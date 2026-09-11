@@ -91,6 +91,17 @@
   .stat span{font-size:13px;color:#ffd9d9;font-weight:600;letter-spacing:1px}
   .btnrow{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
+  /* ---- favourite picker ---- */
+  .favhead{margin:16px 0 8px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
+  #favRow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:460px;margin:0 auto}
+  .fav{display:flex;flex-direction:column;align-items:center;gap:3px;width:80px;padding:8px 4px 7px;
+    background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);border-radius:13px;
+    cursor:pointer;transition:transform .1s, background .1s, border-color .1s}
+  .fav:hover{transform:translateY(-3px);background:rgba(9,13,17,.5)}
+  .fav svg{width:24px;height:24px}
+  .fav span{font-size:10.5px;font-weight:600;color:#f0e6e6;line-height:1.15;text-align:center}
+  .fav.on{background:rgba(255,185,0,.22);border-color:#ffb900;box-shadow:0 0 0 2px rgba(255,185,0,.3)}
+  .fav.on span{color:#fff}
   /* ---- character sheet ---- */
   #charScreen{justify-content:flex-start;overflow:hidden}
   .sheet{width:min(1180px,96vw);max-height:94vh;margin:3vh 0;display:flex;flex-direction:column;
@@ -143,7 +154,9 @@
     <div class="badge">BRICK-BUILT ACTION RPG</div>
     <canvas id="titleCanvas" width="760" height="400"></canvas>
     <div class="tag">Smash the waves. Grab the studs. Everything falls apart.</div>
-    <div class="gap26"></div>
+    <div class="favhead">PICK A FAVOURITE — ITS BRICKS SHOW UP MORE OFTEN</div>
+    <div id="favRow"></div>
+    <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
     <div class="ctl">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
@@ -265,7 +278,27 @@ const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*M
 const FORTUNE_CAP = 8;
 const CHAIN_MAX_ZAPPERS = 5;
 const CHAIN_MIN_RATE = 1.0;    /* a storm brick never fires faster than once a second */
-const CHAIN_FALLOFF  = 0.65;   /* each leap after the first hits for this much of the last */
+/* Chain falloff is a curve, not a flat percentage. Every leap is measured against
+   the OPENING strike, and the curve is stretched across however many foes the bolt
+   actually reaches — so a bolt that chains far keeps far more of its punch:
+     3 leaps -> 60 / 46 / 35% of the opening
+     6 leaps -> 60 / 56 / 52 / 49 / 47 / 44%
+   The last leap of a long chain also lands harder than the last leap of a short
+   one, because the floor itself rises past three leaps. */
+const CHAIN_LEAP_START = 0.60;
+const CHAIN_LEAP_FLOOR = 0.35;
+const CHAIN_LEAP_BONUS = 0.03;      /* floor gain per leap beyond the third */
+const CHAIN_LEAP_BONUS_MAX = 0.18;
+function chainLeapFloor(leaps){
+  return CHAIN_LEAP_FLOOR + Math.min(CHAIN_LEAP_BONUS_MAX, Math.max(0, leaps-3)*CHAIN_LEAP_BONUS);
+}
+function chainLeapFrac(i, leaps){
+  if(leaps <= 0) return CHAIN_LEAP_START;
+  const floor = chainLeapFloor(leaps);
+  if(leaps === 1) return floor;
+  const t = Math.pow((i-1)/(leaps-1), 0.8);
+  return CHAIN_LEAP_START + (floor - CHAIN_LEAP_START)*t;
+}
 const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead of spinning */
 const VORTEX_MIN_HITMUL = 0.45;
 const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above this they strobe */
@@ -1807,8 +1840,12 @@ const UPGRADES = [
     apply:c=>{ player.spellDmg += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} chain — every bolt now leaps to ${player.chain.n + c.n} foes (each leap ${Math.round(CHAIN_FALLOFF*100)}% of the last)`
-      : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''} — each leap weaker than the last`,
+    desc:(c,owned)=>{
+      const n2 = player.chain.n + c.n, lp = n2-1;
+      const tail = lp>0 ? ` — leaps land for ${Math.round(CHAIN_LEAP_START*100)}%…${Math.round(chainLeapFloor(lp)*100)}% of the opening strike` : '';
+      return owned>0 ? `+${c.n} chain — every bolt now leaps to ${n2} foes${tail}`
+        : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}${tail}`;
+    },
     apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
   { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL',
     req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
@@ -1880,6 +1917,45 @@ const UPGRADES = [
     desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.bomb.rate *= (1-c.v); } }
 ];
+/* A favourite doesn't grant anything — it just weights its own bricks (and the
+   mastery that scales them) heavier in every wave and level reward. */
+const FAV_WEIGHT = 3.2;
+const FAVOURITES = [
+  { id:'none',    name:'No Favourite', icon:'xp',      ids:[] },
+  { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem'] },
+  { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitspd','orbm'] },
+  { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastrate','orbm'] },
+  { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
+  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','bladem'] },
+  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem'] },
+  { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
+  { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
+  { id:'tough',   name:'Tough Bricks', icon:'heart',   ids:['hp','regen','armor','heart','resfire','resfrost','resshock','resall'] }
+];
+let favourite = FAVOURITES[0];
+let favSet = new Set();
+function setFavourite(id){
+  favourite = FAVOURITES.find(f=>f.id===id) || FAVOURITES[0];
+  favSet = new Set(favourite.ids);
+  try{ localStorage.setItem('bb_fav', favourite.id); }catch(e){}
+  const row = document.getElementById('favRow');
+  if(row) for(const el of row.children) el.classList.toggle('on', el.dataset.fav===favourite.id);
+}
+function buildFavRow(){
+  const row = document.getElementById('favRow');
+  if(!row) return;
+  row.innerHTML = FAVOURITES.map(f=>
+    `<div class="fav" data-fav="${f.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffd76e" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[f.icon]||''}</svg>
+      <span>${f.name}</span>
+    </div>`).join('');
+  for(const el of row.children)
+    el.addEventListener('click', ()=>{ SFX.click(); setFavourite(el.dataset.fav); });
+  let saved = 'none';
+  try{ saved = localStorage.getItem('bb_fav') || 'none'; }catch(e){}
+  setFavourite(saved);
+}
 function pickChoices(mode){
   /* capped stats remove their rewards from the pool entirely */
   const pool = UPGRADES.filter(u=>{
@@ -1897,8 +1973,14 @@ function pickChoices(mode){
   choices = [];
   const take = (from)=>{
     if(!from.length) return null;
-    const i = (Math.random()*from.length)|0;
-    const t = from[i];
+    /* favourite bricks are drawn heavier, never guaranteed */
+    let total = 0;
+    for(const u of from) total += favSet.has(u.id) ? FAV_WEIGHT : 1;
+    let r = Math.random()*total, t = from[from.length-1];
+    for(const u of from){
+      r -= favSet.has(u.id) ? FAV_WEIGHT : 1;
+      if(r < 0){ t = u; break; }
+    }
     const pi = pool.indexOf(t);
     if(pi >= 0) pool.splice(pi, 1);
     const rar = forcedRarity || rollRarity(mode);
@@ -1942,13 +2024,21 @@ function spellSummaries(){
   }
   if(p.chain.n>0 && p.chain.zappers>0){
     const d = p.chain.dmg*p.spellDmg;
-    let total = 0, cur = d;
-    for(let i=0;i<p.chain.n;i++){ total += cur; cur *= CHAIN_FALLOFF; }
+    const leaps = p.chain.n - 1;
+    let total = d;
+    const steps = [];
+    for(let i=1;i<=leaps;i++){
+      const fr = chainLeapFrac(i, leaps);
+      total += d*fr;
+      if(steps.length < 4) steps.push(Math.round(fr*100)+'%');
+    }
     const zn = Math.min(CHAIN_MAX_ZAPPERS, p.chain.zappers);
     out.push({ id:'chain', icon:'chain', name:'Storm Brick', head:per(d)+' opening strike', tip:
       `${zn} zapper${zn>1?'s, each on its own':' on a'} ${p.chain.rate.toFixed(2)}s cooldown\n`+
       `Opening strike ${per(d)} (${p.chain.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
-      `Each leap deals ${Math.round(CHAIN_FALLOFF*100)}% of the strike before it\n`+
+      (leaps>0
+        ? `Leaps land for ${steps.join(' / ')}${leaps>4?' …':''} of the opening — a longer chain holds up better\n`
+        : `No leaps yet — take another Storm Brick to start chaining\n`)+
       `${p.chain.n} target${p.chain.n>1?'s':''} per bolt: ${per(total)} down the chain\n`+
       `All ${zn} bricks firing: ${per(total*zn)}` });
   }
@@ -2130,7 +2220,9 @@ function renderCharSheet(){
     sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
     sRow('Wave', String(wave.n), best>0 ? `personal best: wave ${best}` : ''),
     sRow('Monsters smashed', String(p.kills), ''),
-    sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, '')
+    sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, ''),
+    sRow('Favourite', favourite.id==='none' ? 'none' : favourite.name,
+      favourite.id==='none' ? 'no bricks weighted' : 'its bricks appear more often')
   ], sBar(p.xp/Math.max(1,p.xpNext), '#ffb900'));
 
   /* --- spells, with the same live numbers the reward screen shows --- */
@@ -2509,19 +2601,13 @@ function updatePlayer(dt){
       if(!pool.length){ chn.cds[z] = 0; continue; }   /* stay charged — fires the frame a foe walks in */
       chn.cds[z] = chn.rate;                          /* only consumed when it actually fires */
       fired = true;
-      let cur = pick(pool);
-      claimed.add(cur);
-      let from = chainBrickPos(p, z, zappers);
-      let dmg = zapDmg;
+      /* Walk the whole chain FIRST, so the falloff can be stretched across the
+         foes this bolt will actually reach rather than a fixed per-leap cut. */
+      const targets = [];
       const hitSet = new Set();
-      for(let i=0;i<chn.n;i++){
-        if(!cur || cur.dead) break;
-        hitSet.add(cur);
-        addZap(from.x, from.y, cur.x, cur.y-14, i);
-        hitEnemy(cur, dmg, angTo(from,cur), 0, 'chain', {spin:true});
-        from = {x:cur.x, y:cur.y-14};
-        dmg *= CHAIN_FALLOFF;   /* every leap lands softer than the strike before it */
-        /* chain to nearest UNIQUE monster this bolt hasn't hit yet */
+      let cur = pick(pool);
+      while(cur && targets.length < chn.n){
+        targets.push(cur); hitSet.add(cur);
         let nxt=null, best=1e9;
         for(const e2 of enemies){
           if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
@@ -2529,6 +2615,16 @@ function updatePlayer(dt){
           if(dd<340 && dd<best){ best=dd; nxt=e2; }
         }
         cur = nxt;
+      }
+      claimed.add(targets[0]);
+      const leaps = targets.length - 1;
+      let from = chainBrickPos(p, z, zappers);
+      for(let i=0;i<targets.length;i++){
+        const tg = targets[i];
+        const dmg = i===0 ? zapDmg : zapDmg * chainLeapFrac(i, leaps);
+        addZap(from.x, from.y, tg.x, tg.y-14, i);
+        hitEnemy(tg, dmg, angTo(from,tg), 0, 'chain', {spin:true});
+        from = {x:tg.x, y:tg.y-14};
       }
     }
     if(fired) SFX.thunder();
@@ -6438,6 +6534,7 @@ function frame(now){
   if(state==='title'){ try { renderTitle(); } catch(err){ console.warn('title:', err); } }
 }
 resetRun(true);
+buildFavRow();
 showBest();
 requestAnimationFrame(frame);
 })();
