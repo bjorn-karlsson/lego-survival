@@ -199,6 +199,7 @@ const HEART_POOL_AT = 99;
 const HEART_ROW_COLS = ['#d3242b','#ffb900','#9b45d6','#2ea8a0','#e4572e','#4b9b41','#2e7dd1','#c95bd0','#d3242b'];
 const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
 const FORTUNE_CAP = 8;
+const CHAIN_MAX_ZAPPERS = 5;
 /* NEW: cave biome pocket (Rock Raiders territory) */
 const CAVE = { x:CX-620, y:CY+430, r:470 };
 const PAL = {
@@ -361,6 +362,7 @@ window.addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; mouse.
 /* =============================== STATE =============================== */
 let state = 'title';
 let vtime = 0;
+let frameRaw = 1/60;   /* real seconds of the frame being drawn */
 let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
 let props=[], solids=[], waters=[], flowers=[], hazards=[];
@@ -377,6 +379,11 @@ let chestT = 0, chestPick = -1;
 let mergeT = 0;
 let player = null;
 
+/* where storm brick #i of `total` hovers — used by both the zap and the renderer */
+function chainBrickPos(p, i, total){
+  const a = vtime*1.6 + 2.2 + i*TAU/Math.max(1,total);
+  return { x: p.x + Math.cos(a)*46, y: p.y - 30 + Math.sin(a)*26 };
+}
 function schedule(delay, fn){ sched.push({t:delay, fn}); }
 function queuePick(mode){ pendingPicks.push(mode); }
 function addShake(a){ cam.shake = Math.min(0.55, cam.shake + a*0.5); }
@@ -391,6 +398,7 @@ function newPlayer(){
     combo:0, comboTimer:0, swing:null, reach:0, xpMul:1,
     dash:{t:0, cd:0, cdMax:0.9, dir:{x:1,y:0}},
     invuln:0, flash:0, xp:0, xpNext:10, level:1, magnetR:95, magnetT:0,
+    kx:0, ky:0,
     fortuneT:0, fortuneMul:1, slowT:0,
     regenRate:0, regenAcc:0,
     crit:0.1, studMul:1, heartChance:0,
@@ -400,8 +408,9 @@ function newPlayer(){
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0 },
     freeze:{ n:0, r:190, dur:2.5, rate:10, cd:4 },
-    /* NEW: storm brick — n = total zaps (1 = single spark, each stack = +1 chain) */
-    chain:{ n:0, dmg:2, rate:2.2, cd:1.5, r:430 },
+    /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
+       bolt that leaps through `n` foes. Damage always scales with spell damage. */
+    chain:{ n:0, zappers:0, dmg:2, rate:2.2, cd:1.5, r:430 },
     bomb:{ n:0, dmg:2, r:105, rate:7, cd:3 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
@@ -672,8 +681,8 @@ function addDmg(x,y,txt,color='#fff',size=17){
    ~once a second, capped work per pass. */
 function mergeSweep(){
   if(pickups.length < 12) return;
-  const NEED = { stud1:10, stud5:8, stud20:8 };
-  const OUT  = { stud1:2,  stud5:2, stud20:1 };
+  const NEED = { stud1:10, stud5:8, stud20:5 };
+  const OUT  = { stud1:2,  stud5:2, stud20:2 };
   const used = new Set();
   let merged = 0;
   for(const kind of ['stud1','stud5','stud20']){
@@ -852,10 +861,11 @@ function ultraForWave(n){
 function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   const tier = Math.max(1, Math.floor(wave.n/5));
   if(type==='boss'){
-    const isSuper = wave.n % 10 === 0;
+    /* a forced key (wave-50 raid) picks its own tier — it may name an ultra */
+    const isSuper = forceBossKey ? !!SUPERBOSSES[forceBossKey] : (wave.n % 10 === 0);
     let B, e;
-    if(isSuper && !forceBossKey){
-      const skey = ultraForWave(wave.n);
+    if(isSuper){
+      const skey = forceBossKey || ultraForWave(wave.n);
       B = SUPERBOSSES[skey];
       const st = Math.max(1, Math.floor(wave.n/10));
       /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
@@ -875,9 +885,9 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
         nextAtk:2.2, ring:null, ring2T:-1, cycle:0 };
     } else {
-      /* normal boss — OR forced boss key (wave-50 raid uses all six) */
+      /* normal boss — OR forced boss key (wave-50 raid uses every boss) */
       let bkey;
-      if(forceBossKey){ B = BOSSES[forceBossKey]; bkey = forceBossKey; }
+      if(forceBossKey){ bkey = forceBossKey; B = BOSSES[bkey]; }
       else {
         const keys2 = Object.keys(BOSSES);
         bkey = keys2[(tier-1) % keys2.length];
@@ -1095,7 +1105,7 @@ function composeWave(n){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
-  wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4;
+  wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4; wave.raidIdx = 0;
   const boss = n%5===0;
   if(n%50===0){
     showBanner('WAVE '+n, 'THE GRAND RAID — ALL BOSSES AWAKEN', '#c95bd0', 3.0, 58);
@@ -1271,11 +1281,11 @@ const UPGRADES = [
     apply:c=>{ player.magnetR *= (1+c.v); } },
   { id:'greed', name:'Golden Touch', icon:'coin', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)} studs from every source`,
+    desc:c=>`+${Math.round(c.v*100)}% studs from every source`,
     apply:c=>{ player.studMul *= (1+c.v); } },
   { id:'wisdom', name:'Stud Wisdom', icon:'xp', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)}% XP from stud pickups`,
+    desc:c=>`+${Math.round(c.v*100)}% XP gained`,
     apply:c=>{ player.xpMul += c.v; } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
@@ -1305,16 +1315,28 @@ const UPGRADES = [
     apply:c=>{ player.blaster.rate *= (1-c.v); } },
   { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)}% spell damage (bombs, orbit, blaster)`,
+    desc:c=>`+${Math.round(c.v*100)}% spell damage (bombs, orbit, blaster, storm bricks)`,
     apply:c=>{ player.spellDmg += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL',
-    calc:m=>({n:1}),
-    desc:(c,owned)=> owned>0 ? `+1 chain — sparks now leap to ${player.chain.n+1} foes`
-      : 'Spell: a storm brick hovers by you and zaps random foes with lightning',
-    apply:c=>{ player.chain.n += 1; } },
+    calc:m=>({n:spellCount(m)}),
+    desc:(c,owned)=> owned>0 ? `+${c.n} chain — every bolt now leaps to ${player.chain.n + c.n} foes`
+      : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}`,
+    apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
+  { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL',
+    req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
+    calc:m=>({n:spellCount(m)}),
+    desc:c=>{
+      const now = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n);
+      return `+${c.n} storm brick${c.n>1?'s':''} — ${now} zapper${now>1?'s':''} firing at once (max ${CHAIN_MAX_ZAPPERS})`;
+    },
+    apply:c=>{ player.chain.zappers = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n); } },
+  { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
+    calc:m=>({v:Math.max(1,Math.round(m*0.9))}),
+    desc:c=>`Storm bricks +${c.v} dmg per zap (currently ${(player.chain.dmg*player.spellDmg).toFixed(1)} with spell damage)`,
+    apply:c=>{ player.chain.dmg += c.v; } },
   { id:'chainrate', name:'Charged Storm', icon:'bolt', cls:'SPELL', req:()=>player.chain.n>0,
     calc:m=>({v:0.14+0.06*m}),
-    desc:c=>`Storm brick zaps ${Math.round(c.v*100)}% faster`,
+    desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.chain.rate *= (1-c.v); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
@@ -1731,32 +1753,42 @@ function updatePlayer(dt){
   const pm = p.magnetT>0 ? 1.7 : 1;
   const fort = p.fortuneT>0 ? p.fortuneMul : 1;
 
-  /* storm brick — hovering zapper with chaining sparks.
-     Stays CHARGED when no foes are in range; fires the instant one appears. */
+  /* storm bricks — up to CHAIN_MAX_ZAPPERS hovering zappers, each firing its own
+     chaining bolt. Damage scales with spell damage. The bank stays CHARGED when no
+     foes are in range, so it fires the instant one appears. */
   const chn = p.chain;
-  if(chn.n>0){
+  if(chn.n>0 && chn.zappers>0){
     chn.cd -= dt;
     if(chn.cd<=0){
       const cands = enemies.filter(e=>!e.dead && e.state==='active' && dist(e,p) < chn.r);
       if(cands.length){
         chn.cd = chn.rate;   /* cooldown only consumed when it actually fires */
-        let cur = pick(cands);
-        let from = {x:p.x, y:p.y-16};
-        const hitSet = new Set();
-        for(let i=0;i<chn.n;i++){
-          if(!cur || cur.dead) break;
-          hitSet.add(cur);
-          addZap(from.x, from.y, cur.x, cur.y-14);
-          hitEnemy(cur, chn.dmg*p.spellDmg, angTo(from,cur), 0, 'chain', {spin:true});
-          from = {x:cur.x, y:cur.y-14};
-          /* chain to nearest UNIQUE monster not yet hit */
-          let nxt=null, best=1e9;
-          for(const e2 of enemies){
-            if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
-            const dd = dist(e2,cur);
-            if(dd<340 && dd<best){ best=dd; nxt=e2; }
+        const zapDmg = chn.dmg * p.spellDmg;
+        const zappers = Math.min(CHAIN_MAX_ZAPPERS, chn.zappers);
+        const claimed = new Set();   /* spread the bricks over different first targets */
+        for(let z=0; z<zappers; z++){
+          let pool = cands.filter(e=>!e.dead && !claimed.has(e));
+          if(!pool.length) pool = cands.filter(e=>!e.dead);
+          if(!pool.length) break;
+          let cur = pick(pool);
+          claimed.add(cur);
+          let from = chainBrickPos(p, z, zappers);
+          const hitSet = new Set();
+          for(let i=0;i<chn.n;i++){
+            if(!cur || cur.dead) break;
+            hitSet.add(cur);
+            addZap(from.x, from.y, cur.x, cur.y-14);
+            hitEnemy(cur, zapDmg, angTo(from,cur), 0, 'chain', {spin:true});
+            from = {x:cur.x, y:cur.y-14};
+            /* chain to nearest UNIQUE monster this bolt hasn't hit yet */
+            let nxt=null, best=1e9;
+            for(const e2 of enemies){
+              if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
+              const dd = dist(e2,cur);
+              if(dd<340 && dd<best){ best=dd; nxt=e2; }
+            }
+            cur = nxt;
           }
-          cur = nxt;
         }
         SFX.thunder();
       } else {
@@ -1799,7 +1831,7 @@ function updatePlayer(dt){
         SFX.fortune();
       } else {
         p.studs += pk.val * fort;
-        gainXp(pk.xp * p.xpMul * fort);
+        gainXp(pk.xp * fort);
         if(pk.kind==='stud50'){
           addDmg(p.x, p.y-56, '+'+(50*fort)+' PURPLE!', '#d5a8ff', 16);
           addRing(pk.x, pk.y, 6, 240, 40, '#d5a8ff', 4, 0.4);
@@ -2760,6 +2792,7 @@ function updateSuperBoss(b, dt, toP, dP){
 }
 function updateProjectiles(dt){
   for(const pr of projectiles){
+    if(pr.x===undefined && pr.sx!==undefined){ pr.x = pr.sx; pr.y = pr.sy; }
     pr.px = pr.x; pr.py = pr.y;
     if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'){
       if(pr.kind==='skull' && pr.homing && !pr.deflected){
@@ -2862,6 +2895,7 @@ function updateProjectiles(dt){
     }
     else if(pr.kind==='vbrick'||pr.kind==='spit'||pr.kind==='jrock'||pr.kind==='molten'
           ||pr.kind==='fireball'||pr.kind==='meteor'){
+      if(pr.x===undefined){ pr.x = pr.sx; pr.y = pr.sy; pr.px = pr.sx; pr.py = pr.sy; }
       if(pr.delay>0){ pr.delay-=dt; continue; }
       pr.t += dt;
       const k = clamp(pr.t/pr.dur,0,1);
@@ -3889,20 +3923,23 @@ function render(){
     ctx.fillStyle = '#7fdc7e';
     roundRect(ctx, bxx, byy, Math.max(2,bw*clamp(player.regenAcc,0,1)), 5, 2.5); ctx.fill();
   }
-  /* hovering storm brick */
-  if(player && player.chain.n>0 && !player.dead){
-    const ca = vtime*1.6 + 2.2;
-    const cbx = player.x + Math.cos(ca)*46;
-    const cby = player.y-18 + Math.sin(ca)*26 - 12;
-    ctx.fillStyle = 'rgba(120,200,255,0.16)';
-    ctx.beginPath(); ctx.arc(cbx, cby-4, 16+Math.sin(vtime*5)*3, 0, TAU); ctx.fill();
-    ctx.save(); ctx.translate(cbx, cby); ctx.rotate(Math.sin(vtime*2)*0.2);
-    ctx.fillStyle = '#2e7dd1'; ctx.strokeStyle='rgba(15,30,50,0.6)'; ctx.lineWidth=1.8;
-    roundRect(ctx,-11,-5.5,22,11,2.5); ctx.fill(); ctx.stroke();
-    drawStudG(ctx,-5,0,3,'#1d4a6b'); drawStudG(ctx,5,0,3,'#1d4a6b');
-    ctx.fillStyle = '#bfe3ff';
-    ctx.beginPath(); ctx.arc(12,-9,2+Math.sin(vtime*12)*0.8,0,TAU); ctx.fill();
-    ctx.restore();
+  /* hovering storm bricks — one per zapper */
+  if(player && player.chain.n>0 && player.chain.zappers>0 && !player.dead){
+    const zn = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers);
+    const charged = player.chain.cd <= 0.12;
+    for(let z=0; z<zn; z++){
+      const bp = chainBrickPos(player, z, zn);
+      const ph = z*1.3;
+      ctx.fillStyle = charged ? 'rgba(150,220,255,0.26)' : 'rgba(120,200,255,0.16)';
+      ctx.beginPath(); ctx.arc(bp.x, bp.y-4, 16+Math.sin(vtime*5+ph)*3, 0, TAU); ctx.fill();
+      ctx.save(); ctx.translate(bp.x, bp.y); ctx.rotate(Math.sin(vtime*2+ph)*0.2);
+      ctx.fillStyle = '#2e7dd1'; ctx.strokeStyle='rgba(15,30,50,0.6)'; ctx.lineWidth=1.8;
+      roundRect(ctx,-11,-5.5,22,11,2.5); ctx.fill(); ctx.stroke();
+      drawStudG(ctx,-5,0,3,'#1d4a6b'); drawStudG(ctx,5,0,3,'#1d4a6b');
+      ctx.fillStyle = '#bfe3ff';
+      ctx.beginPath(); ctx.arc(12,-9,2+Math.sin(vtime*12+ph)*0.8,0,TAU); ctx.fill();
+      ctx.restore();
+    }
   }
   const aliveList = enemies.filter(e=>!e.dead && e.state==='active');
   const markFew = state==='play' && aliveList.length>0 && aliveList.length<=6;
@@ -4216,12 +4253,12 @@ function drawFreezeIcon(x,y){
   for(let i=0;i<3;i++){
     const a=i/3*Math.PI;
     ctx.beginPath();
-    ctx.moveTo(x-Math.cos(a)*9, y-Math.sin(a)*9);
-    ctx.lineTo(x+Math.cos(a)*9, y+Math.sin(a)*9);
+    ctx.moveTo(-Math.cos(a)*9, -Math.sin(a)*9);
+    ctx.lineTo( Math.cos(a)*9,  Math.sin(a)*9);
     ctx.stroke();
   }
   ctx.fillStyle='#dff2ff';
-  ctx.beginPath(); ctx.arc(x,y,2.6,0,TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,0,2.6,0,TAU); ctx.fill();
   ctx.restore();
 }
 function drawStudHUD(x,y,col=PAL.gold){
@@ -4343,8 +4380,8 @@ function renderHUD(){
     label:'STORM ×'+p.storm.n, icon:(x,y)=>{
       ctx.save(); ctx.translate(x,y); ctx.rotate(vtime*3);
       ctx.strokeStyle='#cfd6dd'; ctx.lineWidth=2.4; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(x-4,y+4); ctx.lineTo(x+4,y-4); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+4,y+4); ctx.lineTo(x-4,y-4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-7,7); ctx.lineTo(7,-7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7,7); ctx.lineTo(-7,-7); ctx.stroke();
       ctx.restore();
     }});
   if(p.vortex.n>0) autos.push({
@@ -4352,14 +4389,15 @@ function renderHUD(){
     label:'VORTEX', icon:(x,y)=>{
       ctx.save(); ctx.translate(x,y); ctx.rotate(vtime*6);
       ctx.strokeStyle='#e8eef2'; ctx.lineWidth=2.2; ctx.lineCap='round';
-      ctx.beginPath(); ctx.arc(x,y,7,0.4,2.6); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x,y,3.5,2.8,5.2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,9,0.4,2.6); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,4.5,2.8,5.2); ctx.stroke();
       ctx.restore();
     }});
   if(p.freeze.n>0) autos.push({
     f: clamp(p.freeze.cd/p.freeze.rate,0,1),
     label:'FREEZE', icon:(x,y)=> drawFreezeIcon(x,y) });
-  if(p.chain.n>0) autos.push({f:clamp(p.chain.cd/p.chain.rate,0,1), label:'CHAIN ×'+p.chain.n, icon:(x,y)=>{
+  if(p.chain.n>0 && p.chain.zappers>0) autos.push({f:clamp(p.chain.cd/p.chain.rate,0,1),
+    label:'CHAIN '+Math.min(CHAIN_MAX_ZAPPERS,p.chain.zappers)+'×'+p.chain.n, icon:(x,y)=>{
     ctx.strokeStyle='#8fd4ff'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath(); ctx.moveTo(x-8,y-5); ctx.lineTo(x-2,y-1); ctx.lineTo(x-7,y+2); ctx.lineTo(x+3,y+6); ctx.stroke();
     ctx.fillStyle='#8fd4ff';
@@ -4399,7 +4437,7 @@ function renderHUD(){
     ab(cw-288, 30-p.fortuneT, 30, (x,y)=> drawFortuneIcon(x,y,p.fortuneMul),
        '×'+p.fortuneMul+' · '+Math.ceil(p.fortuneT)+'s');
   if(banner){
-    banner.t += 1/60;
+    banner.t += frameRaw;
     const b = banner;
     const inK = clamp(b.t/0.3,0,1);
     const alpha = b.t > b.dur-0.4 ? clamp((b.dur-b.t)/0.4,0,1) : 1;
@@ -4644,6 +4682,7 @@ function update(dt, raw){
 function frame(now){
   requestAnimationFrame(frame);
   let raw = Math.min((now-last)/1000, 0.05); last = now;
+  frameRaw = raw;
   vtime += raw;
   sizeCheck -= raw;
   if(sizeCheck <= 0){
