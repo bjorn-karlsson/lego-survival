@@ -275,6 +275,14 @@ const BURN_MAX_T = 48;        /* a burn never lingers longer than this */
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
 const ELEMENTS = ['fire','frost','shock'];
 const ELEM_COL = { fire:'#ff8a3c', frost:'#bfe3ff', shock:'#ffe95a' };
+/* Imp master curses. Each weakens the hero without touching their hearts. */
+const CURSES = {
+  resist:{ name:'SUNDERED',  col:'#9b45d6', step:0.18, cap:0.7, tip:'elemental resistance cut' },
+  haste: { name:'LEADEN',    col:'#c9b8e8', step:0.16, cap:0.6, tip:'swings come slower' },
+  armor: { name:'BRITTLE',   col:'#7fb9e0', step:0.20, cap:0.75, tip:'armour weakened' },
+  regen: { name:'WITHERED',  col:'#a5ca18', step:0.25, cap:0.85, tip:'regeneration choked' }
+};
+const CURSE_KEYS = Object.keys(CURSES);
 /* cave biome pockets (Rock Raiders territory) — seeded per run in buildGround */
 let CAVES = [];
 function inCave(x,y){
@@ -421,26 +429,33 @@ const TRACKS = [
     pad:   [48,0,55,0, 50,0,57,0, 51,0,58,0, 53,0,56,0],
     kick:[0,2,4,6,8,10,12,14], snare:[4,12], hat:1, hatHz:4800 }
 ];
-const FIELD_TRACKS = TRACKS.filter(t=>t.kind==='field');
-const music = { step:0, next:0, loop:0, idx:0, track:TRACKS[0], bars:0, timer:null };
+const music = { step:0, next:0, loop:0, track:TRACKS[0], pending:null, bars:0, timer:null };
 let musicToast = null;   /* small "now playing" note drawn by the HUD */
 
-function trackFor(){
-  /* a boss on the field owns the soundtrack until it goes down */
-  const boss = enemies.find(e=>e.type==='boss' && !e.dead);
-  if(boss) return TRACKS.find(t=>t.kind===(boss.super?'super':'boss'));
-  return FIELD_TRACKS[music.idx % FIELD_TRACKS.length];
+/* One track per wave, chosen when the wave starts and held until the next one.
+   Field waves climb in intensity as the run goes on; boss waves take the fast
+   beats, and the ultra waves (10, 20, 30…) get the fastest one in the set. */
+function trackForWave(n){
+  const id = n%10===0 ? 'colossus'
+           : n%5===0  ? 'tyrant'
+           : n<=3     ? 'caves'
+           : n<=8     ? 'quarry'
+           : n<=14    ? 'march'
+           : 'overdrive';
+  return TRACKS.find(t=>t.id===id) || TRACKS[0];
 }
 function setTrack(t, announce){
   if(!t || t===music.track) return;
-  music.track = t; music.bars = 0; music.loop = 0;
+  music.track = t; music.pending = t; music.bars = 0; music.loop = 0;
   if(announce) musicToast = { name:t.name, life:3.2 };
 }
+/* called once per wave — the swap lands on the next bar so nothing stutters */
+function queueTrackForWave(n){ music.pending = trackForWave(n); }
 function startMusic(){
   if(!A.ctx) return;
   music.next = A.ctx.currentTime + 0.1; music.step = 0; music.loop = 0; music.bars = 0;
-  music.idx = (Math.random()*FIELD_TRACKS.length)|0;
-  music.track = FIELD_TRACKS[music.idx];
+  music.track = trackForWave(Math.max(1, wave.n));
+  music.pending = music.track;
   musicToast = { name:music.track.name, life:3.2 };
   if(music.timer) clearInterval(music.timer);
   music.timer = setInterval(()=>{
@@ -451,13 +466,8 @@ function startMusic(){
       music.step++;
       if(music.step>=16){
         music.step = 0; music.loop++; music.bars++;
-        /* bar boundaries are the only place the track is allowed to change */
-        const want = trackFor();
-        if(want !== music.track){ setTrack(want, true); }
-        else if(music.track.kind==='field' && music.bars>=8){
-          music.idx = (music.idx+1) % FIELD_TRACKS.length;
-          setTrack(FIELD_TRACKS[music.idx], true);
-        }
+        /* a wave change queues the next track; it swaps here, on the bar line */
+        if(music.pending && music.pending !== music.track) setTrack(music.pending, true);
       }
       music.next += spb;
     }
@@ -558,6 +568,7 @@ function newPlayer(){
     chill:{ stacks:0, t:0 },
     shock:{ stacks:0, t:0 },
     res:{ fire:0, frost:0, shock:0 },
+    curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
     regenRate:0, regenAcc:0,
     crit:0.1, studMul:1, heartChance:0,
     orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[] },
@@ -1056,6 +1067,10 @@ const EDEF = {
              col:{head:'#eef0ee', torso:'#c9a523', legs:'#8a7115', hands:'#fff3a0', hair:'#8a7115'}, style:'hexer' },
   overseer:{ hp:26, speed:48, r:14, scale:1.2, dmg:1, xp:35, studs:[25,40], fire:6.0,
              col:{head:'#eef0ee', torso:'#8a7115', legs:'#5e4a12', hands:'#ffe95a', hair:'#5e4a12'}, style:'hexer' },
+  /* imp master — keeps a pit of imps coming and hexes the hero with curses that
+     weaken them rather than hurt them */
+  impmaster:{ hp:30, speed:54, r:14, scale:1.3, dmg:1, xp:24, studs:[18,30], fire:3.2,
+             col:{head:'#d3242b', torso:'#5e1220', legs:'#3a0c16', hands:'#ff8a8a', hair:'#3a0c16'}, style:'hexer' },
   /* dire bat — the crypt bat's big brother: longer reach, and it bursts into a
      swarm of ordinary bats when it goes down */
   direbat: { hp:26, speed:132, r:16, scale:1.5, dmg:2, xp:16, studs:[12,20],
@@ -1134,6 +1149,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
         aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
+        path:null, pathI:0, pathT:0, pathGoal:null,
         nextAtk:2.2, ring:null, ring2T:-1, cycle:0 };
     } else {
       /* normal boss — OR forced boss key (wave-50 raid uses every boss) */
@@ -1158,6 +1174,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
         aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
+        path:null, pathI:0, pathT:0, pathGoal:null,
         nextAtk:2.2, ring:null, ring2T:-1, cycle:0 };
     }
     enemies.push(e);
@@ -1184,7 +1201,8 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     flash:0, hitCd:0, atkCd:rnd(0.5,1.5)*atkS, kx:0, ky:0, mode:'chase', modeT:0,
     strafe:Math.random()<0.5?1:-1, strafeT:rnd(1,3), elite, magic, dead:false, phase:rnd(TAU),
     aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
-    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1 };
+    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1,
+    path:null, pathI:0, pathT:0, pathGoal:null };
   enemies.push(e);
   SFX.build();
 }
@@ -1305,9 +1323,39 @@ function gainXp(n){
 function armorPct(){ return Math.round(player.armor*100); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
-  const r = clamp(player.res[elem] || 0, 0, RES_CAP);
+  /* a SUNDERED hero keeps less of their resistance */
+  const r = clamp((player.res[elem] || 0) * (1 - player.curse.resist), 0, RES_CAP);
   return 1 - r;
 }
+function applyCurse(kind, src){
+  const p = player, C = CURSES[kind];
+  if(p.dead || !C) return;
+  const before = p.curse[kind];
+  p.curse[kind] = Math.min(C.cap, p.curse[kind] + C.step*elemPower(src));
+  p.curse.t = Math.max(p.curse.t, 14);
+  if(p.curse[kind] > before){
+    addDmg(p.x, p.y-62, C.name+'!', C.col, 17);
+    addRing(p.x, p.y, 10, 260, 60, C.col, 4, 0.45);
+  }
+}
+function updateCurses(dt){
+  const p = player;
+  if(p.curse.t <= 0) return;
+  p.curse.t -= dt;
+  if(p.curse.t <= 0){
+    for(const k of CURSE_KEYS) p.curse[k] = 0;
+    p.curse.t = 0;
+    addDmg(p.x, p.y-62, 'CURSE LIFTED', '#a5e06e', 16);
+  } else if(Math.random() < 0.25){
+    const live = CURSE_KEYS.filter(k=>p.curse[k] > 0);
+    if(live.length)
+      particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-rnd(4,44), vx:rnd(-10,10), vy:-30,
+        life:0.5, max:0.5, color: CURSES[pick(live)].col});
+  }
+}
+function cursedArmor(){ return player.armor * (1 - player.curse.armor); }
+function cursedRegen(){ return player.regenRate * (1 - player.curse.regen); }
+function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
 function elemPower(src){ return 1 + 0.25*((src && src.buffStacks) || 0); }
 function applyAilment(elem, src){
@@ -1346,6 +1394,7 @@ function chillMul(){ return 1 - 0.09*player.chill.stacks; }              /* 6 st
 function shockCritChance(){ return 0.10*player.shock.stacks; }           /* 6 stacks -> 60% */
 function updateAilments(dt){
   const p = player;
+  updateCurses(dt);
   for(const el of ELEMENTS) p.ailCd[el] = Math.max(0, (p.ailCd[el]||0) - dt);
   if(p.burn.t > 0 && p.burn.pool > 0){
     const rate = p.burn.pool / p.burn.t;
@@ -1377,7 +1426,8 @@ function playerDamage(n, src, elem){
   const p = player;
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   if(elem) n = Math.max(1, Math.round(n * elemTake(elem) * elemPower(src)));
-  if(p.armor > 0 && Math.random() < p.armor) n = Math.max(1, Math.round(n*0.5));
+  const arm = cursedArmor();
+  if(arm > 0 && Math.random() < arm) n = Math.max(1, Math.round(n*0.5));
   /* shock leaves you open — hits against a shocked hero crit */
   if(p.shock.stacks > 0 && Math.random() < shockCritChance()){
     n = Math.max(n+1, Math.round(n*1.8));
@@ -1422,6 +1472,7 @@ function wavePool(n){
   if(n>=10) p.push(['stormcaller',2],['bastion',3],['icegolem',2]);
   if(n>=11) p.push(['firegolem',2]);
   if(n>=11) p.push(['marksman',2]);
+  if(n>=9)  p.push(['impmaster',2]);
   if(n>=13) p.push(['pumpkinlord',2]);
   if(n>=14) p.push(['direbat',2]);
   if(n>=12) p.push(['necrolord',2]);
@@ -1461,6 +1512,7 @@ function composeWave(n){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
+  queueTrackForWave(n);
   wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4; wave.raidIdx = 0;
   const boss = n%5===0;
   if(n%50===0){
@@ -1609,7 +1661,7 @@ const UPGRADES = [
     desc:c=>`+${(c.v*100).toFixed(0)}% crit chance (now ${(player.crit*100).toFixed(0)}%)`,
     apply:c=>{ player.crit = Math.min(0.9, player.crit + (1-player.crit)*c.v); } },
     { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE',
-    calc:m=>({v:0.25+0.2*m}),
+    calc:m=>({v:0.07+0.045*m}),
     desc:c=>`+${Math.round(c.v*100)}% crit damage (now ×${player.critMul.toFixed(1)})`,
     apply:c=>{ player.critMul = Math.min(20, player.critMul*(1+c.v)); } },
   { id:'hp', name:'Sturdy Plates', icon:'heart', cls:'DEFENSE',
@@ -1914,16 +1966,19 @@ function renderCharSheet(){
   /* --- melee maths, mirroring startSwing + updatePlayer --- */
   const light = p.dmg * p.dmgMul * p.bladeDmg;
   const spin  = light * 1.4;
-  const swingT = p.atkRate / Math.max(0.3, chillMul());   /* chill lengthens the cooldown */
+  const swingT = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   const swings = 1/swingT;
   const critAvg = 1 + p.crit*(p.critMul-1);        /* expected multiplier per hit */
   const comboAvg = (light*2 + spin)/3;             /* every third swing is the spin */
 
   const vitals = sBlock('VITALS', [
     sRow('Hearts', `${p.hp} / ${p.maxHp}`, p.maxHp>=HEART_MAX ? 'at the maximum' : `${HEART_MAX-p.maxHp} more possible`),
-    sRow('Armour', pct(p.armor), p.armor>0 ? 'chance to halve incoming damage' : 'no damage reduction'),
-    sRow('Regeneration', p.regenRate>0 ? p.regenRate.toFixed(2)+' hearts/s' : '—',
-      p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
+    sRow('Armour', pct(cursedArmor()),
+      p.curse.armor>0 ? `BRITTLE — cut from ${pct(p.armor)}`
+        : p.armor>0 ? 'chance to halve incoming damage' : 'no damage reduction'),
+    sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
+      p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
+        : p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
     sRow('Hit invulnerability', '1.10s', 'after taking a hit'),
     sRow('Heart drop rate', pct(0.07 + p.heartChance), 'per monster (elites drop more)')
   ], sBar(p.hp/Math.max(1,p.maxHp), '#d3242b'));
@@ -1940,8 +1995,9 @@ function renderCharSheet(){
     sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(56+p.reach)} reach · arc swing`),
     sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(64+p.reach)} reach · every 3rd swing, full circle`),
     sRow('Swing rate', swings.toFixed(2)+'/s',
-      p.chill.stacks>0 ? `${swingT.toFixed(2)}s per swing — chilled from ${p.atkRate.toFixed(2)}s`
-                       : `${p.atkRate.toFixed(2)}s per swing`),
+      (p.chill.stacks>0 || p.curse.haste>0)
+        ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
+        : `${p.atkRate.toFixed(2)}s per swing`),
     sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target')
   ]);
 
@@ -1968,9 +2024,12 @@ function renderCharSheet(){
   ]);
 
   const resist = sBlock('ELEMENTAL RESISTANCE', [
-    sRow('Fire', pct(p.res.fire), 'burn damage and duration'),
-    sRow('Frost', pct(p.res.frost), 'chill stacks applied'),
-    sRow('Lightning', pct(p.res.shock), 'shock stacks applied'),
+    sRow('Fire', pct((1-elemTake('fire'))),
+      p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.fire)}` : 'burn damage and duration'),
+    sRow('Frost', pct((1-elemTake('frost'))),
+      p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.frost)}` : 'chill stacks applied'),
+    sRow('Lightning', pct((1-elemTake('shock'))),
+      p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.shock)}` : 'shock stacks applied'),
     sRow('Cap', pct(RES_CAP), 'nothing is ever fully immune')
   ]);
 
@@ -1983,6 +2042,13 @@ function renderCharSheet(){
       `+${Math.round(shockCritChance()*100)}% chance a hit on you crits for ×1.8`),
     sRow('Stack ceiling', '×'+AIL_MAX, 'chill and shock both cap here')
   ]);
+
+  const curseRows = CURSE_KEYS.map(k=>
+    sRow(CURSES[k].name.charAt(0)+CURSES[k].name.slice(1).toLowerCase(),
+      p.curse[k]>0 ? '-'+Math.round(p.curse[k]*100)+'%' : 'none', CURSES[k].tip));
+  curseRows.push(sRow('Time left', p.curse.t>0 ? p.curse.t.toFixed(1)+'s' : '—',
+    'imp master hexes; they expire together'));
+  const curseBlock = sBlock('CURSES', curseRows);
 
   const run = sBlock('THIS RUN', [
     sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
@@ -2022,7 +2088,7 @@ function renderCharSheet(){
 
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
-     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${resist}${ail}${loot}${run}</div>
+     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${resist}${ail}${curseBlock}${loot}${run}</div>
      <div class="seclabel">SPELLS</div>
      <div class="spellgrid">${spellHtml}</div>
      <div class="seclabel">BRICKS TAKEN</div>
@@ -2134,7 +2200,8 @@ function updatePlayer(dt){
   if(p.slowT>0 && Math.random()<0.25)
     particles.push({kind:'spark', x:p.x+rnd(-14,14), y:p.y-rnd(10,40), vx:rnd(-15,15), vy:-30,
       life:0.5, max:0.5, color:'#bfe3ff'});
-  p.regenAcc = (p.regenRate>0 && p.hp<p.maxHp) ? p.regenAcc + p.regenRate*dt : 0;
+  const regen = cursedRegen();
+  p.regenAcc = (regen>0 && p.hp<p.maxHp) ? p.regenAcc + regen*dt : 0;
   if(p.regenAcc >= 1){
     const g = Math.floor(p.regenAcc);
     p.regenAcc -= g;
@@ -2189,7 +2256,7 @@ function updatePlayer(dt){
         }
       }
       for(const pr of projectiles){
-        if((pr.kind!=='arrow' && pr.kind!=='skull') || pr.owner!=='enemy') continue;
+        if((pr.kind!=='arrow' && pr.kind!=='skull' && pr.kind!=='hexbolt') || pr.owner!=='enemy') continue;
         const d = dist(p,pr);
         if(d < s.reach+6){
           let within = s.spin || inSweep(Math.atan2(pr.y-p.y,pr.x-p.x), s.from, s.to, e, 0.5);
@@ -2471,7 +2538,7 @@ function startSwing(aim){
   const p = player;
   p.combo = p.comboTimer>0 ? (p.combo+1)%3 : 0;
   p.comboTimer = 0.85;
-  p.atkCd = p.atkRate / Math.max(0.3, chillMul());   /* chilled arms swing slower */
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();   /* chill and curses both slow the swing */
   retPulse = 1;
   const spin = p.combo===2;
   const s = { t:0, dur: spin?0.34:0.2, spin, hit:new Set(), hitP:new Set(), aim };
@@ -2481,6 +2548,186 @@ function startSwing(aim){
   s.cur = s.from;
   p.swing = s;
   SFX.swing();
+}
+/* =============================== PATHFINDING =============================== */
+/* A coarse navigation grid over the map, rebuilt whenever the world is. Monsters
+   walk straight at the player while they can see them; the moment the line is
+   blocked they ask for an A* path and follow its waypoints instead of grinding
+   into a boulder. Searches are budgeted per frame and each path is cached, so a
+   field of 500 monsters costs a handful of searches, not 500. */
+const NAV = { cs:72, w:0, h:0, blocked:null, gen:0 };
+const NAV_BUDGET = 14;          /* A* searches allowed per frame */
+let navBudget = NAV_BUDGET;
+/* scratch buffers reused by every search so the hot path allocates nothing */
+let navG = null, navF = null, navFrom = null, navSeen = null, navStamp = 0;
+
+function navBuild(){
+  const cs = NAV.cs;
+  NAV.w = Math.ceil(W.w/cs); NAV.h = Math.ceil(W.h/cs);
+  const n = NAV.w*NAV.h;
+  NAV.blocked = new Uint8Array(n);
+  navG = new Float32Array(n); navF = new Float32Array(n);
+  navFrom = new Int32Array(n); navSeen = new Int32Array(n); navStamp = 0;
+  const pad = 16;   /* keep a body's width away from geometry */
+  for(let iy=0; iy<NAV.h; iy++) for(let ix=0; ix<NAV.w; ix++){
+    const cx = ix*cs + cs/2, cy = iy*cs + cs/2;
+    let bad = false;
+    if(cx < W.wall+pad || cx > W.w-W.wall-pad || cy < W.wall+pad || cy > W.h-W.wall-pad) bad = true;
+    if(!bad) for(const so of solids){
+      if(Math.hypot(cx-so.x, cy-so.y) < so.r + pad){ bad = true; break; }
+    }
+    if(!bad) for(const wa of waters){
+      if(cx > wa.x-pad && cx < wa.x+wa.w+pad && cy > wa.y-pad && cy < wa.y+wa.h+pad){ bad = true; break; }
+    }
+    NAV.blocked[iy*NAV.w+ix] = bad ? 1 : 0;
+  }
+  NAV.gen++;
+}
+const navIdx = (ix,iy)=> iy*NAV.w+ix;
+const navCX = ix=> ix*NAV.cs + NAV.cs/2;
+const navCY = iy=> iy*NAV.cs + NAV.cs/2;
+function navCell(x,y){
+  return { ix: clamp(Math.floor(x/NAV.cs), 0, NAV.w-1), iy: clamp(Math.floor(y/NAV.cs), 0, NAV.h-1) };
+}
+function navBlockedAt(x,y){
+  if(!NAV.blocked) return false;
+  const c = navCell(x,y);
+  return NAV.blocked[navIdx(c.ix,c.iy)] === 1;
+}
+/* nearest walkable cell, for a monster that has been shoved inside geometry */
+function navNearestOpen(ix, iy){
+  if(NAV.blocked[navIdx(ix,iy)] === 0) return {ix, iy};
+  for(let r=1; r<=6; r++){
+    for(let dy=-r; dy<=r; dy++) for(let dx=-r; dx<=r; dx++){
+      if(Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+      const nx = ix+dx, ny = iy+dy;
+      if(nx<0||ny<0||nx>=NAV.w||ny>=NAV.h) continue;
+      if(NAV.blocked[navIdx(nx,ny)] === 0) return {ix:nx, iy:ny};
+    }
+  }
+  return null;
+}
+/* Bresenham over the grid — true when nothing blocks the straight line */
+function navLineOpen(x1,y1,x2,y2){
+  if(!NAV.blocked) return true;
+  const a = navCell(x1,y1), b = navCell(x2,y2);
+  let x = a.ix, y = a.iy;
+  const dx = Math.abs(b.ix-x), dy = Math.abs(b.iy-y);
+  const sx = x < b.ix ? 1 : -1, sy = y < b.iy ? 1 : -1;
+  let err = dx - dy, guard = 0;
+  while(guard++ < 400){
+    if(NAV.blocked[navIdx(x,y)] === 1) return false;
+    if(x === b.ix && y === b.iy) return true;
+    const e2 = 2*err;
+    if(e2 > -dy){ err -= dy; x += sx; }
+    if(e2 <  dx){ err += dx; y += sy; }
+  }
+  return true;
+}
+/* A* on the 8-connected grid. Returns world-space waypoints, or null. */
+function navFindPath(sx, sy, tx, ty){
+  if(!NAV.blocked) return null;
+  const sc0 = navCell(sx,sy), tc0 = navCell(tx,ty);
+  const sc = navNearestOpen(sc0.ix, sc0.iy), tc = navNearestOpen(tc0.ix, tc0.iy);
+  if(!sc || !tc) return null;
+  const start = navIdx(sc.ix,sc.iy), goal = navIdx(tc.ix,tc.iy);
+  if(start === goal) return [{x:tx, y:ty}];
+  const stamp = ++navStamp;
+  const h = (ix,iy)=>{
+    const dx = Math.abs(ix-tc.ix), dy = Math.abs(iy-tc.iy);
+    return (dx+dy) + (Math.SQRT2-2)*Math.min(dx,dy);   /* octile */
+  };
+  /* a plain binary heap, rebuilt per search — these searches stay small */
+  const heap = [start];
+  navSeen[start] = stamp; navG[start] = 0; navF[start] = h(sc.ix,sc.iy); navFrom[start] = -1;
+  const closed = new Set();
+  const push = i=>{
+    heap.push(i);
+    let c = heap.length-1;
+    while(c>0){ const p=(c-1)>>1; if(navF[heap[p]] <= navF[heap[c]]) break;
+      const t2=heap[p]; heap[p]=heap[c]; heap[c]=t2; c=p; }
+  };
+  const pop = ()=>{
+    const top = heap[0], last = heap.pop();
+    if(heap.length){ heap[0]=last; let c=0;
+      for(;;){ const l=2*c+1, r2=l+1; let m=c;
+        if(l<heap.length && navF[heap[l]]<navF[heap[m]]) m=l;
+        if(r2<heap.length && navF[heap[r2]]<navF[heap[m]]) m=r2;
+        if(m===c) break; const t2=heap[m]; heap[m]=heap[c]; heap[c]=t2; c=m; } }
+    return top;
+  };
+  let expanded = 0;
+  while(heap.length){
+    const cur = pop();
+    if(closed.has(cur)) continue;
+    closed.add(cur);
+    if(cur === goal) break;
+    if(++expanded > 3000) return null;          /* give up rather than stall a frame */
+    const cx = cur % NAV.w, cy = (cur / NAV.w) | 0;
+    for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+      if(!dx && !dy) continue;
+      const nx = cx+dx, ny = cy+dy;
+      if(nx<0||ny<0||nx>=NAV.w||ny>=NAV.h) continue;
+      const ni = navIdx(nx,ny);
+      if(NAV.blocked[ni] === 1 || closed.has(ni)) continue;
+      /* no cutting diagonally through a corner */
+      if(dx && dy && (NAV.blocked[navIdx(cx+dx,cy)] === 1 || NAV.blocked[navIdx(cx,cy+dy)] === 1)) continue;
+      const step = (dx && dy) ? Math.SQRT2 : 1;
+      const ng = navG[cur] + step;
+      if(navSeen[ni] !== stamp || ng < navG[ni]){
+        navSeen[ni] = stamp; navG[ni] = ng; navFrom[ni] = cur;
+        navF[ni] = ng + h(nx,ny);
+        push(ni);
+      }
+    }
+  }
+  if(navSeen[goal] !== stamp) return null;
+  const out = [];
+  for(let i=goal; i!==-1 && out.length<400; i=navFrom[i])
+    out.push({ x: navCX(i % NAV.w), y: navCY((i / NAV.w) | 0) });
+  out.reverse();
+  out[out.length-1] = {x:tx, y:ty};              /* finish on the real target */
+  return out;
+}
+/* Steer `e` toward the player, pathing around geometry only when it has to.
+   Returns a unit direction, or null to fall back to the caller's own steering. */
+function navSteer(e, dt){
+  if(!NAV.blocked) return null;
+  e.pathT -= dt;
+  const losNow = navLineOpen(e.x, e.y, player.x, player.y);
+  if(losNow && !navBlockedAt(e.x, e.y)){
+    e.path = null;                               /* clear shot — no need to path */
+    return null;
+  }
+  /* repath on a timer, when the path runs out, or when the player has moved on */
+  const stale = !e.path || e.pathT <= 0 ||
+    (e.pathGoal && Math.hypot(e.pathGoal.x-player.x, e.pathGoal.y-player.y) > 160);
+  if(stale && navBudget > 0){
+    navBudget--;
+    const p2 = navFindPath(e.x, e.y, player.x, player.y);
+    if(p2){
+      e.path = p2; e.pathI = 0;
+      e.pathGoal = {x:player.x, y:player.y};
+      e.pathT = rnd(0.55, 0.95);                 /* spread repaths across frames */
+    } else {
+      e.path = null; e.pathT = rnd(0.4, 0.7);
+    }
+  }
+  if(!e.path || e.pathI >= e.path.length) return null;
+  /* string-pulling: skip ahead to the furthest waypoint still in sight */
+  let best = e.pathI;
+  for(let i = Math.min(e.path.length-1, e.pathI+6); i > e.pathI; i--){
+    if(navLineOpen(e.x, e.y, e.path[i].x, e.path[i].y)){ best = i; break; }
+  }
+  e.pathI = best;
+  const wp = e.path[e.pathI];
+  if(Math.hypot(wp.x-e.x, wp.y-e.y) < NAV.cs*0.6){
+    e.pathI++;
+    if(e.pathI >= e.path.length){ e.path = null; return null; }
+  }
+  const t2 = e.path[e.pathI];
+  const a = Math.atan2(t2.y-e.y, t2.x-e.x);
+  return { x: Math.cos(a), y: Math.sin(a) };
 }
 function collideWorld(e){
   e.x = clamp(e.x, W.wall+e.r+6, W.w-W.wall-e.r-6);
@@ -2609,6 +2856,46 @@ function updateEnemy(e, dt){
     } else {
       vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed;
       if(dP<range && e.atkCd<=0){ e.mode='lunge'; e.modeT=0; e.chain=0; e.lockA=toP; SFX.grunt(); }
+    }
+  }
+  /* imp master — alternates between refilling the field with imps and hexing you */
+  else if(e.type==='impmaster'){
+    const mv = enemyCasterMove(e, dt, toP, dP, 440, 280);
+    vx = mv.x; vy = mv.y;
+    if(e.mode==='summon'){
+      e.modeT += dt; vx = 0; vy = 0;
+      if(e.modeT>=0.8){
+        e.mode='chase'; e.atkCd = 5.0*e.atkS;
+        const cnt = e.elite ? irnd(5,7) : irnd(3,5);
+        for(let i=0;i<cnt;i++){
+          const a = i/cnt*TAU + rnd(-0.3,0.3);
+          spawnEnemy('imp',
+            clamp(e.x+Math.cos(a)*90, W.wall+40, W.w-W.wall-40),
+            clamp(e.y+Math.sin(a)*90, W.wall+40, W.h-W.wall-40));
+        }
+        addRing(e.x, e.y, 14, 300, 110, '#ff8a8a', 6, 0.5);
+        SFX.roar();
+      }
+    } else if(e.mode==='hex'){
+      e.aimT += dt;
+      if(e.aimT>=0.55){
+        e.mode='chase'; e.atkCd = e.fire;
+        /* a fan of curse bolts, each carrying its own hex */
+        for(const off of [-0.2, 0, 0.2]){
+          const a2 = toP+off;
+          projectiles.push({kind:'hexbolt', x:e.x, y:e.y-18,
+            vx:Math.cos(a2)*250, vy:Math.sin(a2)*250,
+            owner:'enemy', dmg:1, life:3.4, curse:pick(CURSE_KEYS), src:e, seed:rnd(TAU)});
+        }
+        SFX.grunt();
+      }
+    } else {
+      if(e.atkCd<=0 && dP < 560){
+        const impCount = enemies.reduce((a,e2)=> a + (e2.type==='imp' && !e2.dead ? 1 : 0), 0);
+        e.mode = (impCount < 14 && Math.random() < 0.5) ? 'summon' : 'hex';
+        e.modeT = 0; e.aimT = 0;
+        addRing(e.x, e.y, 16, 200, 70, e.mode==='summon' ? '#ff8a8a' : '#9b45d6', 4, 0.6);
+      }
     }
   }
   /* pumpkin lord — lobs fused lego-pumpkins from range */
@@ -2963,13 +3250,25 @@ function updateEnemy(e, dt){
     else if(dP < 70){ vx = -Math.cos(toP)*e.speed*0.45; vy = -Math.sin(toP)*e.speed*0.45; }
   }
   else if(e.type==='boss'){ updateBoss(e, dt, toP, dP); return; }
+  /* A* takes over whenever a monster that is chasing the player can't see them.
+     Committed attacks (lunges, charges, dashes) are never redirected. */
+  const committed = (e.mode==='lunge' || e.mode==='charge' || e.mode==='dash');
+  if((vx||vy) && !e.docile && !committed){
+    const sp = Math.hypot(vx,vy);
+    const toward = sp>0 ? (vx*Math.cos(toP) + vy*Math.sin(toP))/sp : 0;
+    if(toward > 0.3){
+      const dir = navSteer(e, dt);
+      if(dir){ vx = dir.x*sp; vy = dir.y*sp; e.avoidT = 0; e.stuckT = 0; }
+    } else { e.path = null; }
+  } else if(committed){ e.path = null; }
   if((vx||vy) && !e.docile){
+    /* last-resort nudge for anything the grid can't help (pinned against a body) */
     const want = Math.hypot(vx,vy)*dt;
     const moved = dist(e, {x:e._lx, y:e._ly});
     if(want > 0.4 && moved < want*0.3) e.stuckT += dt;
     else e.stuckT = 0;
-    if(e.stuckT > 0.3){
-      e.avoidT = 0.75;
+    if(e.stuckT > 0.45){
+      e.avoidT = 0.5;
       e.avoidA = toP + (Math.random()<0.5?1:-1)*Math.PI/2;
       e.stuckT = 0;
     }
@@ -3066,6 +3365,15 @@ function fireRadius(e, base){
   }
   return Math.round(base * m * rnd(0.88, 1.16));
 }
+/* Bosses use the same grid, but only while walking the player down. */
+function bossChase(b, toP, spd, dt, mul){
+  const m = mul || 1;
+  let cx = Math.cos(toP), cy = Math.sin(toP);
+  const dir = navSteer(b, dt);
+  if(dir){ cx = dir.x; cy = dir.y; }
+  b.x += cx*spd*m*dt; b.y += cy*spd*m*dt;
+  b.face = {x:cx, y:cy};
+}
 function bossRingHit(b){
   if(!b.ring.hit && !player.dead){
     const d = dist(b, player);
@@ -3082,8 +3390,8 @@ function updateBoss(b, dt, toP, dP){
   const tier = Math.max(1, Math.floor(wave.n/5));
   if(b.bkey==='brickthane'){
     if(b.mode==='chase'){
-      b.x += Math.cos(toP)*spd*dt; b.y += Math.sin(toP)*spd*dt;
-      b.moving = true; b.walk += dt*8; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+      bossChase(b, toP, spd, dt);
+      b.moving = true; b.walk += dt*8;
       b.nextAtk -= dt;
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
@@ -3174,8 +3482,8 @@ function updateBoss(b, dt, toP, dP){
   }
   else if(b.bkey==='bonebaron'){
     if(b.mode==='chase'){
-      b.x += Math.cos(toP)*spd*dt; b.y += Math.sin(toP)*spd*dt;
-      b.moving = true; b.walk += dt*9; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+      bossChase(b, toP, spd, dt);
+      b.moving = true; b.walk += dt*9;
       b.nextAtk -= dt;
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
@@ -3234,8 +3542,8 @@ function updateBoss(b, dt, toP, dP){
   }
   else if(b.bkey==='lavabrick'){
     if(b.mode==='chase'){
-      b.x += Math.cos(toP)*spd*0.9*dt; b.y += Math.sin(toP)*spd*0.9*dt;
-      b.moving = true; b.walk += dt*7; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+      bossChase(b, toP, spd, dt, 0.9);
+      b.moving = true; b.walk += dt*7;
       b.nextAtk -= dt;
       if(Math.random()<0.25)
         particles.push({kind:'spark', x:b.x+rnd(-18,18), y:b.y-rnd(10,50), vx:0, vy:-60,
@@ -3307,8 +3615,8 @@ function updateBoss(b, dt, toP, dP){
   }
   else {
     if(b.mode==='chase'){
-      b.x += Math.cos(toP)*spd*0.85*dt; b.y += Math.sin(toP)*spd*0.85*dt;
-      b.moving = true; b.walk += dt*6; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+      bossChase(b, toP, spd, dt, 0.85);
+      b.moving = true; b.walk += dt*6;
       b.nextAtk -= dt;
       if(Math.random()<0.3)
         particles.push({kind:'spark', x:b.x+rnd(-22,22), y:b.y-rnd(10,54), vx:rnd(-10,10), vy:-70,
@@ -3397,8 +3705,8 @@ function updateSuperBoss(b, dt, toP, dP){
   const spd = b.speed*(enr?1.3:1);
   const tier = Math.max(2, Math.floor(wave.n/5));
   if(b.mode==='chase'){
-    b.x += Math.cos(toP)*spd*0.9*dt; b.y += Math.sin(toP)*spd*0.9*dt;
-    b.moving = true; b.walk += dt*7; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+    bossChase(b, toP, spd, dt, 0.9);
+    b.moving = true; b.walk += dt*7;
     b.nextAtk -= dt;
     if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
     if(b.nextAtk<=0){
@@ -3515,7 +3823,8 @@ function updateProjectiles(dt){
   for(const pr of projectiles){
     if(pr.x===undefined && pr.sx!==undefined){ pr.x = pr.sx; pr.y = pr.sy; }
     pr.px = pr.x; pr.py = pr.y;
-    if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'){
+    if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'
+       || pr.kind==='hexbolt'){
       if(pr.kind==='skull' && pr.homing && !pr.deflected){
         const ta = Math.atan2(player.y-pr.y, player.x-pr.x);
         const ca = Math.atan2(pr.vy, pr.vx);
@@ -3530,6 +3839,9 @@ function updateProjectiles(dt){
       if(pr.kind==='frostbolt' && Math.random()<0.4)
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-20,20), vy:rnd(-20,20),
           life:0.25, max:0.25, color:'#bfe3ff'});
+      if(pr.kind==='hexbolt' && Math.random()<0.6)
+        particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-25,25), vy:rnd(-25,25),
+          life:0.3, max:0.3, color:CURSES[pr.curse].col});
       if(pr.life<=0) pr.dead=true;
       for(const s of solids){
         if(dist(pr,s) < s.r){ pr.dead=true; addDust(pr.x,pr.y,2); break; }
@@ -3537,6 +3849,14 @@ function updateProjectiles(dt){
       if(pr.owner==='enemy' && !player.dead && dist(pr,player)<player.r+7+(pr.big?5:0)){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x, pr.y); pr.dead=true; }
+        }
+        else if(pr.kind==='hexbolt'){
+          /* curses weaken you rather than hurt you, so i-frames don't stop them —
+             only rolling through the bolt does */
+          applyCurse(pr.curse, pr.src);
+          addSparks(player.x, player.y-20, 8, CURSES[pr.curse].col);
+          SFX.deflect();
+          pr.dead = true;
         }
         else if(player.invuln<=0){
           playerDamage(1, pr,
@@ -5087,7 +5407,7 @@ function render(){
     }
     ctx.restore();
   }
-  if(player && player.regenRate>0 && !player.dead && player.hp < player.maxHp){
+  if(player && cursedRegen()>0 && !player.dead && player.hp < player.maxHp){
     const bw = 36, bxx = player.x-bw/2, byy = player.y-60;
     ctx.fillStyle='rgba(15,20,25,0.65)';
     roundRect(ctx, bxx-1, byy-1, bw+2, 7, 3); ctx.fill();
@@ -5105,10 +5425,12 @@ function render(){
       ctx.beginPath(); ctx.arc(bp.x, bp.y-4, 16+Math.sin(vtime*5+ph)*3, 0, TAU); ctx.fill();
       ctx.save(); ctx.translate(bp.x, bp.y); ctx.rotate(Math.sin(vtime*2+ph)*0.2);
       ctx.fillStyle = '#2e7dd1'; ctx.strokeStyle='rgba(15,30,50,0.6)'; ctx.lineWidth=1.8;
-      roundRect(ctx,-21,-5.5,42,11,2.5); ctx.fill(); ctx.stroke();
-      for(let k=0;k<4;k++) drawStudG(ctx,-15.5+k*10.3,0,3.1,'#1d4a6b');
+      roundRect(ctx,-21,-11,42,22,3); ctx.fill(); ctx.stroke();
+      /* classic 2x4: four studs across, two rows deep */
+      for(let row=0; row<2; row++)
+        for(let k=0;k<4;k++) drawStudG(ctx,-15.5+k*10.3, -5.2+row*10.4, 3.4, '#1d4a6b');
       ctx.fillStyle = '#bfe3ff';
-      ctx.beginPath(); ctx.arc(22,-9,2+Math.sin(vtime*12+ph)*0.8,0,TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(23,-14,2+Math.sin(vtime*12+ph)*0.8,0,TAU); ctx.fill();
       ctx.restore();
     }
   }
@@ -5146,6 +5468,29 @@ function render(){
     else if(pr.kind==='bolt') drawBolt(ctx,pr);
     else if(pr.kind==='fireball') drawFireball(ctx,pr,false);
     else if(pr.kind==='meteor') drawFireball(ctx,pr,true);
+    else if(pr.kind==='hexbolt'){
+      const C = CURSES[pr.curse], rgb = prs(C.col);
+      ctx.save(); ctx.translate(pr.x, pr.y);
+      ctx.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.28)`;
+      ctx.beginPath(); ctx.arc(0,0,11+Math.sin(vtime*11+pr.seed)*2,0,TAU); ctx.fill();
+      ctx.rotate(vtime*4 + pr.seed);
+      ctx.strokeStyle = C.col; ctx.lineWidth = 2.4; ctx.lineJoin='round';
+      ctx.beginPath();
+      for(let i=0;i<3;i++){
+        const a = i*TAU/3;
+        i ? ctx.lineTo(Math.cos(a)*7, Math.sin(a)*7) : ctx.moveTo(Math.cos(a)*7, Math.sin(a)*7);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.rotate(-2*(vtime*4 + pr.seed));
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for(let i=0;i<3;i++){
+        const a = i*TAU/3 + Math.PI/3;
+        i ? ctx.lineTo(Math.cos(a)*5, Math.sin(a)*5) : ctx.moveTo(Math.cos(a)*5, Math.sin(a)*5);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    }
     else if(pr.kind==='pumpkin'){
       const grounded = pr.t >= pr.dur;
       const fz = pr.z || 0;
@@ -5386,6 +5731,8 @@ function drawEnemy(c, e){
   if(e.type==='stormcaller'){ o.weapon='staff'; o.orbCol='#ffe95a'; o.hoodCol='#6b5714'; if(e.mode==='aim'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='stormlord'){ o.weapon='staff'; o.orbCol='#fff3a0'; o.hoodCol='#8a7115'; if(e.mode==='aim'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='overseer'){ o.weapon='staff'; o.orbCol='#ffe95a'; o.hoodCol='#5e4a12'; o.lord=true; if(e.mode==='buffWind'){ o.armsUp=true; o.castGlow=true; } }
+  if(e.type==='impmaster'){ o.weapon='staff'; o.orbCol='#ff5a4a'; o.hoodCol='#3a0c16'; o.horns=true; o.lord=true;
+    if(e.mode==='summon'||e.mode==='hex'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necromancer'){ o.weapon='staff'; o.orbCol='#c9b8e8'; o.hoodCol='#271b3a'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necrolord'){ o.weapon='staff'; o.orbCol='#dccdf5'; o.hoodCol='#31204d'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='brute' && e.mode==='windup') o.armsUp = true;
@@ -5590,6 +5937,10 @@ function renderHUD(){
   if(p.burn.t>0)      ails.push({c:'#ff8a3c', t:'BURN '+Math.ceil(p.burn.pool)+' dmg · '+Math.ceil(p.burn.t)+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
+  if(p.curse.t>0) for(const k of CURSE_KEYS){
+    if(p.curse[k] > 0)
+      ails.push({c:CURSES[k].col, t:CURSES[k].name+' -'+Math.round(p.curse[k]*100)+'% · '+Math.ceil(p.curse.t)+'s'});
+  }
   ails.forEach((a,i)=>{
     const ay = xpY + 24 + i*20;
     ctx.fillStyle = 'rgba(15,20,25,0.62)';
@@ -5810,6 +6161,7 @@ function resetRun(demo){
   pendingPicks = []; upgradeMode = 'wave';
   rerollsUsed = 0; screenRerolls = 0;
   buildGround(); buildProps();
+  navBuild();
   player = newPlayer();
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
   if(demo){
@@ -5898,6 +6250,7 @@ function update(dt, raw){
   }
   else if(state==='play'){
     runTime += dt;
+    navBudget = NAV_BUDGET;
     mouse.wx = cam.x + (mouse.x - cw/2)/zoom;
     mouse.wy = cam.y + (mouse.y - ch/2)/zoom;
     updatePlayer(dt);
