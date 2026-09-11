@@ -65,9 +65,20 @@
     border-radius:9px;padding:3px 8px;box-shadow:0 3px 0 #000}
   #rerollRow{margin-top:26px;display:flex;align-items:center;gap:14px}
   #rerollCost{font-size:14px;color:#ffd76e;font-weight:600}
-  #buildChips{margin-top:22px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:820px}
+  #buildChips{margin-top:22px;display:flex;flex-direction:column;gap:12px;align-items:center;max-width:880px}
+  .chipgroup{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;max-width:880px}
+  .chiphead{font-family:'Titan One';font-size:11px;letter-spacing:2px;color:#ffd76e;opacity:.85;margin-right:4px}
   .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:20px;
     padding:5px 13px;font-size:12.5px;font-weight:600;color:#e8ebe9}
+  .chip.spell{background:rgba(155,69,214,.28);border-color:rgba(214,166,255,.5);cursor:help;position:relative}
+  .chip.spell b{color:#ffd76e;font-weight:700}
+  .chip.spell:hover{background:rgba(155,69,214,.45)}
+  .chip.spell:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:150%;transform:translateX(-50%);
+    white-space:pre;background:#12181d;border:2px solid #ffb900;border-radius:12px;padding:10px 14px;
+    font-size:12px;font-weight:500;color:#f2f3f2;line-height:1.6;text-align:left;z-index:40;
+    box-shadow:0 8px 24px rgba(0,0,0,.65);font-family:'Fredoka'}
+  .chip.spell:hover::before{content:'';position:absolute;left:50%;bottom:138%;transform:translateX(-50%);
+    border:8px solid transparent;border-top-color:#ffb900;z-index:41}
   .plate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:22px;
     box-shadow:0 8px 0 #8f161d,0 20px 44px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.25);position:relative}
   .studrow{display:flex;gap:12px;justify-content:center;padding:14px 26px 0}
@@ -187,7 +198,7 @@ function mixc(h,h2,t){ const a=prs(h), b=prs(h2);
   return css([lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)]); }
 
 /* =============================== CONSTANTS =============================== */
-const W = { w:3600, h:2700, wall:70 };
+const W = { w:5400, h:4050, wall:70 };
 const CX = W.w/2, CY = W.h/2;
 const MAX_ALIVE = 512;
 const CS = 40;
@@ -200,8 +211,18 @@ const HEART_ROW_COLS = ['#d3242b','#ffb900','#9b45d6','#2ea8a0','#e4572e','#4b9b
 const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
 const FORTUNE_CAP = 8;
 const CHAIN_MAX_ZAPPERS = 5;
-/* NEW: cave biome pocket (Rock Raiders territory) */
-const CAVE = { x:CX-620, y:CY+430, r:470 };
+const CHAIN_MIN_RATE = 1.0;    /* a storm brick never fires faster than once a second */
+const CHAIN_FALLOFF  = 0.65;   /* each leap after the first hits for this much of the last */
+const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead of spinning */
+const VORTEX_MIN_HITMUL = 0.45;
+const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above this they strobe */
+const OVERSEER_MAX_STACKS = 3;
+/* cave biome pockets (Rock Raiders territory) — seeded per run in buildGround */
+let CAVES = [];
+function inCave(x,y){
+  for(const c of CAVES) if(Math.hypot(x-c.x, y-c.y) < c.r) return true;
+  return false;
+}
 const PAL = {
   red:'#d3242b', dred:'#8f161d', gold:'#ffb900', hyellow:'#ffcf00',
   blue:'#1668b3', green:'#4b9b41', white:'#f2f3f2', black:'#1b2a34',
@@ -375,7 +396,6 @@ let rerollsUsed = 0;
 let screenRerolls = 0;
 let runTime = 0, retPulse = 0, redFlash = 0;
 let seed = 1;
-let chestT = 0, chestPick = -1;
 let mergeT = 0;
 let player = null;
 
@@ -410,7 +430,7 @@ function newPlayer(){
     freeze:{ n:0, r:190, dur:2.5, rate:10, cd:4 },
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
-    chain:{ n:0, zappers:0, dmg:2, rate:2.2, cd:1.5, r:430 },
+    chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5] },
     bomb:{ n:0, dmg:2, r:105, rate:7, cd:3 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
@@ -454,7 +474,7 @@ function roundRect(g,x,y,w,h,r){
   g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
   g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
 }
-/* biome map: 4 pie quadrants + the CAVE pocket — no more main road */
+/* biome map: 8 alternating sectors, heavy jitter, seeded blotches + cave pockets */
 const BIOMES = {
   forest: ['#4f9a37','#55a43c','#4a9133','#59ab40'],
   desert: ['#d3bc7e','#ccb474','#dcc689','#c9b276'],
@@ -463,14 +483,21 @@ const BIOMES = {
   cave:   ['#6e6a62','#67635c','#767268','#5f5b55']
 };
 const BIOME_ORDER = ['forest','desert','stone','swamp'];
+let biomeBlobs = [];
 function biomeAt(x,y){
-  if(Math.hypot(x-CAVE.x, y-CAVE.y) < CAVE.r) return 'cave';
+  if(inCave(x,y)) return 'cave';
+  for(const b of biomeBlobs){
+    const dx0 = x-b.x, dy0 = y-b.y;
+    const gx0 = Math.floor(x/150), gy0 = Math.floor(y/150);
+    const wob = (hash2(gx0+b.seed, gy0-b.seed)-0.5)*180;
+    if(dx0*dx0 + dy0*dy0 < (b.r+wob)*(b.r+wob)) return b.kind;
+  }
   const dx = x-CX, dy = y-CY;
-  const gx = Math.floor(x/200), gy = Math.floor(y/200);
-  const jx = (hash2(gx,gy)-0.5)*320, jy = (hash2(gx+57,gy+91)-0.5)*320;
+  const gx = Math.floor(x/180), gy = Math.floor(y/180);
+  const jx = (hash2(gx,gy)-0.5)*430, jy = (hash2(gx+57,gy+91)-0.5)*430;
   const a = Math.atan2(dy+jy, dx+jx);
-  const s = Math.floor(((a+TAU)%TAU)/(TAU/4)) % 4;
-  return BIOME_ORDER[s];
+  const s = Math.floor(((a+TAU)%TAU)/(TAU/8)) % 8;
+  return BIOME_ORDER[s % BIOME_ORDER.length];
 }
 const spriteCache = new Map();
 function cellSprite(col){
@@ -490,11 +517,42 @@ function cellColorKey(ix,iy){
   return pal[(hash2(ix>>2, iy>>2)*pal.length)|0];
 }
 function buildGround(){
-  waters = [ {x:520,y:300,w:300,h:180}, {x:2280,y:1480,w:340,h:220},
-             {x:640,y:1620,w:280,h:190}, {x:2440,y:420,w:240,h:160} ];
-  flowers = [];
   const rng = mulberry32(seed+5);
-  for(let i=0;i<110;i++){
+  /* two or three cave pockets, never on top of the spawn clearing */
+  CAVES = [];
+  for(let i=0;i<3 && CAVES.length<3;i++){
+    for(let tries=0; tries<40; tries++){
+      const r = 360 + rng()*220;
+      const cx2 = r+220 + rng()*(W.w-2*(r+220)), cy2 = r+220 + rng()*(W.h-2*(r+220));
+      if(Math.hypot(cx2-CX, cy2-CY) < 900 + r) continue;
+      if(CAVES.some(c=>Math.hypot(c.x-cx2, c.y-cy2) < c.r + r + 220)) continue;
+      CAVES.push({x:cx2, y:cy2, r});
+      break;
+    }
+  }
+  /* biome blotches break up the sector seams */
+  biomeBlobs = [];
+  for(let i=0;i<9;i++){
+    const bx = 320+rng()*(W.w-640), by = 320+rng()*(W.h-640);
+    if(Math.hypot(bx-CX, by-CY) < 640) continue;
+    biomeBlobs.push({ x:bx, y:by, r:230+rng()*300,
+      kind: BIOME_ORDER[(rng()*BIOME_ORDER.length)|0], seed:(rng()*900)|0 });
+  }
+  /* scattered lakes — count scales with the map, none in the spawn clearing or a cave */
+  waters = [];
+  const lakeTarget = Math.round(W.w*W.h/800000);
+  for(let tries=0; tries<400 && waters.length<lakeTarget; tries++){
+    const ww = 200+rng()*260, wh = 140+rng()*200;
+    const wx = 180+rng()*(W.w-360-ww), wy = 180+rng()*(W.h-360-wh);
+    const mx = wx+ww/2, my = wy+wh/2;
+    if(Math.hypot(mx-CX, my-CY) < 700) continue;
+    if(inCave(mx,my)) continue;
+    if(waters.some(o=> wx < o.x+o.w+150 && wx+ww > o.x-150 && wy < o.y+o.h+150 && wy+wh > o.y-150)) continue;
+    waters.push({x:wx, y:wy, w:ww, h:wh});
+  }
+  flowers = [];
+  const flowerTarget = Math.round(W.w*W.h/62000);
+  for(let i=0;i<flowerTarget*3 && flowers.length<flowerTarget;i++){
     const fx = 130+rng()*(W.w-260), fy = 130+rng()*(W.h-260);
     const fc = rng()<0.5?PAL.red:PAL.gold;
     if(Math.abs(fx-CX)<300 || Math.abs(fy-CY)<100) continue;
@@ -562,6 +620,7 @@ function buildProps(){
   const rng = mulberry32(seed+11);
   const torchPos = [[CX-320,CY-200],[CX+320,CY-200],[CX-320,CY+200],[CX+320,CY+200]];
   for(const [tx,ty] of torchPos) addProp('torch', tx, ty, rng);
+  const dens = (W.w*W.h)/(3600*2700);   /* quotas follow the map size */
   const quotas = [
     ['forest','tree',16],['swamp','tree',8],
     ['desert','cactus',10],['desert','rock',6],
@@ -569,16 +628,16 @@ function buildProps(){
     /* Rock Raiders crystals & cave boulders */
     ['cave','boulder',9],['cave','crystal',14],
     ['stone','crystal',6],['forest','crystal',3],['swamp','crystal',3]
-  ];
+  ].map(([b,t,c])=>[b,t,Math.round(c*dens)]);
   let tries = 0;
+  const tryCap = Math.round(3200*dens);
   for(const [biome,type,count] of quotas){
     let placed = 0;
-    while(placed<count && tries<3200){
+    while(placed<count && tries<tryCap){
       tries++;
       const x = 170+rng()*(W.w-340), y = 170+rng()*(W.h-340);
       if(biomeAt(x,y)!==biome) continue;
-      if(Math.hypot(x-CX,y-CY) < 360) continue;
-      if(Math.abs(x-CX)<150 || Math.abs(y-CY)<150) continue;
+      if(Math.hypot(x-CX,y-CY) < 420) continue;
       let bad = false;
       for(const w of waters) if(x>w.x-50 && x<w.x+w.w+50 && y>w.y-50 && y<w.y+w.h+50) bad=true;
       for(const p of props) if(Math.hypot(p.x-x,p.y-y) < 95) bad=true;
@@ -668,8 +727,9 @@ function addDust(x,y,n=3,col='rgba(220,225,210,'){
 function addRing(x,y,r0,speed,max,color,lw=6,life=0.5){
   particles.push({kind:'ring', x, y, r:Math.max(1,r0), v:Math.max(1,speed), max, color, lw, life, maxLife:life});
 }
-function addZap(x1,y1,x2,y2){
-  particles.push({kind:'zap', x1,y1,x2,y2, vx:0, vy:0, life:0.16, max:0.16, seed:rnd(TAU)});
+function addZap(x1,y1,x2,y2,link=0){
+  particles.push({kind:'zap', x1,y1,x2,y2, vx:0, vy:0, life:0.16, max:0.16,
+    seed:rnd(TAU), link});
 }
 function addDmg(x,y,txt,color='#fff',size=17){
   dmgTexts.push({x:x+rnd(-8,8), y:y-30, txt, color, size, life:0.8, vy:-52});
@@ -740,7 +800,7 @@ function mergeSweep(){
           if(d < farBestD){ farBestD = d; farBest = other; }
         }
       }
-      if(near >= need-1 || pk.t < 10 || !farBest){
+      if(near >= need-1 || pk.t < 1 || !farBest){
         pk.seeking = false;    // cluster nearly complete, or too fresh, or nowhere to go
         continue;
       }
@@ -827,7 +887,22 @@ const EDEF = {
   stormlord:{ hp:20, speed:58, r:15, scale:1.25, dmg:1, xp:22, studs:[16,26], fire:2.9,
              col:{head:'#eef0ee', torso:'#c9a523', legs:'#8a7115', hands:'#fff3a0', hair:'#8a7115'}, style:'hexer' },
   overseer:{ hp:26, speed:48, r:14, scale:1.2, dmg:1, xp:35, studs:[25,40], fire:6.0,
-             col:{head:'#eef0ee', torso:'#8a7115', legs:'#5e4a12', hands:'#ffe95a', hair:'#5e4a12'}, style:'hexer' }
+             col:{head:'#eef0ee', torso:'#8a7115', legs:'#5e4a12', hands:'#ffe95a', hair:'#5e4a12'}, style:'hexer' },
+  /* GOLEMS — slow siege units: they lumber in, charge, then plant a delayed AoE stomp */
+  stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:2, xp:26, studs:[18,30], golem:'stone',
+             col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
+  icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'ice',
+             col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
+  firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'fire',
+             col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' }
+};
+const GOLEM_CONF = {
+  stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:210, chargeSpd:430, wind:1.0, dmg:2,
+          bricks:['#9aa0a0','#7b8184','#5f6467'], name:'STONE' },
+  ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:230, chargeSpd:400, wind:1.1, dmg:1,
+          bricks:['#cfeaff','#7fb9e0','#4d86ad'], name:'FROST' },
+  fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:200, chargeSpd:460, wind:0.95, dmg:2,
+          bricks:['#ff9a3c','#8a3418','#4a1d0f'], name:'EMBER' }
 };
 /* ranged monsters get half the wave armor — melee stays the threat */
 const RANGED_SET = new Set(['archer','spitter','hexer','pyromancer','frostmage','stormcaller',
@@ -869,8 +944,8 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       B = SUPERBOSSES[skey];
       const st = Math.max(1, Math.floor(wave.n/10));
       /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
-      const mult = 1 + (st-1)*1.9;
-      const bhp = Math.round(B.hp*mult + st*600);
+      const mult = 1 + (st-1)*2.3;
+      const bhp = Math.round(B.hp*mult + st*1100);
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armor:Math.min(0.55, 0.15*st),
@@ -893,7 +968,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         bkey = keys2[(tier-1) % keys2.length];
         B = BOSSES[bkey];
       }
-      const bhp = Math.round(B.hp*(1 + (tier-1)*1.5) + tier*180);
+      const bhp = Math.round(B.hp*(1 + (tier-1)*1.9) + tier*320);
       e = { type:'boss', x, y, bkey, bname:B.name,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
@@ -933,21 +1008,30 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     flash:0, hitCd:0, atkCd:rnd(0.5,1.5)*atkS, kx:0, ky:0, mode:'chase', modeT:0,
     strafe:Math.random()<0.5?1:-1, strafeT:rnd(1,3), elite, magic, dead:false, phase:rnd(TAU),
     aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
-    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y };
+    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1 };
   enemies.push(e);
   SFX.build();
 }
 
 function randomSpawnPos(){
-  for(let i=0;i<30;i++){
-    const x = rnd(W.wall+130, W.w-W.wall-130), y = rnd(W.wall+130, W.h-W.wall-130);
+  const lo = W.wall+130, hiX = W.w-W.wall-130, hiY = W.h-W.wall-130;
+  for(let i=0;i<40;i++){
+    let x, y;
+    if(player && i<32){
+      /* ring around the player — far enough to be fair, close enough to matter */
+      const a = rnd(TAU), rr = rnd(480, 1150);
+      x = clamp(player.x + Math.cos(a)*rr, lo, hiX);
+      y = clamp(player.y + Math.sin(a)*rr, lo, hiY);
+    } else {
+      x = rnd(lo, hiX); y = rnd(lo, hiY);
+    }
     if(player && dist({x,y}, player) < 440) continue;
     let bad=false;
     for(const s of solids) if(dist({x,y},s)<s.r+30) bad=true;
     for(const w of waters) if(x>w.x-30&&x<w.x+w.w+30&&y>w.y-30&&y<w.y+w.h+30) bad=true;
     if(!bad) return {x,y};
   }
-  return {x:W.wall+150, y:W.wall+150};
+  return {x:clamp((player?player.x:CX)+520, lo, hiX), y:clamp((player?player.y:CY)+520, lo, hiY)};
 }
 function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   if(e.dead||e.state!=='active') return;
@@ -1066,7 +1150,9 @@ function wavePool(n){
   if(n>=7) p.push(['stalker',4],['necromancer',2]);
   if(n>=8) p.push(['jugg',3],['pyromancer',2],['frostmage',2]);
   if(n>=9) p.push(['revenant',3],['lobber',2]);
-  if(n>=10) p.push(['stormcaller',2],['bastion',3]);
+  if(n>=8) p.push(['stonegolem',2]);
+  if(n>=10) p.push(['stormcaller',2],['bastion',3],['icegolem',2]);
+  if(n>=11) p.push(['firegolem',2]);
   if(n>=11) p.push(['marksman',2]);
   if(n>=12) p.push(['necrolord',2]);
   if(n>=13) p.push(['pyrolord',2]);
@@ -1296,10 +1382,11 @@ const UPGRADES = [
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), r:Math.round(6*m), s:Math.round(2*m)}),
     desc:c=>`Orbit +${c.v} dmg, +${c.r} reach, +${c.s} size`,
     apply:c=>{ player.orbit.dmg+=c.v; player.orbit.r+=c.r; player.orbit.size+=c.s; } },
-  { id:'orbitspd', name:'Swift Orbit', icon:'bolt', cls:'SPELL', req:()=>player.orbit.n>0,
+  { id:'orbitspd', name:'Swift Orbit', icon:'bolt', cls:'SPELL',
+    req:()=>player.orbit.n>0 && player.orbit.spd<ORBIT_MAX_SPD,
     calc:m=>({v:0.22+0.12*m}),
-    desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often)`,
-    apply:c=>{ player.orbit.spd *= (1+c.v); } },
+    desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
+    apply:c=>{ player.orbit.spd = Math.min(ORBIT_MAX_SPD, player.orbit.spd*(1+c.v)); } },
   { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bricks per volley (now ${player.blaster.n + c.n})`
@@ -1319,8 +1406,8 @@ const UPGRADES = [
     apply:c=>{ player.spellDmg += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} chain — every bolt now leaps to ${player.chain.n + c.n} foes`
-      : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}`,
+    desc:(c,owned)=> owned>0 ? `+${c.n} chain — every bolt now leaps to ${player.chain.n + c.n} foes (each leap ${Math.round(CHAIN_FALLOFF*100)}% of the last)`
+      : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''} — each leap weaker than the last`,
     apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
   { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL',
     req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
@@ -1331,13 +1418,13 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.zappers = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n); } },
   { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m*0.9))}),
-    desc:c=>`Storm bricks +${c.v} dmg per zap (currently ${(player.chain.dmg*player.spellDmg).toFixed(1)} with spell damage)`,
+    calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
+    desc:c=>`Storm bricks +${c.v} dmg on the opening strike (now ${((player.chain.dmg+c.v)*player.spellDmg).toFixed(1)})`,
     apply:c=>{ player.chain.dmg += c.v; } },
-  { id:'chainrate', name:'Charged Storm', icon:'bolt', cls:'SPELL', req:()=>player.chain.n>0,
+  { id:'chainrate', name:'Charged Storm', icon:'bolt', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
-    desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster`,
-    apply:c=>{ player.chain.rate *= (1-c.v); } },
+    desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
+    apply:c=>{ player.chain.rate = Math.max(CHAIN_MIN_RATE, player.chain.rate*(1-c.v)); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm (now ${player.storm.n + c.n}) — wider sweeping spirals`
@@ -1363,7 +1450,8 @@ const UPGRADES = [
   { id:'vortexrate', name:'Vortex Speed', icon:'bolt', cls:'SPELL', req:()=>player.vortex.n>0,
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
-    apply:c=>{ player.vortex.rate *= (1-c.v); player.vortex.hitMul *= (1-c.v*0.5); } },
+    apply:c=>{ player.vortex.rate *= (1-c.v);
+      player.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, player.vortex.hitMul*(1-c.v*0.5)); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.freeze.n + c.n}) — longer deep-freeze`
@@ -1412,6 +1500,71 @@ function pickChoices(mode){
     choices.push({ t, rar, c: t.calc(RARITY[rar].mult) });
   }
 }
+/* live damage readouts for every spell the player actually owns — the numbers here
+   are computed the same way the update loop computes them, so they can't drift. */
+function spellSummaries(){
+  const p = player, out = [];
+  const per = n=> n.toFixed(1);
+  if(p.orbit.n>0){
+    const d = p.orbit.dmg*p.spellDmg;
+    const hitCd = clamp(0.5*2.6/p.orbit.spd, 0.05, 0.5);
+    out.push({ name:'Guardian Brick', head:per(d)+' per hit', tip:
+      `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
+      `${per(d)} damage per hit (${p.orbit.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `A foe can be struck every ${hitCd.toFixed(2)}s` });
+  }
+  if(p.blaster.n>0){
+    const d = p.blaster.dmg*p.spellDmg;
+    out.push({ name:'Brick Blaster', head:per(d)+' per brick', tip:
+      `${p.blaster.n} brick${p.blaster.n>1?'s':''} per volley, every ${p.blaster.rate.toFixed(2)}s\n`+
+      `${per(d)} damage each (${p.blaster.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'}\n`+
+      `Full volley: ${per(d*p.blaster.n)}` });
+  }
+  if(p.chain.n>0 && p.chain.zappers>0){
+    const d = p.chain.dmg*p.spellDmg;
+    let total = 0, cur = d;
+    for(let i=0;i<p.chain.n;i++){ total += cur; cur *= CHAIN_FALLOFF; }
+    const zn = Math.min(CHAIN_MAX_ZAPPERS, p.chain.zappers);
+    out.push({ name:'Storm Brick', head:per(d)+' opening strike', tip:
+      `${zn} zapper${zn>1?'s':''}, each on its own ${p.chain.rate.toFixed(2)}s cooldown\n`+
+      `Opening strike ${per(d)} (${p.chain.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `Each leap deals ${Math.round(CHAIN_FALLOFF*100)}% of the strike before it\n`+
+      `${p.chain.n} target${p.chain.n>1?'s':''} per bolt: ${per(total)} down the chain\n`+
+      `All ${zn} bricks firing: ${per(total*zn)}` });
+  }
+  if(p.storm.n>0){
+    const d = p.storm.dmg*p.bladeDmg, blades = p.storm.n*p.storm.count;
+    out.push({ name:'Bladestorm', head:per(d)+' per blade', tip:
+      `${blades} blades every ${p.storm.rate.toFixed(2)}s\n`+
+      `${per(d)} damage each (${p.storm.dmg} base × ${p.bladeDmg.toFixed(2)} blade dmg)\n`+
+      `Full burst: ${per(d*blades)} spread around you` });
+  }
+  if(p.vortex.n>0){
+    const d = p.vortex.dmg*p.dmgMul*p.bladeDmg;
+    const tick = 0.24*p.vortex.hitMul;
+    const dur = p.vortex.dur + (p.vortex.n-1)*0.4;
+    out.push({ name:'Blade Vortex', head:per(d)+' per tick', tip:
+      `Spins for ${dur.toFixed(1)}s every ${p.vortex.rate.toFixed(2)}s\n`+
+      `${per(d)} damage per tick, one tick per foe every ${tick.toFixed(2)}s\n`+
+      `Radius ${Math.round(p.vortex.r + (p.vortex.n-1)*10)}\n`+
+      `Up to ${per(d*Math.floor(dur/tick))} to a foe that stays inside` });
+  }
+  if(p.bomb.n>0){
+    const d = p.bomb.dmg*p.spellDmg;
+    out.push({ name:'Bomb Volley', head:per(d)+' per blast', tip:
+      `${p.bomb.n} bomb${p.bomb.n>1?'s':''} every ${p.bomb.rate.toFixed(2)}s\n`+
+      `${per(d)} damage in a ${Math.round(p.bomb.r)} radius (${p.bomb.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
+  }
+  if(p.freeze.n>0){
+    out.push({ name:'Block Freeze', head:'no damage', tip:
+      `Pure crowd control — deals no damage\n`+
+      `Radius ${Math.round(p.freeze.r + (p.freeze.n-1)*30)}, every ${p.freeze.rate.toFixed(2)}s\n`+
+      `Frozen foes crawl at 45% speed for ${(p.freeze.dur + (p.freeze.n-1)*1.2).toFixed(1)}s` });
+  }
+  return out;
+}
 function rerollCost(){ return 25 + rerollsUsed*20; }
 function renderCards(){
   const wrap = document.getElementById('cards');
@@ -1429,15 +1582,13 @@ function renderCards(){
       <h3>${card.t.name}</h3><p>${card.t.desc(card.c, owned)}</p>
       <div class="rtag" style="background:${R.col}">${R.name}</div>
       <div class="ctag" style="background:${CLS_COL[card.t.cls]||'#555'}">${card.t.cls}</div>
-      ${chest ? '<div class="ctag" style="bottom:28px;background:#ffb900;color:#1b2a34">YOUR REWARD</div>'
-              : `<div class="key">${i+1}</div>`}`;
+      <div class="key">${i+1}</div>`;
     if(card.rar==='rare'||card.rar==='epic')
       el.style.boxShadow = `0 8px 0 rgba(0,0,0,.35), 0 0 22px ${R.col}`;
-    if(!chest) el.addEventListener('click', ()=> chooseUpgrade(i));
-    else el.style.cursor = 'default';
+    el.addEventListener('click', ()=> chooseUpgrade(i));
     wrap.appendChild(el);
   });
-  if(chest) return;   /* no reroll UI on chest rewards */
+  if(chest) return;   /* no reroll UI on chest rewards — the single card is the pick */
   const btn = document.getElementById('rerollBtn');
   const cost = rerollCost();
   const left = 2 - screenRerolls;
@@ -1450,7 +1601,6 @@ function openUpgrades(mode='wave'){
   if(state!=='play') return;
   upgradeMode = mode;
   screenRerolls = 0;
-  if(mode==='chest'){ chestT = 0; chestPick = -1; }
   const stats = [
     ['Max HP', player.maxHp],
     ['Regen', player.regenRate>0 ? player.regenRate.toFixed(2)+'/s' : '—'],
@@ -1472,15 +1622,22 @@ function openUpgrades(mode='wave'){
   renderCards();
   document.getElementById('rerollRow').style.display = mode==='chest' ? 'none' : 'flex';
   const chips = document.getElementById('buildChips');
-  chips.innerHTML = Object.keys(taken).map(id=>{
+  const esc = t=> String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const spells = spellSummaries().map(sp=>
+    `<div class="chip spell" data-tip="${esc(sp.tip)}">${esc(sp.name)} · <b>${esc(sp.head)}</b></div>`).join('');
+  const buffs = Object.keys(taken).map(id=>{
     const u = UPGRADES.find(x=>x.id===id);
-    return u ? `<div class="chip">${u.name} ×${taken[id]}</div>` : '';
-  }).join('') || '<div class="chip">Fresh build — first upgrade!</div>';
+    return (u && u.cls!=='SPELL') ? `<div class="chip">${u.name} ×${taken[id]}</div>` : '';
+  }).join('');
+  chips.innerHTML =
+    (spells ? `<div class="chipgroup"><span class="chiphead">SPELLS — HOVER FOR DAMAGE</span>${spells}</div>` : '') +
+    (buffs  ? `<div class="chipgroup"><span class="chiphead">UPGRADES</span>${buffs}</div>` : '') ||
+    '<div class="chipgroup"><div class="chip">Fresh build — first upgrade!</div></div>';
   document.getElementById('upTitle').textContent =
     mode==='chest' ? 'TREASURE CHEST!' :
     mode==='wave' ? 'WAVE '+wave.n+' CLEARED!' : mode==='boss' ? 'BOSS REWARD!' : 'LEVEL UP!';
   document.getElementById('upSub').textContent =
-        mode==='chest' ? 'The chest decides your reward...' :
+        mode==='chest' ? 'One brick inside — take it' :
     mode==='boss' ? 'Four crown bricks to choose from — R rerolls twice for studs'
     : mode==='wave' ? 'Grab a new brick — 1, 2 or 3 · R rerolls (max 2) for studs'
     : 'Level up! Pick a brick — 1, 2 or 3 · R rerolls (max 2) for studs';
@@ -1488,7 +1645,7 @@ function openUpgrades(mode='wave'){
   state = 'upgrade'; cv.style.cursor='default';
 }
 function doReroll(){
-  if(state!=='upgrade' || upgradeMode==='chest') return;
+  if(state!=='upgrade' || upgradeMode==='chest') return;   /* chests offer one brick, no reroll */
   if(screenRerolls >= 2) return;
   const cost = rerollCost();
   if(player.studs < cost) return;
@@ -1500,7 +1657,7 @@ function doReroll(){
   renderCards();
 }
 function chooseUpgrade(i){
-  if(state!=='upgrade' || upgradeMode==='chest' || !choices[i]) return;
+  if(state!=='upgrade' || !choices[i]) return;
   const card = choices[i];
   card.t.apply(card.c);
   taken[card.t.id] = (taken[card.t.id]||0)+1;
@@ -1511,16 +1668,6 @@ function chooseUpgrade(i){
   addRing(player.x, player.y, 10, 400, 130, RARITY[card.rar].col, 6, 0.5);
   if(upgradeMode==='wave') startWave(wave.n+1);
 }
-/* chest rewards are applied automatically — no player selection */
-function applyChest(){
-  const card = choices[0];
-  if(!card) return;
-  card.t.apply(card.c);
-  taken[card.t.id] = (taken[card.t.id]||0)+1;
-  addRing(player.x, player.y, 10, 400, 130, RARITY[card.rar].col, 6, 0.5);
-  addDmg(player.x, player.y-50, card.t.name+'!', RARITY[card.rar].col, 18);
-}
-
 document.getElementById('rerollBtn').addEventListener('click', doReroll);
 
 /* =============================== UPDATE =============================== */
@@ -1758,43 +1905,46 @@ function updatePlayer(dt){
      foes are in range, so it fires the instant one appears. */
   const chn = p.chain;
   if(chn.n>0 && chn.zappers>0){
-    chn.cd -= dt;
-    if(chn.cd<=0){
-      const cands = enemies.filter(e=>!e.dead && e.state==='active' && dist(e,p) < chn.r);
-      if(cands.length){
-        chn.cd = chn.rate;   /* cooldown only consumed when it actually fires */
-        const zapDmg = chn.dmg * p.spellDmg;
-        const zappers = Math.min(CHAIN_MAX_ZAPPERS, chn.zappers);
-        const claimed = new Set();   /* spread the bricks over different first targets */
-        for(let z=0; z<zappers; z++){
-          let pool = cands.filter(e=>!e.dead && !claimed.has(e));
-          if(!pool.length) pool = cands.filter(e=>!e.dead);
-          if(!pool.length) break;
-          let cur = pick(pool);
-          claimed.add(cur);
-          let from = chainBrickPos(p, z, zappers);
-          const hitSet = new Set();
-          for(let i=0;i<chn.n;i++){
-            if(!cur || cur.dead) break;
-            hitSet.add(cur);
-            addZap(from.x, from.y, cur.x, cur.y-14);
-            hitEnemy(cur, zapDmg, angTo(from,cur), 0, 'chain', {spin:true});
-            from = {x:cur.x, y:cur.y-14};
-            /* chain to nearest UNIQUE monster this bolt hasn't hit yet */
-            let nxt=null, best=1e9;
-            for(const e2 of enemies){
-              if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
-              const dd = dist(e2,cur);
-              if(dd<340 && dd<best){ best=dd; nxt=e2; }
-            }
-            cur = nxt;
-          }
+    const zappers = Math.min(CHAIN_MAX_ZAPPERS, chn.zappers);
+    /* every brick runs its own cooldown, staggered so they don't all dump at once */
+    while(chn.cds.length < zappers) chn.cds.push(chn.rate * chn.cds.length / zappers);
+    chn.cds.length = zappers;
+    let cands = null, fired = false;
+    const zapDmg = chn.dmg * p.spellDmg;
+    const claimed = new Set();   /* spread the bricks over different first targets */
+    for(let z=0; z<zappers; z++){
+      chn.cds[z] -= dt;
+      if(chn.cds[z] > 0) continue;
+      if(cands===null)
+        cands = enemies.filter(e=>!e.dead && e.state==='active' && dist(e,p) < chn.r);
+      let pool = cands.filter(e=>!e.dead && !claimed.has(e));
+      if(!pool.length) pool = cands.filter(e=>!e.dead);
+      if(!pool.length){ chn.cds[z] = 0; continue; }   /* stay charged — fires the frame a foe walks in */
+      chn.cds[z] = chn.rate;                          /* only consumed when it actually fires */
+      fired = true;
+      let cur = pick(pool);
+      claimed.add(cur);
+      let from = chainBrickPos(p, z, zappers);
+      let dmg = zapDmg;
+      const hitSet = new Set();
+      for(let i=0;i<chn.n;i++){
+        if(!cur || cur.dead) break;
+        hitSet.add(cur);
+        addZap(from.x, from.y, cur.x, cur.y-14, i);
+        hitEnemy(cur, dmg, angTo(from,cur), 0, 'chain', {spin:true});
+        from = {x:cur.x, y:cur.y-14};
+        dmg *= CHAIN_FALLOFF;   /* every leap lands softer than the strike before it */
+        /* chain to nearest UNIQUE monster this bolt hasn't hit yet */
+        let nxt=null, best=1e9;
+        for(const e2 of enemies){
+          if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
+          const dd = dist(e2,cur);
+          if(dd<340 && dd<best){ best=dd; nxt=e2; }
         }
-        SFX.thunder();
-      } else {
-        chn.cd = 0;   /* stay charged — fires the frame a foe walks in */
+        cur = nxt;
       }
     }
+    if(fired) SFX.thunder();
   }
   /* pickups — magnetism + collection (this loop was accidentally deleted) */
   for(const pk of pickups){
@@ -2002,6 +2152,40 @@ function updateEnemy(e, dt){
       if(dP<220 && e.atkCd<=0){ e.mode='lunge'; e.modeT=0; e.chain=0; e.lockA=toP; SFX.grunt(); }
     }
   }
+  else if(e.golem){
+    const G = GOLEM_CONF[e.golem];
+    if(e.mode==='chargeWind'){
+      /* braced, aiming — the ground streak in front of it is the tell */
+      e.modeT += dt;
+      e.face = {x:Math.cos(e.lockA), y:Math.sin(e.lockA)};
+      if(e.modeT>=0.55){ e.mode='charge'; e.modeT=0; e.lx=Math.cos(e.lockA); e.ly=Math.sin(e.lockA); SFX.grunt(); }
+    }
+    else if(e.mode==='charge'){
+      e.modeT += dt;
+      vx = e.lx*G.chargeSpd; vy = e.ly*G.chargeSpd;
+      if(Math.random()<0.8) addDust(e.x, e.y, 1);
+      /* it stops the moment it reaches you, then plants the stomp */
+      if(e.modeT>=0.42 || dP < e.r+player.r+10){ e.mode='stompWind'; e.modeT=0; SFX.slam(); }
+    }
+    else if(e.mode==='stompWind'){
+      /* arms up, ring painted on the ground, then a slow heavy landing */
+      e.modeT += dt; vx=0; vy=0;
+      if(Math.random()<0.5)
+        particles.push({kind:'spark', x:e.x+rnd(-24,24), y:e.y-rnd(6,52), vx:0, vy:-40,
+          life:0.4, max:0.4, color:G.dust});
+      if(e.modeT>=G.wind){
+        e.mode='chase'; e.modeT=0; e.atkCd = 4.4*e.atkS;
+        golemStomp(e, G);
+      }
+    }
+    else {
+      vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed;
+      if(e.atkCd<=0){
+        if(dP < G.stompR*0.72){ e.mode='stompWind'; e.modeT=0; }           /* already on top of you */
+        else if(dP < 620){ e.mode='chargeWind'; e.modeT=0; e.lockA=toP; }  /* close the gap first */
+      }
+    }
+  }
   else if(e.type==='bastion'){
     /* slow tanky melee —heavy hits, innate armor already applied at spawn */
     if(e.mode==='windup'){
@@ -2172,6 +2356,7 @@ function updateEnemy(e, dt){
         for(const e2 of enemies){
           if(e2===e || e2.dead || e2.state!=='active' || e2.type==='boss') continue;
           if(dist(e2,e) < 300){
+            if((e2.buffStacks||0) >= OVERSEER_MAX_STACKS) continue;   /* three is the ceiling */
             e2.buffStacks = (e2.buffStacks||0)+1;
             const oldMax = e2.maxHp;
             e2.maxHp = Math.round(e2.maxHp*1.15);
@@ -2329,10 +2514,63 @@ function updateEnemy(e, dt){
       const d = dist(e, player);
       if(Math.abs(d - e.ring.r) < 20){
         if(player.dash.t>0){ e.ring.hit = true; perfectDodge(player.x, player.y); }
-        else if(player.invuln<=0){ playerDamage(e.type==='jugg'?1:2, e); e.ring.hit = true; }
+        else if(player.invuln<=0){
+          playerDamage(e.ring.dmg ?? (e.type==='jugg'?1:2), e);
+          e.ring.hit = true;
+          if(e.ring.golem==='ice'){
+            player.slowT = Math.max(player.slowT, 4);
+            addDmg(player.x, player.y-56, 'FROZEN SOLID!', '#bfe3ff', 15);
+          }
+        }
       }
     }
     if(e.ring.r > rmax) e.ring = null;
+  }
+}
+/* Every boss shockwave goes through here so both halves of a double slam announce
+   themselves. `n` is 1 for the slam, 2 for the aftershock that follows it. */
+function spawnBossRing(b, n){
+  b.ring = { r:30, hit:false, wave:n };
+  const col = n===2 ? '#fff2b0' : '#ff6a2a';
+  addRing(b.x, b.y, 26, 460, RING_MAX, col, 13, 0.5);
+  addRing(b.x, b.y, 14, 340, RING_MAX*0.7, '#ffffff', 6, 0.35);
+  addSparks(b.x, b.y-10, n===2?22:16, col);
+  spawnBricks(b.x, b.y+8, ['#6d6e68','#9ba19d'], n===2?6:10, 190);
+  addShake(n===2 ? 0.45 : 0.55);
+  addDmg(b.x, b.y-70*(b.scale||1), n===2 ? 'AFTERSHOCK!' : 'SHOCKWAVE!', col, n===2?19:22);
+  SFX.bomb();
+}
+/* The golem stomp: a shockwave ring plus a lingering elemental scar on the ground. */
+function golemStomp(e, G){
+  e.ring = { r:26, hit:false, max:G.stompR, speed:300, dmg:G.dmg, golem:e.golem };
+  addRing(e.x, e.y, 22, 340, G.stompR, G.ring, 10, 0.5);
+  addRing(e.x, e.y, 12, 250, G.stompR*0.6, '#ffffff', 5, 0.35);
+  addSparks(e.x, e.y-8, 16, G.dust);
+  spawnBricks(e.x, e.y+8, G.bricks, 10, 200);
+  addDust(e.x, e.y, 7, 'rgba(200,200,190,');
+  addShake(0.4);
+  SFX.slam();
+  if(e.golem==='fire'){
+    /* a ring of burning ground you have to path around */
+    for(let i=0;i<7;i++){
+      const a = i/7*TAU + rnd(-0.2,0.2);
+      hazards.push({kind:'fire', x:e.x+Math.cos(a)*G.stompR*0.62, y:e.y+Math.sin(a)*G.stompR*0.62,
+        r:46, life:5, max:5});
+    }
+    SFX.fireball();
+  } else if(e.golem==='ice'){
+    /* a wide frost field — no damage, but you crawl through it */
+    hazards.push({kind:'frost', x:e.x, y:e.y, r:G.stompR*0.85, life:6, max:6});
+    SFX.freeze();
+  } else {
+    /* stone rips chunks out of the floor and flings them */
+    for(let i=0;i<8;i++){
+      const a = i/8*TAU;
+      projectiles.push({kind:'jrock', sx:e.x, sy:e.y-24,
+        tx:clamp(e.x+Math.cos(a)*G.stompR*0.9, W.wall+40, W.w-W.wall-40),
+        ty:clamp(e.y+Math.sin(a)*G.stompR*0.9, W.wall+40, W.h-W.wall-40),
+        t:0, dur:0.7, spin:rnd(TAU), delay:i*0.04});
+    }
   }
 }
 function bossRingHit(b){
@@ -2375,10 +2613,7 @@ function updateBoss(b, dt, toP, dP){
 		b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
 		if(b.modeT>=0.9){
 		  b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.5:2.2;
-		  addRing(b.x,b.y,26,380,270,'#ff6a2a',11,0.55);
-		  addShake(0.5); SFX.bomb();
-		  spawnBricks(b.x,b.y+10,['#6d6e68','#9ba19d'],10,200);
-		  b.ring = { r:30, hit:false };
+		  spawnBossRing(b, 1);
 		  b.ring2T = 0.45;
 		  /* NEW: radial arrow burst on slam */
 		  const na = 8;
@@ -2554,9 +2789,7 @@ function updateBoss(b, dt, toP, dP){
       b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
       if(b.modeT>=0.8){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.7:2.4;
-        addRing(b.x,b.y,26,380,270,'#ff6a2a',11,0.55);
-        addSparks(b.x,b.y,20,'#ffb066'); addShake(0.5); SFX.bomb();
-        b.ring = { r:30, hit:false };
+        spawnBossRing(b, 1);
         if(enr) b.ring2T = 0.4;
       }
     }
@@ -2631,9 +2864,7 @@ function updateBoss(b, dt, toP, dP){
       b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
       if(b.modeT>=0.8){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.7:2.4;
-        addRing(b.x,b.y,26,380,270,'#ff6a2a',11,0.55);
-        addSparks(b.x,b.y,20,'#ffb066'); addShake(0.5); SFX.bomb();
-        b.ring = { r:30, hit:false };
+        spawnBossRing(b, 1);
         if(enr) b.ring2T = 0.4;
       }
     }
@@ -2664,7 +2895,7 @@ function updateBoss(b, dt, toP, dP){
   }
   if(b.ring2T > 0){
     b.ring2T -= dt;
-    if(b.ring2T<=0){ b.ring = { r:30, hit:false }; b.ring2T = -1; SFX.bomb(); }
+    if(b.ring2T<=0){ spawnBossRing(b, 2); b.ring2T = -1; }
   }
 }
 /* NEW: SUPER BOSSES — bigger, meaner, signature mechanic */
@@ -2689,10 +2920,7 @@ function updateSuperBoss(b, dt, toP, dP){
     b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
     if(b.modeT>=0.9){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.5:2.2;
-      addRing(b.x,b.y,26,380,270,'#ff6a2a',11,0.55);
-      addShake(0.5); SFX.bomb();
-      spawnBricks(b.x,b.y+10,['#6d6e68','#9ba19d'],10,200);
-      b.ring = { r:30, hit:false };
+      spawnBossRing(b, 1);
       b.ring2T = 0.45;   /* DOUBLE shockwave */
       /* radial arrow burst on super slam */
       const na = 10;
@@ -2787,7 +3015,7 @@ function updateSuperBoss(b, dt, toP, dP){
   }
   if(b.ring2T > 0){
     b.ring2T -= dt;
-    if(b.ring2T<=0){ b.ring = { r:30, hit:false }; b.ring2T = -1; SFX.bomb(); }
+    if(b.ring2T<=0){ spawnBossRing(b, 2); b.ring2T = -1; }
   }
 }
 function updateProjectiles(dt){
@@ -2976,6 +3204,17 @@ function updateFx(dt){
       particles.push({kind:'spark', x:h.x+rnd(-h.r*0.7,h.r*0.7), y:h.y+rnd(-h.r*0.4,h.r*0.4),
         vx:rnd(-15,15), vy:rnd(-90,-40), life:rnd(0.3,0.6), max:0.6,
         color: Math.random()<0.5?'#ff9a3c':'#ffd166'});
+    if(h.kind==='frost'){
+      if(Math.random()<0.3)
+        particles.push({kind:'spark', x:h.x+rnd(-h.r*0.8,h.r*0.8), y:h.y+rnd(-h.r*0.5,h.r*0.5),
+          vx:rnd(-12,12), vy:rnd(-40,-8), life:rnd(0.4,0.8), max:0.8, color:'#dff2ff'});
+      if(!player.dead && dist(h, player) < h.r*0.9)
+        player.slowT = Math.max(player.slowT, 1.2);
+      for(const en of enemies)
+        if(!en.dead && en.state==='active' && !en.golem && dist(h,en) < h.r*0.9)
+          en.slowT = Math.max(en.slowT, 0.8);   /* the frost field catches its own side too */
+      continue;
+    }
     if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.88)
       playerDamage(1, h);
   }
@@ -3000,6 +3239,44 @@ function separate(){
   }
 }
 
+const GOLEM_RGB = {
+  ice:  ['150,210,255','223,242,255'],
+  fire: ['255,120,40','255,209,102'],
+  stone:['150,156,150','210,214,210']
+};
+/* Chunks of the golem's element circling its shoulders. Drawn over the body so the
+   ones passing in front aren't swallowed by it. */
+function drawGolemAura(c, e){
+  const gg = GOLEM_RGB[e.golem], s = e.scale;
+  const wind = (e.mode==='stompWind' || e.mode==='chargeWind');
+  const spin = (e.golem==='stone' ? 0.9 : 1.7) * (wind ? 2.6 : 1);
+  for(let i=0;i<6;i++){
+    const ga = vtime*spin + i*TAU/6 + (e.phase||0);
+    const gr = (17 + (wind?4:0))*s + Math.sin(vtime*2+i)*3*s;
+    const gx = e.x + Math.cos(ga)*gr;
+    const gy = e.y - 26*s + Math.sin(ga)*gr*0.45;
+    c.save(); c.translate(gx, gy); c.rotate(ga*1.6);
+    if(e.golem==='fire'){
+      const fl = 0.6+0.4*Math.sin(vtime*10+i);
+      c.fillStyle = `rgba(${gg[0]},${0.45*fl})`;
+      c.beginPath(); c.arc(0,0,5.2*s,0,TAU); c.fill();
+      c.fillStyle = `rgba(${gg[1]},${0.75+0.25*fl})`;
+      c.beginPath(); c.arc(0,0,2.8*s,0,TAU); c.fill();
+    } else {
+      c.fillStyle = `rgba(${gg[1]},0.95)`;
+      c.strokeStyle = 'rgba(25,40,55,0.65)'; c.lineWidth = 1.6;
+      if(e.golem==='ice'){
+        c.beginPath(); c.moveTo(0,-5*s); c.lineTo(3.2*s,0); c.lineTo(0,5*s); c.lineTo(-3.2*s,0);
+        c.closePath(); c.fill(); c.stroke();
+      } else {
+        roundRect(c,-3.6*s,-2.6*s,7.2*s,5.2*s,1.2); c.fill(); c.stroke();
+        drawStudG(c, 0, 0, 1.5*s, '#8b9194');
+      }
+    }
+    c.restore();
+  }
+}
+
 /* =============================== DRAW: MINIFIGURE =============================== */
 function drawFigure(c, o){
   const s = o.s, T = col=> o.flash>0 ? mixc(col,'#ffffff',Math.min(1,o.flash*0.85)) : col;
@@ -3019,6 +3296,14 @@ function drawFigure(c, o){
     c.beginPath(); c.ellipse(0,2,19*s,7.5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   if(o.lord){ c.setLineDash([3,3]); c.strokeStyle='rgba(220,200,255,0.6)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,2,20*s,8*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
+  /* golems stand in a pool of their own element */
+  if(o.golem){
+    const gg = GOLEM_RGB[o.golem];
+    c.fillStyle = `rgba(${gg[0]},${0.16+0.06*Math.sin(vtime*4+(o.phase||0))})`;
+    c.beginPath(); c.ellipse(0, 3, 21*s, 8.5*s, 0, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(${gg[1]},0.55)`; c.lineWidth = 2.5;
+    c.beginPath(); c.ellipse(0, 3, 21*s, 8.5*s, 0, 0, TAU); c.stroke();
+  }
   c.translate(0,-bob);
   c.lineWidth = 2; c.lineJoin='round';
   const OL = 'rgba(20,30,40,0.5)';
@@ -3613,38 +3898,96 @@ function drawSkull(c, pr){
   c.restore();
 }
 function drawFrostbolt(c, pr){
-  c.save(); c.translate(pr.x, pr.y); c.rotate(Math.atan2(pr.vy,pr.vx));
-  c.fillStyle = '#bfe3ff'; c.strokeStyle='rgba(30,80,120,0.7)'; c.lineWidth=1.4;
-  c.beginPath();
-  c.moveTo(9,0); c.lineTo(0,-4); c.lineTo(-8,-2.4); c.lineTo(-5,0); c.lineTo(-8,2.4); c.lineTo(0,4);
-  c.closePath(); c.fill(); c.stroke();
-  c.fillStyle='rgba(255,255,255,0.85)';
-  c.beginPath(); c.arc(2,-1,1.4,0,TAU); c.fill();
+  c.save(); c.translate(pr.x, pr.y);
+  /* frozen vapour trailing behind the shard */
+  const ta = Math.atan2(pr.vy,pr.vx);
+  for(let i=1;i<=3;i++){
+    c.fillStyle = `rgba(191,227,255,${0.22/i})`;
+    c.beginPath(); c.arc(-Math.cos(ta)*i*7, -Math.sin(ta)*i*7, 7-i*1.4, 0, TAU); c.fill();
+  }
+  c.fillStyle = 'rgba(140,210,255,0.35)';
+  c.beginPath(); c.arc(0,0,10+Math.sin(vtime*12)*1.2,0,TAU); c.fill();
+  c.rotate(ta + vtime*3);
+  /* six-armed snowflake */
+  c.strokeStyle = '#dff2ff'; c.lineWidth = 2.2; c.lineCap='round';
+  for(let i=0;i<3;i++){
+    const a = i*Math.PI/3;
+    c.beginPath(); c.moveTo(-Math.cos(a)*8, -Math.sin(a)*8); c.lineTo(Math.cos(a)*8, Math.sin(a)*8); c.stroke();
+  }
+  c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1.4;
+  for(let i=0;i<6;i++){
+    const a = i*Math.PI/3;
+    const bx = Math.cos(a)*5, by = Math.sin(a)*5;
+    c.beginPath();
+    c.moveTo(bx,by); c.lineTo(bx+Math.cos(a+0.9)*3.2, by+Math.sin(a+0.9)*3.2);
+    c.moveTo(bx,by); c.lineTo(bx+Math.cos(a-0.9)*3.2, by+Math.sin(a-0.9)*3.2);
+    c.stroke();
+  }
+  c.fillStyle = '#ffffff';
+  c.beginPath(); c.arc(0,0,2.2,0,TAU); c.fill();
   c.restore();
 }
+/* a jittering multi-branch arc that re-rolls every frame, so it crackles */
 function drawBolt(c, pr){
   const sc = pr.big ? 1.8 : 1;
+  if(pr.seed===undefined) pr.seed = rnd(TAU);
   c.save(); c.translate(pr.x, pr.y); c.rotate(Math.atan2(pr.vy,pr.vx)); c.scale(sc,sc);
-  c.strokeStyle = '#ffe95a'; c.lineWidth=2.6; c.lineJoin='round';
-  c.beginPath();
-  c.moveTo(-14,2); c.lineTo(-7,-3); c.lineTo(-1,2); c.lineTo(6,-3); c.lineTo(13,1);
-  c.stroke();
-  c.strokeStyle='rgba(255,255,255,0.8)'; c.lineWidth=1.2;
-  c.beginPath();
-  c.moveTo(-12,1.5); c.lineTo(-6,-2); c.lineTo(0,1.5); c.lineTo(6,-2); c.lineTo(11,1);
-  c.stroke();
+  const L = 17, segs = 7, t = Math.floor(vtime*26);
+  const jag = [];
+  for(let i=0;i<=segs;i++){
+    const u = i/segs;
+    const n = Math.sin(pr.seed + i*2.7 + t*1.3) * Math.sin(pr.seed*1.7 + i*4.1 + t*0.7);
+    jag.push({ x:-L + u*L*2, y: n*5.5*Math.sin(u*Math.PI) });
+  }
+  const stroke = (w, col)=>{
+    c.strokeStyle = col; c.lineWidth = w; c.lineJoin='round'; c.lineCap='round';
+    c.beginPath(); c.moveTo(jag[0].x, jag[0].y);
+    for(let i=1;i<jag.length;i++) c.lineTo(jag[i].x, jag[i].y);
+    c.stroke();
+  };
+  stroke(9, 'rgba(255,233,90,0.20)');   /* outer glow */
+  stroke(5.5, 'rgba(255,200,40,0.55)');
+  stroke(2.8, '#ffe95a');
+  stroke(1.2, '#ffffff');               /* white-hot core */
+  /* short forks peeling off the arc */
+  c.strokeStyle = 'rgba(255,245,170,0.75)'; c.lineWidth = 1.4;
+  for(let i=2;i<segs-1;i+=2){
+    const fy = jag[i].y + (Math.sin(pr.seed+i*3.3+t)>0 ? 1 : -1) * (4+2*Math.abs(Math.sin(t*0.9+i)));
+    c.beginPath(); c.moveTo(jag[i].x, jag[i].y);
+    c.lineTo(jag[i].x + 4, fy); c.lineTo(jag[i].x + 7, fy + Math.sin(t+i)*2.5);
+    c.stroke();
+  }
+  c.fillStyle = 'rgba(255,255,255,0.9)';
+  c.beginPath(); c.arc(L, jag[segs].y, 2.6+Math.sin(vtime*30)*0.7, 0, TAU); c.fill();
   c.restore();
 }
 function drawFireball(c, pr, big){
-  const r = big?9:6.5;
+  const r = big?11:7.5;
   c.save(); c.translate(pr.x, pr.y - (pr.z||10));
   const fl = Math.sin(vtime*20+pr.spin)*1.6;
-  c.fillStyle = 'rgba(255,120,40,0.45)';
-  c.beginPath(); c.arc(0,0,r+4+fl,0,TAU); c.fill();
-  c.fillStyle = '#ff7a2a';
-  c.beginPath(); c.arc(0,0,r,0,TAU); c.fill();
-  c.fillStyle = '#ffd166';
-  c.beginPath(); c.arc(-r*0.2,-r*0.2,r*0.55,0,TAU); c.fill();
+  /* trailing embers streaming up off the ball */
+  for(let i=1;i<=4;i++){
+    const wob = Math.sin(vtime*14 + pr.spin + i)*2.4;
+    c.fillStyle = `rgba(${big?'255,138,90':'255,150,60'},${0.30/i})`;
+    c.beginPath(); c.arc(wob, i*(r*0.7), r*(1-i*0.17), 0, TAU); c.fill();
+  }
+  c.fillStyle = big ? 'rgba(255,110,40,0.30)' : 'rgba(255,140,50,0.28)';
+  c.beginPath(); c.arc(0,0,r+8+fl,0,TAU); c.fill();
+  c.fillStyle = 'rgba(255,120,40,0.55)';
+  c.beginPath(); c.arc(0,0,r+3.5+fl*0.6,0,TAU); c.fill();
+  /* ragged flame edge instead of a clean circle */
+  c.fillStyle = big ? '#ff5f22' : '#ff7a2a';
+  c.beginPath();
+  for(let i=0;i<=10;i++){
+    const a = i/10*TAU;
+    const rr = r*(1 + 0.18*Math.sin(a*3 + vtime*16 + pr.spin));
+    i ? c.lineTo(Math.cos(a)*rr, Math.sin(a)*rr) : c.moveTo(Math.cos(a)*rr, Math.sin(a)*rr);
+  }
+  c.closePath(); c.fill();
+  c.fillStyle = '#ffb14a';
+  c.beginPath(); c.arc(-r*0.12,-r*0.12,r*0.62,0,TAU); c.fill();
+  c.fillStyle = '#fff0b8';
+  c.beginPath(); c.arc(-r*0.22,-r*0.24,r*0.32,0,TAU); c.fill();
   c.restore();
 }
 
@@ -3682,35 +4025,104 @@ function render(){
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
     const k = clamp(h.life/h.max,0,1);
+    if(h.kind==='frost'){
+      ctx.fillStyle = `rgba(150,205,240,${0.30*k})`;
+      ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,TAU); ctx.fill();
+      ctx.fillStyle = `rgba(223,242,255,${0.34*k})`;
+      ctx.beginPath(); ctx.arc(h.x,h.y,h.r*0.82,0,TAU); ctx.fill();
+      /* frozen-over studs */
+      ctx.fillStyle = `rgba(255,255,255,${0.30*k})`;
+      for(let i=0;i<10;i++){
+        const a = i*2.399, rr = h.r*0.85*Math.sqrt(i/10);
+        ctx.beginPath(); ctx.arc(h.x+Math.cos(a)*rr, h.y+Math.sin(a)*rr*0.8, 6, 0, TAU); ctx.fill();
+      }
+      /* cracks radiating from the impact point */
+      ctx.strokeStyle = `rgba(255,255,255,${0.6*k})`; ctx.lineWidth = 2;
+      for(let i=0;i<7;i++){
+        const a = i/7*TAU + h.x*0.01;
+        ctx.beginPath(); ctx.moveTo(h.x,h.y);
+        ctx.lineTo(h.x+Math.cos(a)*h.r*0.55, h.y+Math.sin(a)*h.r*0.45);
+        ctx.lineTo(h.x+Math.cos(a+0.3)*h.r*0.85, h.y+Math.sin(a+0.3)*h.r*0.7);
+        ctx.stroke();
+      }
+      /* jutting shards around the rim */
+      ctx.fillStyle = `rgba(223,242,255,${0.85*k})`;
+      ctx.strokeStyle = `rgba(90,150,195,${0.8*k})`; ctx.lineWidth = 1.5;
+      for(let i=0;i<9;i++){
+        const a = i/9*TAU + 0.3;
+        const sx2 = h.x+Math.cos(a)*h.r*0.8, sy2 = h.y+Math.sin(a)*h.r*0.66;
+        const hgt = 12 + 5*Math.sin(vtime*3+i);
+        ctx.beginPath();
+        ctx.moveTo(sx2-5, sy2); ctx.lineTo(sx2, sy2-hgt); ctx.lineTo(sx2+5, sy2);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+      ctx.setLineDash([9,7]);
+      ctx.strokeStyle = `rgba(191,227,255,${0.55*k})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(h.x,h.y,h.r*0.9,0,TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      continue;
+    }
     const fire = h.kind==='fire';
-    const baseCol = fire ? '255,110,30' : '120,40,10';
     const pulse = 0.85+0.15*Math.sin(vtime*6+h.x);
-    ctx.fillStyle = `rgba(${baseCol},${0.55*k})`;
-    ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,TAU); ctx.fill();
-    ctx.fillStyle = fire ? `rgba(255,150,50,${0.75*k*pulse})` : `rgba(255,110,30,${0.75*k*pulse})`;
-    ctx.beginPath(); ctx.arc(h.x,h.y,h.r*0.86,0,TAU); ctx.fill();
-    for(let i=0;i<5;i++){
-      const fa = i/5*TAU + h.x*0.13;
-      const fx = h.x + Math.cos(fa)*h.r*0.42;
-      const fy = h.y + Math.sin(fa)*h.r*0.32;
-      const fh = (h.r*0.5 + h.r*0.28*Math.sin(vtime*9 + i*2.1 + h.x)) * (fire?1:0.7);
+    /* charred ground first, so the flames read as flames and not as a flat disc */
+    ctx.fillStyle = `rgba(${fire?'70,28,12':'50,20,10'},${0.45*k})`;
+    ctx.beginPath(); ctx.ellipse(h.x,h.y,h.r,h.r*0.86,0,0,TAU); ctx.fill();
+    /* molten cracks crawling through the scorch */
+    ctx.strokeStyle = `rgba(255,${fire?150:100},40,${0.65*k*pulse})`;
+    ctx.lineWidth = 3.5;
+    for(let i=0;i<6;i++){
+      const ca2 = i/6*TAU + h.x*0.02;
+      const wob = Math.sin(vtime*3+i+h.x)*0.25;
+      ctx.beginPath(); ctx.moveTo(h.x,h.y);
+      ctx.quadraticCurveTo(h.x+Math.cos(ca2+wob)*h.r*0.45, h.y+Math.sin(ca2+wob)*h.r*0.38,
+                           h.x+Math.cos(ca2)*h.r*0.88, h.y+Math.sin(ca2)*h.r*0.74);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(255,${fire?140:90},40,${0.34*k*pulse})`;
+    ctx.beginPath(); ctx.ellipse(h.x,h.y,h.r*0.7,h.r*0.58,0,0,TAU); ctx.fill();
+    /* a ring of licking tongues, each on its own flicker clock */
+    const tongues = fire ? 9 : 7;
+    for(let i=0;i<tongues;i++){
+      const fa = i/tongues*TAU + h.x*0.13;
+      const spread = 0.30 + 0.34*((i*7919+((h.x|0)*31))%100)/100;
+      const fx = h.x + Math.cos(fa)*h.r*spread;
+      const fy = h.y + Math.sin(fa)*h.r*spread*0.8;
+      const flick = Math.sin(vtime*(10+i%4) + i*2.1 + h.x);
+      const fh = (h.r*0.55 + h.r*0.34*flick) * (fire?1:0.7) * k;
+      if(fh <= 2) continue;
+      const wob = Math.sin(vtime*13+i*1.7)*4;
       const grad = ctx.createLinearGradient(fx, fy, fx, fy-fh);
-      grad.addColorStop(0, fire ? 'rgba(255,120,30,0.9)' : 'rgba(255,90,20,0.85)');
-      grad.addColorStop(0.6, 'rgba(255,190,70,0.8)');
-      grad.addColorStop(1, 'rgba(255,240,160,0)');
+      grad.addColorStop(0,   fire ? 'rgba(255,90,20,0.95)' : 'rgba(220,60,15,0.9)');
+      grad.addColorStop(0.35,'rgba(255,150,40,0.92)');
+      grad.addColorStop(0.7, 'rgba(255,215,110,0.8)');
+      grad.addColorStop(1,   'rgba(255,250,210,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(fx-5, fy);
-      ctx.quadraticCurveTo(fx-3, fy-fh*0.55, fx + Math.sin(vtime*11+i)*2, fy-fh);
-      ctx.quadraticCurveTo(fx+3, fy-fh*0.55, fx+5, fy);
+      ctx.moveTo(fx-5.5, fy);
+      ctx.quadraticCurveTo(fx-4.5, fy-fh*0.5, fx+wob*0.4, fy-fh*0.78);
+      ctx.quadraticCurveTo(fx+wob*0.9, fy-fh*0.92, fx+wob, fy-fh);
+      ctx.quadraticCurveTo(fx+4.5, fy-fh*0.6, fx+5.5, fy);
+      ctx.closePath(); ctx.fill();
+      /* white-hot heart of the tongue */
+      ctx.fillStyle = `rgba(255,245,190,${0.5*k})`;
+      ctx.beginPath();
+      ctx.moveTo(fx-2, fy);
+      ctx.quadraticCurveTo(fx, fy-fh*0.4, fx+wob*0.3, fy-fh*0.52);
+      ctx.quadraticCurveTo(fx+2, fy-fh*0.3, fx+2, fy);
       ctx.closePath(); ctx.fill();
     }
-    ctx.fillStyle = `rgba(255,200,90,${0.8*k})`;
-    for(let i=0;i<3;i++){
-      const ba = i/3*TAU + vtime*(fire?2:1.4) + h.x;
-      const br = h.r*0.14*(1+0.4*Math.sin(vtime*4+i*2));
-      ctx.beginPath(); ctx.arc(h.x+Math.cos(ba)*h.r*0.4, h.y+Math.sin(ba)*h.r*0.4, br, 0, TAU); ctx.fill();
+    /* embers drifting over the pool */
+    ctx.fillStyle = `rgba(255,215,120,${0.85*k})`;
+    for(let i=0;i<4;i++){
+      const ba = i/4*TAU + vtime*(fire?2:1.4) + h.x;
+      const lift = ((vtime*38 + i*40 + h.x) % 70);
+      const br = h.r*0.055*(1+0.5*Math.sin(vtime*7+i*2));
+      ctx.globalAlpha = clamp(1-lift/70,0,1)*k;
+      ctx.beginPath();
+      ctx.arc(h.x+Math.cos(ba)*h.r*0.5, h.y+Math.sin(ba)*h.r*0.4 - lift, br, 0, TAU);
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
   }
   ctx.fillStyle = 'rgba(10,25,15,0.05)';
   for(let i=0;i<3;i++){
@@ -3731,6 +4143,41 @@ function render(){
       ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.lockA);
       roundRect(ctx, 0, -8, 210*k+40, 16, 8); ctx.fill(); ctx.restore();
     }
+    /* golem: charge lane, then the stomp footprint painted on the ground */
+    if(e.golem){
+      const G = GOLEM_CONF[e.golem];
+      if(e.mode==='chargeWind'){
+        const k = clamp(e.modeT/0.55,0,1);
+        ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.lockA);
+        const rgbC = GOLEM_RGB[e.golem][0];
+        ctx.fillStyle = `rgba(${rgbC},${0.26+0.20*Math.sin(vtime*18)})`;
+        roundRect(ctx, 0, -28, 300*k+60, 56, 26); ctx.fill();
+        ctx.strokeStyle = `rgba(${rgbC},0.85)`; ctx.lineWidth = 3;
+        roundRect(ctx, 0, -28, 300*k+60, 56, 26); ctx.stroke();
+        /* arrow heads racing down the lane */
+        ctx.fillStyle = `rgba(255,255,255,${0.45+0.3*Math.sin(vtime*18)})`;
+        for(let ai=0; ai<3; ai++){
+          const ax2 = 50 + ((vtime*260 + ai*110) % (300*k+40));
+          ctx.beginPath(); ctx.moveTo(ax2, -14); ctx.lineTo(ax2+18, 0); ctx.lineTo(ax2, 14);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      }
+      if(e.mode==='stompWind'){
+        const k = clamp(e.modeT/G.wind,0,1);
+        const rgb = GOLEM_RGB[e.golem][0];
+        ctx.fillStyle = `rgba(${rgb},${0.10+0.10*k})`;
+        ctx.beginPath(); ctx.arc(e.x,e.y,G.stompR,0,TAU); ctx.fill();
+        ctx.setLineDash([16,11]);
+        ctx.strokeStyle = `rgba(${rgb},${0.55+0.35*Math.sin(vtime*16)})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(e.x,e.y,G.stompR,0,TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        /* a closing ring that lands exactly when the stomp does */
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(e.x,e.y, 28 + (G.stompR-28)*(1-k), 0, TAU); ctx.stroke();
+      }
+    }
     /* jugg mace slam telegraph */
     if(e.type==='jugg' && e.mode==='wind'){
       const k = clamp(e.modeT/0.7,0,1);
@@ -3747,9 +4194,17 @@ function render(){
     /* generic small shockwave rings (jugg) */
     if(e.ring && e.type!=='revenant' && e.type!=='boss'){
       const rmax = e.ring.max || 130;
-      ctx.strokeStyle = `rgba(255,209,102,${clamp(1-e.ring.r/rmax,0,1)*0.85})`;
-      ctx.lineWidth = 7;
+      const kk = clamp(1-e.ring.r/rmax,0,1);
+      const rgb = e.ring.golem==='ice' ? '191,227,255'
+                : e.ring.golem==='fire' ? '255,138,60'
+                : e.ring.golem==='stone' ? '201,206,201' : '255,209,102';
+      ctx.strokeStyle = `rgba(${rgb},${kk*0.9})`;
+      ctx.lineWidth = e.ring.golem ? 11 : 7;
       ctx.beginPath(); ctx.arc(e.x,e.y,e.ring.r,0,TAU); ctx.stroke();
+      if(e.ring.golem){
+        ctx.strokeStyle = `rgba(255,255,255,${kk*0.7})`; ctx.lineWidth = 3.5;
+        ctx.beginPath(); ctx.arc(e.x,e.y,Math.max(1,e.ring.r-7),0,TAU); ctx.stroke();
+      }
     }
     if(e.type==='lancer' && e.mode==='windup'){
       const k = e.modeT/0.7;
@@ -3836,14 +4291,45 @@ function render(){
         ctx.beginPath(); ctx.arc(player.x, player.y, 320, 0, TAU); ctx.stroke();
         ctx.setLineDash([]);
       }
+      /* the aftershock is charging — say so loudly before it lands */
+      if(e.ring2T > 0){
+        const w = 1 - clamp(e.ring2T/0.45, 0, 1);
+        ctx.fillStyle = `rgba(255,242,176,${0.10+0.10*Math.sin(vtime*26)})`;
+        ctx.beginPath(); ctx.arc(e.x,e.y,RING_MAX,0,TAU); ctx.fill();
+        ctx.setLineDash([18,12]);
+        ctx.strokeStyle = `rgba(255,242,176,${0.55+0.35*Math.sin(vtime*26)})`;
+        ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.arc(e.x,e.y,RING_MAX,0,TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(e.x,e.y, 34 + (RING_MAX-34)*(1-w), 0, TAU); ctx.stroke();
+      }
       if(e.ring){
-        ctx.strokeStyle = `rgba(255,106,42,${clamp(1-e.ring.r/RING_MAX,0,1)*0.9})`;
-        ctx.lineWidth = 11;
+        const k2 = clamp(1-e.ring.r/RING_MAX,0,1);
+        const second = e.ring.wave===2;
+        const band = second ? '255,242,176' : '255,106,42';
+        /* a filled band rather than a hairline — you can actually see where it is */
+        ctx.fillStyle = `rgba(${band},${k2*0.30})`;
+        ctx.beginPath();
+        ctx.arc(e.x,e.y,e.ring.r,0,TAU);
+        ctx.arc(e.x,e.y,Math.max(1,e.ring.r-22),0,TAU,true);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(${band},${k2*0.95})`;
+        ctx.lineWidth = second ? 13 : 15;
         ctx.beginPath(); ctx.arc(e.x,e.y,e.ring.r,0,TAU); ctx.stroke();
-        ctx.strokeStyle = `rgba(255,255,255,${clamp(1-e.ring.r/RING_MAX,0,1)*0.6})`; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.arc(e.x,e.y,Math.max(1,e.ring.r-8),0,TAU); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,255,255,${k2*0.85})`; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(e.x,e.y,Math.max(1,e.ring.r-9),0,TAU); ctx.stroke();
+        /* studded crest so it reads as bricks flying outward */
+        const studs = 18;
+        ctx.fillStyle = `rgba(255,255,255,${k2*0.5})`;
+        for(let i=0;i<studs;i++){
+          const sa = i/studs*TAU + e.ring.r*0.012;
+          ctx.beginPath();
+          ctx.arc(e.x+Math.cos(sa)*e.ring.r, e.y+Math.sin(sa)*e.ring.r, 4.5*k2+1.5, 0, TAU);
+          ctx.fill();
+        }
         ctx.setLineDash([10,14]);
-        ctx.strokeStyle = 'rgba(255,90,50,0.3)'; ctx.lineWidth=3;
+        ctx.strokeStyle = `rgba(${band},0.3)`; ctx.lineWidth=3;
         ctx.beginPath(); ctx.arc(e.x,e.y,RING_MAX,0,TAU); ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -3859,13 +4345,32 @@ function render(){
     if(pr.kind==='blizzard'){
       const k = clamp(pr.t/pr.dur,0,1);
       const rr = pr.r*(0.6+0.4*k);
-      ctx.fillStyle = 'rgba(191,227,255,0.16)';
+      if(pr.seed===undefined) pr.seed = rnd(TAU);
+      ctx.fillStyle = `rgba(191,227,255,${0.10+0.14*k})`;
       ctx.beginPath(); ctx.arc(pr.x, pr.y, rr, 0, TAU); ctx.fill();
+      /* flakes spiralling down into the impact point */
+      ctx.strokeStyle = `rgba(255,255,255,${0.35+0.45*k})`; ctx.lineWidth = 1.8; ctx.lineCap='round';
+      for(let i=0;i<14;i++){
+        const fa = pr.seed + i*2.399 + vtime*2.4;
+        const fr = rr*(0.25 + 0.72*(((i*0.137 + vtime*0.55) % 1)));
+        const fx2 = pr.x + Math.cos(fa)*fr, fy2 = pr.y + Math.sin(fa)*fr*0.8;
+        const fs = 3.4 - 1.6*(fr/rr);
+        for(let a2=0;a2<3;a2++){
+          const aa = a2*Math.PI/3 + vtime*3 + i;
+          ctx.beginPath();
+          ctx.moveTo(fx2-Math.cos(aa)*fs, fy2-Math.sin(aa)*fs);
+          ctx.lineTo(fx2+Math.cos(aa)*fs, fy2+Math.sin(aa)*fs);
+          ctx.stroke();
+        }
+      }
       ctx.setLineDash([10,8]);
       ctx.strokeStyle = `rgba(191,227,255,${0.6+0.3*Math.sin(vtime*14)})`;
       ctx.lineWidth = 4.5;
       ctx.beginPath(); ctx.arc(pr.x, pr.y, rr, 0, TAU); ctx.stroke();
       ctx.setLineDash([]);
+      /* the ring that closes exactly as it detonates */
+      ctx.strokeStyle = `rgba(255,255,255,${0.5+0.4*k})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(2, rr*(1-k)), 0, TAU); ctx.stroke();
     }
   }
   for(const pk of pickups) drawPickup(ctx, pk);
@@ -3899,14 +4404,16 @@ function render(){
     ctx.fillStyle = 'rgba(207,214,221,0.06)';
     ctx.beginPath(); ctx.arc(player.x, player.y, vr, 0, TAU); ctx.fill();
     const rows = [
-      { rr:0.55, n:3, sp: 15 },
-      { rr:0.82, n:4, sp:-11 },
-      { rr:1.08, n:5, sp: 18 }
+      { rr:0.55, n:3, sp: 5.5 },
+      { rr:0.82, n:4, sp:-4.2 },
+      { rr:1.08, n:5, sp: 6.2 }
     ];
+    const vSpin = clamp(1/Math.max(0.25, v.hitMul), 1, 1.8);
     for(let ri=0; ri<rows.length; ri++){
       const row = rows[ri];
+      const w = clamp(row.sp*vSpin, -VORTEX_MAX_SPIN, VORTEX_MAX_SPIN);
       for(let i=0;i<row.n;i++){
-        const a = vtime*row.sp*v.hitMul + i*TAU/row.n + ri*1.1;
+        const a = vtime*w + i*TAU/row.n + ri*1.1;
         const bx = player.x + Math.cos(a)*vr*row.rr;
         const by = player.y-6 + Math.sin(a)*vr*row.rr*0.72;
         ctx.save(); ctx.translate(bx,by); ctx.rotate(a+Math.PI/2);
@@ -3926,10 +4433,10 @@ function render(){
   /* hovering storm bricks — one per zapper */
   if(player && player.chain.n>0 && player.chain.zappers>0 && !player.dead){
     const zn = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers);
-    const charged = player.chain.cd <= 0.12;
     for(let z=0; z<zn; z++){
       const bp = chainBrickPos(player, z, zn);
       const ph = z*1.3;
+      const charged = (player.chain.cds[z] ?? 0) <= 0.12;   /* each brick glows on its own clock */
       ctx.fillStyle = charged ? 'rgba(150,220,255,0.26)' : 'rgba(120,200,255,0.16)';
       ctx.beginPath(); ctx.arc(bp.x, bp.y-4, 16+Math.sin(vtime*5+ph)*3, 0, TAU); ctx.fill();
       ctx.save(); ctx.translate(bp.x, bp.y); ctx.rotate(Math.sin(vtime*2+ph)*0.2);
@@ -4015,7 +4522,7 @@ function render(){
       ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(0.5,p.r*(2-k)),0,TAU); ctx.fill();
     } else if(p.kind==='zap'){
       ctx.globalAlpha = k;
-      ctx.strokeStyle = '#8fd4ff'; ctx.lineWidth = 2.6;
+      ctx.strokeStyle = '#8fd4ff'; ctx.lineWidth = Math.max(1.2, 2.8*Math.pow(0.8,p.link||0));
       ctx.beginPath();
       const segs = 6;
       ctx.moveTo(p.x1,p.y1);
@@ -4152,6 +4659,10 @@ function drawEnemy(c, e){
   if(e.type==='overseer'){ o.weapon='staff'; o.orbCol='#ffe95a'; o.hoodCol='#5e4a12'; o.lord=true; if(e.mode==='buffWind'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necromancer'){ o.weapon='staff'; o.orbCol='#c9b8e8'; o.hoodCol='#271b3a'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necrolord'){ o.weapon='staff'; o.orbCol='#dccdf5'; o.hoodCol='#31204d'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
+  if(e.golem){
+    o.armsUp = (e.mode==='stompWind' || e.mode==='chargeWind');
+    o.golem = e.golem;
+  }
   if(e.type==='brute' && e.mode==='windup') o.armsUp = true;
   if(e.type==='jugg' && e.mode==='wind') o.armsUp = true;
   if(e.type==='lancer'){ o.weapon='spear'; o.armsUp = (e.mode==='windup'||e.mode==='lunge'); }
@@ -4167,6 +4678,7 @@ function drawEnemy(c, e){
     if(e.bkey==='ashtyrant'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
+  if(e.golem) drawGolemAura(c, e);
   /* frostbite tint */
   if(e.slowT>0){
     c.save(); c.globalAlpha = 0.45;
@@ -4396,7 +4908,7 @@ function renderHUD(){
   if(p.freeze.n>0) autos.push({
     f: clamp(p.freeze.cd/p.freeze.rate,0,1),
     label:'FREEZE', icon:(x,y)=> drawFreezeIcon(x,y) });
-  if(p.chain.n>0 && p.chain.zappers>0) autos.push({f:clamp(p.chain.cd/p.chain.rate,0,1),
+  if(p.chain.n>0 && p.chain.zappers>0) autos.push({f:clamp(Math.min(...p.chain.cds)/p.chain.rate,0,1),
     label:'CHAIN '+Math.min(CHAIN_MAX_ZAPPERS,p.chain.zappers)+'×'+p.chain.n, icon:(x,y)=>{
     ctx.strokeStyle='#8fd4ff'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath(); ctx.moveTo(x-8,y-5); ctx.lineTo(x-2,y-1); ctx.lineTo(x-7,y+2); ctx.lineTo(x+3,y+6); ctx.stroke();
@@ -4629,25 +5141,6 @@ function update(dt, raw){
     player.x = CX; player.y = CY-30;
     player.face = {x:Math.cos(vtime*0.4), y:Math.sin(vtime*0.4)};
     updateCamera(raw, CX + Math.cos(vtime*0.07)*140, CY + Math.sin(vtime*0.09)*100);
-  }
-  else if(state==='upgrade' && upgradeMode==='chest'){
-    chestT += raw;
-    if(chestT>0.7 && chestPick<0){
-      chestPick = 0;
-      const cardEls = document.querySelectorAll('#cards .card');
-      if(cardEls[0]){
-        cardEls[0].style.outline = '4px solid #ffb900';
-        cardEls[0].style.outlineOffset = '-3px';
-      }
-      SFX.fortune();
-    }
-    if(chestT>2.6){
-      chestT = 0; chestPick = -1;
-      applyChest();
-      document.getElementById('upgradeScreen').classList.add('hidden');
-      state = 'play'; cv.style.cursor='none';
-      try{ window.focus(); }catch(err){}
-    }
   }
   else if(state==='play'){
     runTime += dt;
