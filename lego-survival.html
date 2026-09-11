@@ -91,6 +91,47 @@
   .stat span{font-size:13px;color:#ffd9d9;font-weight:600;letter-spacing:1px}
   .btnrow{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
+  /* ---- character sheet ---- */
+  #charScreen{justify-content:flex-start;overflow:hidden}
+  .sheet{width:min(1180px,96vw);max-height:94vh;margin:3vh 0;display:flex;flex-direction:column;
+    background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;padding:6px 6px 0;
+    box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25)}
+  .sheethead{text-align:center;padding:12px 0 4px;flex:none}
+  .sheethead h2{font-family:'Titan One';font-size:32px;color:#fff;letter-spacing:1px;
+    text-shadow:0 4px 0 rgba(0,0,0,.35)}
+  .sheetsub{font-size:14px;color:#ffdada;font-weight:600;margin-top:3px}
+  .sheetbody{overflow-y:auto;padding:14px 18px 4px;display:flex;flex-direction:column;gap:14px;min-height:0}
+  .sheetbody::-webkit-scrollbar{width:9px}
+  .sheetbody::-webkit-scrollbar-thumb{background:rgba(0,0,0,.35);border-radius:5px}
+  .seclabel{font-family:'Titan One';font-size:12px;letter-spacing:3px;color:#ffe6a3;
+    text-align:left;margin:4px 0 -6px 2px;display:flex;align-items:center;gap:10px}
+  .seclabel::after{content:'';flex:1;height:2px;border-radius:1px;background:rgba(255,230,163,.28)}
+  .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));gap:12px}
+  .sblock{background:rgba(9,13,17,.44);border:1px solid rgba(255,255,255,.16);border-radius:15px;
+    padding:11px 14px 9px;text-align:left}
+  .sblock h4{font-family:'Titan One';font-size:11.5px;letter-spacing:2px;color:#ffd76e;margin-bottom:7px}
+  .srow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px;
+    padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.10)}
+  .srow:last-child{border-bottom:none}
+  .srow>span{color:#e6ecea;font-weight:500}
+  .srow>b{color:#fff;font-weight:700;white-space:nowrap;font-size:13.5px}
+  .srow small{display:block;color:#ffc4c4;font-weight:400;font-size:10.5px;line-height:1.35;margin-top:1px}
+  .sbar{height:9px;border-radius:5px;background:rgba(0,0,0,.4);overflow:hidden;margin:6px 0 2px}
+  .sbar i{display:block;height:100%;border-radius:5px}
+  .spellgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:12px}
+  .spellcard{background:rgba(26,12,38,.55);border:1px solid rgba(214,166,255,.45);border-radius:15px;
+    padding:11px 14px 10px;text-align:left;box-shadow:inset 0 0 0 1px rgba(155,69,214,.25)}
+  .spellcard .schead{display:flex;align-items:center;gap:9px}
+  .spellcard svg{width:26px;height:26px;flex:none}
+  .spellcard h5{font-family:'Titan One';font-size:14px;color:#fff;flex:1}
+  .spellcard .scstack{background:rgba(0,0,0,.4);border-radius:9px;padding:2px 8px;font-size:11px;font-weight:700;color:#e8d6ff}
+  .spellcard .scdmg{font-size:13px;color:#ffd76e;font-weight:700;margin:6px 0 2px}
+  .spellcard ul{list-style:none;margin-top:4px}
+  .spellcard li{font-size:12px;color:#ece5f7;padding:2.5px 0 2.5px 13px;position:relative;font-weight:500;line-height:1.35}
+  .spellcard li::before{content:'';position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:2px;background:#d6a6ff}
+  .nospell{background:rgba(9,13,17,.44);border:1px dashed rgba(255,255,255,.25);border-radius:15px;
+    padding:16px;font-size:13px;color:#ffd9d9;font-weight:600}
+  .sheetfoot{flex:none;text-align:center;font-size:12.5px;color:#ffd0d0;padding:9px 0 11px;font-weight:600}
 </style>
 </head>
 <body>
@@ -108,6 +149,7 @@
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
       <span><kbd>LMB</kbd> <b>swing sword</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
+      <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>sound</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
@@ -127,6 +169,17 @@
     <div id="rerollCost"></div>
   </div>
   <div id="buildChips"></div>
+</div>
+
+<div id="charScreen" class="overlay hidden">
+  <div class="sheet">
+    <div class="sheethead">
+      <h2>CHARACTER</h2>
+      <div class="sheetsub" id="charSub"></div>
+    </div>
+    <div class="sheetbody" id="charBody"></div>
+    <div class="sheetfoot">C or ESC to close</div>
+  </div>
 </div>
 
 <div id="pauseScreen" class="overlay hidden">
@@ -365,6 +418,8 @@ window.addEventListener('keydown', e=>{
   keys[e.code] = true;
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
+  if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
+  if(e.code==='Escape' && state==='char') toggleChar();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR') doReroll();
 });
@@ -1508,14 +1563,14 @@ function spellSummaries(){
   if(p.orbit.n>0){
     const d = p.orbit.dmg*p.spellDmg;
     const hitCd = clamp(0.5*2.6/p.orbit.spd, 0.05, 0.5);
-    out.push({ name:'Guardian Brick', head:per(d)+' per hit', tip:
+    out.push({ id:'orbit', icon:'orbit', name:'Guardian Brick', head:per(d)+' per hit', tip:
       `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
       `${per(d)} damage per hit (${p.orbit.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
       `A foe can be struck every ${hitCd.toFixed(2)}s` });
   }
   if(p.blaster.n>0){
     const d = p.blaster.dmg*p.spellDmg;
-    out.push({ name:'Brick Blaster', head:per(d)+' per brick', tip:
+    out.push({ id:'blaster', icon:'blaster', name:'Brick Blaster', head:per(d)+' per brick', tip:
       `${p.blaster.n} brick${p.blaster.n>1?'s':''} per volley, every ${p.blaster.rate.toFixed(2)}s\n`+
       `${per(d)} damage each (${p.blaster.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
       `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'}\n`+
@@ -1526,8 +1581,8 @@ function spellSummaries(){
     let total = 0, cur = d;
     for(let i=0;i<p.chain.n;i++){ total += cur; cur *= CHAIN_FALLOFF; }
     const zn = Math.min(CHAIN_MAX_ZAPPERS, p.chain.zappers);
-    out.push({ name:'Storm Brick', head:per(d)+' opening strike', tip:
-      `${zn} zapper${zn>1?'s':''}, each on its own ${p.chain.rate.toFixed(2)}s cooldown\n`+
+    out.push({ id:'chain', icon:'chain', name:'Storm Brick', head:per(d)+' opening strike', tip:
+      `${zn} zapper${zn>1?'s, each on its own':' on a'} ${p.chain.rate.toFixed(2)}s cooldown\n`+
       `Opening strike ${per(d)} (${p.chain.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
       `Each leap deals ${Math.round(CHAIN_FALLOFF*100)}% of the strike before it\n`+
       `${p.chain.n} target${p.chain.n>1?'s':''} per bolt: ${per(total)} down the chain\n`+
@@ -1535,7 +1590,7 @@ function spellSummaries(){
   }
   if(p.storm.n>0){
     const d = p.storm.dmg*p.bladeDmg, blades = p.storm.n*p.storm.count;
-    out.push({ name:'Bladestorm', head:per(d)+' per blade', tip:
+    out.push({ id:'storm', icon:'storm', name:'Bladestorm', head:per(d)+' per blade', tip:
       `${blades} blades every ${p.storm.rate.toFixed(2)}s\n`+
       `${per(d)} damage each (${p.storm.dmg} base × ${p.bladeDmg.toFixed(2)} blade dmg)\n`+
       `Full burst: ${per(d*blades)} spread around you` });
@@ -1544,7 +1599,7 @@ function spellSummaries(){
     const d = p.vortex.dmg*p.dmgMul*p.bladeDmg;
     const tick = 0.24*p.vortex.hitMul;
     const dur = p.vortex.dur + (p.vortex.n-1)*0.4;
-    out.push({ name:'Blade Vortex', head:per(d)+' per tick', tip:
+    out.push({ id:'vortex', icon:'vortex', name:'Blade Vortex', head:per(d)+' per tick', tip:
       `Spins for ${dur.toFixed(1)}s every ${p.vortex.rate.toFixed(2)}s\n`+
       `${per(d)} damage per tick, one tick per foe every ${tick.toFixed(2)}s\n`+
       `Radius ${Math.round(p.vortex.r + (p.vortex.n-1)*10)}\n`+
@@ -1552,13 +1607,13 @@ function spellSummaries(){
   }
   if(p.bomb.n>0){
     const d = p.bomb.dmg*p.spellDmg;
-    out.push({ name:'Bomb Volley', head:per(d)+' per blast', tip:
+    out.push({ id:'bombplus', icon:'bomb', name:'Bomb Volley', head:per(d)+' per blast', tip:
       `${p.bomb.n} bomb${p.bomb.n>1?'s':''} every ${p.bomb.rate.toFixed(2)}s\n`+
       `${per(d)} damage in a ${Math.round(p.bomb.r)} radius (${p.bomb.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
   }
   if(p.freeze.n>0){
-    out.push({ name:'Block Freeze', head:'no damage', tip:
+    out.push({ id:'freeze', icon:'freeze', name:'Block Freeze', head:'no damage', tip:
       `Pure crowd control — deals no damage\n`+
       `Radius ${Math.round(p.freeze.r + (p.freeze.n-1)*30)}, every ${p.freeze.rate.toFixed(2)}s\n`+
       `Frozen foes crawl at 45% speed for ${(p.freeze.dur + (p.freeze.n-1)*1.2).toFixed(1)}s` });
@@ -1597,6 +1652,138 @@ function renderCards(){
     left <= 0 ? 'no rerolls left for this reward'
     : `costs ${cost} studs · ${left} reroll${left>1?'s':''} left · you have ${player.studs}`;
 }
+/* =============================== CHARACTER SHEET =============================== */
+const esc = t=> String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function sRow(label, value, sub){
+  return `<div class="srow"><span>${label}${sub?`<small>${esc(sub)}</small>`:''}</span><b>${esc(value)}</b></div>`;
+}
+function sBlock(title, rows, extra=''){
+  return `<div class="sblock"><h4>${title}</h4>${extra}${rows.join('')}</div>`;
+}
+function sBar(frac, col){
+  return `<div class="sbar"><i style="width:${(clamp(frac,0,1)*100).toFixed(1)}%;background:${col}"></i></div>`;
+}
+/* Everything here is read straight off the live player, and the derived numbers use
+   the same formulas the update loop does — see updatePlayer / hitEnemy / gainXp. */
+function renderCharSheet(){
+  const p = player;
+  if(!p) return;
+  const pct = v=> Math.round(v*100)+'%';
+  const mm = Math.floor(runTime/60), ss = Math.floor(runTime%60);
+  let best = 0; try{ best = +(localStorage.getItem('bb_best')||0); }catch(e){}
+
+  document.getElementById('charSub').textContent =
+    `Level ${p.level} · Wave ${wave.n} · ${p.kills} smashed · ${p.studs} studs · ${mm}:${String(ss).padStart(2,'0')}`;
+
+  /* --- melee maths, mirroring startSwing + updatePlayer --- */
+  const light = p.dmg * p.dmgMul * p.bladeDmg;
+  const spin  = light * 1.4;
+  const swings = 1/p.atkRate;
+  const critAvg = 1 + p.crit*(p.critMul-1);        /* expected multiplier per hit */
+  const comboAvg = (light*2 + spin)/3;             /* every third swing is the spin */
+
+  const vitals = sBlock('VITALS', [
+    sRow('Hearts', `${p.hp} / ${p.maxHp}`, p.maxHp>=HEART_MAX ? 'at the maximum' : `${HEART_MAX-p.maxHp} more possible`),
+    sRow('Armour', pct(p.armor), p.armor>0 ? 'chance to halve incoming damage' : 'no damage reduction'),
+    sRow('Regeneration', p.regenRate>0 ? p.regenRate.toFixed(2)+' hearts/s' : '—',
+      p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
+    sRow('Hit invulnerability', '1.10s', 'after taking a hit'),
+    sRow('Heart drop rate', pct(0.07 + p.heartChance), 'per monster (elites drop more)')
+  ], sBar(p.hp/Math.max(1,p.maxHp), '#d3242b'));
+
+  const move = sBlock('MOVEMENT', [
+    sRow('Move speed', Math.round(p.speed)+' px/s', `×${(p.speed/215).toFixed(2)} of base`),
+    sRow('Roll cooldown', p.dash.cdMax.toFixed(2)+'s', 'SPACE — invulnerable while rolling'),
+    sRow('Roll distance', Math.round(640*0.18)+' px', 'a perfect dodge refunds bomb cooldown'),
+    sRow('Chilled', p.slowT>0 ? p.slowT.toFixed(1)+'s left' : 'no', p.slowT>0 ? 'moving at 55% speed' : '')
+  ]);
+
+  const sword = sBlock('SWORD', [
+    sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(56+p.reach)} reach · arc swing`),
+    sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(64+p.reach)} reach · every 3rd swing, full circle`),
+    sRow('Swing rate', swings.toFixed(2)+'/s', `${p.atkRate.toFixed(2)}s per swing`),
+    sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target')
+  ]);
+
+  const crit = sBlock('CRITICALS', [
+    sRow('Crit chance', pct(p.crit), p.crit>=0.88 ? 'at the cap' : ''),
+    sRow('Crit damage', '×'+p.critMul.toFixed(1), p.critMul>=20 ? 'at the cap' : ''),
+    sRow('Average multiplier', '×'+critAvg.toFixed(2), 'expected damage across all hits')
+  ], sBar(p.crit, '#ffd166'));
+
+  const power = sBlock('DAMAGE MULTIPLIERS', [
+    sRow('Base sword damage', p.dmg.toFixed(1), 'raised by Sharpened Blade'),
+    sRow('Level bonus', '×'+p.dmgMul.toFixed(2), '+5% every level'),
+    sRow('Blade damage', '×'+p.bladeDmg.toFixed(2), 'sword, bladestorm & vortex'),
+    sRow('Spell damage', '×'+p.spellDmg.toFixed(2), 'orbit, blaster, bombs & storm bricks')
+  ]);
+
+  const loot = sBlock('LOOT & XP', [
+    sRow('Studs held', String(p.studs), `next reroll costs ${rerollCost()}`),
+    sRow('Stud gain', '×'+p.studMul.toFixed(2), ''),
+    sRow('XP gain', '×'+p.xpMul.toFixed(2), `wave bonus ×${(1+wave.n/6).toFixed(2)} on top`),
+    sRow('Magnet range', Math.round(p.magnetR)+' px', p.magnetR>=420 ? 'at the cap' : ''),
+    sRow('Fortune', p.fortuneT>0 ? `×${p.fortuneMul} · ${Math.ceil(p.fortuneT)}s` : '—',
+      p.fortuneT>0 ? 'doubling studs and XP' : '')
+  ]);
+
+  const run = sBlock('THIS RUN', [
+    sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
+    sRow('Wave', String(wave.n), best>0 ? `personal best: wave ${best}` : ''),
+    sRow('Monsters smashed', String(p.kills), ''),
+    sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, '')
+  ], sBar(p.xp/Math.max(1,p.xpNext), '#ffb900'));
+
+  /* --- spells, with the same live numbers the reward screen shows --- */
+  const spells = spellSummaries();
+  const spellHtml = spells.length ? spells.map(sp=>{
+    const stacks = taken[sp.id] || 0;
+    const lines = sp.tip.split('\n').map(l=>`<li>${esc(l)}</li>`).join('');
+    return `<div class="spellcard">
+      <div class="schead">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#d6a6ff" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">${ICONS[sp.icon]||''}</svg>
+        <h5>${esc(sp.name)}</h5>
+        ${stacks?`<div class="scstack">×${stacks}</div>`:''}
+      </div>
+      <div class="scdmg">${esc(sp.head)}</div>
+      <ul>${lines}</ul>
+    </div>`;
+  }).join('') : '<div class="nospell">No spells yet — spell bricks come from wave, level and boss rewards.</div>';
+
+  /* --- every upgrade taken, grouped by class --- */
+  const byCls = {};
+  for(const id in taken){
+    const u = UPGRADES.find(x=>x.id===id);
+    if(!u) continue;
+    (byCls[u.cls] = byCls[u.cls] || []).push(`<div class="chip">${esc(u.name)} ×${taken[id]}</div>`);
+  }
+  const clsOrder = ['OFFENSE','DEFENSE','UTILITY','SPELL'];
+  const upHtml = clsOrder.filter(c=>byCls[c]).map(c=>
+    `<div class="chipgroup"><span class="chiphead">${c}</span>${byCls[c].join('')}</div>`
+  ).join('') || '<div class="chipgroup"><div class="chip">Fresh build — no bricks taken yet</div></div>';
+
+  document.getElementById('charBody').innerHTML =
+    `<div class="seclabel">STATS</div>
+     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${loot}${run}</div>
+     <div class="seclabel">SPELLS</div>
+     <div class="spellgrid">${spellHtml}</div>
+     <div class="seclabel">BRICKS TAKEN</div>
+     <div id="charChips" style="display:flex;flex-direction:column;gap:10px;align-items:center">${upHtml}</div>`;
+}
+function toggleChar(){
+  if(state==='play'){
+    renderCharSheet();
+    document.getElementById('charScreen').classList.remove('hidden');
+    state = 'char'; cv.style.cursor='default';
+    SFX.click();
+  } else if(state==='char'){
+    document.getElementById('charScreen').classList.add('hidden');
+    state = 'play'; cv.style.cursor='none';
+    try{ window.focus(); }catch(err){}
+    SFX.click();
+  }
+}
 function openUpgrades(mode='wave'){
   if(state!=='play') return;
   upgradeMode = mode;
@@ -1622,7 +1809,6 @@ function openUpgrades(mode='wave'){
   renderCards();
   document.getElementById('rerollRow').style.display = mode==='chest' ? 'none' : 'flex';
   const chips = document.getElementById('buildChips');
-  const esc = t=> String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const spells = spellSummaries().map(sp=>
     `<div class="chip spell" data-tip="${esc(sp.tip)}">${esc(sp.name)} · <b>${esc(sp.head)}</b></div>`).join('');
   const buffs = Object.keys(taken).map(id=>{
@@ -5078,6 +5264,7 @@ function updateCamera(raw, tx0, ty0){
 }
 function startGame(){
   audioInit();
+  document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('titleScreen').classList.add('hidden');
   resetRun(false);
   cam.x = player.x; cam.y = player.y; cam.shake = 0;
@@ -5108,6 +5295,7 @@ function togglePause(){
     document.getElementById('pauseScreen').classList.add('hidden'); }
 }
 function backToTitle(){
+  document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
   document.getElementById('pauseScreen').classList.add('hidden');
   document.getElementById('upgradeScreen').classList.add('hidden');
