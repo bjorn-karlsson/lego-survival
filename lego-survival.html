@@ -63,6 +63,24 @@
     letter-spacing:1.5px;border-radius:6px;padding:2px 8px;font-family:'Fredoka'}
   .card .stack{position:absolute;top:-12px;right:26px;background:#1b2a34;color:#fff;font-size:12px;font-weight:700;
     border-radius:9px;padding:3px 8px;box-shadow:0 3px 0 #000}
+  /* the test bench shows the real reward cards at half size — hovering one
+     lifts it back to full scale so the whole description is readable */
+  #cheatUps{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:10px 4px 16px}
+  .card.mini{width:132px;padding:9px 9px 20px;border-radius:11px;border-width:2px;
+    box-shadow:0 5px 0 rgba(0,0,0,.35);transform-origin:center bottom;font-size:11px}
+  .card.mini .band{height:7px;border-radius:5px;margin-bottom:8px}
+  .card.mini .band i{top:6px;width:7px;height:7px}
+  .card.mini svg{width:26px;height:26px;margin:1px auto 5px}
+  .card.mini h3{font-size:11px;margin-bottom:4px;line-height:1.15}
+  .card.mini p{font-size:9px;line-height:1.28;max-height:3.9em;overflow:hidden}
+  .card.mini .rtag{font-size:8px;padding:2px 6px;border-radius:6px;top:-9px;left:-7px}
+  .card.mini .ctag{font-size:7.5px;letter-spacing:1px;padding:1px 6px;bottom:5px}
+  .card.mini .stack{font-size:9px;padding:2px 6px;top:-9px;right:-7px;border-radius:6px}
+  .card.mini:hover{transform:scale(1.62) translateY(-8px);z-index:40;
+    box-shadow:0 14px 0 rgba(0,0,0,.4)}
+  .card.mini:hover p{max-height:none}
+  .card.mini.capped{opacity:.42;cursor:not-allowed;filter:saturate(.35)}
+  .card.mini.capped:hover{transform:scale(1.62) translateY(-8px);opacity:.9}
   #rerollRow{margin-top:26px;display:flex;align-items:center;gap:14px}
   #rerollCost{font-size:14px;color:#ffd76e;font-weight:600}
   #buildChips{margin-top:22px;display:flex;flex-direction:column;gap:12px;align-items:center;max-width:880px}
@@ -220,7 +238,7 @@
       <div class="cheatrow" id="cheatWaves"></div>
       <div class="seclabel">DIFFICULTY</div>
       <div class="cheatrow" id="cheatDiffs"></div>
-      <div class="seclabel">GRANT A BRICK — CLICK TO MAX IT OUT</div>
+      <div class="seclabel">GRANT A BRICK — CLICK TO MAX IT OUT (hover to read; greyed-out means already at its cap)</div>
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
@@ -248,6 +266,7 @@
     <div class="btnrow">
       <button id="resumeBtn" class="btn">RESUME</button>
       <button id="restartBtn" class="btn gray">RESTART</button>
+      <button id="pauseTitleBtn" class="btn gray">MAIN MENU</button>
     </div>
     <div class="smallhint">P or Esc resumes · if keys don't respond, click the game once</div>
   </div>
@@ -321,8 +340,28 @@ const HEART_POOL_AT = 99;
 const HEART_ROW_COLS = ['#d3242b','#ffb900','#9b45d6','#2ea8a0','#e4572e','#4b9b41','#2e7dd1','#c95bd0','#d3242b'];
 const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
 const BOMB_MAX      = BOMB_DIRS.length;   /* the compass is full at 8 — no stacking past it */
+const PUMPKIN_LIVE_CAP = 12;              /* fuses burning on the field at once */
+const FROST_TRAIL_CAP = 80;               /* frost patches on the floor at once */
+const PUMPKIN_MIN_RATE = 4.0;             /* wave scaling never speeds the lobbing up past this */
 const BOMB_MIN_RATE = 2.0;                /* never faster than one volley every two seconds */
 const BOMB_MAX_R    = 110;                /* blast radius ceiling */
+/* Real ceilings on the stats that break the game when they run away. Every one
+   of these is also a `req` on its brick, so a maxed stat stops being offered —
+   and the test bench can't push past it either. */
+const REACH_MAX   = 84;    /* +reach on top of the 56/64 base arc */
+const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
+const SPEED_MAX   = 430;   /* twice the starting walk speed */
+const DASH_CD_MIN = 0.30;
+const MAGNET_MAX  = 420;
+const REGEN_MAX   = 1.20;  /* hearts per second */
+const HEART_CHANCE_MAX = 0.35;
+const BLAST_MIN_RATE = 0.30;
+const STORM_MIN_RATE = 2.00;
+const VORTEX_MIN_RATE = 3.00;
+const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
+/* how many extra flight legs a blade gets: rank 1 flies home, rank 2 is caught
+   and thrown back out, so four passes in total */
+const BOOMER_LEGS = [0, 1, 3];
 const CLUSTER_MAX   = 2;                  /* how many times a bomb may split */
 const CLUSTER_FALLOFF = 0.45;             /* each split generation hits for this much of the last */
 const FORTUNE_CAP = 8;
@@ -705,7 +744,7 @@ function newPlayer(){
     crit:0.1, studMul:1, heartChance:0,
     orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[] },
     blaster:{ n:0, dmg:2, rate:1.5, cd:0.8, spd:560, pierce:2 },
-    storm:{ n:0, dmg:2, rate:6.5, cd:2, spd:255, life:1.5, count:8, size:1,
+    storm:{ n:0, dmg:2, rate:6.5, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0 },
     freeze:{ n:0, r:190, dur:2.5, rate:10, cd:4 },
@@ -1230,8 +1269,16 @@ const EDEF = {
              col:{head:'#6a4f7e', torso:'#513a68', legs:'#3a2a50', hands:'#7a5f92', hair:'#513a68'}, style:'stalker' },
   /* pumpkin lord — the bomber's promotion: instead of running in and popping, it
      lobs lego-pumpkins that sit on a three-second fuse and go off wide */
-  pumpkinlord:{ hp:22, speed:62, r:14, scale:1.2, dmg:2, xp:20, studs:[15,26], fire:3.6,
+  pumpkinlord:{ hp:22, speed:62, r:14, scale:1.2, dmg:2, xp:20, studs:[15,26], fire:5.2,
              col:{head:'#ff9a3c', torso:'#3a3f44', legs:'#23272b', hands:'#ffc07a', hair:'#7a3a20'}, style:'bomber' },
+  /* MINI GOLEMS — what is left when a golem comes apart. Small, quick, no
+     abilities at all: they just run you down and leave their element on you. */
+  ministone:{ hp:11, speed:112, r:10, scale:0.85, dmg:1, xp:6, studs:[4,9], mini:'stone',
+             col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
+  miniice:  { hp:9,  speed:122, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'ice', elem:'frost',
+             col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
+  minifire: { hp:9,  speed:128, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'fire', elem:'fire',
+             col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' },
   /* GOLEMS — slow siege units: they lumber in, charge, then plant a delayed AoE stomp */
   stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:2, xp:26, studs:[18,30], golem:'stone',
              col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
@@ -1240,12 +1287,18 @@ const EDEF = {
   firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'fire',
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' }
 };
+/* Each golem has its OWN kit now. Stone is the only one that charges in and
+   stomps; frost skips a boulder across the whole field and frost-burns the lane
+   it travelled; ember lobs a small cluster of firebombs the way the bosses do. */
 const GOLEM_CONF = {
   stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:300, chargeSpd:430, wind:1.0, dmg:2,
+          kit:'stomp', range:620, mini:'ministone',
           bricks:['#9aa0a0','#7b8184','#5f6467'], name:'STONE' },
   ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:330, chargeSpd:400, wind:1.1, dmg:1,
+          kit:'boulder', range:1000, mini:'miniice',
           bricks:['#cfeaff','#7fb9e0','#4d86ad'], name:'FROST' },
   fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:285, chargeSpd:460, wind:0.95, dmg:2,
+          kit:'bombs', range:640, mini:'minifire',
           bricks:['#ff9a3c','#8a3418','#4a1d0f'], name:'EMBER' }
 };
 /* ranged monsters get half the wave armor — melee stays the threat */
@@ -1303,7 +1356,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
         aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
-        path:null, pathI:0, pathT:0, pathGoal:null,
+        path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1,
         nextAtk:1.8, ring:null, cycle:0 };
     } else {
       /* normal boss — OR forced boss key (wave-50 raid uses every boss) */
@@ -1328,7 +1381,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
         aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
-        path:null, pathI:0, pathT:0, pathGoal:null,
+        path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1,
         nextAtk:2.2, ring:null, cycle:0 };
     }
     enemies.push(e);
@@ -1361,7 +1414,8 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     strafe:Math.random()<0.5?1:-1, strafeT:rnd(1,3), elite, magic, dead:false, phase:rnd(TAU),
     aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
     stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1,
-    path:null, pathI:0, pathT:0, pathGoal:null };
+    mini:d.mini||null, touchElem:d.elem||null,
+    path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1 };
   enemies.push(e);
   SFX.build();
 }
@@ -1454,6 +1508,23 @@ function killEnemy(e, source){
     addRing(e.x, e.y, 14, 320, 120, '#b58fd6', 6, 0.5);
     addDmg(e.x, e.y-70, 'THE SWARM!', '#c9b8e8', 18);
     SFX.roar();
+  }
+  if(e.golem){
+    /* it doesn't topple, it comes apart — the pieces get back up and run */
+    const G = GOLEM_CONF[e.golem];
+    const n = irnd(3,5);
+    for(let i=0;i<n;i++){
+      const a = i/n*TAU + rnd(-0.3,0.3);
+      spawnEnemy(G.mini,
+        clamp(e.x+Math.cos(a)*46, W.wall+40, W.w-W.wall-40),
+        clamp(e.y+Math.sin(a)*46, W.wall+40, W.h-W.wall-40));
+    }
+    addRing(e.x, e.y, 16, 340, 140, G.ring, 7, 0.5);
+    spawnBricks(e.x, e.y, G.bricks, 16, 240);
+    addDust(e.x, e.y, 8, 'rgba(200,200,190,');
+    addDmg(e.x, e.y-70, 'IT BREAKS APART!', G.ring, 19);
+    addShake(0.35);
+    SFX.brick(6);
   }
   const fort = player.fortuneT>0 ? player.fortuneMul : 1;
   const cols = [e.col.head, e.col.torso, e.col.legs, e.col.head];
@@ -1976,13 +2047,15 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%)`,
     apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
+    req:()=>player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
-    desc:c=>`+${c.v} sword attack range`,
-    apply:c=>{ player.reach += c.v; } },
+    desc:c=>`+${Math.min(c.v, REACH_MAX-player.reach)} sword attack range (now ${Math.round(56+Math.min(REACH_MAX,player.reach+c.v))}, cap ${56+REACH_MAX})`,
+    apply:c=>{ player.reach = Math.min(REACH_MAX, player.reach + c.v); } },
   { id:'aspd', name:'Swift Hands', icon:'bolt', cls:'OFFENSE',
+    req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
-    desc:c=>`Swing ${Math.round(c.v*100)}% faster`,
-    apply:c=>{ player.atkRate *= (1-c.v); } },
+    desc:c=>`Swing ${Math.round(c.v*100)}% faster (now every ${Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)).toFixed(2)}s, floor ${ATK_RATE_MIN.toFixed(2)}s)`,
+    apply:c=>{ player.atkRate = Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.35+0.30*m}),
     desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (now ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%)`,
@@ -1996,25 +2069,30 @@ const UPGRADES = [
     desc:c=>`+${c.v} max hearts, heal ${c.v}`,
     apply:c=>{ player.maxHp=Math.min(HEART_MAX,player.maxHp+c.v); player.hp=Math.min(player.maxHp,player.hp+c.v); } },
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
+    req:()=>player.regenRate < REGEN_MAX,
     calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`Regenerate ${(c.v).toFixed(2)} hearts per second (now ${player.regenRate.toFixed(2)}/s)`,
-    apply:c=>{ player.regenRate += c.v; } },
+    desc:c=>`Regenerate ${(c.v).toFixed(2)} more hearts per second (now ${Math.min(REGEN_MAX,player.regenRate+c.v).toFixed(2)}/s, cap ${REGEN_MAX.toFixed(2)}/s)`,
+    apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
   { id:'heart', name:'Generous Smith', icon:'heartplus', cls:'DEFENSE',
+    req:()=>player.heartChance < HEART_CHANCE_MAX,
     calc:m=>({v:Math.round(3+2*m)}),
-    desc:c=>`+${c.v}% heart drop chance`,
-    apply:c=>{ player.heartChance += c.v/100; } },
+    desc:c=>`+${c.v}% heart drop chance (now ${Math.round(Math.min(HEART_CHANCE_MAX,player.heartChance+c.v/100)*100)}%, cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
+    apply:c=>{ player.heartChance = Math.min(HEART_CHANCE_MAX, player.heartChance + c.v/100); } },
   { id:'spd', name:'Sprint Studs', icon:'boot', cls:'UTILITY',
+    req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
-    desc:c=>`+${Math.round(c.v*100)}% move speed`,
-    apply:c=>{ player.speed *= (1+c.v); } },
+    desc:c=>`+${Math.round(c.v*100)}% move speed (now ${Math.round(Math.min(SPEED_MAX,player.speed*(1+c.v)))}, cap ${SPEED_MAX})`,
+    apply:c=>{ player.speed = Math.min(SPEED_MAX, player.speed*(1+c.v)); } },
   { id:'roll', name:'Phantom Roll', icon:'roll', cls:'UTILITY',
+    req:()=>player.dash.cdMax > DASH_CD_MIN,
     calc:m=>({v:0.10+0.05*m}),
-    desc:c=>`Roll cooldown -${Math.round(c.v*100)}%`,
-    apply:c=>{ player.dash.cdMax *= (1-c.v); } },
+    desc:c=>`Roll cooldown -${Math.round(c.v*100)}% (now ${Math.max(DASH_CD_MIN,player.dash.cdMax*(1-c.v)).toFixed(2)}s, floor ${DASH_CD_MIN.toFixed(2)}s)`,
+    apply:c=>{ player.dash.cdMax = Math.max(DASH_CD_MIN, player.dash.cdMax*(1-c.v)); } },
   { id:'mag', name:'Magnet Bricks', icon:'magnet', cls:'UTILITY',
+    req:()=>player.magnetR < MAGNET_MAX,
     calc:m=>({v:0.20+0.15*m}),
-    desc:c=>`+${Math.round(c.v*100)}% stud pickup range`,
-    apply:c=>{ player.magnetR *= (1+c.v); } },
+    desc:c=>`+${Math.round(c.v*100)}% stud pickup range (now ${Math.round(Math.min(MAGNET_MAX,player.magnetR*(1+c.v)))}, cap ${MAGNET_MAX})`,
+    apply:c=>{ player.magnetR = Math.min(MAGNET_MAX, player.magnetR*(1+c.v)); } },
   { id:'greed', name:'Golden Touch', icon:'coin', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`+${Math.round(c.v*100)}% studs from every source`,
@@ -2066,10 +2144,11 @@ const UPGRADES = [
     calc:m=>({v:Math.max(1,Math.round(m*0.8)), p:m>=2.4?1:0}),
     desc:c=>`Blaster +${c.v} dmg${c.p?' and +1 pierce':''}`,
     apply:c=>{ player.blaster.dmg+=c.v; player.blaster.pierce+=c.p; } },
-  { id:'blastrate', name:'Rapid Blaster', icon:'bolt', cls:'SPELL', req:()=>player.blaster.n>0,
+  { id:'blastrate', name:'Rapid Blaster', icon:'bolt', cls:'SPELL',
+    req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
     calc:m=>({v:0.13+0.06*m}),
-    desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster`,
-    apply:c=>{ player.blaster.rate *= (1-c.v); } },
+    desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (now ${Math.max(BLAST_MIN_RATE,player.blaster.rate*(1-c.v)).toFixed(2)}s, floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
+    apply:c=>{ player.blaster.rate = Math.max(BLAST_MIN_RATE, player.blaster.rate*(1-c.v)); } },
   { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL', minRar:'uncommon',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% increased spell damage (now ${Math.round((player.incSpell+c.v)*100)}%)`,
@@ -2108,10 +2187,11 @@ const UPGRADES = [
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), s:0.15*m}),
     desc:c=>`Storm blades +${c.v} dmg, +${Math.round(c.s*100)}% size`,
     apply:c=>{ player.storm.dmg+=c.v; player.storm.size+=c.s; } },
-  { id:'stormrate', name:'Storm Caller', icon:'bolt', cls:'SPELL', req:()=>player.storm.n>0,
+  { id:'stormrate', name:'Storm Caller', icon:'bolt', cls:'SPELL',
+    req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
-    desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster`,
-    apply:c=>{ player.storm.rate *= (1-c.v); } },
+    desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (now ${Math.max(STORM_MIN_RATE,player.storm.rate*(1-c.v)).toFixed(2)}s, floor ${STORM_MIN_RATE.toFixed(2)}s)`,
+    apply:c=>{ player.storm.rate = Math.max(STORM_MIN_RATE, player.storm.rate*(1-c.v)); } },
   { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.vortex.n + c.n}) — longer & wider whirlwind`
@@ -2121,10 +2201,11 @@ const UPGRADES = [
     calc:m=>({v:Math.round(8*m)}),
     desc:c=>`Vortex area +${c.v} radius`,
     apply:c=>{ player.vortex.r += c.v; } },
-  { id:'vortexrate', name:'Vortex Speed', icon:'bolt', cls:'SPELL', req:()=>player.vortex.n>0,
+  { id:'vortexrate', name:'Vortex Speed', icon:'bolt', cls:'SPELL',
+    req:()=>player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
-    apply:c=>{ player.vortex.rate *= (1-c.v);
+    apply:c=>{ player.vortex.rate = Math.max(VORTEX_MIN_RATE, player.vortex.rate*(1-c.v));
       player.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, player.vortex.hitMul*(1-c.v*0.5)); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
@@ -2166,7 +2247,14 @@ const UPGRADES = [
         ? `Every bomb bursts into 3-5 bomblets that scatter and detonate for ${Math.round(CLUSTER_FALLOFF*100)}% damage`
         : `Bomblets burst again — a third wave at ${Math.round(CLUSTER_FALLOFF*CLUSTER_FALLOFF*100)}% damage`;
     },
-    apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } }
+    apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } },
+  { id:'stormback', name:'Returning Blades', icon:'storm', cls:'SPELL', minRar:'epic',
+    req:()=>player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
+    calc:m=>({n:1}),
+    desc:c=> player.storm.boomer===0
+      ? 'Storm blades stop fading at the end of their flight — each one wheels around and cuts its way back to you'
+      : 'You catch every returning blade and hurl it straight back out: four passes per blade',
+    apply:c=>{ player.storm.boomer = Math.min(BOOMER_MAX, player.storm.boomer + 1); } }
 ];
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
@@ -2177,7 +2265,7 @@ const FAVOURITES = [
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
-  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','bladem','moredmg'] },
+  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
@@ -2228,15 +2316,14 @@ function buildDiffRow(){
 function grantMaxed(id){
   const u = UPGRADES.find(x=>x.id===id);
   if(!u) return;
-  /* push it until its own cap stops it, or 8 epic picks for anything uncapped */
-  let n = 0;
+  /* push it until its own cap stops it, or 8 epic picks for anything uncapped.
+     A brick whose requirement already fails hands out NOTHING — the bench must
+     not be able to push a stat past a ceiling the real run respects. */
   for(let i=0;i<8;i++){
     if(u.req && !u.req()) break;
     u.apply(u.calc(RARITY.epic.mult));
     taken[id] = (taken[id]||0)+1;
-    n++;
   }
-  if(n===0){ u.apply(u.calc(RARITY.epic.mult)); taken[id] = (taken[id]||0)+1; }
   buildCheatRows();
 }
 function buildCheatRows(){
@@ -2258,10 +2345,30 @@ function buildCheatRows(){
     el.addEventListener('click', ()=>{ setDifficulty(el.dataset.diff); SFX.click(); buildCheatRows(); });
 
   const ups = document.getElementById('cheatUps');
-  ups.innerHTML = UPGRADES.map(u=>
-    `<div class="cheatbtn${taken[u.id]?' got':''}" data-up="${u.id}">${esc(u.name)}${taken[u.id]?' ×'+taken[u.id]:''}</div>`).join('');
+  ups.innerHTML = UPGRADES.map(u=>{
+    const owned = taken[u.id]||0;
+    /* the bench can only hand out what the run could actually reach, so a brick
+       sitting at its cap is shown greyed out rather than clickable */
+    let open = true;
+    try{ open = !u.req || !!u.req(); }catch(e){ open = false; }
+    const R = RARITY[u.minRar || 'common'];
+    let body = '';
+    try{ body = esc(u.desc(u.calc(RARITY.epic.mult), owned)); }catch(e){ body = ''; }
+    return `<div class="card mini${open?'':' capped'}" data-up="${u.id}">
+      ${owned?`<div class="stack">x${owned}</div>`:''}
+      <div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
+      <h3>${esc(u.name)}</h3><p>${body}</p>
+      <div class="rtag" style="background:${R.col}">${u.minRar?R.name+'+':'ANY'}</div>
+      <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
+    </div>`;
+  }).join('');
   for(const el of ups.children)
-    el.addEventListener('click', ()=>{ grantMaxed(el.dataset.up); SFX.pick(); });
+    el.addEventListener('click', ()=>{
+      if(el.classList.contains('capped')){ SFX.click(); return; }
+      grantMaxed(el.dataset.up); SFX.pick();
+    });
 
   const misc = document.getElementById('cheatMisc');
   misc.innerHTML = [
@@ -2409,7 +2516,10 @@ function spellSummaries(){
     out.push({ id:'storm', icon:'storm', name:'Bladestorm', head:per(d)+' per blade', tip:
       `${blades} blades every ${p.storm.rate.toFixed(2)}s\n`+
       `${per(d)} each — ${p.storm.dmg} base × (1 + ${Math.round((p.incMelee+p.incAll)*100)}% increased)\n`+
-      `Full burst: ${per(d*blades)} spread around you` });
+      `Full burst: ${per(d*blades)} spread around you`+
+      (p.storm.boomer>0 ? `\nReturning Blades ×${p.storm.boomer}: `+
+        (p.storm.boomer>1 ? 'four passes per blade — out, home, out, home'
+                          : 'each blade flies home through everything again') : '') });
   }
   if(p.vortex.n>0){
     const d = calcDamage(p.vortex.dmg,'melee');
@@ -2925,16 +3035,10 @@ function updatePlayer(dt){
       SFX.zap();
     }
   }
+  /* bladestorm — the cooldown starts when the CAST ENDS, never while the burst
+     is still pouring out of the hero. Same rule the vortex already followed. */
   const st = p.storm;
   if(st.n>0){
-    st.cd -= dt;
-    if(st.cd<=0 && st.queued<=0){
-      st.cd = st.rate;
-      st.queued = st.n * st.count;
-      st.qIdx = 0; st.qT = 0; st.qOffset = rnd(TAU);
-      addRing(p.x, p.y, 12, 320, 70, '#cfd6dd', 4, 0.35);
-      SFX.whoosh();
-    }
     if(st.queued>0){
       st.qT -= dt;
       while(st.qT<=0 && st.queued>0){
@@ -2943,7 +3047,17 @@ function updatePlayer(dt){
         st.qIdx++;
         projectiles.push({ kind:'wblade', x:p.x, y:p.y-12,
           vx:Math.cos(ang)*st.spd, vy:Math.sin(ang)*st.spd,
-          life:st.life, dmg:calcDamage(st.dmg,'melee'), size:st.size, spin:ang, hit:new Set() });
+          life:st.life, olife:st.life, dmg:calcDamage(st.dmg,'melee'), size:st.size,
+          spin:ang, hit:new Set(), phase:'out', legs:BOOMER_LEGS[st.boomer]||0 });
+      }
+      if(st.queued<=0) st.cd = st.rate;    /* cast finished — now it ticks */
+    } else {
+      st.cd -= dt;
+      if(st.cd<=0){
+        st.queued = st.n * st.count;
+        st.qIdx = 0; st.qT = 0; st.qOffset = rnd(TAU);
+        addRing(p.x, p.y, 12, 320, 70, '#cfd6dd', 4, 0.35);
+        SFX.whoosh();
       }
     }
   }
@@ -3190,13 +3304,17 @@ function navBuild(){
   NAV.blocked = new Uint8Array(n);
   navG = new Float32Array(n); navF = new Float32Array(n);
   navFrom = new Int32Array(n); navSeen = new Int32Array(n); navStamp = 0;
-  const pad = 16;   /* keep a body's width away from geometry */
+  const pad = 14;   /* keep a body's width away from geometry */
   for(let iy=0; iy<NAV.h; iy++) for(let ix=0; ix<NAV.w; ix++){
-    const cx = ix*cs + cs/2, cy = iy*cs + cs/2;
+    const x0 = ix*cs, y0 = iy*cs, cx = x0 + cs/2, cy = y0 + cs/2;
     let bad = false;
     if(cx < W.wall+pad || cx > W.w-W.wall-pad || cy < W.wall+pad || cy > W.h-W.wall-pad) bad = true;
     if(!bad) for(const so of solids){
-      if(Math.hypot(cx-so.x, cy-so.y) < so.r + pad){ bad = true; break; }
+      /* circle against the whole cell, not just its centre — a tree narrower than
+         half a cell used to be invisible to the grid, so monsters were routed
+         straight into it and then shoved back out, frame after frame */
+      const qx = clamp(so.x, x0, x0+cs), qy = clamp(so.y, y0, y0+cs);
+      if(Math.hypot(so.x-qx, so.y-qy) < so.r + pad){ bad = true; break; }
     }
     if(!bad) for(const wa of waters){
       if(cx > wa.x-pad && cx < wa.x+wa.w+pad && cy > wa.y-pad && cy < wa.y+wa.h+pad){ bad = true; break; }
@@ -3311,6 +3429,39 @@ function navFindPath(sx, sy, tx, ty){
   out[out.length-1] = {x:tx, y:ty};              /* finish on the real target */
   return out;
 }
+/* Slide around a solid rather than pushing into it. The side is chosen once and
+   held for half a second, which is what stops the back-and-forth wiggle: without
+   that the cross-product flips as the body drifts and the monster shuffles in
+   place instead of committing to a way round. */
+function slideAroundSolids(e, vx, vy, dt){
+  const sp = Math.hypot(vx, vy);
+  if(sp < 1) return null;
+  let nx = vx/sp, ny = vy/sp, touched = false;
+  for(const so of solids){
+    const dx = so.x - e.x, dy = so.y - e.y;
+    const d = Math.hypot(dx, dy);
+    if(d < 0.001) continue;
+    const rr = so.r + e.r + 6;
+    const look = rr + sp*0.35;
+    if(d > look) continue;
+    const ahead = (dx*nx + dy*ny) / d;       /* is it in front of us at all? */
+    if(ahead < 0.2) continue;
+    touched = true;
+    e.slideT = (e.slideT||0) - dt;
+    if(e.slideT <= 0){
+      const cross = nx*dy - ny*dx;
+      e.slideSign = cross > 0 ? -1 : 1;      /* pick a side and keep it */
+      e.slideT = 0.55;
+    }
+    const tx = -dy/d * e.slideSign, ty = dx/d * e.slideSign;
+    const k = clamp((look - d) / Math.max(1, rr*0.75), 0, 1);
+    nx = nx*(1-k) + tx*k; ny = ny*(1-k) + ty*k;
+    const n2 = Math.hypot(nx, ny) || 1; nx /= n2; ny /= n2;
+  }
+  if(!touched){ e.slideT = 0; return null; }
+  return { x: nx*sp, y: ny*sp };
+}
+
 /* Steer `e` toward the player, pathing around geometry only when it has to.
    Returns a unit direction, or null to fall back to the caller's own steering. */
 function navSteer(e, dt){
@@ -3350,6 +3501,19 @@ function navSteer(e, dt){
   const t2 = e.path[e.pathI];
   const a = Math.atan2(t2.y-e.y, t2.x-e.x);
   return { x: Math.cos(a), y: Math.sin(a) };
+}
+/* The open cell centre nearest a point that has ended up INSIDE the padded band
+   around a solid, a lake or the arena wall. A body shoved in there has nothing
+   sane to path from, so it used to sit and shuffle on the spot — this hands it a
+   definite way back out instead of a coin-flip sidestep. */
+function navEscape(x, y){
+  if(!NAV.blocked || !navBlockedAt(x, y)) return null;
+  const c = navCell(x, y);
+  const open = navNearestOpen(c.ix, c.iy);
+  if(!open) return null;
+  const ex = (open.ix+0.5)*NAV.cs, ey = (open.iy+0.5)*NAV.cs;
+  if(Math.hypot(ex-x, ey-y) < 1) return null;
+  return { x: ex, y: ey };
 }
 function collideWorld(e){
   e.x = clamp(e.x, W.wall+e.r+6, W.w-W.wall-e.r-6);
@@ -3527,8 +3691,12 @@ function updateEnemy(e, dt){
     if(e.mode==='aim'){
       e.aimT += dt;
       if(e.aimT>=0.6){
-        e.mode='chase'; e.atkCd = e.fire;
-        const n = e.elite ? 3 : 2;
+        e.mode='chase'; e.atkCd = Math.max(PUMPKIN_MIN_RATE, e.fire);
+        /* one pumpkin, two if it has been promoted — and never more than a
+           dozen fuses burning on the field at once, however many lords live */
+        let live = 0;
+        for(const q of projectiles) if(q.kind==='pumpkin' && !q.dead) live++;
+        const n = Math.max(0, Math.min(e.elite ? 2 : 1, PUMPKIN_LIVE_CAP - live));
         for(let i=0;i<n;i++){
           const dur = rnd(0.75,1.0);
           /* aim at where you are heading, plus the fuse they will sit on */
@@ -3571,11 +3739,29 @@ function updateEnemy(e, dt){
         golemStomp(e, G);
       }
     }
+    /* frost and ember both wind up a throw instead: planted, arms back, then it
+       goes. Re-aimed right up to the release so you cannot just walk sideways. */
+    else if(e.mode==='throwWind'){
+      e.modeT += dt; vx=0; vy=0;
+      if(e.modeT < G.wind*0.6) e.lockA = toP;
+      e.face = {x:Math.cos(e.lockA), y:Math.sin(e.lockA)};
+      if(Math.random()<0.6)
+        particles.push({kind:'spark', x:e.x+rnd(-22,22), y:e.y-rnd(20,58),
+          vx:rnd(-20,20), vy:-50, life:0.4, max:0.4, color:G.dust});
+      if(e.modeT>=G.wind*0.8){
+        e.mode='chase'; e.modeT=0; e.atkCd = (e.golem==='ice' ? 5.0 : 4.6)*e.atkS;
+        golemThrow(e, G);
+      }
+    }
     else {
       vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed;
       if(e.atkCd<=0){
-        if(dP < G.stompR*0.72){ e.mode='stompWind'; e.modeT=0; }           /* already on top of you */
-        else if(dP < 620){ e.mode='chargeWind'; e.modeT=0; e.lockA=toP; }  /* close the gap first */
+        if(G.kit==='stomp'){
+          if(dP < G.stompR*0.72){ e.mode='stompWind'; e.modeT=0; }           /* already on top of you */
+          else if(dP < G.range){ e.mode='chargeWind'; e.modeT=0; e.lockA=toP; }  /* close the gap first */
+        } else if(dP < G.range){
+          e.mode='throwWind'; e.modeT=0; e.lockA=toP;
+        }
       }
     }
   }
@@ -3879,14 +4065,19 @@ function updateEnemy(e, dt){
   /* A* takes over whenever a monster that is chasing the player can't see them.
      Committed attacks (lunges, charges, dashes) are never redirected. */
   const committed = (e.mode==='lunge' || e.mode==='charge' || e.mode==='dash');
+  let navDir = null;
   if((vx||vy) && !e.docile && !committed){
     const sp = Math.hypot(vx,vy);
     const toward = sp>0 ? (vx*Math.cos(toP) + vy*Math.sin(toP))/sp : 0;
     if(toward > 0.3){
       const dir = navSteer(e, dt);
-      if(dir){ vx = dir.x*sp; vy = dir.y*sp; e.avoidT = 0; e.stuckT = 0; }
+      if(dir){ navDir = dir; vx = dir.x*sp; vy = dir.y*sp; e.avoidT = 0; e.stuckT = 0; }
     } else { e.path = null; }
   } else if(committed){ e.path = null; }
+  if((vx||vy) && !e.docile){
+    const slid = slideAroundSolids(e, vx, vy, dt);
+    if(slid){ vx = slid.x; vy = slid.y; }
+  }
   if((vx||vy) && !e.docile){
     /* last-resort nudge for anything the grid can't help (pinned against a body) */
     const want = Math.hypot(vx,vy)*dt;
@@ -3894,16 +4085,25 @@ function updateEnemy(e, dt){
     if(want > 0.4 && moved < want*0.3) e.stuckT += dt;
     else e.stuckT = 0;
     if(e.stuckT > 0.45){
-      e.avoidT = 0.5;
-      e.avoidA = toP + (Math.random()<0.5?1:-1)*Math.PI/2;
+      /* standing inside the padded band? walk back out to open ground. that is a
+         definite answer, where the old random sidestep was a coin flip that could
+         (and did) shove a body further into the corner it was already wedged in */
+      const esc = navEscape(e.x, e.y);
+      e.avoidA = esc ? Math.atan2(esc.y-e.y, esc.x-e.x)
+                     : toP + (Math.random()<0.5?1:-1)*Math.PI/2;
+      e.avoidT = esc ? 0.45 : 0.3;
       e.stuckT = 0;
     }
     e._lx = e.x; e._ly = e.y;
   }
+  /* a monster that HAS a path is never hijacked by the nudge — that override was
+     what turned a one-off bump into half a second of walking the wrong way */
   if(e.avoidT > 0){
     e.avoidT -= dt;
-    vx = Math.cos(e.avoidA)*e.speed*0.8;
-    vy = Math.sin(e.avoidA)*e.speed*0.8;
+    if(!navDir){
+      vx = Math.cos(e.avoidA)*e.speed*0.8;
+      vy = Math.sin(e.avoidA)*e.speed*0.8;
+    }
   }
   if(e.slowT>0){ vx*=0.45; vy*=0.45; }   /* frozen enemies crawl */
   e.moving = (vx!==0||vy!==0);
@@ -3912,7 +4112,7 @@ function updateEnemy(e, dt){
   e.x += vx*dt; e.y += vy*dt;
   collideWorld(e);
   if(!e.docile && e.hitCd<=0 && dP < e.r + player.r + 2 && !player.dead){
-    playerDamage(e.mode==='lunge' ? e.dmg+1 : e.dmg, e);
+    playerDamage(e.mode==='lunge' ? e.dmg+1 : e.dmg, e, e.touchElem || undefined, false);
     e.hitCd = e.touchCd || 0.9;
   }
   if(e.ring){
@@ -3965,6 +4165,65 @@ function spawnBossRing(b){
   addDmg(b.x, b.y-70*(b.scale||1), 'SHOCKWAVE!', col, 23);
   SFX.bomb(); SFX.slam();
 }
+/* HELLFIRE: a sustained rain from above, not a single burst. The boss plants
+   himself, throws his arms up, and the sky keeps opening for a few seconds —
+   so you have to keep moving through it instead of side-stepping one volley. */
+const HELL_WIND = 0.75, HELL_DUR = 3.4;
+function bossHellfire(b, dt, tier, enr){
+  b.modeT += dt; b.moving = false;
+  if(b.modeT < HELL_WIND){
+    /* wind-up: embers gather over his head so the rain is never a surprise */
+    if(Math.random()<0.8)
+      particles.push({kind:'spark', x:b.x+rnd(-34,34), y:b.y-rnd(40,90),
+        vx:rnd(-14,14), vy:-110, life:0.45, max:0.45, color:'#ffb066'});
+    return false;
+  }
+  const rate = 7 + tier*1.2 + (enr?4:0);            /* meteors per second */
+  b.hellAcc = (b.hellAcc||0) + rate*dt;
+  while(b.hellAcc >= 1){
+    b.hellAcc -= 1;
+    const lead = leadPlayer(b.x, b.y, 0.95, 0.5);
+    const a = rnd(TAU), rr = Math.sqrt(Math.random())*310;
+    const tx = clamp(lead.x + Math.cos(a)*rr, W.wall+60, W.w-W.wall-60);
+    const ty = clamp(lead.y + Math.sin(a)*rr, W.wall+60, W.h-W.wall-60);
+    projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
+      t:0, dur:rnd(0.75,1.0), spin:rnd(TAU), delay:0, fr:fireRadius(b, 46)});
+    if(Math.random()<0.14) SFX.fireball();
+  }
+  if(b.modeT >= HELL_WIND + HELL_DUR){ b.hellAcc = 0; return true; }
+  return false;
+}
+/* Boss bomb volleys: concentric rings instead of a random blob. One bomb dead
+   centre, then rings packed at the minimum separation so no two blasts sit on
+   top of each other — the inner rings fill first, so the middle of the pattern
+   is where the bombs are thickest, and the last ring is pushed all the way out
+   to the full radius so the whole thing covers far more ground than before. */
+function bombSpread(cx, cy, n, R, minSep){
+  if(n <= 1) return [{x:cx, y:cy}];
+  /* how many rings it takes to hold them all, packed at minSep */
+  const caps = [];
+  let total = 1;
+  while(total < n && caps.length < 8){
+    const rr = (caps.length+1) * minSep;
+    const cap = Math.max(1, Math.floor(TAU*rr/minSep));
+    caps.push(cap); total += cap;
+  }
+  /* then stretch those rings across the whole radius, biased outward so the
+     inner ring stays tight around the centre bomb */
+  const out = [{x:cx, y:cy}];
+  const rings = caps.length, a0 = rnd(TAU);
+  for(let i=0; i<rings && out.length<n; i++){
+    const rr = R * Math.pow((i+1)/rings, 1.3);
+    const k = Math.min(caps[i], n - out.length);
+    for(let j=0;j<k;j++){
+      const a = a0 + i*0.8 + (j + rnd(-0.18,0.18))*TAU/k;
+      const jr = rr * rnd(0.93, 1.07);
+      out.push({x: cx + Math.cos(a)*jr, y: cy + Math.sin(a)*jr});
+    }
+  }
+  while(out.length < n) out.push({x:cx + rnd(-R*0.4,R*0.4), y:cy + rnd(-R*0.4,R*0.4)});
+  return out;
+}
 /* The golem stomp: a shockwave ring plus a lingering elemental scar on the ground. */
 function golemStomp(e, G){
   e.ring = { r:26, hit:false, max:G.stompR, speed:300, dmg:G.dmg, golem:e.golem };
@@ -3998,6 +4257,36 @@ function golemStomp(e, G){
     }
   }
 }
+/* The frost golem's boulder and the ember golem's bomb cluster. Neither of them
+   stomps: stone owns that. */
+function golemThrow(e, G){
+  const a = e.lockA;
+  if(e.golem==='ice'){
+    /* a boulder that skates the length of the field and freezes the lane it
+       crossed — the trail is the real attack, the rock is just the delivery */
+    projectiles.push({kind:'frostrock', x:e.x, y:e.y-22, owner:'enemy',
+      vx:Math.cos(a)*660, vy:Math.sin(a)*660, life:1.9, dmg:2,
+      spin:rnd(TAU), trailD:0, trailLife:rnd(5,8), tr:48,
+      fr:0, big:true});
+    addSparks(e.x, e.y-20, 12, '#dff2ff');
+    SFX.freeze();
+  } else {
+    /* fire golem: the boss bomb pattern, but a handful instead of a barrage */
+    const n = e.elite ? 3 : 2;
+    const lead = leadPlayer(e.x, e.y, 0.95, 0.8);
+    const pts = bombSpread(lead.x, lead.y, n, 130, 74);
+    for(let i=0;i<n;i++){
+      projectiles.push({kind:'molten', sx:e.x, sy:e.y-24,
+        tx:clamp(pts[i].x, W.wall+50, W.w-W.wall-50),
+        ty:clamp(pts[i].y, W.wall+50, W.h-W.wall-50),
+        t:0, dur:rnd(0.8,1.0), spin:rnd(TAU), delay:i*0.14, fr:fireRadius(e, 54)});
+    }
+    addSparks(e.x, e.y-20, 12, '#ffb066');
+    SFX.fireball();
+  }
+  spawnBricks(e.x, e.y+6, G.bricks, 5, 150);
+  addShake(0.2);
+}
 /* How wide a patch of fire this caster leaves. Elites, magic-touched, lords,
    bosses and anything an overseer has buffed all burn a bigger hole. */
 function fireRadius(e, base){
@@ -4017,6 +4306,8 @@ function bossChase(b, toP, spd, dt, mul){
   let cx = Math.cos(toP), cy = Math.sin(toP);
   const dir = navSteer(b, dt);
   if(dir){ cx = dir.x; cy = dir.y; }
+  const slid = slideAroundSolids(b, cx*spd*m, cy*spd*m, dt);
+  if(slid){ const l = Math.hypot(slid.x, slid.y) || 1; cx = slid.x/l; cy = slid.y/l; }
   b.x += cx*spd*m*dt; b.y += cy*spd*m*dt;
   b.face = {x:cx, y:cy};
 }
@@ -4102,13 +4393,13 @@ function updateBoss(b, dt, toP, dP){
       if(b.modeT>=0.6){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
+        const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
+        const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          const dur = rnd(0.7,0.95);
-          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
-            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
-            t:0, dur, spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(pts[i].x, 120, W.w-120),
+            ty:clamp(pts[i].y, 120, W.h-120),
+            t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
         }
         SFX.grunt();
       }
@@ -4199,12 +4490,13 @@ function updateBoss(b, dt, toP, dP){
           life:0.5, max:0.5, color:'#ff9a3c'});
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
-        /* 4-cycle: pools, slam, NEW magma fan, volley */
-        b.cycle = (b.cycle+1)%4;
+        /* 5-cycle: pools, slam, magma fan, volley, HELLFIRE */
+        b.cycle = (b.cycle+1)%5;
         if(b.cycle===0){ b.mode='poolsWind'; SFX.grunt(); }
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='fanWind'; SFX.fireball(); }
-        else { b.mode='volleyWind'; SFX.grunt(); }
+        else if(b.cycle===3){ b.mode='volleyWind'; SFX.grunt(); }
+        else { b.mode='hellWind'; SFX.roar(); showBanner('HELLFIRE!','', '#ff6a3a', 1.1, 34); }
         b.modeT=0;
       }
     }
@@ -4221,6 +4513,11 @@ function updateBoss(b, dt, toP, dP){
             ty:clamp(lead.y+rnd(-120,120), W.wall+60, W.h-W.wall-60),
             t:0, dur, spin:rnd(TAU), delay:i*0.1, fr:fireRadius(b, 66)});
         }
+      }
+    }
+    else if(b.mode==='hellWind'){
+      if(bossHellfire(b, dt, tier, enr)){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.1:3.0;
       }
     }
     /* NEW mechanic: magma fan — 3 molten bricks in a spread */
@@ -4250,13 +4547,13 @@ function updateBoss(b, dt, toP, dP){
       if(b.modeT>=0.6){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
+        const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
+        const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          const dur = rnd(0.7,0.95);
-          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
-            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
-            t:0, dur, spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(pts[i].x, 120, W.w-120),
+            ty:clamp(pts[i].y, 120, W.h-120),
+            t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
         }
         SFX.grunt();
       }
@@ -4278,7 +4575,7 @@ function updateBoss(b, dt, toP, dP){
       if(b.nextAtk<=0){
         /* 4-cycle: rain, slam, NEW ember ring, volley */
         b.cycle = (b.cycle+1)%4;
-        if(b.cycle===0){ b.mode='rainWind'; SFX.roar(); showBanner('FIRE FROM THE SKY!','', '#ff6a3a', 1.1, 34); }
+        if(b.cycle===0){ b.mode='rainWind'; SFX.roar(); showBanner('HELLFIRE!','FIRE FROM THE SKY', '#ff6a3a', 1.2, 34); }
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='emberWind'; SFX.fireball(); }
         else { b.mode='volleyWind'; SFX.grunt(); }
@@ -4286,18 +4583,8 @@ function updateBoss(b, dt, toP, dP){
       }
     }
     else if(b.mode==='rainWind'){
-      b.modeT += dt; b.moving=false;
-      if(b.modeT>=0.9){
+      if(bossHellfire(b, dt, tier, enr)){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.0:2.9;
-        const n = 10 + tier*2 + (enr?6:0);
-        for(let i=0;i<n;i++){
-          const lead = leadPlayer(b.x, b.y, 1.0 + i*0.09, 0.7);
-          const tx = clamp(lead.x + rnd(-280,280), W.wall+60, W.w-W.wall-60);
-          const ty = clamp(lead.y + rnd(-280,280), W.wall+60, W.h-W.wall-60);
-          projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
-            t:0, dur:rnd(0.8,1.15), spin:rnd(TAU), delay:i*0.09, fr:fireRadius(b, 54)});
-        }
-        SFX.fireball();
       }
     }
     /* NEW mechanic: ember ring — fireballs all around him */
@@ -4328,13 +4615,13 @@ function updateBoss(b, dt, toP, dP){
       if(b.modeT>=0.6){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
+        const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
+        const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          const dur = rnd(0.7,0.95);
-          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
-            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
-            t:0, dur, spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(pts[i].x, 120, W.w-120),
+            ty:clamp(pts[i].y, 120, W.h-120),
+            t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
         }
         SFX.grunt();
       }
@@ -4390,13 +4677,13 @@ function updateSuperBoss(b, dt, toP, dP){
     if(b.modeT>=0.7){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.6:2.4;
       const n = 8 + Math.min(6,tier);
+      const lead = leadPlayer(b.x, b.y, 1.0, 0.95);
+      const pts = bombSpread(lead.x, lead.y, n, 290, 86);
       for(let i=0;i<n;i++){
-        const dur = rnd(0.7,0.95);
-        const lead = leadPlayer(b.x, b.y, dur + i*0.09, 0.95);
         projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-          tx:clamp(lead.x+rnd(-80,80), 120, W.w-120),
-          ty:clamp(lead.y+rnd(-80,80), 120, W.h-120),
-          t:0, dur, spin:rnd(TAU), delay:i*0.09});
+          tx:clamp(pts[i].x, 120, W.w-120),
+          ty:clamp(pts[i].y, 120, W.h-120),
+          t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.08});
       }
       SFX.grunt();
     }
@@ -4463,18 +4750,9 @@ function updateSuperBoss(b, dt, toP, dP){
     }
   }
   else if(b.mode==='meteorWind'){
-    b.modeT += dt; b.moving=false;
-    if(b.modeT>=0.9){
+    if(b.modeT===0) showBanner('HELLFIRE!','THE SKY IS FALLING', '#ff6a3a', 1.2, 36);
+    if(bossHellfire(b, dt, tier+2, enr)){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.0:2.9;
-      const n = 16;
-      for(let i=0;i<n;i++){
-        const lead = leadPlayer(b.x, b.y, 1.0 + i*0.08, 0.75);
-        const tx = clamp(lead.x + rnd(-240,240), W.wall+60, W.w-W.wall-60);
-        const ty = clamp(lead.y + rnd(-240,240), W.wall+60, W.h-W.wall-60);
-        projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
-          t:0, dur:rnd(0.8,1.1), spin:rnd(TAU), delay:i*0.08, fr:fireRadius(b, 54)});
-      }
-      SFX.fireball();
     }
   }
   else if(b.mode==='recover'){
@@ -4488,12 +4766,32 @@ function updateSuperBoss(b, dt, toP, dP){
     if(b.ring.r > RING_MAX) b.ring = null;
   }
 }
+/* Returning Blades: a storm blade with legs left over doesn't fade when its
+   flight runs out — it turns around and comes home, and at the second rank the
+   hero catches it and hurls it straight back out the far side. */
+function wbladeLeg(pr, caught){
+  if(pr.legs <= 0){ pr.dead = true; return; }
+  pr.legs--;
+  const sp = Math.hypot(pr.vx, pr.vy) || 255;
+  pr.hit = new Set();                       /* a fresh pass cuts the same foes again */
+  if(caught){
+    pr.phase = 'out'; pr.life = pr.olife;
+    const a = Math.atan2(pr.vy, pr.vx) + rnd(-0.45, 0.45);
+    pr.vx = Math.cos(a)*sp; pr.vy = Math.sin(a)*sp;
+    addSparks(pr.x, pr.y, 4, '#e8eef2'); SFX.whoosh();
+  } else {
+    /* the return leg gets a long fuse — the hero is a moving target */
+    pr.phase = 'back'; pr.life = pr.olife*2.4 + 0.6;
+    const a = Math.atan2((player.y-12)-pr.y, player.x-pr.x);
+    pr.vx = Math.cos(a)*sp; pr.vy = Math.sin(a)*sp;
+  }
+}
 function updateProjectiles(dt){
   for(const pr of projectiles){
     if(pr.x===undefined && pr.sx!==undefined){ pr.x = pr.sx; pr.y = pr.sy; }
     pr.px = pr.x; pr.py = pr.y;
     if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'
-       || pr.kind==='hexbolt'){
+       || pr.kind==='hexbolt' || pr.kind==='frostrock'){
       if(pr.delay > 0){ pr.delay -= dt; continue; }
       if(pr.kind==='skull' && pr.homing && !pr.deflected){
         const ta = Math.atan2(player.y-pr.y, player.x-pr.x);
@@ -4506,6 +4804,24 @@ function updateProjectiles(dt){
       if(pr.kind==='bolt' && Math.random()<(pr.big?0.7:0.5))
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-30,30), vy:rnd(-30,30),
           life:0.15, max:0.15, color:'#ffe95a'});
+      if(pr.kind==='frostrock'){
+        pr.spin += dt*7;
+        /* it lays a freezing scar down the whole lane it crossed */
+        pr.trailD += Math.hypot(pr.x-pr.px, pr.y-pr.py);
+        if(pr.trailD >= 72){
+          pr.trailD = 0;
+          /* a pack of frost golems could otherwise carpet the whole floor */
+          let frostPatches = 0;
+          for(const h of hazards) if(h.kind==='frost') frostPatches++;
+          if(frostPatches < FROST_TRAIL_CAP){
+            const lf = pr.trailLife;
+            hazards.push({kind:'frost', x:pr.x, y:pr.y, r:pr.tr, life:lf, max:lf});
+          }
+        }
+        if(Math.random()<0.8)
+          particles.push({kind:'spark', x:pr.x+rnd(-10,10), y:pr.y+rnd(-8,8),
+            vx:rnd(-40,40), vy:rnd(-50,-5), life:0.4, max:0.4, color:'#dff2ff'});
+      }
       if(pr.kind==='frostbolt' && Math.random()<0.4)
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-20,20), vy:rnd(-20,20),
           life:0.25, max:0.25, color:'#bfe3ff'});
@@ -4529,10 +4845,15 @@ function updateProjectiles(dt){
           pr.dead = true;
         }
         else if(player.invuln<=0){
-          playerDamage(1, pr,
-            pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null,
+          playerDamage(pr.dmg||1, pr,
+            (pr.kind==='frostbolt'||pr.kind==='frostrock') ? 'frost' : pr.kind==='bolt' ? 'shock' : null,
             pr.kind==='skull' ? true : undefined);   /* skulls are spells, arrows are not */
           pr.dead=true;
+          if(pr.kind==='frostrock'){
+            addRing(pr.x,pr.y,16,300,110,'#dff2ff',7,0.45);
+            spawnBricks(pr.x,pr.y,['#cfeaff','#7fb9e0','#4d86ad'],7,180);
+            SFX.freeze();
+          }
         }
       }
       if(pr.owner==='player'){
@@ -4584,7 +4905,25 @@ function updateProjectiles(dt){
     }
     else if(pr.kind==='wblade'){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*14;
-      if(pr.life<=0) pr.dead=true;
+      if(pr.phase==='back'){
+        /* it hunts the hero down on the way home instead of flying a dead line */
+        const sp = Math.hypot(pr.vx, pr.vy);
+        const ta = Math.atan2((player.y-12)-pr.y, player.x-pr.x);
+        const ca = Math.atan2(pr.vy, pr.vx);
+        const d2 = Math.hypot(player.x-pr.x, (player.y-12)-pr.y);
+        /* rate-limited while it is still far out, but it homes dead-on once it
+           is close — a turn-limited blade just orbits the hero and never lands */
+        const na = d2 < 110 ? ta : ca + clamp(angDiff(ta, ca), -9*dt, 9*dt);
+        pr.vx = Math.cos(na)*sp; pr.vy = Math.sin(na)*sp;
+        if(Math.random()<0.35)
+          particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-25,25), vy:rnd(-25,25),
+            life:0.2, max:0.2, color:'#dfe6ec'});
+        if(d2 < 34) wbladeLeg(pr, true);
+      }
+      if(!pr.dead && pr.life<=0){
+        if(pr.phase==='out' && pr.legs>0) wbladeLeg(pr, false);
+        else pr.dead = true;
+      }
       for(const e of enemies){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
         if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < e.r + 9*pr.size + 6){
@@ -4748,7 +5087,7 @@ function updateFx(dt){
           vx:rnd(-12,12), vy:rnd(-40,-8), life:rnd(0.4,0.8), max:0.8, color:'#dff2ff'});
       if(!player.dead && dist(h, player) < h.r*0.9) applyAilment('frost', null);
       for(const en of enemies)
-        if(!en.dead && en.state==='active' && !en.golem && dist(h,en) < h.r*0.9)
+        if(!en.dead && en.state==='active' && !en.golem && !en.mini && dist(h,en) < h.r*0.9)
           en.slowT = Math.max(en.slowT, 0.8);   /* the frost field catches its own side too */
       continue;
     }
@@ -4801,7 +5140,7 @@ const GOLEM_RGB = {
    ones passing in front aren't swallowed by it. */
 function drawGolemAura(c, e){
   const gg = GOLEM_RGB[e.golem], s = e.scale;
-  const wind = (e.mode==='stompWind' || e.mode==='chargeWind');
+  const wind = (e.mode==='stompWind' || e.mode==='chargeWind' || e.mode==='throwWind');
   const spin = (e.golem==='stone' ? 0.9 : 1.7) * (wind ? 2.6 : 1);
   /* a pool of its element seeping into the ground it stands on */
   c.fillStyle = `rgba(${gg[0]},${0.15+0.07*Math.sin(vtime*4+(e.phase||0))})`;
@@ -4852,7 +5191,7 @@ function drawGolem(c, e){
   const w = e.walk;
   const bob = Math.abs(Math.sin(w)) * 2.4 * mv + Math.sin(vtime*1.6 + e.phase)*0.6;
   const lean = Math.sin(w) * 0.07 * mv;
-  const armsUp = (e.mode==='stompWind');
+  const armsUp = (e.mode==='stompWind' || e.mode==='throwWind');
   const braced = (e.mode==='chargeWind' || e.mode==='charge');
   const fl = e.flash > 0 ? Math.min(1, e.flash*0.85) : 0;
   const P = i=> fl ? mixc(K.slab[i], '#ffffff', fl) : K.slab[i];
@@ -5625,6 +5964,27 @@ function drawSkull(c, pr){
   c.fillRect(-2.4,4.6,1.4,2.6); c.fillRect(0.4,4.6,1.4,2.6);
   c.restore();
 }
+/* The frost golem's boulder: a rough stack of ice bricks tumbling end over end. */
+function drawFrostRock(c, pr){
+  const ta = Math.atan2(pr.vy, pr.vx);
+  for(let i=1;i<=4;i++){
+    c.fillStyle = `rgba(191,227,255,${0.20/i})`;
+    c.beginPath(); c.arc(pr.x-Math.cos(ta)*i*11, pr.y-Math.sin(ta)*i*11, 15-i*2.2, 0, TAU); c.fill();
+  }
+  c.save(); c.translate(pr.x, pr.y);
+  c.fillStyle = 'rgba(0,0,0,0.18)';
+  c.beginPath(); c.ellipse(0, 20, 17, 6, 0, 0, TAU); c.fill();
+  c.rotate(pr.spin||0);
+  const cols = ['#e6f6ff','#cfeaff','#7fb9e0'];
+  const blocks = [[-11,-8,14,11],[3,-11,13,12],[-7,3,16,11],[6,2,10,10]];
+  blocks.forEach((b2,i)=>{
+    c.fillStyle = cols[i%3];
+    c.strokeStyle = 'rgba(40,90,130,0.55)'; c.lineWidth = 1.4;
+    roundRect(c, b2[0], b2[1], b2[2], b2[3], 2.5); c.fill(); c.stroke();
+    drawStudG(c, b2[0]+b2[2]/2, b2[1]+2.5, 3, '#4d86ad');
+  });
+  c.restore();
+}
 function drawFrostbolt(c, pr){
   c.save(); c.translate(pr.x, pr.y);
   /* frozen vapour trailing behind the shard */
@@ -5888,6 +6248,25 @@ function render(){
           const ax2 = 50 + ((vtime*260 + ai*110) % (300*k+40));
           ctx.beginPath(); ctx.moveTo(ax2, -14); ctx.lineTo(ax2+18, 0); ctx.lineTo(ax2, 14);
           ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      }
+      if(e.mode==='throwWind'){
+        const k = clamp(e.modeT/(G.wind*0.8),0,1);
+        const rgb = GOLEM_RGB[e.golem][0];
+        ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.lockA);
+        if(e.golem==='ice'){
+          /* the lane the boulder will freeze */
+          ctx.fillStyle = `rgba(${rgb},${0.10+0.12*k})`;
+          roundRect(ctx, 0, -26, 900, 52, 24); ctx.fill();
+          ctx.strokeStyle = `rgba(${rgb},${0.5+0.35*Math.sin(vtime*16)})`; ctx.lineWidth = 3;
+          ctx.setLineDash([18,12]);
+          roundRect(ctx, 0, -26, 900, 52, 24); ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          /* where the cluster is going to land */
+          ctx.fillStyle = `rgba(${rgb},${0.12+0.14*k})`;
+          roundRect(ctx, 0, -20, 420, 40, 18); ctx.fill();
         }
         ctx.restore();
       }
@@ -6206,6 +6585,7 @@ function render(){
     if(pr.kind==='arrow') drawArrow(ctx,pr);
     else if(pr.kind==='skull') drawSkull(ctx,pr);
     else if(pr.kind==='frostbolt') drawFrostbolt(ctx,pr);
+    else if(pr.kind==='frostrock') drawFrostRock(ctx,pr);
     else if(pr.kind==='bolt') drawBolt(ctx,pr);
     else if(pr.kind==='fireball') drawFireball(ctx,pr,false);
     else if(pr.kind==='meteor') drawFireball(ctx,pr,true);
@@ -6431,6 +6811,12 @@ function drawEnemy(c, e){
     c.globalAlpha = 1;
     return;
   }
+  if(e.mini){
+    /* a scrap of the golem it fell off, still glowing with its element */
+    const gg = GOLEM_RGB[e.mini];
+    c.fillStyle = `rgba(${gg[0]},${0.16+0.07*Math.sin(vtime*5+(e.phase||0))})`;
+    c.beginPath(); c.ellipse(e.x, e.y+2, 13*e.scale, 5.5*e.scale, 0, 0, TAU); c.fill();
+  }
   if(e.golem){
     drawGolem(c, e);
     drawGolemAura(c, e);
@@ -6488,7 +6874,7 @@ function drawEnemy(c, e){
     if(e.bkey==='omegathane'){ o.horns = true; }
     if(e.bkey==='brickthane'||e.bkey==='omegathane'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'); }
     if(e.bkey==='bonebaron'||e.bkey==='megabaron'){ o.armsUp = (e.mode==='ringWind'||e.mode==='summonWind'||e.mode==='curseWind'||e.mode==='spiralWind'); }
-    if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'); }
+    if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'||e.mode==='hellWind'); }
     if(e.bkey==='ashtyrant'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
@@ -6978,6 +7364,7 @@ document.getElementById('titleBtn').addEventListener('click', ()=>{ SFX.click();
 document.getElementById('resumeBtn').addEventListener('click', ()=>{ SFX.click(); togglePause(); });
 document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('pauseScreen').classList.add('hidden'); startGame(); });
+document.getElementById('pauseTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
 
 /* =============================== MAIN LOOP =============================== */
 let last = performance.now(), sizeCheck = 0;
