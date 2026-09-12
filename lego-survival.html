@@ -1467,7 +1467,13 @@ const BOSSES = {
   lavabrick:{ name:'LORD LAVABRICK',  hp:120, speed:44, r:28, scale:2.35, dmg:3, xp:55, studs:[50,78],
     col:{head:'#ff9a3c', torso:'#4a342a', legs:'#2a2422', hands:'#5a4a3a', hair:'#5a4a3a'}, style:'brute' },
   ashtyrant:{ name:'THE ASH TYRANT',  hp:150, speed:48, r:29, scale:2.4,  dmg:3, xp:65, studs:[60,95],
-    col:{head:'#6b5f58', torso:'#3a2f2a', legs:'#241d1a', hands:'#8a2f1d', hair:'#241d1a'}, style:'brute' }
+    col:{head:'#6b5f58', torso:'#3a2f2a', legs:'#241d1a', hands:'#8a2f1d', hair:'#241d1a'}, style:'brute' },
+  /* The bat boss: it never stands still. It hangs in the air, rains bat-shaped
+     missiles and hexes, calls the whole roost down on you, and then throws
+     itself across the arena in a string of charges. */
+  batsovereign:{ name:'THE DREAD ROOST', hp:170, speed:72, r:30, scale:2.5, dmg:3, xp:80, studs:[70,110],
+    col:{head:'#4a3a63', torso:'#2e2442', legs:'#1d1730', hands:'#6b5790', hair:'#140f22'},
+    style:'bat' }
 };
 /* NEW: SUPER BOSSES at waves 10 / 20 / 30 … */
 const SUPERBOSSES = {
@@ -2006,52 +2012,113 @@ function playerDie(){
 }
 
 /* =============================== WAVES =============================== */
+/* =============================== THE ROSTER =============================== */
+/* A wave is not a body count, it is a BUDGET. Every monster has a price in
+   bricks — an imp is 1, a bomber is 25, an impmaster is 50 — so a wave can
+   afford a horde of chaff or a handful of horrors, never both at full strength.
+   The list is in rank order, cheapest first, and that order is what the pivot
+   walks up: the cheap ranks fade and then stop appearing at all, so a late wave
+   cannot be padded out with imps however big its budget is.
+
+   `at` is the wave the rank first appears. Nothing new arrives on a boss wave,
+   and after the opening stretch the gaps widen — the point is to play with a
+   roster for a while rather than have it replaced under you every wave. */
+const ROSTER = [
+  { k:'imp',         at:1,  cost:1,  flavour:1 },
+  { k:'boneling',    at:2,  cost:1,  flavour:1 },
+  { k:'archer',      at:3,  cost:2,  flavour:1 },
+  { k:'spitter',     at:4,  cost:3,  flavour:1 },
+  { k:'shade',       at:6,  cost:4,  flavour:0.9 },
+  { k:'cryptbat',    at:7,  cost:5,  flavour:1 },
+  { k:'brute',       at:8,  cost:6,  flavour:1 },
+  { k:'knight',      at:9,  cost:8,  flavour:1 },
+  { k:'stalker',     at:11, cost:9,  flavour:1 },
+  { k:'lancer',      at:12, cost:10, flavour:1 },
+  { k:'hexer',       at:14, cost:12, flavour:0.8 },
+  { k:'revenant',    at:16, cost:14, flavour:1 },
+  { k:'lobber',      at:17, cost:15, flavour:0.9 },
+  { k:'pyromancer',  at:19, cost:16, flavour:0.9 },
+  { k:'frostmage',   at:21, cost:16, flavour:0.9 },
+  { k:'necromancer', at:22, cost:18, flavour:0.8 },
+  { k:'stormcaller', at:24, cost:18, flavour:0.9 },
+  { k:'jugg',        at:26, cost:20, flavour:1 },
+  { k:'marksman',    at:27, cost:20, flavour:0.9 },
+  { k:'bastion',     at:29, cost:22, flavour:1 },
+  { k:'bomber',      at:13, cost:25, flavour:1 },
+  { k:'direbat',     at:31, cost:26, flavour:0.9 },
+  { k:'pumpkinlord', at:32, cost:28, flavour:0.8 },
+  { k:'shadestorm',  at:34, cost:30, flavour:0.8 },
+  { k:'pyrolord',    at:36, cost:40, flavour:0.7 },
+  { k:'frostlord',   at:37, cost:40, flavour:0.7 },
+  { k:'stormlord',   at:38, cost:42, flavour:0.7 },
+  { k:'necrolord',   at:39, cost:45, flavour:0.7 },
+  { k:'impmaster',   at:33, cost:50, flavour:0.7 },
+  { k:'overseer',    at:41, cost:55, flavour:0.6 }
+];
+const MONSTER_COST = {};
+for(const r of ROSTER) MONSTER_COST[r.k] = r.cost;
+/* Rank order for the pivot, which is the ROSTER order — bomber and impmaster are
+   priced above their unlock wave on purpose, so sort by cost for the walk-up. */
+const RANKS = [...ROSTER].sort((a,b)=> a.cost - b.cost || a.at - b.at);
+const MAX_WAVE_BODIES = 320;
+const PIVOT_HOLD = 13;        /* the cheap ranks are safe until this wave */
+const PIVOT_EVERY = 3;        /* then one more rank drops out every N waves */
+const PIVOT_KEEP = 5;         /* never strip the roster below this many ranks */
+/* How far up the rank list the floor has climbed. Everything below it is gone. */
+function wavePivot(n){
+  if(n < PIVOT_HOLD) return 0;
+  return Math.min(RANKS.length - PIVOT_KEEP, Math.floor((n - PIVOT_HOLD)/PIVOT_EVERY) + 1);
+}
+/* Bricks to spend. It climbs fast, but the pivot means the budget buys fewer
+   and fewer BODIES as it grows — the wave gets heavier, not just longer. */
+function waveBudget(n){
+  /* The quadratic term has to outrun the pivot: as the cheap ranks age out the
+     average body gets dearer, so a budget that only grew linearly would hand
+     you FEWER monsters every wave instead of more. */
+  return Math.round((14 + n*10 + n*n*1.7) * difficulty.count);
+}
+/* The weight is set from the price so every rank in the pool gets roughly the
+   same slice of the BUDGET: 60 bricks of imps is sixty bodies, 60 bricks of
+   impmasters is barely one. `flavour` then thins out the ranks that should stay
+   rare however cheap they look. */
 function wavePool(n){
-  const p = [['imp',12]];
-  if(n>=1) p.push(['imp',7]);
-  if(n>=2) p.push(['archer',4],['boneling',6]);
-  if(n>=3) p.push(['spitter',3],['brute',4]);
-  if(n>=4) p.push(['knight',4]);
-  if(n>=5) p.push(['bomber',4]);
-  if(n>=6) p.push(['lancer',4],['hexer',2],['cryptbat',4]);
-  if(n>=7) p.push(['stalker',4],['necromancer',2]);
-  if(n>=8) p.push(['jugg',3],['pyromancer',2],['frostmage',2]);
-  if(n>=9) p.push(['revenant',3],['lobber',2]);
-  if(n>=10) p.push(['stormcaller',2],['bastion',3]);
-  if(n>=11) p.push(['marksman',2]);
-  if(n>=9)  p.push(['impmaster',2]);
-  if(n>=4)  p.push(['shade',4]);
-  if(n>=12) p.push(['shadestorm',2]);
-  if(n>=13) p.push(['pumpkinlord',2]);
-  if(n>=14) p.push(['direbat',2]);
-  if(n>=12) p.push(['necrolord',2]);
-  if(n>=13) p.push(['pyrolord',2]);
-  if(n>=14) p.push(['frostlord',2]);
-  if(n>=15) p.push(['stormlord',2]);
-  if(n>=20) p.push(['overseer',2]);
-  return p;
+  const pivot = wavePivot(n);
+  const out = [];
+  for(let i=0;i<RANKS.length;i++){
+    const r = RANKS[i];
+    if(n < r.at) continue;
+    if(i < pivot) continue;                        /* this rank has aged out */
+    /* the rank at the floor is on its way out, and the one above it is thinning */
+    const fade = i===pivot ? 0.35 : i===pivot+1 ? 0.7 : 1;
+    const w = Math.max(1, Math.round(64/r.cost * r.flavour * fade));
+    out.push([r.k, w]);
+  }
+  if(!out.length) out.push(['imp', 1]);
+  return out;
 }
 function pickFrom(p){
   let t=0; for(const [,w] of p) t+=w;
   let r=Math.random()*t;
   for(const [k,w] of p){ if((r-=w)<0) return k; }
-  return 'imp';
+  return p[0][0];
 }
 /* Golems are siege units, not rank and file — the random pool made them show up
    in packs the moment they unlocked. They now get an explicit budget per wave:
    one at 10-11, a couple at 12-13, a handful at 14, and properly crowded by 18. */
 const GOLEM_MAX = 36;     /* they are slow and tanky; past this a wave is a slog */
+/* Siege units keep pace with the stretched roster: one at 16, a pair by 20, a
+   handful by 26, properly crowded past 34. */
 function golemCount(n){
-  if(n < 10) return 0;
-  if(n < 12) return 1;
-  if(n < 14) return 2;
-  const avg = 4.5 + (n-14)*2.0;         /* 14 ≈ 4.5, 18 ≈ 12.5, then onward */
+  if(n < 16) return 0;
+  if(n < 19) return 1;
+  if(n < 23) return 2;
+  const avg = 3.5 + (n-23)*0.95;        /* 23 ≈ 3.5, 34 ≈ 14, then onward */
   return clamp(Math.round(avg * rnd(0.72, 1.28)), 1, GOLEM_MAX);
 }
 function golemKinds(n){
   const k = ['stonegolem'];
-  if(n>=12) k.push('icegolem');
-  if(n>=14) k.push('firegolem');
+  if(n>=20) k.push('icegolem');
+  if(n>=24) k.push('firegolem');
   return k;
 }
 /* Drop `count` golems into a queue, replacing rank-and-file rather than adding to
@@ -2073,29 +2140,44 @@ function seedGolems(q, n){
     else q.push(g);          /* queue too small or too crowded — just add one */
   }
 }
-function composeWave(n){
+/* Spend `budget` bricks out of `pool`, cheapest-affordable last. Returns the
+   bodies in the order they were bought; the caller shuffles. */
+function spendBudget(pool, budget){
   const q = [];
+  let spent = 0, guard = 0;
+  let cheapest = pool[0][0];
+  for(const [k] of pool) if((MONSTER_COST[k]||1) < (MONSTER_COST[cheapest]||1)) cheapest = k;
+  const cheap = MONSTER_COST[cheapest] || 1;
+  while(spent + cheap <= budget && q.length < MAX_WAVE_BODIES && guard++ < 8000){
+    const k = pickFrom(pool);
+    const c = MONSTER_COST[k] || 1;
+    if(spent + c > budget){ q.push(cheapest); spent += cheap; continue; }
+    q.push(k); spent += c;
+  }
+  return q;
+}
+function composeWave(n){
+  const pool = wavePool(n);
+  let q = [];
   if(n%5===0){
-    /* WAVE 50 (and every 50): the raid — all six bosses at once */
-    if(n%50===0){
-      q.push('boss','boss','boss','boss','boss','boss');
-      const extras = 3+Math.floor(n/5);
-      for(let i=0;i<extras;i++) q.push(pickFrom(wavePool(n)));
-      seedGolems(q, n);
-      return q;
-    }
-    q.push('boss');
-    const extras = 3+Math.floor(n/5);
-    for(let i=0;i<extras;i++)
-      q.push(n>=10 ? pickFrom(wavePool(n)) : (i%2?'archer':'imp'));
+    /* a boss wave spends a slice of the budget on an escort rather than a
+       hand-counted handful, so the escort keeps pace with the roster */
+    const escort = Math.round(waveBudget(n) * (n%50===0 ? 0.55 : 0.40));
+    q = spendBudget(pool, escort);
+    shuffleArr(q);
+    if(n%50===0) q.unshift('boss','boss','boss','boss','boss','boss');  /* the raid */
+    else q.unshift('boss');
     seedGolems(q, n);
     return q;
   }
-  const count = Math.min(Math.round((10 + n*3.2) * difficulty.count), 260);
-  const pool = wavePool(n);
-  for(let i=0;i<count;i++) q.push(pickFrom(pool));
+  q = spendBudget(pool, waveBudget(n));
+  shuffleArr(q);
   seedGolems(q, n);
   return q;
+}
+function shuffleArr(a){
+  for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; const t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
 }
 
 function startWave(n){
@@ -2110,9 +2192,10 @@ function startWave(n){
   }
   let bname = '';
   if(boss){
+    const bkeys = Object.keys(BOSSES);
     bname = (n%10===0)
       ? SUPERBOSSES[ultraForWave(n)].name
-      : BOSSES[Object.keys(BOSSES)[(Math.max(1,Math.floor(n/5))-1)%4]].name;
+      : BOSSES[bkeys[(Math.max(1,Math.floor(n/5))-1)%bkeys.length]].name;
   }
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
     boss ? bname+' approaches...'
@@ -3404,7 +3487,7 @@ function updatePlayer(dt){
       }
       for(const pr of projectiles){
         /* curse bolts are not deflectable — you have to move */
-        if((pr.kind!=='arrow' && pr.kind!=='skull') || pr.owner!=='enemy') continue;
+        if((pr.kind!=='arrow' && pr.kind!=='skull' && pr.kind!=='batbolt') || pr.owner!=='enemy') continue;
         const d = dist(p,pr);
         if(d < s.reach+6){
           let within = s.spin || inSweep(Math.atan2(pr.y-p.y,pr.x-p.x), s.from, s.to, e, 0.5);
@@ -4902,6 +4985,63 @@ function bossRingHit(b){
     }
   }
 }
+/* One place for every boss summon, so "call for help" means the same thing
+   whoever is doing it — and so the crowd scales with the wave instead of being
+   the same four bodies at wave 5 and wave 45. */
+/* THE MACE SPIN. A boss with a mace should use it: it plants itself, winds up,
+   then whirls on the spot with the whole thing extended, walking slowly at you
+   the entire time. Anything the head passes through gets hit. */
+const MACE_WIND = 0.55, MACE_SPIN_T = 2.3, MACE_SPIN_RATE = 11, MACE_TICK = 0.4;
+function maceSpin(b, dt, tier, enr, toP){
+  b.modeT += dt;
+  if(b.modeT < MACE_WIND){
+    /* braced, mace back, the reach painted on the ground by the renderer */
+    b.moving = false;
+    b.whirlA = -1.2;
+    return false;
+  }
+  b.whirlA = (b.whirlA||0) + MACE_SPIN_RATE*dt;
+  b.moving = true; b.walk += dt*5;
+  /* it closes on you while it spins, slowly — you cannot just back off forever */
+  const creep = b.speed*0.42*(enr?1.3:1);
+  b.x += Math.cos(toP)*creep*dt; b.y += Math.sin(toP)*creep*dt;
+  collideWorld(b);
+  const reach = maceReach(b);
+  b.maceCd = (b.maceCd||0) - dt;
+  if(!player.dead && player.dash.t<=0 && dist(b,player) < reach + player.r && b.maceCd<=0){
+    b.maceCd = MACE_TICK;
+    playerDamage(b.dmg+1, b);
+  }
+  if(Math.random()<0.7){
+    const hx = b.x + Math.cos(b.whirlA)*reach, hy = b.y-30*(b.scale||1)*0.5 + Math.sin(b.whirlA)*reach*0.62;
+    particles.push({kind:'spark', x:hx, y:hy, vx:rnd(-40,40), vy:rnd(-40,10),
+      life:0.22, max:0.22, color:'#ffd166'});
+  }
+  if(b.modeT >= MACE_WIND + MACE_SPIN_T*(enr?1.35:1)){
+    b.whirlA = undefined;
+    addShake(0.3); SFX.slam();
+    return true;
+  }
+  return false;
+}
+function maceReach(b){ return 52*(b.scale||1) + 18; }
+function bossSummon(b, count, kinds, elites){
+  const room = Math.max(0, MAX_ALIVE - enemies.length - 4);
+  const n = Math.min(count, room);
+  for(let i=0;i<n;i++){
+    const a = i/Math.max(1,n)*TAU + rnd(-0.25,0.25);
+    const rr = 92 + rnd(0,70) + (i%3)*26;
+    spawnEnemy(pick(kinds),
+      clamp(b.x+Math.cos(a)*rr, 120, W.w-120),
+      clamp(b.y+Math.sin(a)*rr, 120, W.h-120),
+      i < (elites||0));
+  }
+  if(n>0){
+    addRing(b.x, b.y, 18, 320, 170, '#c9b8e8', 6, 0.5);
+    addDmg(b.x, b.y-80, 'TO ME!', '#c9b8e8', 20);
+    SFX.roar();
+  }
+}
 function updateBoss(b, dt, toP, dP){
   if(b.super){ updateSuperBoss(b, dt, toP, dP); return; }
   const enr = b.hp < b.maxHp*0.5;
@@ -4914,12 +5054,13 @@ function updateBoss(b, dt, toP, dP){
       b.nextAtk -= dt;
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
-        /* 4-mechanic cycle: summon, dash, slam, NEW brick nova */
-        b.cycle = (b.cycle+1)%4;
+        /* 5-mechanic cycle: summon, dash, slam, brick nova, MACE SPIN */
+        b.cycle = (b.cycle+1)%5;
         if(b.cycle===0 && !b.sum1 && b.hp<b.maxHp*0.7){ b.sum1=true; b.mode='summonWind'; }
         else if(b.cycle===1 && dP>170 && dP<560){ b.mode='dashWind'; b.lockA=toP; }
         else if(b.cycle===2 && dP<=190){ b.mode='slamWind'; }
         else if(b.cycle===3){ b.mode='novaWind'; }
+        else if(b.cycle===4){ b.mode='maceWind'; }
         else { b.mode='volleyWind'; }
         b.modeT=0;
         if(b.mode!=='chase'){ if(b.mode==='summonWind'||b.mode==='novaWind') SFX.roar(); else SFX.grunt(); }
@@ -4953,6 +5094,11 @@ function updateBoss(b, dt, toP, dP){
       if(b.modeT>=0.38){ b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.5:2.2; }
     }
     /* NEW mechanic: brick nova — ring of vbricks bursting outward */
+    else if(b.mode==='maceWind'){
+      if(maceSpin(b, dt, tier, enr, toP)){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
+      }
+    }
     else if(b.mode==='novaWind'){
       b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
       if(b.modeT>=0.7){
@@ -4989,11 +5135,7 @@ function updateBoss(b, dt, toP, dP){
       b.modeT += dt; b.moving=false;
       if(b.modeT>=0.7){
         b.mode='recover'; b.modeT=0; b.nextAtk = 2.4;
-        for(let i=0;i<4;i++){
-          const a = rnd(TAU);
-          spawnEnemy(i%2?'archer':'imp',
-            clamp(b.x+Math.cos(a)*100, 120, W.w-120), clamp(b.y+Math.sin(a)*100, 120, W.h-120));
-        }
+        bossSummon(b, 8 + tier*2, ['imp','archer','boneling']);
       }
     }
     else if(b.mode==='recover'){
@@ -5049,16 +5191,108 @@ function updateBoss(b, dt, toP, dP){
       b.modeT += dt; b.moving=false;
       if(b.modeT>=0.75){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
-        for(let i=0;i<4+Math.min(2,tier);i++){
-          const a = rnd(TAU);
-          spawnEnemy(i%2?'boneling':'archer',
-            clamp(b.x+Math.cos(a)*110, 120, W.w-120), clamp(b.y+Math.sin(a)*110, 120, W.h-120));
-        }
+        bossSummon(b, 9 + tier*2, ['boneling','archer','revenant']);
       }
     }
     else if(b.mode==='recover'){
       b.modeT += dt;
       if(b.modeT>0.45){ b.mode='chase'; }
+    }
+  }
+  else if(b.bkey==='batsovereign'){
+    /* it hovers rather than walks, so the bob is part of the silhouette */
+    b.hover = (b.hover||0) + dt;
+    if(b.mode==='chase'){
+      bossChase(b, toP, spd, dt, 1.15);
+      b.moving = true; b.walk += dt*12;
+      b.nextAtk -= dt;
+      if(Math.random()<0.3)
+        particles.push({kind:'spark', x:b.x+rnd(-26,26), y:b.y-rnd(20,70),
+          vx:rnd(-16,16), vy:rnd(-12,12), life:0.4, max:0.4, color:'#b58fd6'});
+      if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
+      if(b.nextAtk<=0){
+        /* 4-cycle: the roost, a salvo of bat missiles, a fan of hexes, then a
+           string of charges back and forth across the arena */
+        b.cycle = (b.cycle+1)%4;
+        if(b.cycle===0){ b.mode='roostWind'; SFX.roar(); }
+        else if(b.cycle===1){ b.mode='batsWind'; SFX.grunt(); }
+        else if(b.cycle===2){ b.mode='hexWind'; SFX.grunt(); }
+        else { b.mode='swoopWind'; b.swoops = 3 + Math.min(3, tier);
+               showBanner('THE ROOST DIVES!','', '#b58fd6', 1.0, 32); SFX.roar(); }
+        b.modeT = 0;
+      }
+    }
+    else if(b.mode==='roostWind'){
+      b.modeT += dt; b.moving=false;
+      if(Math.random()<0.6)
+        particles.push({kind:'spark', x:b.x+rnd(-40,40), y:b.y-rnd(30,90),
+          vx:rnd(-40,40), vy:rnd(-30,10), life:0.4, max:0.4, color:'#c9b8e8'});
+      if(b.modeT>=0.8){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.7:2.5;
+        /* both kinds of bat, and more of the small ones */
+        const small = 6 + tier*2, big = 1 + Math.min(3, Math.floor(tier/2));
+        bossSummon(b, small, ['cryptbat']);
+        bossSummon(b, big, ['direbat']);
+      }
+    }
+    else if(b.mode==='batsWind'){
+      b.modeT += dt; b.moving=false;
+      if(b.modeT>=0.55){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.5:2.2;
+        /* bat-shaped missiles: they turn after you, so you have to break away */
+        const n = 5 + tier;
+        for(let i=0;i<n;i++){
+          const a2 = toP + (i-(n-1)/2)*0.22;
+          projectiles.push({kind:'batbolt', x:b.x, y:b.y-24,
+            vx:Math.cos(a2)*250, vy:Math.sin(a2)*250,
+            owner:'enemy', dmg:1, life:5, homing:true, turn:1.9,
+            flap:rnd(TAU), seed:rnd(TAU)});
+        }
+        SFX.zap();
+      }
+    }
+    else if(b.mode==='hexWind'){
+      b.modeT += dt; b.moving=false;
+      if(b.modeT>=0.6){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.6:2.4;
+        for(const off of [-0.5,-0.25,0,0.25,0.5]){
+          const a2 = toP+off;
+          projectiles.push({kind:'hexbolt', x:b.x, y:b.y-22,
+            vx:Math.cos(a2)*265, vy:Math.sin(a2)*265,
+            owner:'enemy', dmg:1, life:3.6, curse:pick(CURSE_KEYS), src:b, seed:rnd(TAU)});
+        }
+        SFX.grunt();
+      }
+    }
+    /* THE DIVE. It picks a line through the hero, throws itself down it at full
+       tilt, overshoots, turns and does it again — the arena stops being a place
+       you can stand still in. */
+    else if(b.mode==='swoopWind'){
+      b.modeT += dt; b.moving=false;
+      b.face = {x:Math.cos(toP), y:Math.sin(toP)};
+      if(b.modeT>=0.45){ b.mode='swoop'; b.modeT=0; b.lockA=toP;
+        b.lx=Math.cos(toP); b.ly=Math.sin(toP); SFX.whoosh(); }
+    }
+    else if(b.mode==='swoop'){
+      b.modeT += dt;
+      b.moving = true; b.walk += dt*20;
+      const sp2 = 720 + tier*30;
+      b.x += b.lx*sp2*dt; b.y += b.ly*sp2*dt;
+      collideWorld(b);
+      if(Math.random()<0.9)
+        particles.push({kind:'spark', x:b.x+rnd(-20,20), y:b.y-rnd(10,60),
+          vx:-b.lx*140, vy:-b.ly*140, life:0.3, max:0.3, color:'#b58fd6'});
+      if(dP < b.r+player.r+10 && b.hitCd<=0){ playerDamage(b.dmg+1,b); b.hitCd=0.5; }
+      const outOfRoom = b.x<W.wall+90 || b.x>W.w-W.wall-90 || b.y<W.wall+90 || b.y>W.h-W.wall-90;
+      if(b.modeT>=0.62 || outOfRoom){
+        b.swoops--;
+        if(b.swoops>0){ b.mode='swoopWind'; b.modeT=0; }
+        else { b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6; }
+      }
+    }
+    else if(b.mode==='recover'){
+      b.modeT += dt;
+      if(b.modeT>0.4){ b.mode='chase'; }
     }
   }
   else if(b.bkey==='lavabrick'){
@@ -5071,12 +5305,13 @@ function updateBoss(b, dt, toP, dP){
           life:0.5, max:0.5, color:'#ff9a3c'});
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
-        /* 5-cycle: pools, slam, magma fan, volley, HELLFIRE */
-        b.cycle = (b.cycle+1)%5;
+        /* 6-cycle: pools, slam, magma fan, volley, HELLFIRE, MACE SPIN */
+        b.cycle = (b.cycle+1)%6;
         if(b.cycle===0){ b.mode='poolsWind'; SFX.grunt(); }
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='fanWind'; SFX.fireball(); }
         else if(b.cycle===3){ b.mode='volleyWind'; SFX.grunt(); }
+        else if(b.cycle===4){ b.mode='maceWind'; SFX.grunt(); }
         else { b.mode='hellWind'; SFX.roar(); showBanner('HELLFIRE!','', '#ff6a3a', 1.1, 34); }
         b.modeT=0;
       }
@@ -5094,6 +5329,11 @@ function updateBoss(b, dt, toP, dP){
             ty:clamp(lead.y+rnd(-120,120), W.wall+60, W.h-W.wall-60),
             t:0, dur, spin:rnd(TAU), delay:i*0.1, fr:fireRadius(b, 66)});
         }
+      }
+    }
+    else if(b.mode==='maceWind'){
+      if(maceSpin(b, dt, tier, enr, toP)){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
       }
     }
     else if(b.mode==='hellWind'){
@@ -5154,11 +5394,12 @@ function updateBoss(b, dt, toP, dP){
           life:0.6, max:0.6, color:'#ff8a5a'});
       if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
       if(b.nextAtk<=0){
-        /* 4-cycle: rain, slam, NEW ember ring, volley */
-        b.cycle = (b.cycle+1)%4;
+        /* 5-cycle: rain, slam, ember ring, volley, MACE SPIN */
+        b.cycle = (b.cycle+1)%5;
         if(b.cycle===0){ b.mode='rainWind'; SFX.roar(); showBanner('HELLFIRE!','FIRE FROM THE SKY', '#ff6a3a', 1.2, 34); }
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='emberWind'; SFX.fireball(); }
+        else if(b.cycle===3){ b.mode='maceWind'; SFX.grunt(); }
         else { b.mode='volleyWind'; SFX.grunt(); }
         b.modeT=0;
       }
@@ -5166,6 +5407,11 @@ function updateBoss(b, dt, toP, dP){
     else if(b.mode==='rainWind'){
       if(bossHellfire(b, dt, tier, enr)){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.0:2.9;
+      }
+    }
+    else if(b.mode==='maceWind'){
+      if(maceSpin(b, dt, tier, enr, toP)){
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
       }
     }
     /* NEW mechanic: ember ring — fireballs all around him */
@@ -5273,13 +5519,8 @@ function updateSuperBoss(b, dt, toP, dP){
     b.modeT += dt; b.moving=false;
     if(b.modeT>=0.8){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
-      /* NEW: summons include two elites */
-      for(let i=0;i<6;i++){
-        const a = rnd(TAU);
-        spawnEnemy(pick(['imp','archer','boneling']),
-          clamp(b.x+Math.cos(a)*130, 120, W.w-120),
-          clamp(b.y+Math.sin(a)*130, 120, W.h-120), i<2);
-      }
+      /* an ultra calls down a warband, and the first few come through promoted */
+      bossSummon(b, 14 + tier*3, ['imp','archer','boneling','knight','brute'], 3);
       addRing(b.x,b.y,20,300,150,'#ffd166',6,0.5);
     }
   }
@@ -5372,9 +5613,9 @@ function updateProjectiles(dt){
     if(pr.x===undefined && pr.sx!==undefined){ pr.x = pr.sx; pr.y = pr.sy; }
     pr.px = pr.x; pr.py = pr.y;
     if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'
-       || pr.kind==='hexbolt' || pr.kind==='frostrock'){
+       || pr.kind==='hexbolt' || pr.kind==='frostrock' || pr.kind==='batbolt'){
       if(pr.delay > 0){ pr.delay -= dt; continue; }
-      if(pr.kind==='skull' && pr.homing && !pr.deflected){
+      if((pr.kind==='skull'||pr.kind==='batbolt') && pr.homing && !pr.deflected){
         const ta = Math.atan2(player.y-pr.y, player.x-pr.x);
         const ca = Math.atan2(pr.vy, pr.vx);
         const na = ca + clamp(angDiff(ta, ca), -pr.turn*dt, pr.turn*dt);
@@ -5385,6 +5626,12 @@ function updateProjectiles(dt){
       if(pr.kind==='bolt' && Math.random()<(pr.big?0.7:0.5))
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-30,30), vy:rnd(-30,30),
           life:0.15, max:0.15, color:'#ffe95a'});
+      if(pr.kind==='batbolt'){
+        pr.flap += dt*22;
+        if(Math.random()<0.4)
+          particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-24,24), vy:rnd(-24,24),
+            life:0.2, max:0.2, color:'#b58fd6'});
+      }
       if(pr.kind==='frostrock'){
         pr.spin += dt*7;
         /* it lays a freezing scar down the whole lane it crossed */
@@ -5431,7 +5678,7 @@ function updateProjectiles(dt){
         else if(player.invuln<=0){
           playerDamage(pr.dmg||1, pr,
             (pr.kind==='frostbolt'||pr.kind==='frostrock') ? 'frost' : pr.kind==='bolt' ? 'shock' : null,
-            pr.kind==='skull' ? true : undefined);   /* skulls are spells, arrows are not */
+            (pr.kind==='skull'||pr.kind==='batbolt') ? true : undefined);   /* skulls and bats are spells, arrows are not */
           pr.dead=true;
           if(pr.kind==='frostrock'){
             addRing(pr.x,pr.y,16,300,110,FX.foe.frost,7,0.45);
@@ -5987,6 +6234,10 @@ function drawFigure(c, o){
   if(o.lord){ c.setLineDash([3,3]); c.strokeStyle='rgba(220,200,255,0.6)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,2,20*s,8*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.translate(0,-bob);
+  /* A WHIRL leans the whole body into the turn. Together with the arms thrown
+     out below and a face that rotates with it, the figure is genuinely spinning
+     on the spot rather than standing still while a blade orbits them. */
+  if(o.whirlA !== undefined) c.rotate(Math.sin(o.whirlA)*0.20);
   c.lineWidth = 2; c.lineJoin='round';
   const OL = 'rgba(20,30,40,0.5)';
   if(o.style==='boss'){
@@ -6053,6 +6304,12 @@ function drawFigure(c, o){
   const handL = { x: shL.x + Math.sin(aL)*armLen, y: shL.y + Math.cos(aL)*armLen };
   const handR2 = gripR ? {x:shR.x+(gripR.x-shR.x)*0.85, y:shR.y+(gripR.y-shR.y)*0.85}
     : { x: shR.x + Math.sin(aR)*armLen, y: shR.y + Math.cos(aR)*armLen };
+  /* both arms straight out, opposite each other, riding the spin */
+  if(o.whirlA !== undefined){
+    const wl = 17*s;
+    handL.x = shL.x - Math.cos(o.whirlA)*wl; handL.y = shL.y - Math.sin(o.whirlA)*wl*0.62;
+    handR2.x = shR.x + Math.cos(o.whirlA)*wl; handR2.y = shR.y + Math.sin(o.whirlA)*wl*0.62;
+  }
   c.strokeStyle = T(C.torso); c.lineWidth = 6*s; c.lineCap='round';
   c.beginPath(); c.moveTo(shL.x,shL.y); c.lineTo(handL.x,handL.y); c.stroke();
   c.beginPath(); c.moveTo(shR.x,shR.y); c.lineTo(handR2.x,handR2.y); c.stroke();
@@ -6074,13 +6331,15 @@ function drawFigure(c, o){
   c.beginPath(); c.arc(handL.x,handL.y,handR,0,TAU); c.fill(); c.stroke();
   c.beginPath(); c.arc(handR2.x,handR2.y,handR,0,TAU); c.fill(); c.stroke();
   if(o.weapon==='sword' && o.bladeAng===undefined){
-    c.save(); c.translate(handR2.x,handR2.y); c.rotate(aR+0.6);
-    drawBlade(c, s*0.9, false);
+    c.save(); c.translate(handR2.x,handR2.y);
+    c.rotate(o.whirlA !== undefined ? o.whirlA + 0.5 : aR+0.6);
+    drawBlade(c, s*(o.whirlA !== undefined ? 1.05 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
-  if(o.weapon==='mace' && !o.armsUp){
-    c.save(); c.translate(handR2.x,handR2.y); c.rotate(aR+0.5);
-    drawMace(c, s);
+  if(o.weapon==='mace' && (!o.armsUp || o.whirlA !== undefined)){
+    c.save(); c.translate(handR2.x,handR2.y);
+    c.rotate(o.whirlA !== undefined ? o.whirlA + 0.35 : aR+0.5);
+    drawMace(c, s*(o.whirlA !== undefined ? 1.15 : 1));
     c.restore();
   }
   if(o.weapon==='spear' && !o.armsUp){
@@ -6184,6 +6443,30 @@ function drawFigure(c, o){
     c.beginPath(); c.arc(0,hy2-0.5*s,hr+2*s, Math.PI, TAU); c.closePath(); c.fill(); c.stroke();
     c.fillRect(-hr-1.4*s, hy2-1*s, 3.4*s, 7*s); c.strokeRect(-hr-1.4*s, hy2-1*s, 3.4*s, 7*s);
     c.fillRect(hr-2*s, hy2-1*s, 3.4*s, 7*s); c.strokeRect(hr-2*s, hy2-1*s, 3.4*s, 7*s);
+  }
+  if(o.wings){
+    /* two membrane wings beating behind the shoulders */
+    const beat = Math.sin(vtime*7 + (o.phase||0));
+    for(const side of [-1, 1]){
+      c.save(); c.translate(side*8*s, -30*s); c.scale(side, 1);
+      c.rotate(-0.35 + beat*0.4);
+      c.fillStyle = 'rgba(70,54,104,0.95)';
+      c.strokeStyle = 'rgba(20,14,34,0.75)'; c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(0,0);
+      c.quadraticCurveTo(22*s, -16*s, 40*s, -6*s);
+      c.lineTo(31*s, 0);  c.lineTo(36*s, 7*s);
+      c.lineTo(24*s, 5*s); c.lineTo(27*s, 12*s);
+      c.lineTo(12*s, 8*s); c.closePath();
+      c.fill(); c.stroke();
+      /* wing ribs */
+      c.strokeStyle = 'rgba(20,14,34,0.5)'; c.lineWidth = 1.4;
+      for(const t of [0.35, 0.62, 0.85]){
+        c.beginPath(); c.moveTo(2*s, 2*s);
+        c.lineTo(36*s*t, -8*s*t + 8*s*t*t); c.stroke();
+      }
+      c.restore();
+    }
   }
   if(o.horns){
     c.fillStyle = T('#4a4b47'); c.strokeStyle = OL;
@@ -6626,6 +6909,29 @@ function drawSkull(c, pr){
   c.fillRect(-2.4,4.6,1.4,2.6); c.fillRect(0.4,4.6,1.4,2.6);
   c.restore();
 }
+/* A bat-shaped missile: a little brick body with two wings beating. It turns
+   after the hero, so it reads as alive rather than thrown. */
+function drawBatBolt(c, pr){
+  const a = Math.atan2(pr.vy, pr.vx);
+  c.save(); c.translate(pr.x, pr.y); c.rotate(a);
+  const flap = Math.sin(pr.flap)*0.8;
+  for(const side of [-1, 1]){
+    c.fillStyle = 'rgba(120,90,170,0.95)';
+    c.strokeStyle = 'rgba(30,20,50,0.6)'; c.lineWidth = 1.4;
+    c.save(); c.scale(1, side);
+    c.rotate(flap*0.4);
+    c.beginPath();
+    c.moveTo(-1, 0); c.lineTo(-9, -7-flap*3); c.lineTo(-3, -10-flap*3);
+    c.lineTo(3, -6); c.closePath(); c.fill(); c.stroke();
+    c.restore();
+  }
+  c.fillStyle = '#4a3a63'; c.strokeStyle = 'rgba(20,14,34,0.7)'; c.lineWidth = 1.5;
+  roundRect(c, -6, -3.5, 12, 7, 2.5); c.fill(); c.stroke();
+  drawStudG(c, 0, -2.5, 2.2, '#2e2442');
+  c.fillStyle = '#ffe95a';
+  c.beginPath(); c.arc(4, -1, 1.4, 0, TAU); c.arc(4, 1.4, 1.4, 0, TAU); c.fill();
+  c.restore();
+}
 /* The shade-storm's orb: a caged ball of lightning with one arm of it sweeping
    round, drawn as a jagged polyline so it reads as lightning and not a laser. */
 function drawZorb(c, pr){
@@ -7051,6 +7357,23 @@ function render(){
         ctx.beginPath(); ctx.arc(e.x,e.y,(e.r+20)*pr2,0,TAU); ctx.stroke();
         ctx.setLineDash([]);
       }
+      if(e.mode==='maceWind'){
+        /* the circle the head sweeps, and a bright wedge racing round it */
+        const rr = maceReach(e);
+        const winding = e.modeT < MACE_WIND;
+        groundDisc(ctx, e.x, e.y, rr, `rgba(255,209,102,${winding?0.10:0.18})`);
+        ctx.setLineDash([14,10]);
+        groundRing(ctx, e.x, e.y, rr, 5, `rgba(255,209,102,${0.55+0.35*Math.sin(vtime*16)})`);
+        ctx.setLineDash([]);
+        if(!winding && e.whirlA!==undefined){
+          ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, GROUND_SQUASH);
+          ctx.fillStyle = 'rgba(255,240,180,0.28)';
+          ctx.beginPath(); ctx.moveTo(0,0);
+          ctx.arc(0, 0, rr, e.whirlA-1.1, e.whirlA);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+        }
+      }
       if(e.mode==='slamWind'){
         const pulling = e.modeT < BOSS_PULL_T;
         groundDisc(ctx, e.x, e.y, RING_MAX, `rgba(255,90,50,${pulling?0.10:0.16})`);
@@ -7212,25 +7535,18 @@ function render(){
     }
     ctx.restore();
   }
-  /* Blademaster whirl — a ring of motion blur and the blade caught mid-sweep */
+  /* Blademaster whirl — the trailing arc. The blade itself is on the figure now,
+     held in the hero's hand and swung round with the body. */
   if(player && player.whirl && !player.dead){
     const reach = 56 + player.reach;
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    for(let i=0;i<3;i++){
-      const a0 = player.whirlAng - i*0.55;
-      ctx.strokeStyle = `rgba(232,238,242,${0.5 - i*0.15})`;
-      ctx.lineWidth = 5 - i*1.2;
+    for(let i=0;i<4;i++){
+      const a0 = player.whirlAng - i*0.42;
+      ctx.strokeStyle = `rgba(232,238,242,${0.42 - i*0.10})`;
+      ctx.lineWidth = 6 - i*1.2;
       ctx.beginPath();
-      ctx.ellipse(player.x, player.y-14, reach, reach*0.62, 0, a0-0.8, a0+0.25);
+      ctx.ellipse(player.x, player.y-14, reach, reach*0.62, 0, a0-0.55, a0+0.18);
       ctx.stroke();
-    }
-    for(const side of [0, Math.PI]){
-      const a = player.whirlAng + side;
-      const bx = player.x + Math.cos(a)*reach*0.92, by = player.y-14 + Math.sin(a)*reach*0.58;
-      ctx.save(); ctx.translate(bx,by); ctx.rotate(a+Math.PI/2);
-      drawBlade(ctx, 0.8, true);
-      ctx.restore();
     }
     ctx.restore();
   }
@@ -7326,6 +7642,7 @@ function render(){
     else if(pr.kind==='frostbolt') drawFrostbolt(ctx,pr);
     else if(pr.kind==='frostrock') drawFrostRock(ctx,pr);
     else if(pr.kind==='zorb') drawZorb(ctx,pr);
+    else if(pr.kind==='batbolt') drawBatBolt(ctx,pr);
     else if(pr.kind==='bolt') drawBolt(ctx,pr);
     else if(pr.kind==='fireball') drawFireball(ctx,pr,false);
     else if(pr.kind==='meteor') drawFireball(ctx,pr,true);
@@ -7534,9 +7851,14 @@ function drawHero(c){
   if(!p || p.dead) return;
   if(p.invuln>0 && Math.sin(vtime*30)>0) c.globalAlpha = 0.45;
   const sw = p.swing;
-  drawFigure(c, { x:p.x, y:p.y, s:1, face:p.face, walk:p.walk, moving:p.moving,
+  const wh = p.whirl ? p.whirlAng : undefined;
+  drawFigure(c, { x:p.x, y:p.y, s:1,
+    /* facing rides the spin, so the minifig turns its back to you and round again */
+    face: wh!==undefined ? {x:Math.cos(wh), y:Math.sin(wh)} : p.face,
+    walk:p.walk, moving:p.moving,
     flash:p.flash, blink:p.blink, colors:HERO_COLORS, style:'hero',
-    weapon:'sword', bladeAng: sw ? sw.cur : undefined, elite:false, phase:0 });
+    weapon:'sword', bladeAng: (wh===undefined && sw) ? sw.cur : undefined,
+    whirlA: wh, elite:false, phase:0 });
   c.globalAlpha = 1;
   drawPlayerWeapon(c);
 }
@@ -7700,10 +8022,16 @@ function drawEnemy(c, e){
   if(e.type==='lancer'){ o.weapon='spear'; o.armsUp = (e.mode==='windup'||e.mode==='lunge'); }
   if(e.type==='lobber' && e.mode==='wind') o.armsUp = true;
   if(e.type==='boss'){
+    /* a boss mid-mace-spin hands the figure its whirl angle, so the body leans
+       and turns and the mace really does go round with it */
+    if(e.whirlA !== undefined && e.mode==='maceWind') o.whirlA = e.whirlA;
     if(e.bkey==='bonebaron' || e.super) o.crown = true;
     if(e.bkey==='lavabrick'||e.bkey==='ultralava') o.lava = true;
     if(e.bkey==='ashtyrant'){ o.lava = true; o.horns = true; }
     if(e.bkey==='omegathane'){ o.horns = true; }
+    if(e.bkey==='batsovereign'){ o.wings = true; o.horns = true;
+      o.z = 14 + Math.sin((e.hover||0)*3.1)*7;
+      o.armsUp = (e.mode==='roostWind'||e.mode==='hexWind'||e.mode==='batsWind'); }
     if(e.bkey==='brickthane'||e.bkey==='omegathane'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'); }
     if(e.bkey==='bonebaron'||e.bkey==='megabaron'){ o.armsUp = (e.mode==='ringWind'||e.mode==='summonWind'||e.mode==='curseWind'||e.mode==='spiralWind'); }
     if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'||e.mode==='hellWind'); }
