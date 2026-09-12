@@ -93,6 +93,19 @@
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
   /* ---- favourite picker ---- */
   .favhead{margin:16px 0 8px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
+  #diffRow{display:flex;gap:10px;justify-content:center}
+  .diff{min-width:126px;padding:9px 14px 8px;border-radius:13px;cursor:pointer;
+    background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);
+    font-family:'Titan One';font-size:13px;letter-spacing:1px;color:#f0e6e6;
+    transition:transform .1s, background .1s, border-color .1s}
+  .diff:hover{transform:translateY(-3px);background:rgba(9,13,17,.5)}
+  .diff.on{background:rgba(255,255,255,.14)}
+  .diffblurb{margin:8px auto 0;max-width:520px;font-size:12.5px;color:#ffdada;font-weight:500;min-height:34px}
+  .cheatrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  .cheatbtn{background:rgba(9,13,17,.45);border:1px solid rgba(255,255,255,.22);border-radius:10px;
+    padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
+  .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
+  .cheatbtn.got{border-color:#4b9b41;color:#a5e06e}
   #favRow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:460px;margin:0 auto}
   .fav{display:flex;flex-direction:column;align-items:center;gap:3px;width:80px;padding:8px 4px 7px;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);border-radius:13px;
@@ -119,13 +132,21 @@
   .seclabel::after{content:'';flex:1;height:2px;border-radius:1px;background:rgba(255,230,163,.28)}
   .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));gap:12px}
   .sblock{background:rgba(9,13,17,.44);border:1px solid rgba(255,255,255,.16);border-radius:15px;
-    padding:11px 14px 9px;text-align:left}
+    padding:11px 14px 9px;text-align:left;position:relative}
   .sblock h4{font-family:'Titan One';font-size:11.5px;letter-spacing:2px;color:#ffd76e;margin-bottom:7px}
   .srow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px;
     padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.10)}
   .srow:last-child{border-bottom:none}
   .srow>span{color:#e6ecea;font-weight:500}
   .srow>b{color:#fff;font-weight:700;white-space:nowrap;font-size:13.5px}
+  .srow.tip{cursor:help}
+  .srow.tip>span{border-bottom:1px dotted rgba(255,214,110,.5)}
+  .srow.tip:hover{background:rgba(255,214,110,.08);border-radius:6px}
+  .srow.tip:hover::after{content:attr(data-tip);position:fixed;left:50%;bottom:54px;
+    transform:translateX(-50%);white-space:pre;background:#12181d;border:2px solid #ffb900;
+    border-radius:12px;padding:12px 18px;font-size:12.5px;font-weight:500;color:#f2f3f2;
+    line-height:1.65;text-align:left;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.75);
+    font-family:'Fredoka';max-width:min(560px,92vw)}
   .srow small{display:block;color:#ffc4c4;font-weight:400;font-size:10.5px;line-height:1.35;margin-top:1px}
   .sbar{height:9px;border-radius:5px;background:rgba(0,0,0,.4);overflow:hidden;margin:6px 0 2px}
   .sbar i{display:block;height:100%;border-radius:5px}
@@ -154,6 +175,9 @@
     <div class="badge">BRICK-BUILT ACTION RPG</div>
     <canvas id="titleCanvas" width="760" height="400"></canvas>
     <div class="tag">Smash the waves. Grab the studs. Everything falls apart.</div>
+    <div class="favhead">DIFFICULTY</div>
+    <div id="diffRow"></div>
+    <div class="diffblurb" id="diffBlurb"></div>
     <div class="favhead">PICK A FAVOURITE — ITS BRICKS SHOW UP MORE OFTEN</div>
     <div id="favRow"></div>
     <div class="gap20"></div>
@@ -163,6 +187,7 @@
       <span><kbd>LMB</kbd> <b>swing sword</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
+      <span><kbd>F1</kbd> <b>test bench</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>sound</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
@@ -182,6 +207,26 @@
     <div id="rerollCost"></div>
   </div>
   <div id="buildChips"></div>
+</div>
+
+<div id="cheatScreen" class="overlay hidden">
+  <div class="sheet">
+    <div class="sheethead">
+      <h2>TEST BENCH</h2>
+      <div class="sheetsub">Give yourself anything, jump to any wave. F1 or ESC to close.</div>
+    </div>
+    <div class="sheetbody">
+      <div class="seclabel">WAVE</div>
+      <div class="cheatrow" id="cheatWaves"></div>
+      <div class="seclabel">DIFFICULTY</div>
+      <div class="cheatrow" id="cheatDiffs"></div>
+      <div class="seclabel">GRANT A BRICK — CLICK TO MAX IT OUT</div>
+      <div class="cheatrow" id="cheatUps"></div>
+      <div class="seclabel">UTILITIES</div>
+      <div class="cheatrow" id="cheatMisc"></div>
+    </div>
+    <div class="sheetfoot">F1 or ESC to close</div>
+  </div>
 </div>
 
 <div id="charScreen" class="overlay hidden">
@@ -275,6 +320,11 @@ const HEART_MAX = 150;
 const HEART_POOL_AT = 99;
 const HEART_ROW_COLS = ['#d3242b','#ffb900','#9b45d6','#2ea8a0','#e4572e','#4b9b41','#2e7dd1','#c95bd0','#d3242b'];
 const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
+const BOMB_MAX      = BOMB_DIRS.length;   /* the compass is full at 8 — no stacking past it */
+const BOMB_MIN_RATE = 2.0;                /* never faster than one volley every two seconds */
+const BOMB_MAX_R    = 110;                /* blast radius ceiling */
+const CLUSTER_MAX   = 2;                  /* how many times a bomb may split */
+const CLUSTER_FALLOFF = 0.45;             /* each split generation hits for this much of the last */
 const FORTUNE_CAP = 8;
 const CHAIN_MAX_ZAPPERS = 5;
 const CHAIN_MIN_RATE = 1.0;    /* a storm brick never fires faster than once a second */
@@ -304,8 +354,27 @@ const VORTEX_MIN_HITMUL = 0.45;
 const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above this they strobe */
 const OVERSEER_MAX_STACKS = 3;
 const AIL_MAX = 6;            /* chill / shock stack ceiling */
+const AIL_BREAK = 5;          /* the fifth stack breaks something */
+const STUN_T = 3;             /* frozen solid, in seconds, before resistance */
+const SUNDER_FIRE_T = 20;     /* scorched: fire resistance cut, in seconds */
+const SUNDER_FIRE = 0.5;      /* ...by this much of what you have */
 const BURN_MAX_T = 48;        /* a burn never lingers longer than this */
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
+/* Difficulty scales the monsters and the loot, not the rules. */
+const DIFFS = {
+  easy:      { name:'EASY',      col:'#4b9b41', lvl:-2, hp:0.70, dmg:0.75, spd:0.88, atk:1.20,
+               count:0.80, pack:0.6, rar:0.85,
+               blurb:'Fewer, slower, softer monsters. Rewards roll a touch worse.' },
+  hard:      { name:'HARD',      col:'#ffb900', lvl:0,  hp:1.00, dmg:1.00, spd:1.00, atk:1.00,
+               count:1.00, pack:1.0, rar:1.00,
+               blurb:'The game as built. Every number is the baseline.' },
+  nightmare: { name:'NIGHTMARE', col:'#d3242b', lvl:4,  hp:1.85, dmg:1.55, spd:1.16, atk:0.78,
+               count:1.45, pack:1.9, rar:1.25,
+               blurb:'Monsters arrive earlier, in packs, and hit far harder. Rewards roll better.' }
+};
+let difficulty = DIFFS.hard;
+/* the effective wave a monster is built at — difficulty shifts the whole curve */
+function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
 /* ---- damage model ----------------------------------------------------------
    Every hit in the game is built the same way:
      Damage = (Base + Flat added) × (1 + increased − reduced) × ∏(1 + more) × ∏(1 − less)
@@ -556,6 +625,8 @@ window.addEventListener('keydown', e=>{
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='Escape' && state==='char') toggleChar();
+  if(e.code==='F1' && (state==='play'||state==='cheat')){ e.preventDefault(); toggleCheat(); }
+  if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR') doReroll();
 });
@@ -624,6 +695,8 @@ function newPlayer(){
        stack up to AIL_MAX and decay when nothing refreshes them. */
     burn:{ pool:0, t:0, acc:0 },
     ailCd:{ fire:0, frost:0, shock:0 },
+    stunT:0,                  /* frozen solid — no moving, no swinging */
+    scorchT:0,                /* fire resistance sundered by a burn overload */
     chill:{ stacks:0, t:0 },
     shock:{ stacks:0, t:0 },
     res:{ fire:0, frost:0, shock:0 },
@@ -639,7 +712,7 @@ function newPlayer(){
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
     chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5] },
-    bomb:{ n:0, dmg:2, r:105, rate:7, cd:3 },
+    bomb:{ n:0, dmg:2, r:62, rate:7, cd:3, cluster:0 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
   };
@@ -1190,7 +1263,7 @@ const BOSSES = {
 };
 /* NEW: SUPER BOSSES at waves 10 / 20 / 30 … */
 const SUPERBOSSES = {
-  omegathane:{ name:'OMEGA BRICKTHANE', hp:420, speed:60, r:40, scale:3.1, dmg:4, xp:120, studs:[120,180], sig:'nova',
+  omegathane:{ name:'OMEGA BRICKTHANE', hp:640, speed:66, r:40, scale:3.1, dmg:5, xp:120, studs:[120,180], sig:'nova',
     col:{head:'#2c3136', torso:'#181c20', legs:'#101315', hands:'#3a4045', hair:'#3a4045'}, style:'boss' },
   megabaron:{ name:'MEGA BONE BARON', hp:400, speed:70, r:38, scale:3.0, dmg:4, xp:130, studs:[130,190], sig:'spiral',
     col:{head:'#f6f2e4', torso:'#d9cf9a', legs:'#b3a878', hands:'#f6f2e4', hair:'#8a7d4a'}, style:'skel' },
@@ -1215,22 +1288,23 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       B = SUPERBOSSES[skey];
       const st = Math.max(1, Math.floor(wave.n/10));
       /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
+    /* the first ultra used to fold to any build; it now starts from a real base */
       const mult = 1 + (st-1)*2.3;
-      const bhp = Math.round(B.hp*mult + st*1100);
+      const bhp = Math.round((B.hp*mult + st*1100 + 900) * difficulty.hp);
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armour: 40 + st*45, suppress:0.30,
         speed:B.speed*(1+tier*0.03),
         dmg:B.dmg + st*2,
         xp:Math.round(B.xp*(1+(st-1)*0.8)), studs:{a:B.studs[0], b:B.studs[1]},
-        atkS:Math.max(0.6, 1-(wave.n-1)*0.02), touchCd:0.9,
+        atkS:Math.max(0.5, (1-(wave.n-1)*0.02)*difficulty.atk), touchCd:0.8,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
         flash:0, hitCd:0, atkCd:0, kx:0, ky:0, mode:'chase', modeT:0,
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
         aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
         stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y,
         path:null, pathI:0, pathT:0, pathGoal:null,
-        nextAtk:2.2, ring:null, cycle:0 };
+        nextAtk:1.8, ring:null, cycle:0 };
     } else {
       /* normal boss — OR forced boss key (wave-50 raid uses every boss) */
       let bkey;
@@ -1240,7 +1314,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         bkey = keys2[(tier-1) % keys2.length];
         B = BOSSES[bkey];
       }
-      const bhp = Math.round(B.hp*(1 + (tier-1)*1.9) + tier*320);
+      const bhp = Math.round((B.hp*(1 + (tier-1)*1.9) + tier*320) * difficulty.hp);
       e = { type:'boss', x, y, bkey, bname:B.name,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
@@ -1262,19 +1336,20 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     return;
   }
   const d = EDEF[type];
+  const lvl = mobLevel();
   /* steep HP curve so wave 20/30 stay hard */
-  const hpS  = 1 + (wave.n-1)*0.30 + Math.pow(Math.max(0,wave.n-5),1.6)*0.05;
+  const hpS  = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp;
   /* flat armour, fed into the same DR curve the player uses */
-  const armour = wave.n * 1.1 * (type==='bastion' ? 1.8 : 1)
+  const armour = lvl * 1.1 * (type==='bastion' ? 1.8 : 1)
     * (RANGED_SET.has(type) ? 0.45 : 1) * (elite ? 1.4 : 1) * (d.golem ? 1.6 : 1);
   /* spell suppression: the arcane ones shrug off half a spell hit */
   const suppress = magic ? 0.30 : (typeof type === 'string' && type.endsWith('lord')) ? 0.20 : 0;
-  const dmgB = Math.floor((wave.n-1)/2);
-  const spdS = 1.07 + Math.min(0.55, (wave.n-1)*0.028);
-  let atkS = Math.max(0.58, 1 - (wave.n-1)*0.03);
+  const dmgB = Math.floor((lvl-1)/2);
+  const spdS = (1.07 + Math.min(0.55, (lvl-1)*0.028)) * difficulty.spd;
+  let atkS = Math.max(0.58, 1 - (lvl-1)*0.03) * difficulty.atk;
   if(magic) atkS *= 0.7;
   const e = { type, x, y, r:d.r*(elite?1.15:1), scale:d.scale*(elite?1.12:1),
-    dmg: d.dmg + dmgB + (magic?1:0),
+    dmg: Math.max(1, Math.round((d.dmg + dmgB + (magic?1:0)) * difficulty.dmg)),
     hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     armour, suppress,
@@ -1291,6 +1366,21 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   SFX.build();
 }
 
+/* Where the player will BE, not where they are. Lobbed things that land on the
+   hero's current tile are trivially dodged by walking. */
+function leadPlayer(fromX, fromY, travelT, accuracy){
+  const p = player;
+  const acc = accuracy === undefined ? 1 : accuracy;
+  const vx = (p.x - (p.leadX ?? p.x)) / Math.max(0.016, p.leadDt || 0.016);
+  const vy = (p.y - (p.leadY ?? p.y)) / Math.max(0.016, p.leadDt || 0.016);
+  const sp = Math.hypot(vx, vy);
+  const cap = p.speed * 1.1;
+  const k = sp > cap ? cap/sp : 1;
+  return {
+    x: clamp(p.x + vx*k*travelT*acc, W.wall+40, W.w-W.wall-40),
+    y: clamp(p.y + vy*k*travelT*acc, W.wall+40, W.h-W.wall-40)
+  };
+}
 function randomSpawnPos(){
   const lo = W.wall+130, hiX = W.w-W.wall-130, hiY = W.h-W.wall-130;
   for(let i=0;i<40;i++){
@@ -1440,9 +1530,10 @@ function armourValue(){
 function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
-  /* a SUNDERED hero keeps less of their resistance */
-  const r = clamp((player.res[elem] || 0) * (1 - player.curse.resist), 0, RES_CAP);
-  return 1 - r;
+  /* a SUNDERED hero keeps less of their resistance, and a SCORCHED one less fire */
+  let r = (player.res[elem] || 0) * (1 - player.curse.resist);
+  if(elem==='fire' && player.scorchT > 0) r *= (1 - SUNDER_FIRE);
+  return 1 - clamp(r, 0, RES_CAP);
 }
 function applyCurse(kind, src){
   const p = player, C = CURSES[kind];
@@ -1474,6 +1565,37 @@ function cursedRegen(){ return player.regenRate * (1 - player.curse.regen); }
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
 function elemPower(src){ return 1 + 0.25*((src && src.buffStacks) || 0); }
+/* At AIL_BREAK stacks each element overloads into something far worse. Resistance
+   scales the punishment down and can shrug it off entirely at high values. */
+function ailmentBreak(elem, src){
+  const p = player, take = elemTake(elem);
+  if(take <= 0.05) return;                       /* near-immune: nothing happens */
+  if(elem==='frost'){
+    const t = STUN_T * take;
+    if(t < 0.25) return;
+    p.stunT = Math.max(p.stunT, t);
+    p.chill.stacks = 0; p.chill.t = 0;           /* the freeze consumes the stacks */
+    addDmg(p.x, p.y-70, 'FROZEN SOLID!', '#bfe3ff', 22);
+    addRing(p.x, p.y, 10, 320, 90, '#bfe3ff', 7, 0.6);
+    SFX.freeze(); addShake(0.3);
+  } else if(elem==='fire'){
+    p.scorchT = Math.max(p.scorchT, SUNDER_FIRE_T * take);
+    addDmg(p.x, p.y-70, 'SCORCHED!', '#ff8a3c', 22);
+    addRing(p.x, p.y, 10, 320, 90, '#ff8a3c', 7, 0.6);
+    SFX.fireball(); addShake(0.25);
+  } else if(elem==='shock'){
+    /* electrocution: the monster's own hit, amplified — survivable only if you
+       have the resistance and the hearts for it */
+    const power = (src && src.dmg ? src.dmg : 2) * elemPower(src);
+    const hit = Math.max(1, Math.round(power * 4 * take));
+    p.shock.stacks = 0; p.shock.t = 0;
+    addDmg(p.x, p.y-76, 'ELECTROCUTED!', '#ffe95a', 24);
+    addRing(p.x, p.y, 8, 420, 130, '#ffe95a', 9, 0.6);
+    for(let i=0;i<7;i++) addZap(p.x+rnd(-70,70), p.y-90, p.x, p.y-14, 0);
+    SFX.thunder(); addShake(0.55);
+    ailmentDamage(hit);
+  }
+}
 function applyAilment(elem, src){
   const p = player;
   if(p.dead) return;
@@ -1485,22 +1607,26 @@ function applyAilment(elem, src){
     /* each hit adds 3 damage and 12 seconds — two hits is 6 over 24 */
     p.burn.pool += 3 * take;
     p.burn.t = Math.min(BURN_MAX_T, p.burn.t + 12);
+    p.burn.stacks = Math.min(AIL_MAX, (p.burn.stacks||0) + 1);
     addDmg(p.x, p.y-58, 'BURNING!', '#ff8a3c', 15);
+    if(p.burn.stacks >= AIL_BREAK){ p.burn.stacks = 0; ailmentBreak('fire', src); }
   } else if(elem==='frost'){
     p.chill.stacks = Math.min(AIL_MAX, p.chill.stacks + (take >= 0.5 ? 1 : 0.5));
     p.chill.t = Math.max(p.chill.t, 5 * take);
     addDmg(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
+    if(p.chill.stacks >= AIL_BREAK) ailmentBreak('frost', src);
   } else if(elem==='shock'){
     p.shock.stacks = Math.min(AIL_MAX, p.shock.stacks + (take >= 0.5 ? 1 : 0.5));
     p.shock.t = Math.max(p.shock.t, 6 * take);
     addDmg(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
+    if(p.shock.stacks >= AIL_BREAK) ailmentBreak('shock', src);
   }
 }
 /* Burn ticks bypass the post-hit invulnerability — otherwise a damage-over-time
    effect would never land a single point. */
 function ailmentDamage(n){
   const p = player;
-  if(p.dead || state!=='play') return;
+  if(godMode || p.dead || state!=='play') return;
   p.hp -= n; p.flash = 1; redFlash = Math.max(redFlash, 0.35);
   addDmg(p.x, p.y-44, '-'+n, '#ff8a3c', 16);
   if(p.hp<=0){ p.hp=0; playerDie(); }
@@ -1511,6 +1637,14 @@ function shockCritChance(){ return 0.10*player.shock.stacks; }           /* 6 st
 function updateAilments(dt){
   const p = player;
   updateCurses(dt);
+  p.stunT = Math.max(0, p.stunT - dt);
+  p.scorchT = Math.max(0, p.scorchT - dt);
+  if(p.stunT > 0 && Math.random() < 0.4)
+    particles.push({kind:'spark', x:p.x+rnd(-18,18), y:p.y-rnd(4,44), vx:rnd(-20,20), vy:rnd(-20,20),
+      life:0.3, max:0.3, color:'#dff2ff'});
+  if(p.scorchT > 0 && Math.random() < 0.25)
+    particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-rnd(4,40), vx:0, vy:-50,
+      life:0.4, max:0.4, color:'#ff6a2a'});
   for(const el of ELEMENTS) p.ailCd[el] = Math.max(0, (p.ailCd[el]||0) - dt);
   if(p.burn.t > 0 && p.burn.pool > 0){
     const rate = p.burn.pool / p.burn.t;
@@ -1543,6 +1677,7 @@ function updateAilments(dt){
    hits meet armour — never both. */
 function playerDamage(n, src, elem, spell){
   const p = player;
+  if(godMode) return;
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   const isSpell = (spell === undefined) ? !!elem : spell;
   let d = n;
@@ -1668,7 +1803,7 @@ function composeWave(n){
     seedGolems(q, n);
     return q;
   }
-  const count = Math.min(10 + Math.round(n*3.2), 220);
+  const count = Math.min(Math.round((10 + n*3.2) * difficulty.count), 260);
   const pool = wavePool(n);
   for(let i=0;i<count;i++) q.push(pickFrom(pool));
   seedGolems(q, n);
@@ -1728,16 +1863,20 @@ function updateWave(dt){
             const packable = wave.n>=6;
             const packSize = wave.n>=30 ? 5 : wave.n>=20 ? 4 : 3;
             const roll = Math.random();
-            if(packable && roll < 0.09){
+            /* golems are siege units — they only rarely head a magic or elite pack,
+               and the odds climb slowly as the run goes on */
+            const isGolem = type.endsWith('golem');
+            const pk = difficulty.pack * (isGolem ? clamp(0.10 + (wave.n-10)*0.015, 0.10, 0.45) : 1);
+            if(packable && roll < 0.09*pk){
               for(let k=0;k<packSize;k++)
                 spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
                   clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), false, true);
-            } else if(packable && roll < 0.21){
+            } else if(packable && roll < 0.09*pk + 0.12*pk){
               for(let k=0;k<packSize;k++)
                 spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
                   clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), true, false);
             } else {
-              spawnEnemy(type, pos.x, pos.y, packable && Math.random()<0.15);
+              spawnEnemy(type, pos.x, pos.y, packable && Math.random() < 0.15*pk);
             }
           }
         }
@@ -1767,8 +1906,18 @@ const MODE_W = {
   boss:  { common:0,  uncommon:22, rare:50, epic:28 },
   chest: { common:30, uncommon:34, rare:26, epic:10 }
 };
+const RAR_ORDER = ['common','uncommon','rare','epic'];
+const rarRank = r=> Math.max(0, RAR_ORDER.indexOf(r));
+/* A card with `minRar` never appears below that tier. The strongest effects —
+   MORE damage, resistances, crit, anything that changes what a spell does —
+   are gated so a common reward can't hand them out. */
+function rarAllows(u, rar){ return rarRank(rar) >= rarRank(u.minRar || 'common'); }
 function rollRarity(mode){
-  const w = MODE_W[mode]||MODE_W.wave;
+  const base = MODE_W[mode]||MODE_W.wave;
+  /* difficulty tilts the roll: the harder the run, the better the bricks */
+  const q = difficulty.rar;
+  const w = { common: base.common / q, uncommon: base.uncommon,
+              rare: base.rare * q, epic: base.epic * q * q };
   let t=0; for(const k in w) t+=w[k];
   let r=Math.random()*t;
   for(const k of ['common','uncommon','rare','epic']){ if((r-=w[k])<0) return k; }
@@ -1803,34 +1952,28 @@ const ICONS = {
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     calc:m=>({v:Math.max(1,Math.round(m))}),
-    desc:c=>`+${c.v} flat sword damage (base ${swordBase().toFixed(0)} → ${(swordBase()+c.v).toFixed(0)})`,
+    desc:c=>`+${c.v} flat sword damage (now ${(swordBase()+c.v).toFixed(0)})`,
     apply:c=>{ player.flatSword += c.v; } },
-  { id:'bladem', name:'Blade Mastery', icon:'sword', cls:'OFFENSE',
+  { id:'bladem', name:'Blade Mastery', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased melee damage — sword, bladestorm & vortex (now ${Math.round((player.incMelee+c.v)*100)}%)`,
+    desc:c=>`${Math.round(c.v*100)}% increased melee damage (now ${Math.round((player.incMelee+c.v)*100)}%)`,
     apply:c=>{ player.incMelee += c.v; } },
-  { id:'moredmg', name:'Overcharged Bricks', icon:'force', cls:'OFFENSE',
+  { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
     calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`${Math.round(c.v*100)}% MORE damage — its own multiplier, not added to your increases`,
+    desc:c=>`${Math.round(c.v*100)}% more damage with everything — sword, blades and spells alike (now ×${(player.moreAll*(1+c.v)).toFixed(2)})`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
   { id:'armor', name:'Reinforced Armour', icon:'heart', cls:'DEFENSE',
     calc:m=>({v:Math.round(14+10*m)}),
-    desc:c=>{
-      const a = (player.armour+c.v)*(1+player.incArmour);
-      return `+${c.v} flat armour (now ${Math.round(a)}) — cuts a 2-damage hit by ${Math.round(armourDR(a,2)*100)}%, a 6-damage hit by ${Math.round(armourDR(a,6)*100)}%`;
-    },
+    desc:c=>`+${c.v} flat armour (now ${Math.round((player.armour+c.v)*(1+player.incArmour))})`,
     apply:c=>{ player.armour += c.v; } },
   { id:'armorinc', name:'Plated Rig', icon:'heart', cls:'DEFENSE', req:()=>player.armour>0,
     calc:m=>({v:0.14+0.10*m}),
-    desc:c=>{
-      const a = player.armour*(1+player.incArmour+c.v);
-      return `${Math.round(c.v*100)}% increased armour (now ${Math.round(a)}) — additive with your other armour increases`;
-    },
+    desc:c=>`${Math.round(c.v*100)}% increased armour (now ${Math.round(player.armour*(1+player.incArmour+c.v))})`,
     apply:c=>{ player.incArmour += c.v; } },
-  { id:'suppress', name:'Spell Suppression', icon:'freeze', cls:'DEFENSE',
+  { id:'suppress', name:'Spell Suppression', icon:'freeze', cls:'DEFENSE', minRar:'uncommon',
     req:()=>player.suppress < 1,
     calc:m=>({v:0.08+0.06*m}),
-    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%) — a suppressed spell hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
+    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%)`,
     apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     calc:m=>({v:Math.round(10*m+8)}),
@@ -1840,11 +1983,11 @@ const UPGRADES = [
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`Swing ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.atkRate *= (1-c.v); } },
-  { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE',
+  { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.35+0.30*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased critical strike chance — ${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round((player.incCrit+c.v)*100)}%) = ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%`,
+    desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (now ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%)`,
     apply:c=>{ player.incCrit += c.v; } },
-  { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE',
+  { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:Math.round(12+9*m)}),
     desc:c=>`+${c.v}% to critical strike multiplier (now ${Math.min(CRIT_MULT_CAP, player.critMultPct+c.v)}%)`,
     apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
@@ -1880,27 +2023,27 @@ const UPGRADES = [
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`+${Math.round(c.v*100)}% XP gained`,
     apply:c=>{ player.xpMul += c.v; } },
-  { id:'resfire', name:'Flameguard Plates', icon:'bomb', cls:'DEFENSE',
+  { id:'resfire', name:'Flameguard Plates', icon:'bomb', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.fire < RES_CAP,
     calc:m=>({v:0.08+0.07*m}),
-    desc:c=>`+${Math.round(c.v*100)}% fire resistance (now ${Math.round(Math.min(RES_CAP,player.res.fire+c.v)*100)}%) — less burn, less fire damage`,
+    desc:c=>`+${Math.round(c.v*100)}% fire resistance (now ${Math.round(Math.min(RES_CAP,player.res.fire+c.v)*100)}%)`,
     apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
-  { id:'resfrost', name:'Thermal Lining', icon:'freeze', cls:'DEFENSE',
+  { id:'resfrost', name:'Thermal Lining', icon:'freeze', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.frost < RES_CAP,
     calc:m=>({v:0.08+0.07*m}),
-    desc:c=>`+${Math.round(c.v*100)}% frost resistance (now ${Math.round(Math.min(RES_CAP,player.res.frost+c.v)*100)}%) — shrugs off chill`,
+    desc:c=>`+${Math.round(c.v*100)}% frost resistance (now ${Math.round(Math.min(RES_CAP,player.res.frost+c.v)*100)}%)`,
     apply:c=>{ player.res.frost = Math.min(RES_CAP, player.res.frost + c.v); } },
-  { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE',
+  { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.shock < RES_CAP,
     calc:m=>({v:0.08+0.07*m}),
-    desc:c=>`+${Math.round(c.v*100)}% lightning resistance (now ${Math.round(Math.min(RES_CAP,player.res.shock+c.v)*100)}%) — fewer shock crits on you`,
+    desc:c=>`+${Math.round(c.v*100)}% lightning resistance (now ${Math.round(Math.min(RES_CAP,player.res.shock+c.v)*100)}%)`,
     apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
-  { id:'resall', name:'Elementalist Bricks', icon:'heart', cls:'DEFENSE',
+  { id:'resall', name:'Elementalist Bricks', icon:'heart', cls:'DEFENSE', minRar:'rare',
     req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
     calc:m=>({v:0.05+0.045*m}),
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
     apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
-  { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL',
+  { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} orbiting bricks (now ${player.orbit.n + c.n})`
       : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes`,
@@ -1914,7 +2057,7 @@ const UPGRADES = [
     calc:m=>({v:0.22+0.12*m}),
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
     apply:c=>{ player.orbit.spd = Math.min(ORBIT_MAX_SPD, player.orbit.spd*(1+c.v)); } },
-  { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL',
+  { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bricks per volley (now ${player.blaster.n + c.n})`
       : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor`,
@@ -1927,11 +2070,11 @@ const UPGRADES = [
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.blaster.rate *= (1-c.v); } },
-  { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL',
+  { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL', minRar:'uncommon',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased spell damage — bombs, orbit, blaster, storm bricks (now ${Math.round((player.incSpell+c.v)*100)}%)`,
+    desc:c=>`${Math.round(c.v*100)}% increased spell damage (now ${Math.round((player.incSpell+c.v)*100)}%)`,
     apply:c=>{ player.incSpell += c.v; } },
-  { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL',
+  { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=>{
       const n2 = player.chain.n + c.n, lp = n2-1;
@@ -1940,7 +2083,7 @@ const UPGRADES = [
         : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}${tail}`;
     },
     apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
-  { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL',
+  { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
     req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
     calc:m=>({n:spellCount(m)}),
     desc:c=>{
@@ -1956,7 +2099,7 @@ const UPGRADES = [
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.chain.rate = Math.max(CHAIN_MIN_RATE, player.chain.rate*(1-c.v)); } },
-  { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL',
+  { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm (now ${player.storm.n + c.n}) — wider sweeping spirals`
       : `Spell: a whirl of ${c.n*8} swords bursts out of you`,
@@ -1969,7 +2112,7 @@ const UPGRADES = [
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.storm.rate *= (1-c.v); } },
-  { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL',
+  { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.vortex.n + c.n}) — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
@@ -1983,7 +2126,7 @@ const UPGRADES = [
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
     apply:c=>{ player.vortex.rate *= (1-c.v);
       player.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, player.vortex.hitMul*(1-c.v*0.5)); } },
-  { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL',
+  { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.freeze.n + c.n}) — longer deep-freeze`
       : 'Spell: flash-freeze all enemies around you — no damage, pure crowd control',
@@ -1996,19 +2139,34 @@ const UPGRADES = [
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.freeze.rate *= (1-c.v); } },
-  { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL',
+  { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.bomb.n < BOMB_MAX,
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} bombs — compass spread (now ${player.bomb.n + c.n})`
-      : `Spell: launch ${1+c.n} bomb${c.n>0?'s':''} in a compass spread`,
-    apply:c=>{ player.bomb.n += c.n; } },
+    desc:(c,owned)=>{
+      const now = Math.min(BOMB_MAX, player.bomb.n + c.n);
+      return owned>0 ? `+${c.n} bombs — compass spread (now ${now} of ${BOMB_MAX})`
+        : `Spell: launch ${Math.min(BOMB_MAX,c.n)} bomb${c.n>1?'s':''} in a compass spread`;
+    },
+    apply:c=>{ player.bomb.n = Math.min(BOMB_MAX, player.bomb.n + c.n); } },
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m)), r:0.10+0.05*m}),
-    desc:c=>`Bombs +${c.v} dmg, +${Math.round(c.r*100)}% radius`,
-    apply:c=>{ player.bomb.dmg += c.v; player.bomb.r *= (1+c.r); } },
-  { id:'bombcd', name:'Quick Fuse', icon:'bolt', cls:'SPELL', req:()=>player.bomb.n>0,
+    calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
+    desc:c=>`Bombs +${c.v} flat damage, +${Math.round(c.r*100)}% radius (now ${Math.round(Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)))})`,
+    apply:c=>{ player.bomb.dmg += c.v; player.bomb.r = Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)); } },
+  { id:'bombcd', name:'Quick Fuse', icon:'bolt', cls:'SPELL',
+    req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
-    desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster`,
-    apply:c=>{ player.bomb.rate *= (1-c.v); } }
+    desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster (now ${Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)).toFixed(2)}s, floor ${BOMB_MIN_RATE.toFixed(1)}s)`,
+    apply:c=>{ player.bomb.rate = Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)); } },
+  { id:'cluster', name:'Cluster Charge', icon:'bomb', cls:'SPELL', minRar:'epic',
+    req:()=>player.bomb.n>0 && player.bomb.cluster < CLUSTER_MAX,
+    calc:m=>({n:1}),
+    desc:c=>{
+      const lv = player.bomb.cluster + 1;
+      return lv===1
+        ? `Every bomb bursts into 3-5 bomblets that scatter and detonate for ${Math.round(CLUSTER_FALLOFF*100)}% damage`
+        : `Bomblets burst again — a third wave at ${Math.round(CLUSTER_FALLOFF*CLUSTER_FALLOFF*100)}% damage`;
+    },
+    apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } }
 ];
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
@@ -2027,6 +2185,7 @@ const FAVOURITES = [
     ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
 ];
 let favourite = FAVOURITES[0];
+let godMode = false;
 let favSet = new Set();
 function setFavourite(id){
   favourite = FAVOURITES.find(f=>f.id===id) || FAVOURITES[0];
@@ -2034,6 +2193,103 @@ function setFavourite(id){
   try{ localStorage.setItem('bb_fav', favourite.id); }catch(e){}
   const row = document.getElementById('favRow');
   if(row) for(const el of row.children) el.classList.toggle('on', el.dataset.fav===favourite.id);
+}
+function setDifficulty(id){
+  difficulty = DIFFS[id] || DIFFS.hard;
+  try{ localStorage.setItem('bb_diff', id); }catch(e){}
+  const row = document.getElementById('diffRow');
+  if(row) for(const el of row.children){
+    const on = el.dataset.diff === id;
+    const col = DIFFS[el.dataset.diff].col;
+    el.classList.toggle('on', on);
+    el.style.borderColor = on ? col : 'rgba(255,255,255,.18)';
+    el.style.background = on ? col : 'rgba(9,13,17,.34)';
+    el.style.color = on ? '#12181d' : '#f0e6e6';
+    el.style.boxShadow = on ? `0 4px 0 ${sh(col,-0.35)}` : 'none';
+  }
+  const blurb = document.getElementById('diffBlurb');
+  if(blurb) blurb.textContent = difficulty.blurb;
+}
+function buildDiffRow(){
+  const row = document.getElementById('diffRow');
+  if(!row) return;
+  row.innerHTML = Object.keys(DIFFS).map(id=>
+    `<div class="diff" data-diff="${id}">${DIFFS[id].name}</div>`).join('');
+  for(const el of row.children)
+    el.addEventListener('click', ()=>{ SFX.click(); setDifficulty(el.dataset.diff); });
+  let saved = 'hard';
+  try{ saved = localStorage.getItem('bb_diff') || 'hard'; }catch(e){}
+  setDifficulty(DIFFS[saved] ? saved : 'hard');
+}
+
+/* =============================== TEST BENCH =============================== */
+/* A developer shortcut: hand yourself any brick at epic and max it out, or jump
+   straight to a wave. F1 toggles it during play. */
+function grantMaxed(id){
+  const u = UPGRADES.find(x=>x.id===id);
+  if(!u) return;
+  /* push it until its own cap stops it, or 8 epic picks for anything uncapped */
+  let n = 0;
+  for(let i=0;i<8;i++){
+    if(u.req && !u.req()) break;
+    u.apply(u.calc(RARITY.epic.mult));
+    taken[id] = (taken[id]||0)+1;
+    n++;
+  }
+  if(n===0){ u.apply(u.calc(RARITY.epic.mult)); taken[id] = (taken[id]||0)+1; }
+  buildCheatRows();
+}
+function buildCheatRows(){
+  const waves = document.getElementById('cheatWaves');
+  if(!waves) return;
+  waves.innerHTML = [1,5,10,15,20,25,30,40,50].map(n=>
+    `<div class="cheatbtn" data-wave="${n}">WAVE ${n}</div>`).join('');
+  for(const el of waves.children)
+    el.addEventListener('click', ()=>{
+      const n = +el.dataset.wave;
+      enemies.length = 0; projectiles.length = 0; hazards.length = 0;
+      startWave(n); SFX.click(); toggleCheat();
+    });
+
+  const diffs = document.getElementById('cheatDiffs');
+  diffs.innerHTML = Object.keys(DIFFS).map(id=>
+    `<div class="cheatbtn${difficulty===DIFFS[id]?' got':''}" data-diff="${id}">${DIFFS[id].name}</div>`).join('');
+  for(const el of diffs.children)
+    el.addEventListener('click', ()=>{ setDifficulty(el.dataset.diff); SFX.click(); buildCheatRows(); });
+
+  const ups = document.getElementById('cheatUps');
+  ups.innerHTML = UPGRADES.map(u=>
+    `<div class="cheatbtn${taken[u.id]?' got':''}" data-up="${u.id}">${esc(u.name)}${taken[u.id]?' ×'+taken[u.id]:''}</div>`).join('');
+  for(const el of ups.children)
+    el.addEventListener('click', ()=>{ grantMaxed(el.dataset.up); SFX.pick(); });
+
+  const misc = document.getElementById('cheatMisc');
+  misc.innerHTML = [
+    ['heal','FULL HEARTS'], ['hearts','+20 MAX HEARTS'], ['studs','+1000 STUDS'],
+    ['level','+5 LEVELS'], ['clear','CLEAR THE FIELD'], ['god','TOGGLE GOD MODE']
+  ].map(([k,label])=>`<div class="cheatbtn${k==='god'&&godMode?' got':''}" data-misc="${k}">${label}</div>`).join('');
+  for(const el of misc.children)
+    el.addEventListener('click', ()=>{
+      const k = el.dataset.misc, p = player;
+      if(k==='heal') p.hp = p.maxHp;
+      else if(k==='hearts'){ p.maxHp = Math.min(HEART_MAX, p.maxHp+20); p.hp = p.maxHp; }
+      else if(k==='studs') p.studs += 1000;
+      else if(k==='level'){ for(let i=0;i<5;i++){ p.level++; p.incAll += 0.05; } }
+      else if(k==='clear'){ for(const e of enemies) e.dead = true; }
+      else if(k==='god') godMode = !godMode;
+      SFX.click(); buildCheatRows();
+    });
+}
+function toggleCheat(){
+  if(state==='play'){
+    buildCheatRows();
+    document.getElementById('cheatScreen').classList.remove('hidden');
+    state = 'cheat'; cv.style.cursor='default';
+  } else if(state==='cheat'){
+    document.getElementById('cheatScreen').classList.add('hidden');
+    state = 'play'; cv.style.cursor='none';
+    try{ window.focus(); }catch(err){}
+  }
 }
 function buildFavRow(){
   const row = document.getElementById('favRow');
@@ -2066,17 +2322,30 @@ function pickChoices(mode){
   choices = [];
   const take = (from)=>{
     if(!from.length) return null;
+    /* roll the rarity FIRST, then draw only from what that tier is allowed to offer */
+    let rar = forcedRarity || rollRarity(mode);
+    let cands = from.filter(u=>rarAllows(u, rar));
+    for(let tries=0; !cands.length && tries<4 && !forcedRarity; tries++){
+      rar = rollRarity(mode);
+      cands = from.filter(u=>rarAllows(u, rar));
+    }
+    if(!cands.length){
+      /* nothing at that tier — take any card and lift the roll to its own floor */
+      cands = from;
+      rar = RAR_ORDER[Math.max(rarRank(rar), Math.min(...cands.map(u=>rarRank(u.minRar||'common'))))];
+      cands = from.filter(u=>rarAllows(u, rar));
+      if(!cands.length) return null;
+    }
     /* favourite bricks are drawn heavier, never guaranteed */
     let total = 0;
-    for(const u of from) total += favSet.has(u.id) ? FAV_WEIGHT : 1;
-    let r = Math.random()*total, t = from[from.length-1];
-    for(const u of from){
+    for(const u of cands) total += favSet.has(u.id) ? FAV_WEIGHT : 1;
+    let r = Math.random()*total, t = cands[cands.length-1];
+    for(const u of cands){
       r -= favSet.has(u.id) ? FAV_WEIGHT : 1;
       if(r < 0){ t = u; break; }
     }
     const pi = pool.indexOf(t);
     if(pi >= 0) pool.splice(pi, 1);
-    const rar = forcedRarity || rollRarity(mode);
     choices.push({ t, rar, c: t.calc(RARITY[rar].mult) });
     return t;
   };
@@ -2154,8 +2423,18 @@ function spellSummaries(){
   }
   if(p.bomb.n>0){
     const d = calcDamage(p.bomb.dmg,'spell');
+    let clusterLine = '';
+    if(p.bomb.cluster > 0){
+      let tot = d, gen = d;
+      for(let g=1; g<=p.bomb.cluster; g++){ gen *= CLUSTER_FALLOFF; tot += gen*4; }
+      clusterLine = `Cluster ×${p.bomb.cluster}: 3-5 bomblets per blast at `+
+        `${Math.round(Math.pow(CLUSTER_FALLOFF,1)*100)}%`+
+        (p.bomb.cluster>1?` then ${Math.round(Math.pow(CLUSTER_FALLOFF,2)*100)}%`:'')+
+        ` — about ${per(tot)} from one bomb\n`;
+    }
     out.push({ id:'bombplus', icon:'bomb', name:'Bomb Volley', head:per(d)+' per blast', tip:
-      `${p.bomb.n} bomb${p.bomb.n>1?'s':''} every ${p.bomb.rate.toFixed(2)}s\n`+
+      `${p.bomb.n} bomb${p.bomb.n>1?'s':''} of ${BOMB_MAX} every ${p.bomb.rate.toFixed(2)}s\n`+
+      clusterLine+
       `${per(d)} in a ${Math.round(p.bomb.r)} radius — ${p.bomb.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
   }
@@ -2201,8 +2480,11 @@ function renderCards(){
 }
 /* =============================== CHARACTER SHEET =============================== */
 const esc = t=> String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function sRow(label, value, sub){
-  return `<div class="srow"><span>${label}${sub?`<small>${esc(sub)}</small>`:''}</span><b>${esc(value)}</b></div>`;
+/* `tip` turns the row into a hover card: what the stat IS, and what it is doing
+   for you right now. The cards themselves stay terse — the glossary lives here. */
+function sRow(label, value, sub, tip){
+  const cls = tip ? ' class="srow tip" data-tip="'+esc(tip)+'"' : ' class="srow"';
+  return `<div${cls}><span>${label}${sub?`<small>${esc(sub)}</small>`:''}</span><b>${esc(value)}</b></div>`;
 }
 function sBlock(title, rows, extra=''){
   return `<div class="sblock"><h4>${title}</h4>${extra}${rows.join('')}</div>`;
@@ -2236,12 +2518,28 @@ function renderCharSheet(){
     sRow('Armour', Math.round(armourValue()),
       p.curse.armor>0 ? `BRITTLE — cut from ${Math.round(p.armour*(1+p.incArmour))}`
         : p.armour>0 ? `${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased)`
-        : 'no armour — attack hits land in full'),
+        : 'no armour — attack hits land in full',
+      `ARMOUR reduces ATTACK hits — never spells.\n`+
+      `Damage reduction = Armour / (Armour + 5 × hit damage),\n`+
+      `so a big hit punches through armour that shrugs off a small one.\n`+
+      `Flat armour adds to the total; increased armour is additive in its own pool.\n\n`+
+      `Yours: ${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased) = ${Math.round(armourValue())}\n`+
+      `A 6-damage hit: ${Math.round(armourValue())} / (${Math.round(armourValue())} + 30) = `+
+      `${Math.round(armourDR(armourValue(),6)*100)}% less → you take ${(6*(1-armourDR(armourValue(),6))).toFixed(1)}`),
     sRow('Attack mitigation',
       p.armour>0 ? `${Math.round(armourDR(armourValue(),2)*100)}% / ${Math.round(armourDR(armourValue(),6)*100)}% / ${Math.round(armourDR(armourValue(),12)*100)}%` : '—',
-      'against a 2 / 6 / 12 damage hit — big hits punch through'),
+      'against a 2 / 6 / 12 damage hit',
+      `The same armour is worth less the harder you are hit.\n\n`+
+      [2,6,12,30].map(h=>`${h} damage → ${(h*(1-armourDR(armourValue(),h))).toFixed(1)} taken (${Math.round(armourDR(armourValue(),h)*100)}% less)`).join('\n')+
+      `\n\nCapped at ${Math.round(ARMOUR_DR_CAP*100)}% — nothing is ever immune.`),
     sRow('Spell suppression', Math.round(suppressChance()*100)+'%',
-      suppressChance()>0 ? `a suppressed spell hit deals ${Math.round(SUPPRESS_TAKEN*100)}%` : 'spell hits land in full'),
+      suppressChance()>0 ? `a suppressed spell hit deals ${Math.round(SUPPRESS_TAKEN*100)}%` : 'spell hits land in full',
+      `SPELL SUPPRESSION is a separate layer from armour and resistance.\n`+
+      `It is a CHANCE to suppress an incoming spell hit; a suppressed hit\n`+
+      `deals ${Math.round(SUPPRESS_TAKEN*100)}% of its damage. At 100% every spell hit is suppressed.\n`+
+      `Attack hits are never suppressed — those meet armour instead.\n\n`+
+      `Yours: ${Math.round(suppressChance()*100)}% chance.\n`+
+      `A 10-damage spell hit averages ${(10*(1 - suppressChance()*(1-SUPPRESS_TAKEN))).toFixed(1)} against you.`),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
       p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
         : p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
@@ -2270,21 +2568,51 @@ function renderCharSheet(){
   const crit = sBlock('CRITICALS', [
     sRow('Crit chance', (cc*100).toFixed(1)+'%',
       `${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round(p.incCrit*100)}% increased)`
-      + (cc>=CRIT_CHANCE_CAP ? ' — at the cap' : '')),
+      + (cc>=CRIT_CHANCE_CAP ? ' — at the cap' : ''),
+      `Final crit chance = Base × (1 + total increased).\n`+
+      `Increases are additive with one another, then multiply the base once.\n\n`+
+      `Yours: ${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round(p.incCrit*100)}%) = ${(cc*100).toFixed(1)}%\n`+
+      `Capped at ${Math.round(CRIT_CHANCE_CAP*100)}%.`),
     sRow('Crit multiplier', critMultPct()+'%',
       `a crit deals ${critMultPct()}% of the hit`
-      + (critMultPct()>=CRIT_MULT_CAP ? ' — at the cap' : '')),
+      + (critMultPct()>=CRIT_MULT_CAP ? ' — at the cap' : ''),
+      `Crit multiplier is how much of the hit a critical strike deals.\n`+
+      `${CRIT_MULT_BASE}% is the base; +X% to multiplier adds points to it.\n\n`+
+      `Yours: ${CRIT_MULT_BASE}% base + ${critMultPct()-CRIT_MULT_BASE}% = ${critMultPct()}%\n`+
+      `Your ${light.toFixed(1)} sword hit crits for ${(light*critMult()).toFixed(1)}.\n`+
+      `Capped at ${CRIT_MULT_CAP}%.`),
     sRow('Average multiplier', '×'+critAvg.toFixed(2), 'expected damage across all hits')
   ], sBar(cc, '#ffd166'));
 
   const power = sBlock('DAMAGE PIPELINE', [
     sRow('Sword base + flat', swordBase().toFixed(1),
-      `${SWORD_BASE} base + ${p.flatSword.toFixed(0)} flat added`),
-    sRow('Increased damage', Math.round(p.incAll*100)+'%', '+5% per level — applies to everything'),
-    sRow('Increased melee', Math.round(p.incMelee*100)+'%', 'sword, bladestorm & vortex'),
-    sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks'),
+      `${SWORD_BASE} base + ${p.flatSword.toFixed(0)} flat added`,
+      `FLAT added damage is summed with the base BEFORE anything scales it,\n`+
+      `so flat is worth most when you already have big increases, and vice versa.\n\n`+
+      `Damage = (Base + Flat) × (1 + increased) × each more multiplier\n`+
+      `Yours:  (${SWORD_BASE} + ${p.flatSword.toFixed(0)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)} = ${light.toFixed(2)}`),
+    sRow('Increased damage', Math.round(p.incAll*100)+'%', '+5% per level — applies to everything',
+      `INCREASED modifiers of the same kind are ADDITIVE with one another,\n`+
+      `then multiply the base once.\n`+
+      `50% increased + 30% increased = ×1.80, NOT ×1.50 × 1.30.\n\n`+
+      `Yours: ${Math.round(p.incAll*100)}% from levels + ${Math.round(p.incMelee*100)}% melee`+
+      ` = ×${(1+p.incAll+p.incMelee).toFixed(2)} on a sword hit.`),
+    sRow('Increased melee', Math.round(p.incMelee*100)+'%', 'sword, bladestorm & vortex',
+      `Adds into the same pool as your increased damage, for melee only.\n\n`+
+      `Sword: (${SWORD_BASE} + ${p.flatSword.toFixed(0)} flat) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) = `+
+      `${((SWORD_BASE+p.flatSword)*(1+p.incAll+p.incMelee)).toFixed(2)} before more multipliers.`),
+    sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks',
+      `The spell half of the same pool. Bladestorm and vortex are melee, not spells.\n\n`+
+      `A 5-base spell hit: 5 × (1 + ${Math.round((p.incAll+p.incSpell)*100)}%) × ${p.moreAll.toFixed(2)} = `+
+      `${calcDamage(5,'spell').toFixed(2)}`),
     sRow('More multipliers', '×'+p.moreAll.toFixed(2),
-      'each MORE modifier multiplies on its own, after every increase'),
+      'each MORE modifier multiplies on its own',
+      `MORE modifiers are NOT added together — each one is its own multiplier,\n`+
+      `applied after every increase.\n`+
+      `50% more + 30% more = ×1.50 × 1.30 = ×1.95, not ×1.80.\n`+
+      `That is why they are rare and why they stay strong on a big build.\n\n`+
+      `Yours: ×${p.moreAll.toFixed(3)} on every hit.\n`+
+      `The spin swing is a separate 40% more on top.`),
     sRow('Sword hit', light.toFixed(2),
       `(${SWORD_BASE} + ${p.flatSword.toFixed(0)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)}`)
   ]);
@@ -2300,7 +2628,12 @@ function renderCharSheet(){
 
   const resist = sBlock('ELEMENTAL RESISTANCE', [
     sRow('Fire', pct((1-elemTake('fire'))),
-      p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.fire)}` : 'burn damage and duration'),
+      p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.fire)}` : 'burn damage and duration',
+      `RESISTANCE scales down both the elemental damage of a hit AND the\n`+
+      `strength of the ailment it applies. Capped at ${Math.round(RES_CAP*100)}%.\n\n`+
+      `Yours: ${pct(1-elemTake('fire'))} fire.\n`+
+      `A 10-damage fire hit lands for ${(10*elemTake('fire')).toFixed(1)},\n`+
+      `and a burn that would be 3 damage applies as ${(3*elemTake('fire')).toFixed(1)}.`),
     sRow('Frost', pct((1-elemTake('frost'))),
       p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.frost)}` : 'chill stacks applied'),
     sRow('Lightning', pct((1-elemTake('shock'))),
@@ -2496,7 +2829,9 @@ function updatePlayer(dt){
   p.moving = (ax!==0||ay!==0);
   const spdMul = chillMul();   /* chill stacks are the only movement penalty */
   let vx, vy;
-  if(p.dash.t>0){
+  if(p.stunT > 0){
+    vx = 0; vy = 0; p.moving = false;      /* frozen solid — no moving, no swinging */
+  } else if(p.dash.t>0){
     p.dash.t -= dt;
     vx = p.dash.dir.x*640; vy = p.dash.dir.y*640;
     if(Math.random()<0.6) addDust(p.x, p.y+2, 1);
@@ -2506,15 +2841,16 @@ function updatePlayer(dt){
     if(p.moving){ p.walk += dt*11*spdMul;
       p.stepT -= dt; if(p.stepT<=0){ addDust(p.x,p.y,1); p.stepT=0.22; } }
   }
+  p.leadX = p.x; p.leadY = p.y; p.leadDt = dt;   /* sampled for lead-targeting */
   p.x += (vx + p.kx)*dt; p.y += (vy + p.ky)*dt;
   p.kx *= Math.max(0,1-8*dt); p.ky *= Math.max(0,1-8*dt);
   collideWorld(p);
-  if(keys.Space && p.dash.cd<=0 && !p.swing){
+  if(keys.Space && p.dash.cd<=0 && !p.swing && p.stunT<=0){
     p.dash.t = 0.18; p.dash.cd = p.dash.cdMax;
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
     SFX.dash(); addDust(p.x,p.y,5);
   }
-  if(mouse.down && !p.swing && p.atkCd<=0) startSwing(aimA);
+  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0) startSwing(aimA);
   if(p.swing){
     const s = p.swing;
     s.t += dt;
@@ -2535,7 +2871,8 @@ function updatePlayer(dt){
         }
       }
       for(const pr of projectiles){
-        if((pr.kind!=='arrow' && pr.kind!=='skull' && pr.kind!=='hexbolt') || pr.owner!=='enemy') continue;
+        /* curse bolts are not deflectable — you have to move */
+        if((pr.kind!=='arrow' && pr.kind!=='skull') || pr.owner!=='enemy') continue;
         const d = dist(p,pr);
         if(d < s.reach+6){
           let within = s.spin || inSweep(Math.atan2(pr.y-p.y,pr.x-p.x), s.from, s.to, e, 0.5);
@@ -2677,11 +3014,13 @@ function updatePlayer(dt){
       const minR = bo.n>1 ? Math.min(bo.r*2, 380) : 0;
       const rng0 = clamp(Math.max(minR, dist(p,{x:tx0,y:ty0})), 60, 400);
       const T = clamp(rng0/460, 0.32, 0.8);
-      for(let i=0;i<bo.n;i++){
+      const count = Math.min(BOMB_MAX, bo.n);
+      for(let i=0;i<count;i++){
         const off = BOMB_DIRS[i % BOMB_DIRS.length];
         projectiles.push({ kind:'bomb', x:p.x, y:p.y-10, sx:p.x, sy:p.y-10,
           tx:p.x+Math.cos(baseA+off)*rng0, ty:p.y+Math.sin(baseA+off)*rng0,
-          t:0, dur:T, spin:rnd(TAU) });
+          t:0, dur:T, spin:rnd(TAU),
+          dmg:calcDamage(bo.dmg,'spell'), r:bo.r, gen:0, cluster:bo.cluster });
       }
       SFX.swing();
     }
@@ -3191,11 +3530,14 @@ function updateEnemy(e, dt){
         e.mode='chase'; e.atkCd = e.fire;
         const n = e.elite ? 3 : 2;
         for(let i=0;i<n;i++){
+          const dur = rnd(0.75,1.0);
+          /* aim at where you are heading, plus the fuse they will sit on */
+          const lead = leadPlayer(e.x, e.y, dur + 1.6, 0.85);
           projectiles.push({kind:'pumpkin', sx:e.x, sy:e.y-26,
-            tx:clamp(player.x+rnd(-90,90), W.wall+50, W.w-W.wall-50),
-            ty:clamp(player.y+rnd(-90,90), W.wall+50, W.h-W.wall-50),
-            t:0, dur:rnd(0.75,1.0), spin:rnd(TAU), delay:i*0.22,
-            fuse:3, r:fireRadius(e, 132) });
+            tx:clamp(lead.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
+            ty:clamp(lead.y+rnd(-50,50), W.wall+50, W.h-W.wall-50),
+            t:0, dur, spin:rnd(TAU), delay:i*0.22,
+            fuse:3, r:fireRadius(e, 86) });
         }
         SFX.grunt();
       }
@@ -3761,10 +4103,12 @@ function updateBoss(b, dt, toP, dP){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
         for(let i=0;i<n;i++){
+          const dur = rnd(0.7,0.95);
+          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(player.x+rnd(-110,110), 120, W.w-120),
-            ty:clamp(player.y+rnd(-110,110), 120, W.h-120),
-            t:0, dur:rnd(0.7,0.95), spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
+            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
+            t:0, dur, spin:rnd(TAU), delay:i*0.12});
         }
         SFX.grunt();
       }
@@ -3870,10 +4214,12 @@ function updateBoss(b, dt, toP, dP){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.9:2.8;
         const n = 3 + Math.min(3, tier) + (enr?2:0);
         for(let i=0;i<n;i++){
+          const dur = rnd(0.8,1.05);
+          const lead = leadPlayer(b.x, b.y, dur + i*0.1, 0.8);
           projectiles.push({kind:'molten', sx:b.x, sy:b.y-30,
-            tx:clamp(player.x+rnd(-180,180), W.wall+60, W.w-W.wall-60),
-            ty:clamp(player.y+rnd(-180,180), W.wall+60, W.h-W.wall-60),
-            t:0, dur:rnd(0.8,1.05), spin:rnd(TAU), delay:i*0.1, fr:fireRadius(b, 66)});
+            tx:clamp(lead.x+rnd(-120,120), W.wall+60, W.w-W.wall-60),
+            ty:clamp(lead.y+rnd(-120,120), W.wall+60, W.h-W.wall-60),
+            t:0, dur, spin:rnd(TAU), delay:i*0.1, fr:fireRadius(b, 66)});
         }
       }
     }
@@ -3905,10 +4251,12 @@ function updateBoss(b, dt, toP, dP){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
         for(let i=0;i<n;i++){
+          const dur = rnd(0.7,0.95);
+          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(player.x+rnd(-110,110), 120, W.w-120),
-            ty:clamp(player.y+rnd(-110,110), 120, W.h-120),
-            t:0, dur:rnd(0.7,0.95), spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
+            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
+            t:0, dur, spin:rnd(TAU), delay:i*0.12});
         }
         SFX.grunt();
       }
@@ -3943,8 +4291,9 @@ function updateBoss(b, dt, toP, dP){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.0:2.9;
         const n = 10 + tier*2 + (enr?6:0);
         for(let i=0;i<n;i++){
-          const tx = clamp(player.x + rnd(-340,340), W.wall+60, W.w-W.wall-60);
-          const ty = clamp(player.y + rnd(-340,340), W.wall+60, W.h-W.wall-60);
+          const lead = leadPlayer(b.x, b.y, 1.0 + i*0.09, 0.7);
+          const tx = clamp(lead.x + rnd(-280,280), W.wall+60, W.w-W.wall-60);
+          const ty = clamp(lead.y + rnd(-280,280), W.wall+60, W.h-W.wall-60);
           projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
             t:0, dur:rnd(0.8,1.15), spin:rnd(TAU), delay:i*0.09, fr:fireRadius(b, 54)});
         }
@@ -3980,10 +4329,12 @@ function updateBoss(b, dt, toP, dP){
         b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.8:2.6;
         const n = 4 + tier;
         for(let i=0;i<n;i++){
+          const dur = rnd(0.7,0.95);
+          const lead = leadPlayer(b.x, b.y, dur + i*0.12, 0.9);
           projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-            tx:clamp(player.x+rnd(-110,110), 120, W.w-120),
-            ty:clamp(player.y+rnd(-110,110), 120, W.h-120),
-            t:0, dur:rnd(0.7,0.95), spin:rnd(TAU), delay:i*0.12});
+            tx:clamp(lead.x+rnd(-70,70), 120, W.w-120),
+            ty:clamp(lead.y+rnd(-70,70), 120, W.h-120),
+            t:0, dur, spin:rnd(TAU), delay:i*0.12});
         }
         SFX.grunt();
       }
@@ -4012,8 +4363,8 @@ function updateSuperBoss(b, dt, toP, dP){
     if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
     if(b.nextAtk<=0){
       b.cycle = (b.cycle+1)%4;
-      const order = ['slamWind','volleyWind','summonWind'];
-      b.mode = b.cycle===3 ? b.sig+'Wind' : order[b.cycle];
+      const order = ['slamWind','missileWind','volleyWind','summonWind'];
+      b.mode = b.cycle===3 ? b.sig+'Wind' : order[b.cycle % order.length];
       b.modeT = 0;
       SFX.roar();
     }
@@ -4040,10 +4391,12 @@ function updateSuperBoss(b, dt, toP, dP){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.6:2.4;
       const n = 8 + Math.min(6,tier);
       for(let i=0;i<n;i++){
+        const dur = rnd(0.7,0.95);
+        const lead = leadPlayer(b.x, b.y, dur + i*0.09, 0.95);
         projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
-          tx:clamp(player.x+rnd(-140,140), 120, W.w-120),
-          ty:clamp(player.y+rnd(-140,140), 120, W.h-120),
-          t:0, dur:rnd(0.7,0.95), spin:rnd(TAU), delay:i*0.09});
+          tx:clamp(lead.x+rnd(-80,80), 120, W.w-120),
+          ty:clamp(lead.y+rnd(-80,80), 120, W.h-120),
+          t:0, dur, spin:rnd(TAU), delay:i*0.09});
       }
       SFX.grunt();
     }
@@ -4060,6 +4413,24 @@ function updateSuperBoss(b, dt, toP, dP){
           clamp(b.y+Math.sin(a)*130, 120, W.h-120), i<2);
       }
       addRing(b.x,b.y,20,300,150,'#ffd166',6,0.5);
+    }
+  }
+  else if(b.mode==='missileWind'){
+    /* a salvo of seeking bricks — they turn, so running in a straight line
+       is not enough; you have to break their line of sight or out-turn them */
+    b.modeT += dt; b.moving=false;
+    if(b.modeT>=0.75){
+      b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.5:2.2;
+      const n = enr ? 7 : 5;
+      for(let i=0;i<n;i++){
+        const a2 = Math.atan2(player.y-b.y, player.x-b.x) + (i-(n-1)/2)*0.4;
+        projectiles.push({kind:'skull', x:b.x, y:b.y-24,
+          vx:Math.cos(a2)*215, vy:Math.sin(a2)*215,
+          owner:'enemy', dmg:1, life:6, homing:true, turn:1.5+0.15*i,
+          missile:true, spin:rnd(TAU), delay:i*0.08});
+      }
+      addRing(b.x,b.y,20,360,170,'#ffd166',7,0.5);
+      SFX.roar();
     }
   }
   else if(b.mode==='novaWind'){
@@ -4097,8 +4468,9 @@ function updateSuperBoss(b, dt, toP, dP){
       b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.0:2.9;
       const n = 16;
       for(let i=0;i<n;i++){
-        const tx = clamp(player.x + rnd(-300,300), W.wall+60, W.w-W.wall-60);
-        const ty = clamp(player.y + rnd(-300,300), W.wall+60, W.h-W.wall-60);
+        const lead = leadPlayer(b.x, b.y, 1.0 + i*0.08, 0.75);
+        const tx = clamp(lead.x + rnd(-240,240), W.wall+60, W.w-W.wall-60);
+        const ty = clamp(lead.y + rnd(-240,240), W.wall+60, W.h-W.wall-60);
         projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
           t:0, dur:rnd(0.8,1.1), spin:rnd(TAU), delay:i*0.08, fr:fireRadius(b, 54)});
       }
@@ -4122,6 +4494,7 @@ function updateProjectiles(dt){
     pr.px = pr.x; pr.py = pr.y;
     if(pr.kind==='arrow' || pr.kind==='skull' || pr.kind==='frostbolt' || pr.kind==='bolt'
        || pr.kind==='hexbolt'){
+      if(pr.delay > 0){ pr.delay -= dt; continue; }
       if(pr.kind==='skull' && pr.homing && !pr.deflected){
         const ta = Math.atan2(player.y-pr.y, player.x-pr.x);
         const ca = Math.atan2(pr.vy, pr.vx);
@@ -4226,7 +4599,30 @@ function updateProjectiles(dt){
       pr.x = lerp(pr.sx, pr.tx, k); pr.y = lerp(pr.sy, pr.ty, k);
       pr.z = 26 + 120*Math.sin(Math.PI*k);
       pr.spin += dt*8;
-      if(k>=1){ pr.dead=true; explode(pr.x, pr.y, player.bomb.r, calcDamage(player.bomb.dmg,'spell'), {source:'bomb'}); SFX.bomb(); }
+      if(k>=1){
+        pr.dead = true;
+        const br = pr.r ?? player.bomb.r;
+        explode(pr.x, pr.y, br, pr.dmg ?? calcDamage(player.bomb.dmg,'spell'), {source:'bomb'});
+        SFX.bomb();
+        /* Cluster Charge: the blast throws out bomblets that scatter and go off
+           again, each generation weaker — the same falloff idea as chain lightning */
+        const gen = pr.gen || 0;
+        const liveBombs = projectiles.reduce((a,q)=> a + (q.kind==='bomb' && !q.dead ? 1 : 0), 0);
+        if(gen < (pr.cluster||0) && liveBombs < 80){
+          const n = gen===0 ? irnd(3,5) : irnd(2,3);   /* the second split is tighter */
+          const base = rnd(TAU);
+          for(let i=0;i<n;i++){
+            const a = base + i*TAU/n + rnd(-0.3,0.3);
+            const dd = br * rnd(0.8, 1.6);
+            projectiles.push({ kind:'bomb', x:pr.x, y:pr.y, sx:pr.x, sy:pr.y,
+              tx:clamp(pr.x+Math.cos(a)*dd, W.wall+30, W.w-W.wall-30),
+              ty:clamp(pr.y+Math.sin(a)*dd, W.wall+30, W.h-W.wall-30),
+              t:0, dur:rnd(0.34,0.5), spin:rnd(TAU),
+              dmg:(pr.dmg ?? 0) * CLUSTER_FALLOFF,
+              r:br * 0.62, gen:gen+1, cluster:pr.cluster, small:true });
+          }
+        }
+      }
     }
     else if(pr.kind==='pumpkin'){
       if(pr.x===undefined){ pr.x = pr.sx; pr.y = pr.sy; pr.px = pr.sx; pr.py = pr.sy; }
@@ -5906,8 +6302,9 @@ function render(){
     }
     else if(LOB_CONF[pr.kind] || pr.kind==='bomb'){
       const lc = LOB_CONF[pr.kind] || {sc:1, cols:[PAL.red, PAL.dred]};
-      const cols = pr.kind==='bomb' ? [PAL.red, PAL.dred] : lc.cols;
-      const sc = lc.sc || 1;
+      const cols = pr.kind==='bomb'
+        ? (pr.gen ? ['#fe8a18','#b5540a'] : [PAL.red, PAL.dred]) : lc.cols;
+      const sc = (lc.sc || 1) * (pr.kind==='bomb' ? Math.pow(0.7, pr.gen||0) : 1);
       ctx.fillStyle='rgba(15,30,20,0.25)';
       ctx.beginPath(); ctx.ellipse(pr.x, pr.y, 10*sc, 4*sc, 0, 0, TAU); ctx.fill();
       ctx.save(); ctx.translate(pr.x, pr.y - (pr.z||10)); ctx.rotate(pr.spin); ctx.scale(sc,sc);
@@ -6527,6 +6924,7 @@ function updateCamera(raw, tx0, ty0){
 }
 function startGame(){
   audioInit();
+  document.getElementById('cheatScreen').classList.add('hidden');
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('titleScreen').classList.add('hidden');
   resetRun(false);
@@ -6558,6 +6956,7 @@ function togglePause(){
     document.getElementById('pauseScreen').classList.add('hidden'); }
 }
 function backToTitle(){
+  document.getElementById('cheatScreen').classList.add('hidden');
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
   document.getElementById('pauseScreen').classList.add('hidden');
@@ -6648,6 +7047,7 @@ function frame(now){
 }
 resetRun(true);
 buildFavRow();
+buildDiffRow();
 showBest();
 requestAnimationFrame(frame);
 })();
