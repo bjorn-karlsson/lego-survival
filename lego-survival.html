@@ -337,6 +337,13 @@ const MAX_ALIVE = 512;
 const CS = 40;
 const RING_MAX = 320;
 const REV_MAX = 260;
+/* Studs fuse into the next tier only when a real pile has formed, and a pile
+   forms by studs settling next to each other over time. */
+const MERGE_NEAR  = 62;       /* how close two studs must be to count as one pile */
+const MERGE_DRIFT = 150;      /* how far a stud will look for a neighbour to join */
+const MERGE_CREEP = 42;       /* px/s — a settle, not a flight */
+const MERGE_AGE   = 3.0;      /* a stud has to lie still this long before it drifts */
+const HEART_REGEN = 0.015;    /* what a heart on the ground is worth now */
 const MAGNET_SPEED = 1500;    /* px/s straight at the hero while a magnet is up */
 const HEARTS_PER_ROW = 16;
 const HEART_MAX = 999;
@@ -435,11 +442,20 @@ const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead o
 const VORTEX_MIN_HITMUL = 0.45;
 const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above this they strobe */
 const OVERSEER_MAX_STACKS = 3;
-const AIL_MAX = 6;            /* chill / shock stack ceiling */
+/* Ailment stacks are NOT capped. Every fifth one is spent breaking something and
+   leaves a BRAND behind: a lasting mark that eats that element's resistance and
+   stacks without limit, so the tenth fire that lands on you hurts more than the
+   first did. Resistance can go negative — a thoroughly branded hero takes more
+   than the full hit. */
 const AIL_BREAK = 5;          /* the fifth stack breaks something */
+const BRAND_STEP = 0.11;      /* resistance lost per brand stack */
+const BRAND_T = 22;           /* seconds a brand lasts; new ones refresh it */
+const RES_FLOOR = -1.0;       /* resistance can be dragged to -100%: double damage */
+const BRAND_NAME = { fire:'BURNT', frost:'FROSTBITTEN', shock:'CONDUCTIVE' };
+const BRAND_COL  = { fire:'#ff6a2a', frost:'#7fb9e0', shock:'#e0a81a' };
 const STUN_T = 3;             /* frozen solid, in seconds, before resistance */
-const SUNDER_FIRE_T = 20;     /* scorched: fire resistance cut, in seconds */
-const SUNDER_FIRE = 0.5;      /* ...by this much of what you have */
+/* scorch used to be a single flat cut to fire resistance on a timer; brands
+   replaced it with a stacking one (see BRAND_STEP) */
 const BURN_DUR = 12;          /* one fire burns for this long */
 /* Everything about the fires currently on you, read straight off the stack list. */
 function burnList(){ return (player.burn && player.burn.list) || []; }
@@ -484,11 +500,15 @@ const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb']);
 const ELEMENTS = ['fire','frost','shock'];
 const ELEM_COL = { fire:'#ff8a3c', frost:'#bfe3ff', shock:'#ffe95a' };
 /* Imp master curses. Each weakens the hero without touching their hearts. */
+/* Curses STACK. Each hex that lands adds another step and refreshes the whole
+   pile's timer, so a hexer you leave alive grinds you down instead of parking
+   you at one fixed penalty. The caps only stop the numbers going absurd — they
+   are deliberately much higher than one application. */
 const CURSES = {
-  resist:{ name:'SUNDERED',  col:'#9b45d6', step:0.18, cap:0.7, tip:'elemental resistance cut' },
-  haste: { name:'LEADEN',    col:'#c9b8e8', step:0.16, cap:0.6, tip:'swings come slower' },
-  armor: { name:'BRITTLE',   col:'#7fb9e0', step:0.20, cap:0.75, tip:'armour weakened' },
-  regen: { name:'WITHERED',  col:'#a5ca18', step:0.25, cap:0.85, tip:'regeneration choked' }
+  resist:{ name:'SUNDERED',  col:'#9b45d6', step:0.12, cap:0.90, tip:'elemental resistance cut' },
+  haste: { name:'LEADEN',    col:'#c9b8e8', step:0.11, cap:1.50, tip:'swings come slower' },
+  armor: { name:'BRITTLE',   col:'#7fb9e0', step:0.13, cap:0.92, tip:'armour weakened' },
+  regen: { name:'WITHERED',  col:'#a5ca18', step:0.16, cap:0.95, tip:'regeneration choked' }
 };
 const CURSE_KEYS = Object.keys(CURSES);
 /* cave biome pockets (Rock Raiders territory) — seeded per run in buildGround */
@@ -812,8 +832,9 @@ function newPlayer(){
     invuln:0, flash:0, xp:0, xpNext:10, level:1, magnetR:95, magnetT:0,
     kx:0, ky:0,
     fortuneT:0, fortuneMul:1, slowT:0,
-    /* elemental ailments. chill and shock stack up to AIL_MAX and decay when
-       nothing refreshes them; burn keeps one entry per fire (see below). */
+    /* elemental ailments. Chill and shock count up without a ceiling and decay
+       when nothing refreshes them; burn keeps one entry per fire. Every fifth
+       stack is spent breaking something and leaves a brand. */
     /* burn is a LIST of independent fires, each with its own damage rate and its
        own clock. Adding one raises the damage you take per second — the old model
        poured every hit into a single pool and stretched the timer to match, so a
@@ -821,11 +842,15 @@ function newPlayer(){
     burn:{ list:[], acc:0, brkCd:0 },
     ailCd:{ fire:0, frost:0, shock:0 },
     stunT:0,                  /* frozen solid — no moving, no swinging */
-    scorchT:0,                /* fire resistance sundered by a burn overload */
+    /* brands: how many times each element has overloaded on you, and for how
+       much longer that is still true */
+    brand:{ fire:0, frost:0, shock:0 },
+    brandT:{ fire:0, frost:0, shock:0 },
     chill:{ stacks:0, t:0 },
     shock:{ stacks:0, t:0 },
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
+    curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
     regenRate:0, regenAcc:0,
     crit:0.1, studMul:1, heartChance:0, hpMore:1,
     orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[], pulse:0 },
@@ -889,17 +914,26 @@ const BIOMES = {
   desert: ['#d3bc7e','#ccb474','#dcc689','#c9b276'],
   swamp:  ['#3f7d3a','#468540','#386f33','#4b8c43'],
   stone:  ['#8f948f','#878c87','#989d98','#828782'],
+  /* three more surfaces so the roll has somewhere to go */
+  tundra: ['#dfe8ee','#d3dee6','#e8f0f5','#c9d6df'],
+  ash:    ['#54494a','#4c4243','#5d5253','#453c3d'],
+  meadow: ['#7db84a','#86c152','#74ae44','#8fca5c'],
   cave:   ['#6e6a62','#67635c','#767268','#5f5b55']
 };
-const BIOME_ORDER = ['forest','desert','stone','swamp'];
+const BIOME_ORDER = ['forest','desert','stone','swamp','tundra','ash','meadow'];
 const BIOME_NAMES = { forest:'THE GREENWOOD', desert:'THE DUST FLATS',
-                      stone:'THE GREY REACH', swamp:'THE MIRE' };
+                      stone:'THE GREY REACH', swamp:'THE MIRE',
+                      tundra:'THE WHITE WASTE', ash:'THE CINDER FIELDS',
+                      meadow:'THE LONG MEADOW' };
 /* what grows where, now that a run has exactly one surface to fill */
 const BIOME_PROPS = {
   forest: [['tree',26],['crate',6],['crystal',4]],
   desert: [['cactus',20],['rock',12],['crate',5]],
   stone:  [['rock',22],['crate',10],['crystal',8]],
-  swamp:  [['tree',20],['crate',8],['crystal',4]]
+  swamp:  [['tree',20],['crate',8],['crystal',4]],
+  tundra: [['rock',14],['tree',10],['crystal',10]],
+  ash:    [['rock',18],['boulder',6],['crate',6]],
+  meadow: [['tree',12],['crate',8],['cactus',4]]
 };
 let runBiome = 'forest';
 function biomeAt(x,y){ return inCave(x,y) ? 'cave' : runBiome; }
@@ -920,6 +954,7 @@ function cellColorKey(ix,iy){
   const pal = BIOMES[biomeAt(cxw,cyw)];
   return pal[(hash2(ix>>2, iy>>2)*pal.length)|0];
 }
+function biomeName(){ return BIOME_NAMES[runBiome] || 'THE FIELD'; }
 function buildGround(){
   const rng = mulberry32(seed+5);
   /* two or three cave pockets, never on top of the spawn clearing */
@@ -1202,7 +1237,9 @@ function mergeSweep(){
       const cluster = [arr[i]]; used.add(arr[i]);
       for(let j=i+1; j<arr.length && cluster.length<need; j++){
         if(used.has(arr[j])) continue;
-        if(Math.abs(arr[j].x-arr[i].x)<110 && Math.abs(arr[j].y-arr[i].y)<110){
+        /* they have to be genuinely touching. The old window was 110px square,
+           which fused studs half a screen apart into a pile out of nowhere. */
+        if(Math.hypot(arr[j].x-arr[i].x, arr[j].y-arr[i].y) < MERGE_NEAR){
           cluster.push(arr[j]); used.add(arr[j]);
         }
       }
@@ -1235,37 +1272,23 @@ function mergeSweep(){
       if(pk.kind===kind && !pk.dead && pk.z<6) arr.push(pk);
     }
     if(arr.length < 2 || arr.length > 300){ for(const pk of arr) pk.seeking = false; continue; }
-    /* split into regions so studs on opposite sides of the map don't try to meet */
-    const groups = [];
+    /* Nudging phase. Studs only ever creep toward a NEIGHBOUR they can already
+       see — MERGE_DRIFT away, not half the map. A pile therefore grows where
+       studs happen to land near each other and fills up over the seconds it
+       takes them to settle, instead of a crowd flying across open grass to a
+       meeting point nobody dropped anything at. */
     for(const pk of arr){
-      let g = null;
-      for(const cand of groups){
-        if(Math.hypot(cand.cx-pk.x, cand.cy-pk.y) < 700){ g = cand; break; }
+      if(pk.t < MERGE_AGE){ pk.seeking = false; continue; }
+      let ax2 = 0, ay2 = 0, n = 0;
+      for(const o of arr){
+        if(o===pk) continue;
+        const dd = Math.hypot(o.x-pk.x, o.y-pk.y);
+        if(dd < MERGE_DRIFT){ ax2 += o.x; ay2 += o.y; n++; }
       }
-      if(!g){ g = {items:[], cx:pk.x, cy:pk.y}; groups.push(g); }
-      g.items.push(pk);
-      g.cx += (pk.x-g.cx)/g.items.length;
-      g.cy += (pk.y-g.cy)/g.items.length;
-    }
-    for(const g of groups){
-      if(g.items.length < 2){ g.items[0].seeking = false; continue; }
-      /* anchor on the densest pile in the region, so they converge onto studs that
-         are already touching rather than onto a point in empty grass */
-      let anchor = null, bestN = -1;
-      for(const pk of g.items){
-        let n = 0;
-        for(const o of g.items) if(o!==pk && Math.abs(o.x-pk.x)<130 && Math.abs(o.y-pk.y)<130) n++;
-        if(n > bestN){ bestN = n; anchor = pk; }
-      }
-      const ax2 = bestN>0 ? anchor.x : g.cx, ay2 = bestN>0 ? anchor.y : g.cy;
-      const done = bestN >= need-1;
-      for(const pk of g.items){
-        if(pk.t < 1 || (done && Math.abs(pk.x-ax2)<110 && Math.abs(pk.y-ay2)<110)){
-          pk.seeking = false;   // too fresh, or already part of the pile that will merge
-          continue;
-        }
-        pk.seeking = true; pk.seekX = ax2; pk.seekY = ay2;
-      }
+      if(!n){ pk.seeking = false; continue; }
+      ax2 /= n; ay2 /= n;
+      if(Math.hypot(ax2-pk.x, ay2-pk.y) < MERGE_NEAR*0.5){ pk.seeking = false; continue; }
+      pk.seeking = true; pk.seekX = ax2; pk.seekY = ay2;
     }
   }
   if(merged>0){
@@ -1747,10 +1770,19 @@ function armourValue(){
 function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
-  /* a SUNDERED hero keeps less of their resistance, and a SCORCHED one less fire */
+  /* a SUNDERED hero keeps less of their resistance; a BRANDED one has had it
+     burned, frozen or shocked out of them, one stack at a time */
   let r = (player.res[elem] || 0) * (1 - player.curse.resist);
-  if(elem==='fire' && player.scorchT > 0) r *= (1 - SUNDER_FIRE);
-  return 1 - clamp(r, 0, RES_CAP);
+  r -= BRAND_STEP * (player.brand[elem] || 0);
+  return 1 - clamp(r, RES_FLOOR, RES_CAP);
+}
+/* what the brand pile is costing you, for the sheet */
+function brandLoss(elem){ return BRAND_STEP * (player.brand[elem] || 0); }
+function addBrand(elem){
+  const p = player;
+  p.brand[elem] = (p.brand[elem] || 0) + 1;
+  p.brandT[elem] = BRAND_T;
+  addDmg(p.x, p.y-84, BRAND_NAME[elem]+' ×'+p.brand[elem], BRAND_COL[elem], 18);
 }
 function applyCurse(kind, src){
   const p = player, C = CURSES[kind];
@@ -1759,7 +1791,8 @@ function applyCurse(kind, src){
   p.curse[kind] = Math.min(C.cap, p.curse[kind] + C.step*elemPower(src));
   p.curse.t = Math.max(p.curse.t, 14);
   if(p.curse[kind] > before){
-    addDmg(p.x, p.y-62, C.name+'!', C.col, 17);
+    p.curseN[kind] = (p.curseN[kind] || 0) + 1;
+    addDmg(p.x, p.y-62, C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+'!', C.col, 17);
     addRing(p.x, p.y, 10, 260, 60, C.col, 4, 0.45);
   }
 }
@@ -1768,7 +1801,7 @@ function updateCurses(dt){
   if(p.curse.t <= 0) return;
   p.curse.t -= dt;
   if(p.curse.t <= 0){
-    for(const k of CURSE_KEYS) p.curse[k] = 0;
+    for(const k of CURSE_KEYS){ p.curse[k] = 0; p.curseN[k] = 0; }
     p.curse.t = 0;
     addDmg(p.x, p.y-62, 'CURSE LIFTED', '#a5e06e', 16);
   } else if(Math.random() < 0.25){
@@ -1791,12 +1824,14 @@ function ailmentBreak(elem, src){
     const t = STUN_T * take;
     if(t < 0.25) return;
     p.stunT = Math.max(p.stunT, t);
-    p.chill.stacks = 0; p.chill.t = 0;           /* the freeze consumes the stacks */
+    p.chill.stacks = Math.max(0, p.chill.stacks - AIL_BREAK);   /* five are spent */
+    if(p.chill.stacks <= 0) p.chill.t = 0;
+    addBrand('frost');
     addDmg(p.x, p.y-70, 'FROZEN SOLID!', '#bfe3ff', 22);
     addRing(p.x, p.y, 10, 320, 90, '#bfe3ff', 7, 0.6);
     SFX.freeze(); addShake(0.3);
   } else if(elem==='fire'){
-    p.scorchT = Math.max(p.scorchT, SUNDER_FIRE_T * take);
+    addBrand('fire');
     addDmg(p.x, p.y-70, 'SCORCHED!', '#ff8a3c', 22);
     addRing(p.x, p.y, 10, 320, 90, '#ff8a3c', 7, 0.6);
     SFX.fireball(); addShake(0.25);
@@ -1805,7 +1840,9 @@ function ailmentBreak(elem, src){
        have the resistance and the hearts for it */
     const power = (src && src.dmg ? src.dmg : 2) * elemPower(src);
     const hit = Math.max(1, Math.round(power * 4 * take));
-    p.shock.stacks = 0; p.shock.t = 0;
+    p.shock.stacks = Math.max(0, p.shock.stacks - AIL_BREAK);
+    if(p.shock.stacks <= 0) p.shock.t = 0;
+    addBrand('shock');
     addDmg(p.x, p.y-76, 'ELECTROCUTED!', '#ffe95a', 24);
     addRing(p.x, p.y, 8, 420, 130, '#ffe95a', 9, 0.6);
     for(let i=0;i<7;i++) addZap(p.x+rnd(-70,70), p.y-90, p.x, p.y-14, 0);
@@ -1825,27 +1862,22 @@ function applyAilment(elem, src, stacks){
     /* one more fire on you: 3 damage over 12 seconds, burning alongside the rest */
     const b = p.burn;
     if(!b.list) b.list = [];
-    const fire = { dps: 3*take/BURN_DUR, t: BURN_DUR };
-    if(b.list.length >= AIL_MAX){
-      /* at the ceiling the freshest fire replaces whichever is closest to out */
-      let worst = 0;
-      for(let i=1;i<b.list.length;i++) if(b.list[i].t < b.list[worst].t) worst = i;
-      b.list[worst] = fire;
-    } else b.list.push(fire);
+    b.list.push({ dps: 3*take/BURN_DUR, t: BURN_DUR });
     addDmg(p.x, p.y-58, 'BURNING ×'+b.list.length, '#ff8a3c', 15);
-    if(b.list.length >= AIL_BREAK && b.brkCd <= 0){
-      b.brkCd = 8;                       /* one scorch per pile-up, not per hit */
+    /* the fifth fire is spent branding you, and the pile carries on from there */
+    if(b.list.length >= AIL_BREAK){
+      b.list.splice(0, AIL_BREAK);
       ailmentBreak('fire', src);
     }
   } else if(elem==='frost'){
-    p.chill.stacks = Math.min(AIL_MAX, p.chill.stacks + (take >= 0.5 ? 1 : 0.5));
+    p.chill.stacks += (take >= 0.5 ? 1 : 0.5);
     p.chill.t = Math.max(p.chill.t, 5 * take);
     addDmg(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
     if(p.chill.stacks >= AIL_BREAK) ailmentBreak('frost', src);
   } else if(elem==='shock'){
     /* a storm orb dumps a whole handful at once, thinned by your resistance */
     const add = many > 1 ? many * clamp(take, 0, 1) : (take >= 0.5 ? 1 : 0.5);
-    p.shock.stacks = Math.min(AIL_MAX, p.shock.stacks + add);
+    p.shock.stacks += add;
     p.shock.t = Math.max(p.shock.t, 6 * take);
     addDmg(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
     if(p.shock.stacks >= AIL_BREAK) ailmentBreak('shock', src);
@@ -1864,19 +1896,29 @@ function ailmentDamage(n, quiet){
   if(p.hp<=0){ p.hp=0; playerDie(); }
 }
 /* Chill slows you down and slows your swing; shock makes hits land harder. */
-function chillMul(){ return 1 - 0.09*player.chill.stacks; }              /* 6 stacks -> 0.46 */
-function shockCritChance(){ return 0.10*player.shock.stacks; }           /* 6 stacks -> 60% */
+/* Stacks are uncapped now, so the EFFECTS need floors — an eleventh chill stack
+   would otherwise send the hero's move speed negative, and shock past ten would
+   crit on every single hit. */
+const CHILL_FLOOR = 0.30;     /* never slower than a third speed */
+function chillMul(){ return Math.max(CHILL_FLOOR, 1 - 0.09*player.chill.stacks); }
+function shockCritChance(){ return Math.min(0.95, 0.10*player.shock.stacks); }
 function updateAilments(dt){
   const p = player;
   updateCurses(dt);
   p.stunT = Math.max(0, p.stunT - dt);
-  p.scorchT = Math.max(0, p.scorchT - dt);
+  for(const el of ELEMENTS){
+    if(p.brandT[el] > 0){
+      p.brandT[el] -= dt;
+      if(p.brandT[el] <= 0){ p.brandT[el] = 0; p.brand[el] = 0; }
+    }
+  }
   if(p.stunT > 0 && Math.random() < 0.4)
     particles.push({kind:'spark', x:p.x+rnd(-18,18), y:p.y-rnd(4,44), vx:rnd(-20,20), vy:rnd(-20,20),
       life:0.3, max:0.3, color:'#dff2ff'});
-  if(p.scorchT > 0 && Math.random() < 0.25)
-    particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-rnd(4,40), vx:0, vy:-50,
-      life:0.4, max:0.4, color:'#ff6a2a'});
+  for(const el of ELEMENTS)
+    if(p.brand[el] > 0 && Math.random() < 0.06*p.brand[el])
+      particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-rnd(4,40), vx:0, vy:-50,
+        life:0.4, max:0.4, color:BRAND_COL[el]});
   for(const el of ELEMENTS) p.ailCd[el] = Math.max(0, (p.ailCd[el]||0) - dt);
   if(!p.burn.list) p.burn.list = [];
   p.burn.brkCd = Math.max(0, (p.burn.brkCd||0) - dt);
@@ -2073,7 +2115,8 @@ function startWave(n){
       : BOSSES[Object.keys(BOSSES)[(Math.max(1,Math.floor(n/5))-1)%4]].name;
   }
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
-    boss ? bname+' approaches...' : (n===1?'Slash with LMB · SPACE to roll!':''),
+    boss ? bname+' approaches...'
+      : (n===1 ? biomeName()+' · Slash with LMB · SPACE to roll!' : ''),
     boss ? (n%10===0 ? '#c95bd0' : '#ff5a4a') : '#ffb900', boss?2.2:1.7,
     boss && n%10===0 ? 60 : 54);
   if(boss) SFX.roar();
@@ -3063,13 +3106,21 @@ function renderCharSheet(){
     sRow('Burning', burnNow, 'damage over time, ignores i-frames',
       `Every fire that lands on you burns on its own: 3 damage over ${BURN_DUR}s, scaled `+
       `by your fire resistance.\n\nThey STACK — the damage per second is the sum of every `+
-      `fire still alight, up to ${AIL_MAX} of them, not one pool stretched thinner.\n\n`+
+      `fire still alight — there is no ceiling on how many — not one pool stretched thinner.\n\n`+
       `Right now: ${burnStacks()} burning for ${burnDps().toFixed(2)} per second.`),
     sRow('Chill', p.chill.stacks>0 ? '×'+Math.round(p.chill.stacks) : 'none',
       `-${Math.round((1-chillMul())*100)}% move speed and swing rate`),
     sRow('Shock', p.shock.stacks>0 ? '×'+Math.round(p.shock.stacks) : 'none',
       `+${Math.round(shockCritChance()*100)}% chance a hit on you crits for ×1.8`),
-    sRow('Stack ceiling', '×'+AIL_MAX, 'chill and shock both cap here'),
+    ...ELEMENTS.map(el=> sRow(BRAND_NAME[el],
+      player.brand[el]>0 ? '×'+player.brand[el]+' · -'+Math.round(brandLoss(el)*100)+'%' : 'none',
+      player.brand[el]>0 ? Math.ceil(player.brandT[el])+'s left' : el+' resistance intact',
+      `Every ${AIL_BREAK}th ${el} stack is spent breaking something, and leaves a `+
+      `${BRAND_NAME[el]} mark behind: -${Math.round(BRAND_STEP*100)}% ${el} resistance for `+
+      `${BRAND_T}s.\n\nThey STACK without limit and each new one refreshes the timer, so `+
+      `resistance can be driven below zero — at -100% you take double.\n\nRight now: `+
+      `${player.brand[el]||0} stack${(player.brand[el]||0)===1?'':'s'}, `+
+      `${el} resistance effectively ${Math.round((1-elemTake(el))*100)}%.`)),
     sRow('Whose effect is that?', 'pale = yours', 'deep = theirs',
       `Anything YOU put on the floor is drawn bleached toward white — your bombs `+
       `land as pale gold craters, your blaster bricks are cream, your lightning is `+
@@ -3259,12 +3310,20 @@ function updatePlayer(dt){
   if(p.slowT>0 && Math.random()<0.25)
     particles.push({kind:'spark', x:p.x+rnd(-14,14), y:p.y-rnd(10,40), vx:rnd(-15,15), vy:-30,
       life:0.5, max:0.5, color:'#bfe3ff'});
-  /* regen is continuous now: the heart you are standing on fills from 0.00 up,
-     instead of nothing happening until a whole point has been banked */
+  /* Regeneration banks in its OWN float and only moves hp once it has a
+     hundredth of a heart to give. Adding regen*dt straight into hp and rounding
+     hp to hundredths meant anything under 0.6/s produced a per-frame increment
+     smaller than the rounding step — it was rounded straight back off and
+     nothing below that rate ever healed at all. */
   const regen = cursedRegen();
-  if(regen>0 && p.hp<p.maxHp)
-    p.hp = Math.round(Math.min(p.maxHp, p.hp + regen*dt)*100)/100;
-  p.regenAcc = regen>0 ? (p.hp - Math.floor(p.hp)) : 0;   /* the sliver, for the bar */
+  if(regen > 0 && p.hp < p.maxHp){
+    p.regenAcc += regen*dt;
+    if(p.regenAcc >= 0.01){
+      const gain = Math.floor(p.regenAcc*100)/100;
+      p.regenAcc -= gain;
+      p.hp = Math.round(Math.min(p.maxHp, p.hp + gain)*100)/100;
+    }
+  } else p.regenAcc = 0;
   updateAilments(dt);
   p.blinkT -= dt; if(p.blinkT<=0){ p.blink=0.12; p.blinkT=rnd(2,4.5); } p.blink = Math.max(0,p.blink-dt);
   const aimA = Math.atan2(mouse.wy-p.y, mouse.wx-p.x);
@@ -3623,13 +3682,8 @@ function updatePlayer(dt){
   for(const pk of pickups){
     pk.t += dt;
     const d = dist(pk,p);
-    if(p.magnetT > 0 && pk.z < 20){
-      /* a magnet is not a gentle tug: every stud on the field drops what it was
-         doing and flies straight in, at a flat speed rather than accelerating */
-      const a = angTo(pk,p);
-      pk.seeking = false;
-      pk.vx = Math.cos(a)*MAGNET_SPEED;
-      pk.vy = Math.sin(a)*MAGNET_SPEED;
+    if(p.magnetT > 0){
+      pk.seeking = false;      /* the drag itself happens in the physics pass */
     } else if(d < mr && pk.z<20){
       const closeness = clamp(1 - d/mr, 0, 1);
       const pull = (500 + 2400*Math.pow(closeness,1.5)) * pm;
@@ -3639,12 +3693,18 @@ function updatePlayer(dt){
     if(d < 26 && pk.z<16){
       pk.got = true;
       if(pk.kind==='heart'){
-        if(p.hp<p.maxHp){ p.hp = Math.min(p.maxHp, p.hp+1); addDmg(p.x,p.y-46,'+1','#ff8a8a',18); }
-        else { spawnStuds(p.x,p.y,3); }
+        /* A heart no longer tops you up — it leaves you regenerating a little
+           faster for the rest of the run. Raw healing on every drop is exactly
+           what made wave 40 survivable with every debuff in the game stacked on
+           you: the hearts out-healed the whole pile. */
+        if(p.regenRate < REGEN_MAX){
+          p.regenRate = Math.min(REGEN_MAX, p.regenRate + HEART_REGEN);
+          addDmg(p.x, p.y-46, '+'+HEART_REGEN.toFixed(2)+' REGEN', '#ff8a8a', 16);
+        } else { spawnStuds(p.x,p.y,3); }
         SFX.heart();
       } else if(pk.kind==='gheart'){
         p.maxHp = Math.min(heartCap(), p.maxHp+1);
-        p.hp = p.maxHp;
+        p.hp = Math.min(p.maxHp, p.hp+1);    /* the new heart arrives full, no refill */
         addDmg(p.x, p.y-56, 'MAX HEART!', '#ffd166', 19);
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
         SFX.heart(); SFX.levelup();
@@ -3675,6 +3735,22 @@ function updatePlayer(dt){
   }
   /* pickup physics + seeking drift (this is the ONLY place pickups move) */
   for(const pk of pickups){
+    if(p.magnetT > 0){
+      /* A MAGNET IS A BLACK HOLE. The stud is dragged along the straight line to
+         the hero and it accelerates as it closes — hop, bounce and drag all
+         cancelled. Handing it a velocity was not enough: gravity and the ground
+         bounce turned every flight into a series of hops going nowhere near me. */
+      pk.vx = 0; pk.vy = 0; pk.vz = 0;
+      pk.z = Math.max(0, pk.z - 200*dt);
+      const dx = p.x-pk.x, dy = p.y-pk.y, dd = Math.hypot(dx,dy) || 1;
+      const speed = MAGNET_SPEED * (0.3 + 0.7*clamp(1 - dd/900, 0, 1));
+      const step = Math.min(dd, speed*dt);
+      pk.x += dx/dd*step; pk.y += dy/dd*step;
+      if(Math.random() < 0.25)
+        particles.push({kind:'spark', x:pk.x, y:pk.y-pk.z, vx:-dx/dd*120, vy:-dy/dd*120,
+          life:0.16, max:0.16, color:'#c9a6ff'});
+      continue;
+    }
     pk.vz -= 800*dt; pk.z += pk.vz*dt;
     if(pk.z<0){ pk.z=0; pk.vz*=-0.45; pk.vx*=0.6; pk.vy*=0.6; }
     pk.x += pk.vx*dt; pk.y += pk.vy*dt;
@@ -3683,8 +3759,8 @@ function updatePlayer(dt){
       const dx = pk.seekX-pk.x, dy = pk.seekY-pk.y;
       const dd = Math.hypot(dx,dy);
       if(dd>8){
-        /* gravitate: slow at the edges, faster the closer they get */
-        const pull = 55 + 145*clamp(1 - dd/620, 0, 1);
+        /* a slow creep, deliberately. They are settling into a pile, not flying. */
+        const pull = MERGE_CREEP;
         pk.x += dx/dd*pull*dt; pk.y += dy/dd*pull*dt;
         pk.vx *= Math.max(0,1-6*dt); pk.vy *= Math.max(0,1-6*dt);
       } else {
@@ -7838,9 +7914,14 @@ function renderHUD(){
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
+  for(const el of ELEMENTS)
+    if(p.brand[el] > 0)
+      ails.push({c:BRAND_COL[el], t:BRAND_NAME[el]+' ×'+p.brand[el]+' · '+el+' res '+
+        Math.round((1-elemTake(el))*100)+'% · '+Math.ceil(p.brandT[el])+'s'});
   if(p.curse.t>0) for(const k of CURSE_KEYS){
     if(p.curse[k] > 0)
-      ails.push({c:CURSES[k].col, t:CURSES[k].name+' -'+Math.round(p.curse[k]*100)+'% · '+Math.ceil(p.curse.t)+'s'});
+      ails.push({c:CURSES[k].col, t:CURSES[k].name+(p.curseN[k]>1?' ×'+p.curseN[k]:'')+
+        ' -'+Math.round(p.curse[k]*100)+'% · '+Math.ceil(p.curse.t)+'s'});
   }
   ails.forEach((a,i)=>{
     const ay = xpY + 24 + i*20;
