@@ -3304,17 +3304,17 @@ function navBuild(){
   NAV.blocked = new Uint8Array(n);
   navG = new Float32Array(n); navF = new Float32Array(n);
   navFrom = new Int32Array(n); navSeen = new Int32Array(n); navStamp = 0;
-  const pad = 14;   /* keep a body's width away from geometry */
+  const pad = 16;   /* keep a body's width away from geometry */
+  /* The test is deliberately against the cell CENTRE, not the whole cell. Cells
+     are 72px and a tree is 14px across: marking every cell a sapling touches
+     would wall off 144px of ground per tree and turn open woodland into a maze
+     with no route through it. Small props are left to local steering instead. */
   for(let iy=0; iy<NAV.h; iy++) for(let ix=0; ix<NAV.w; ix++){
-    const x0 = ix*cs, y0 = iy*cs, cx = x0 + cs/2, cy = y0 + cs/2;
+    const cx = ix*cs + cs/2, cy = iy*cs + cs/2;
     let bad = false;
     if(cx < W.wall+pad || cx > W.w-W.wall-pad || cy < W.wall+pad || cy > W.h-W.wall-pad) bad = true;
     if(!bad) for(const so of solids){
-      /* circle against the whole cell, not just its centre — a tree narrower than
-         half a cell used to be invisible to the grid, so monsters were routed
-         straight into it and then shoved back out, frame after frame */
-      const qx = clamp(so.x, x0, x0+cs), qy = clamp(so.y, y0, y0+cs);
-      if(Math.hypot(so.x-qx, so.y-qy) < so.r + pad){ bad = true; break; }
+      if(Math.hypot(cx-so.x, cy-so.y) < so.r + pad){ bad = true; break; }
     }
     if(!bad) for(const wa of waters){
       if(cx > wa.x-pad && cx < wa.x+wa.w+pad && cy > wa.y-pad && cy < wa.y+wa.h+pad){ bad = true; break; }
