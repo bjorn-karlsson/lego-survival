@@ -306,6 +306,24 @@ const OVERSEER_MAX_STACKS = 3;
 const AIL_MAX = 6;            /* chill / shock stack ceiling */
 const BURN_MAX_T = 48;        /* a burn never lingers longer than this */
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
+/* ---- damage model ----------------------------------------------------------
+   Every hit in the game is built the same way:
+     Damage = (Base + Flat added) × (1 + increased − reduced) × ∏(1 + more) × ∏(1 − less)
+   `increased` modifiers of the same kind are ADDITIVE with one another; every
+   `more` modifier is its own multiplier. 50% increased + 30% increased is ×1.80,
+   while 50% more + 30% more is ×1.50 × 1.30.                                   */
+const SWORD_BASE      = 1;     /* base sword damage before any flat adds */
+const CRIT_BASE       = 0.05;  /* base critical strike chance */
+const CRIT_MULT_BASE  = 150;   /* base critical strike multiplier, in percent */
+const CRIT_CHANCE_CAP = 0.95;
+const CRIT_MULT_CAP   = 600;
+/* Armour mitigates ATTACK hits: DR = Armour / (Armour + 5 × hit damage), so a
+   big hit punches through armour that shrugs off small ones. */
+const ARMOUR_DR_CAP   = 0.90;
+/* Spell suppression is a separate layer on SPELL hits: a suppressed hit lands
+   for half. At 100% chance every applicable spell hit is suppressed. */
+const SUPPRESS_TAKEN  = 0.5;
+const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb']);
 const ELEMENTS = ['fire','frost','shock'];
 const ELEM_COL = { fire:'#ff8a3c', frost:'#bfe3ff', shock:'#ffe95a' };
 /* Imp master curses. Each weakens the hero without touching their hearts. */
@@ -586,8 +604,16 @@ function showBanner(text, sub, color='#ffb900', dur=1.7, size=54){ banner = {tex
 /* =============================== PLAYER =============================== */
 function newPlayer(){
   return {
-    x:CX, y:CY-40, r:13, hp:6, maxHp:6, speed:215, dmg:1, dmgMul:1,
-    critMul:2, spellDmg:1, bladeDmg:1, armor:0,
+    x:CX, y:CY-40, r:13, hp:6, maxHp:6, speed:215,
+    /* offence, in PoE terms */
+    flatSword:0,          /* flat added sword damage */
+    incMelee:0,           /* increased melee damage — sword, bladestorm, vortex */
+    incSpell:0,           /* increased spell damage — orbit, blaster, storm bricks, bombs */
+    incAll:0,             /* increased damage, everything (+5% per level) */
+    moreAll:1,            /* product of every `more damage` multiplier */
+    critBase:CRIT_BASE, incCrit:0, critMultPct:CRIT_MULT_BASE,
+    /* defence */
+    armour:0, incArmour:0, suppress:0,
     atkRate:0.34, atkCd:0,
     combo:0, comboTimer:0, swing:null, reach:0, xpMul:1,
     dash:{t:0, cd:0, cdMax:0.9, dir:{x:1,y:0}},
@@ -1193,7 +1219,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       const bhp = Math.round(B.hp*mult + st*1100);
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
-        hp:bhp, maxHp:bhp, armor:Math.min(0.55, 0.15*st),
+        hp:bhp, maxHp:bhp, armour: 40 + st*45, suppress:0.30,
         speed:B.speed*(1+tier*0.03),
         dmg:B.dmg + st*2,
         xp:Math.round(B.xp*(1+(st-1)*0.8)), studs:{a:B.studs[0], b:B.studs[1]},
@@ -1218,7 +1244,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       e = { type:'boss', x, y, bkey, bname:B.name,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
-        hp:bhp, maxHp:bhp, armor:Math.min(0.4, wave.n*0.008),
+        hp:bhp, maxHp:bhp, armour: 18 + wave.n*1.4, suppress:0.15,
         speed:B.speed*(1+tier*0.05),
         dmg:B.dmg + Math.floor(tier/2),
         xp:B.xp, studs:{a:B.studs[0], b:B.studs[1]},
@@ -1238,7 +1264,11 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   const d = EDEF[type];
   /* steep HP curve so wave 20/30 stay hard */
   const hpS  = 1 + (wave.n-1)*0.30 + Math.pow(Math.max(0,wave.n-5),1.6)*0.05;
-  const armor = Math.min(0.55, wave.n*0.012) * (type==='bastion' ? 1.6 : 1) * (RANGED_SET.has(type) ? 0.45 : 1);
+  /* flat armour, fed into the same DR curve the player uses */
+  const armour = wave.n * 1.1 * (type==='bastion' ? 1.8 : 1)
+    * (RANGED_SET.has(type) ? 0.45 : 1) * (elite ? 1.4 : 1) * (d.golem ? 1.6 : 1);
+  /* spell suppression: the arcane ones shrug off half a spell hit */
+  const suppress = magic ? 0.30 : (typeof type === 'string' && type.endsWith('lord')) ? 0.20 : 0;
   const dmgB = Math.floor((wave.n-1)/2);
   const spdS = 1.07 + Math.min(0.55, (wave.n-1)*0.028);
   let atkS = Math.max(0.58, 1 - (wave.n-1)*0.03);
@@ -1247,7 +1277,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     dmg: d.dmg + dmgB + (magic?1:0),
     hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
-    armor,
+    armour, suppress,
     speed:d.speed*spdS*(elite?0.95:1)*(magic?1.3:1),
     atkS, fire: d.fire ? d.fire*atkS : undefined, touchCd: 0.9*atkS,
     col:d.col, style:d.style, xp:d.xp, studs:{a:d.studs[0], b:d.studs[1]},
@@ -1295,17 +1325,27 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       return;
     }
   }
-  let d = Math.max(1, Math.round(dmg));
-  const crit = Math.random() < player.crit;
-  if(crit) d = Math.round(d * player.critMul);
-  if(e.magic) d = Math.max(1, Math.round(d*0.7));
-  if(e.armor && Math.random() < e.armor) d = Math.max(1, Math.round(d*0.5));
+  /* the incoming number is already (base + flat) × increased × more */
+  let d = Math.max(0, dmg);
+  const crit = Math.random() < critChance();
+  if(crit) d *= critMult();
+  if(e.magic) d *= 0.7;                       /* magic-touched: 30% less damage taken */
+  let suppressed = false;
+  if(SPELL_SOURCES.has(source)){
+    /* spells meet suppression, never armour */
+    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
+  } else {
+    /* attacks meet armour, scaled against the size of this very hit */
+    d *= (1 - armourDR(e.armour||0, d));
+  }
+  d = Math.max(1, Math.round(d));
   e.hp -= d; e.flash = 1;
   const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
   e.kx += Math.cos(kdir)*kb*kbm;
   e.ky += Math.sin(kdir)*kb*kbm;
   addSparks(e.x, e.y-18*e.scale, 5, crit?'#ffd166':'#fff2b0');
-  addDmg(e.x, e.y-34*e.scale, (crit?'CRIT ':'')+d, crit?'#ffd166':'#ffffff', crit?21:16);
+  addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+d,
+    suppressed?'#9fd4ff' : crit?'#ffd166':'#ffffff', crit?21:16);
   addShake(crit?0.13:0.08);
   SFX.hit();
   if(e.hp<=0) killEnemy(e, source);
@@ -1366,7 +1406,7 @@ function gainXp(n){
   p.xp += n * waveBonus * p.xpMul;
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*1.3+5);
-    p.dmgMul *= 1.05;
+    p.incAll += 0.05;      /* additive with every other increase, PoE style */
     if(p.hp < p.maxHp) p.hp++;
     addRing(p.x,p.y,10,300,110,'#ffb900',6,0.5);
     addDmg(p.x, p.y-50, 'LEVEL UP!', '#ffb900', 22);
@@ -1374,7 +1414,30 @@ function gainXp(n){
     queuePick('level');
   }
 }
-function armorPct(){ return Math.round(player.armor*100); }
+/* Damage = (Base + Flat) × (1 + increased) × ∏(1 + more).
+   `kind` picks which increased pool applies on top of the global one. */
+function calcDamage(base, kind, more){
+  const p = player;
+  const inc = p.incAll + (kind==='melee' ? p.incMelee : kind==='spell' ? p.incSpell : 0);
+  let d = base * (1 + inc) * p.moreAll;
+  if(more) for(const m of more) d *= m;
+  return Math.max(0, d);
+}
+function swordBase(){ return SWORD_BASE + player.flatSword; }
+function swordDamage(more){ return calcDamage(swordBase(), 'melee', more); }
+function critChance(){ return clamp(player.critBase * (1 + player.incCrit), 0, CRIT_CHANCE_CAP); }
+function critMultPct(){ return Math.min(CRIT_MULT_CAP, player.critMultPct); }
+function critMult(){ return critMultPct()/100; }
+/* The armour curve. Mitigation always uses the ACTUAL hit damage. */
+function armourDR(armour, hit){
+  if(armour <= 0 || hit <= 0) return 0;
+  return Math.min(ARMOUR_DR_CAP, armour / (armour + 5*hit));
+}
+/* increased armour is additive in its own pool; flat armour adds to the total */
+function armourValue(){
+  return Math.max(0, player.armour * (1 + player.incArmour) * (1 - player.curse.armor));
+}
+function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
   /* a SUNDERED hero keeps less of their resistance */
@@ -1407,7 +1470,6 @@ function updateCurses(dt){
         life:0.5, max:0.5, color: CURSES[pick(live)].col});
   }
 }
-function cursedArmor(){ return player.armor * (1 - player.curse.armor); }
 function cursedRegen(){ return player.regenRate * (1 - player.curse.regen); }
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
@@ -1476,18 +1538,30 @@ function updateAilments(dt){
         life:0.18, max:0.18, color:'#ffe95a'});
   }
 }
-function playerDamage(n, src, elem){
+/* `elem` tags fire/frost/shock damage; `spell` marks a hit as spell damage and
+   defaults to true for anything elemental. Spell hits meet suppression, attack
+   hits meet armour — never both. */
+function playerDamage(n, src, elem, spell){
   const p = player;
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
-  if(elem) n = Math.max(1, Math.round(n * elemTake(elem) * elemPower(src)));
-  const arm = cursedArmor();
-  if(arm > 0 && Math.random() < arm) n = Math.max(1, Math.round(n*0.5));
+  const isSpell = (spell === undefined) ? !!elem : spell;
+  let d = n;
+  if(elem) d *= elemTake(elem) * elemPower(src);
   /* shock leaves you open — hits against a shocked hero crit */
   if(p.shock.stacks > 0 && Math.random() < shockCritChance()){
-    n = Math.max(n+1, Math.round(n*1.8));
+    d *= 1.8;
     addDmg(p.x, p.y-64, 'SHOCK CRIT!', '#ffe95a', 18);
     addShake(0.2);
   }
+  if(isSpell){
+    if(Math.random() < suppressChance()){
+      d *= SUPPRESS_TAKEN;
+      addDmg(p.x, p.y-70, 'SUPPRESSED', '#9fd4ff', 16);
+    }
+  } else {
+    d *= (1 - armourDR(armourValue(), d));
+  }
+  n = Math.max(1, Math.round(d));
   if(elem) applyAilment(elem, src);
   p.hp -= n; p.invuln = 1.1; p.flash = 1; redFlash = 0.6;
   const a = angTo(src, p);
@@ -1729,16 +1803,35 @@ const ICONS = {
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     calc:m=>({v:Math.max(1,Math.round(m))}),
-    desc:c=>`+${c.v} sword damage`,
-    apply:c=>{ player.dmg += c.v; } },
+    desc:c=>`+${c.v} flat sword damage (base ${swordBase().toFixed(0)} → ${(swordBase()+c.v).toFixed(0)})`,
+    apply:c=>{ player.flatSword += c.v; } },
   { id:'bladem', name:'Blade Mastery', icon:'sword', cls:'OFFENSE',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)}% sword, bladestorm & vortex damage`,
-    apply:c=>{ player.bladeDmg += c.v; } },
-    { id:'armor', name:'Reinforced Armor', icon:'heart', cls:'DEFENSE',
+    desc:c=>`${Math.round(c.v*100)}% increased melee damage — sword, bladestorm & vortex (now ${Math.round((player.incMelee+c.v)*100)}%)`,
+    apply:c=>{ player.incMelee += c.v; } },
+  { id:'moredmg', name:'Overcharged Bricks', icon:'force', cls:'OFFENSE',
     calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`+${Math.round(c.v*100)}% armor (now ${armorPct()}%) — blocks damage`,
-    apply:c=>{ player.armor = Math.min(0.8, player.armor + c.v); } },
+    desc:c=>`${Math.round(c.v*100)}% MORE damage — its own multiplier, not added to your increases`,
+    apply:c=>{ player.moreAll *= (1+c.v); } },
+  { id:'armor', name:'Reinforced Armour', icon:'heart', cls:'DEFENSE',
+    calc:m=>({v:Math.round(14+10*m)}),
+    desc:c=>{
+      const a = (player.armour+c.v)*(1+player.incArmour);
+      return `+${c.v} flat armour (now ${Math.round(a)}) — cuts a 2-damage hit by ${Math.round(armourDR(a,2)*100)}%, a 6-damage hit by ${Math.round(armourDR(a,6)*100)}%`;
+    },
+    apply:c=>{ player.armour += c.v; } },
+  { id:'armorinc', name:'Plated Rig', icon:'heart', cls:'DEFENSE', req:()=>player.armour>0,
+    calc:m=>({v:0.14+0.10*m}),
+    desc:c=>{
+      const a = player.armour*(1+player.incArmour+c.v);
+      return `${Math.round(c.v*100)}% increased armour (now ${Math.round(a)}) — additive with your other armour increases`;
+    },
+    apply:c=>{ player.incArmour += c.v; } },
+  { id:'suppress', name:'Spell Suppression', icon:'freeze', cls:'DEFENSE',
+    req:()=>player.suppress < 1,
+    calc:m=>({v:0.08+0.06*m}),
+    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%) — a suppressed spell hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
+    apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} sword attack range`,
@@ -1747,14 +1840,14 @@ const UPGRADES = [
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`Swing ${Math.round(c.v*100)}% faster`,
     apply:c=>{ player.atkRate *= (1-c.v); } },
-    { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE',
-    calc:m=>({v:0.02+0.02*m}),
-    desc:c=>`+${(c.v*100).toFixed(0)}% crit chance (now ${(player.crit*100).toFixed(0)}%)`,
-    apply:c=>{ player.crit = Math.min(0.9, player.crit + (1-player.crit)*c.v); } },
-    { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE',
-    calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`+${Math.round(c.v*100)}% crit damage (now ×${player.critMul.toFixed(1)})`,
-    apply:c=>{ player.critMul = Math.min(20, player.critMul*(1+c.v)); } },
+  { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE',
+    calc:m=>({v:0.35+0.30*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased critical strike chance — ${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round((player.incCrit+c.v)*100)}%) = ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%`,
+    apply:c=>{ player.incCrit += c.v; } },
+  { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE',
+    calc:m=>({v:Math.round(12+9*m)}),
+    desc:c=>`+${c.v}% to critical strike multiplier (now ${Math.min(CRIT_MULT_CAP, player.critMultPct+c.v)}%)`,
+    apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
   { id:'hp', name:'Sturdy Plates', icon:'heart', cls:'DEFENSE',
     calc:m=>({v:Math.max(2,Math.round(2*m))}),
     desc:c=>`+${c.v} max hearts, heal ${c.v}`,
@@ -1836,8 +1929,8 @@ const UPGRADES = [
     apply:c=>{ player.blaster.rate *= (1-c.v); } },
   { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)}% spell damage (bombs, orbit, blaster, storm bricks)`,
-    apply:c=>{ player.spellDmg += c.v; } },
+    desc:c=>`${Math.round(c.v*100)}% increased spell damage — bombs, orbit, blaster, storm bricks (now ${Math.round((player.incSpell+c.v)*100)}%)`,
+    apply:c=>{ player.incSpell += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=>{
@@ -1857,7 +1950,7 @@ const UPGRADES = [
     apply:c=>{ player.chain.zappers = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n); } },
   { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
-    desc:c=>`Storm bricks +${c.v} dmg on the opening strike (now ${((player.chain.dmg+c.v)*player.spellDmg).toFixed(1)})`,
+    desc:c=>`+${c.v} flat storm brick damage (opening strike now ${calcDamage(player.chain.dmg+c.v,'spell').toFixed(1)})`,
     apply:c=>{ player.chain.dmg += c.v; } },
   { id:'chainrate', name:'Charged Storm', icon:'bolt', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
@@ -1922,15 +2015,16 @@ const UPGRADES = [
 const FAV_WEIGHT = 3.2;
 const FAVOURITES = [
   { id:'none',    name:'No Favourite', icon:'xp',      ids:[] },
-  { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem'] },
+  { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
-  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','bladem'] },
-  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem'] },
+  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','bladem','moredmg'] },
+  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
-  { id:'tough',   name:'Tough Bricks', icon:'heart',   ids:['hp','regen','armor','heart','resfire','resfrost','resshock','resall'] }
+  { id:'tough',   name:'Tough Bricks', icon:'heart',
+    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
 ];
 let favourite = FAVOURITES[0];
 let favSet = new Set();
@@ -1964,9 +2058,8 @@ function pickChoices(mode){
     if(u.id==='hp'    && player.maxHp    >= HEART_MAX) return false;
     if(u.id==='mag'   && player.magnetR  >= 420) return false;
     if(u.id==='spd'   && player.speed    >= 500) return false;
-    if(u.id==='armor' && player.armor    >= 0.8) return false;
-    if(u.id==='crit'  && player.crit     >= 0.88) return false;
-    if(u.id==='critpow' && player.critMul >= 20) return false;
+    if(u.id==='crit'  && critChance() >= CRIT_CHANCE_CAP) return false;
+    if(u.id==='critpow' && player.critMultPct >= CRIT_MULT_CAP) return false;
     return true;
   });
   const want = mode==='boss' ? 4 : mode==='chest' ? 1 : 3;
@@ -2007,23 +2100,23 @@ function spellSummaries(){
   const p = player, out = [];
   const per = n=> n.toFixed(1);
   if(p.orbit.n>0){
-    const d = p.orbit.dmg*p.spellDmg;
+    const d = calcDamage(p.orbit.dmg,'spell');
     const hitCd = clamp(0.5*2.6/p.orbit.spd, 0.05, 0.5);
     out.push({ id:'orbit', icon:'orbit', name:'Guardian Brick', head:per(d)+' per hit', tip:
       `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
-      `${per(d)} damage per hit (${p.orbit.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `${per(d)} per hit — ${p.orbit.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
       `A foe can be struck every ${hitCd.toFixed(2)}s` });
   }
   if(p.blaster.n>0){
-    const d = p.blaster.dmg*p.spellDmg;
+    const d = calcDamage(p.blaster.dmg,'spell');
     out.push({ id:'blaster', icon:'blaster', name:'Brick Blaster', head:per(d)+' per brick', tip:
       `${p.blaster.n} brick${p.blaster.n>1?'s':''} per volley, every ${p.blaster.rate.toFixed(2)}s\n`+
-      `${per(d)} damage each (${p.blaster.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
       `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'}\n`+
       `Full volley: ${per(d*p.blaster.n)}` });
   }
   if(p.chain.n>0 && p.chain.zappers>0){
-    const d = p.chain.dmg*p.spellDmg;
+    const d = calcDamage(p.chain.dmg,'spell');
     const leaps = p.chain.n - 1;
     let total = d;
     const steps = [];
@@ -2035,7 +2128,7 @@ function spellSummaries(){
     const zn = Math.min(CHAIN_MAX_ZAPPERS, p.chain.zappers);
     out.push({ id:'chain', icon:'chain', name:'Storm Brick', head:per(d)+' opening strike', tip:
       `${zn} zapper${zn>1?'s, each on its own':' on a'} ${p.chain.rate.toFixed(2)}s cooldown\n`+
-      `Opening strike ${per(d)} (${p.chain.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `Opening strike ${per(d)} — ${p.chain.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
       (leaps>0
         ? `Leaps land for ${steps.join(' / ')}${leaps>4?' …':''} of the opening — a longer chain holds up better\n`
         : `No leaps yet — take another Storm Brick to start chaining\n`)+
@@ -2043,14 +2136,14 @@ function spellSummaries(){
       `All ${zn} bricks firing: ${per(total*zn)}` });
   }
   if(p.storm.n>0){
-    const d = p.storm.dmg*p.bladeDmg, blades = p.storm.n*p.storm.count;
+    const d = calcDamage(p.storm.dmg,'melee'), blades = p.storm.n*p.storm.count;
     out.push({ id:'storm', icon:'storm', name:'Bladestorm', head:per(d)+' per blade', tip:
       `${blades} blades every ${p.storm.rate.toFixed(2)}s\n`+
-      `${per(d)} damage each (${p.storm.dmg} base × ${p.bladeDmg.toFixed(2)} blade dmg)\n`+
+      `${per(d)} each — ${p.storm.dmg} base × (1 + ${Math.round((p.incMelee+p.incAll)*100)}% increased)\n`+
       `Full burst: ${per(d*blades)} spread around you` });
   }
   if(p.vortex.n>0){
-    const d = p.vortex.dmg*p.dmgMul*p.bladeDmg;
+    const d = calcDamage(p.vortex.dmg,'melee');
     const tick = 0.24*p.vortex.hitMul;
     const dur = p.vortex.dur + (p.vortex.n-1)*0.4;
     out.push({ id:'vortex', icon:'vortex', name:'Blade Vortex', head:per(d)+' per tick', tip:
@@ -2060,10 +2153,10 @@ function spellSummaries(){
       `Up to ${per(d*Math.floor(dur/tick))} to a foe that stays inside` });
   }
   if(p.bomb.n>0){
-    const d = p.bomb.dmg*p.spellDmg;
+    const d = calcDamage(p.bomb.dmg,'spell');
     out.push({ id:'bombplus', icon:'bomb', name:'Bomb Volley', head:per(d)+' per blast', tip:
       `${p.bomb.n} bomb${p.bomb.n>1?'s':''} every ${p.bomb.rate.toFixed(2)}s\n`+
-      `${per(d)} damage in a ${Math.round(p.bomb.r)} radius (${p.bomb.dmg} base × ${p.spellDmg.toFixed(2)} spell dmg)\n`+
+      `${per(d)} in a ${Math.round(p.bomb.r)} radius — ${p.bomb.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
   }
   if(p.freeze.n>0){
@@ -2130,18 +2223,25 @@ function renderCharSheet(){
     `Level ${p.level} · Wave ${wave.n} · ${p.kills} smashed · ${p.studs} studs · ${mm}:${String(ss).padStart(2,'0')}`;
 
   /* --- melee maths, mirroring startSwing + updatePlayer --- */
-  const light = p.dmg * p.dmgMul * p.bladeDmg;
+  const light = swordDamage();
   const spin  = light * 1.4;
   const swingT = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   const swings = 1/swingT;
-  const critAvg = 1 + p.crit*(p.critMul-1);        /* expected multiplier per hit */
+  const cc = critChance();
+  const critAvg = 1 + cc*(critMult()-1);           /* expected multiplier per hit */
   const comboAvg = (light*2 + spin)/3;             /* every third swing is the spin */
 
   const vitals = sBlock('VITALS', [
     sRow('Hearts', `${p.hp} / ${p.maxHp}`, p.maxHp>=HEART_MAX ? 'at the maximum' : `${HEART_MAX-p.maxHp} more possible`),
-    sRow('Armour', pct(cursedArmor()),
-      p.curse.armor>0 ? `BRITTLE — cut from ${pct(p.armor)}`
-        : p.armor>0 ? 'chance to halve incoming damage' : 'no damage reduction'),
+    sRow('Armour', Math.round(armourValue()),
+      p.curse.armor>0 ? `BRITTLE — cut from ${Math.round(p.armour*(1+p.incArmour))}`
+        : p.armour>0 ? `${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased)`
+        : 'no armour — attack hits land in full'),
+    sRow('Attack mitigation',
+      p.armour>0 ? `${Math.round(armourDR(armourValue(),2)*100)}% / ${Math.round(armourDR(armourValue(),6)*100)}% / ${Math.round(armourDR(armourValue(),12)*100)}%` : '—',
+      'against a 2 / 6 / 12 damage hit — big hits punch through'),
+    sRow('Spell suppression', Math.round(suppressChance()*100)+'%',
+      suppressChance()>0 ? `a suppressed spell hit deals ${Math.round(SUPPRESS_TAKEN*100)}%` : 'spell hits land in full'),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
       p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
         : p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
@@ -2168,16 +2268,25 @@ function renderCharSheet(){
   ]);
 
   const crit = sBlock('CRITICALS', [
-    sRow('Crit chance', pct(p.crit), p.crit>=0.88 ? 'at the cap' : ''),
-    sRow('Crit damage', '×'+p.critMul.toFixed(1), p.critMul>=20 ? 'at the cap' : ''),
+    sRow('Crit chance', (cc*100).toFixed(1)+'%',
+      `${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round(p.incCrit*100)}% increased)`
+      + (cc>=CRIT_CHANCE_CAP ? ' — at the cap' : '')),
+    sRow('Crit multiplier', critMultPct()+'%',
+      `a crit deals ${critMultPct()}% of the hit`
+      + (critMultPct()>=CRIT_MULT_CAP ? ' — at the cap' : '')),
     sRow('Average multiplier', '×'+critAvg.toFixed(2), 'expected damage across all hits')
-  ], sBar(p.crit, '#ffd166'));
+  ], sBar(cc, '#ffd166'));
 
-  const power = sBlock('DAMAGE MULTIPLIERS', [
-    sRow('Base sword damage', p.dmg.toFixed(1), 'raised by Sharpened Blade'),
-    sRow('Level bonus', '×'+p.dmgMul.toFixed(2), '+5% every level'),
-    sRow('Blade damage', '×'+p.bladeDmg.toFixed(2), 'sword, bladestorm & vortex'),
-    sRow('Spell damage', '×'+p.spellDmg.toFixed(2), 'orbit, blaster, bombs & storm bricks')
+  const power = sBlock('DAMAGE PIPELINE', [
+    sRow('Sword base + flat', swordBase().toFixed(1),
+      `${SWORD_BASE} base + ${p.flatSword.toFixed(0)} flat added`),
+    sRow('Increased damage', Math.round(p.incAll*100)+'%', '+5% per level — applies to everything'),
+    sRow('Increased melee', Math.round(p.incMelee*100)+'%', 'sword, bladestorm & vortex'),
+    sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks'),
+    sRow('More multipliers', '×'+p.moreAll.toFixed(2),
+      'each MORE modifier multiplies on its own, after every increase'),
+    sRow('Sword hit', light.toFixed(2),
+      `(${SWORD_BASE} + ${p.flatSword.toFixed(0)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)}`)
   ]);
 
   const loot = sBlock('LOOT & XP', [
@@ -2284,12 +2393,14 @@ function openUpgrades(mode='wave', forceRar){
     ['Max HP', player.maxHp],
     ['Regen', player.regenRate>0 ? player.regenRate.toFixed(2)+'/s' : '—'],
     ['Move spd', (player.speed/215).toFixed(2)+'×'],
-    ['Crit', (player.crit*100).toFixed(0)+'%'],
-    ['Crit dmg', '×'+player.critMul.toFixed(1)],
-    ['Armor', armorPct()+'%'],
-    ['Sword dmg', (player.dmg*player.dmgMul).toFixed(1)],
-    ['Blade dmg', '×'+player.bladeDmg.toFixed(2)],
-    ['Spell dmg', '×'+player.spellDmg.toFixed(2)],
+    ['Crit', (critChance()*100).toFixed(1)+'%'],
+    ['Crit mult', critMultPct()+'%'],
+    ['Armour', Math.round(armourValue())],
+    ['Sword hit', swordDamage().toFixed(1)],
+    ['Inc. melee', Math.round((player.incMelee+player.incAll)*100)+'%'],
+    ['Inc. spell', Math.round((player.incSpell+player.incAll)*100)+'%'],
+    ['More dmg', '×'+player.moreAll.toFixed(2)],
+    ['Suppress', Math.round(suppressChance()*100)+'%'],
     ['Stud gain', '×'+player.studMul.toFixed(2)],
     ['XP gain', '×'+player.xpMul.toFixed(2)],
     ['Heart drop', (player.heartChance*100).toFixed(0)+'%']
@@ -2417,7 +2528,7 @@ function updatePlayer(dt){
           let within = s.spin ? x>0.12 : inSweep(Math.atan2(en.y-p.y,en.x-p.x), s.from, s.to, e, 0.45);
           if(within){
             s.hit.add(en);
-            const dmg = p.dmg * p.dmgMul * p.bladeDmg * (s.spin?1.4:1);
+            const dmg = swordDamage(s.spin ? [1.4] : null);   /* spin = 40% MORE */
             hitEnemy(en, dmg, Math.atan2(en.y-p.y,en.x-p.x), s.spin?300:210, 'sword', {spin:s.spin});
             if(s.spin) addShake(0.12);
           }
@@ -2456,7 +2567,7 @@ function updatePlayer(dt){
         if(en.dead || en.state!=='active' || en.orbCd>0) continue;
         if(dist({x:ox,y:oy}, en) < orb.size + en.r + 4){
           en.orbCd = hitCd;
-          hitEnemy(en, orb.dmg * p.spellDmg, angTo(p,en), 150, 'orbit', {spin:true});
+          hitEnemy(en, calcDamage(orb.dmg,'spell'), angTo(p,en), 150, 'orbit', {spin:true});
           addRing(en.x, en.y, 6, 160, 40, '#ffd166', 3, 0.3);
         }
       }
@@ -2472,7 +2583,7 @@ function updatePlayer(dt){
         projectiles.push({ kind:'pbrick',
           x:p.x, y:p.y-14,
           vx:Math.cos(ang)*bl.spd, vy:Math.sin(ang)*bl.spd,
-          life:1.15, dmg:bl.dmg*p.spellDmg, pierce:bl.pierce, hit:new Set(), spin:rnd(TAU) });
+          life:1.15, dmg:calcDamage(bl.dmg,'spell'), pierce:bl.pierce, hit:new Set(), spin:rnd(TAU) });
       }
       SFX.zap();
     }
@@ -2495,7 +2606,7 @@ function updatePlayer(dt){
         st.qIdx++;
         projectiles.push({ kind:'wblade', x:p.x, y:p.y-12,
           vx:Math.cos(ang)*st.spd, vy:Math.sin(ang)*st.spd,
-          life:st.life, dmg:st.dmg*p.bladeDmg, size:st.size, spin:ang, hit:new Set() });
+          life:st.life, dmg:calcDamage(st.dmg,'melee'), size:st.size, spin:ang, hit:new Set() });
       }
     }
   }
@@ -2511,7 +2622,7 @@ function updatePlayer(dt){
         if(en.dead || en.state!=='active' || en.vortCd>0) continue;
         if(dist(p,en) < vr + en.r){
           en.vortCd = vHit;
-          hitEnemy(en, vx2.dmg * p.dmgMul * p.bladeDmg, angTo(p,en), 180, 'sword', {spin:true});
+          hitEnemy(en, calcDamage(vx2.dmg,'melee'), angTo(p,en), 180, 'sword', {spin:true});
         }
       }
       if(Math.random()<0.5)
@@ -2589,7 +2700,7 @@ function updatePlayer(dt){
     while(chn.cds.length < zappers) chn.cds.push(chn.rate * chn.cds.length / zappers);
     chn.cds.length = zappers;
     let cands = null, fired = false;
-    const zapDmg = chn.dmg * p.spellDmg;
+    const zapDmg = calcDamage(chn.dmg,'spell');
     const claimed = new Set();   /* spread the bricks over different first targets */
     for(let z=0; z<zappers; z++){
       chn.cds[z] -= dt;
@@ -3301,7 +3412,8 @@ function updateEnemy(e, dt){
             const oldMax = e2.maxHp;
             e2.maxHp = Math.round(e2.maxHp*1.15);
             e2.hp += e2.maxHp - oldMax;
-            e2.armor = Math.min(0.85, (e2.armor||0) + 0.05);
+            e2.armour = (e2.armour||0) + 10;      /* flat armour, additive */
+            e2.suppress = Math.min(0.6, (e2.suppress||0) + 0.08);
             if((e2.buffDmg||0) < 6){ e2.buffDmg = (e2.buffDmg||0)+1; e2.dmg += 1; }
             /* buffStacks also feeds elemPower(), so their fire/frost/lightning
                lands harder and burns a wider patch of ground */
@@ -4045,7 +4157,8 @@ function updateProjectiles(dt){
         }
         else if(player.invuln<=0){
           playerDamage(1, pr,
-            pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null);
+            pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null,
+            pr.kind==='skull' ? true : undefined);   /* skulls are spells, arrows are not */
           pr.dead=true;
         }
       }
@@ -4053,7 +4166,7 @@ function updateProjectiles(dt){
         for(const e of enemies){
           if(e.dead||e.state!=='active') continue;
           if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < e.r+10){
-            hitEnemy(e,2*player.bladeDmg,Math.atan2(pr.vy,pr.vx),180,'arrow',{spin:true});
+            hitEnemy(e, calcDamage(2,'melee'), Math.atan2(pr.vy,pr.vx),180,'arrow',{spin:true});
             pr.dead=true; break;
           }
         }
@@ -4113,7 +4226,7 @@ function updateProjectiles(dt){
       pr.x = lerp(pr.sx, pr.tx, k); pr.y = lerp(pr.sy, pr.ty, k);
       pr.z = 26 + 120*Math.sin(Math.PI*k);
       pr.spin += dt*8;
-      if(k>=1){ pr.dead=true; explode(pr.x, pr.y, player.bomb.r, player.bomb.dmg*player.spellDmg, {source:'bomb'}); SFX.bomb(); }
+      if(k>=1){ pr.dead=true; explode(pr.x, pr.y, player.bomb.r, calcDamage(player.bomb.dmg,'spell'), {source:'bomb'}); SFX.bomb(); }
     }
     else if(pr.kind==='pumpkin'){
       if(pr.x===undefined){ pr.x = pr.sx; pr.y = pr.sy; pr.px = pr.sx; pr.py = pr.sy; }
