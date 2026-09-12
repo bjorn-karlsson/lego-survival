@@ -337,8 +337,9 @@ const MAX_ALIVE = 512;
 const CS = 40;
 const RING_MAX = 320;
 const REV_MAX = 260;
+const MAGNET_SPEED = 1500;    /* px/s straight at the hero while a magnet is up */
 const HEARTS_PER_ROW = 16;
-const HEART_MAX = 150;
+const HEART_MAX = 999;
 const HEART_POOL_AT = 99;
 const HEART_ROW_COLS = ['#d3242b','#ffb900','#9b45d6','#2ea8a0','#e4572e','#4b9b41','#2e7dd1','#c95bd0','#d3242b'];
 const BOMB_DIRS = [0, Math.PI/2, -Math.PI/2, Math.PI, Math.PI/4, -Math.PI/4, 3*Math.PI/4, -3*Math.PI/4];
@@ -358,6 +359,9 @@ const STORM_MAX_SIZE = 2.2; /* storm blades stop growing here */
 const VORTEX_MAX_R = 210;
 const FREEZE_MAX_R = 420;
 const BLAST_MAX_PIERCE = 8;
+const ORBIT_MAX_N = 15;                   /* guardian bricks in the ring */
+const BLAST_MAX_N = 40;                   /* bricks per volley */
+const BLAST_MAX_SHOTS = 40;               /* projectiles per volley, shards included */
 const FREEZE_MIN_RATE = 3.5;
 const EVADE_CAP = 0.55;                   /* no monster ever dodges more than this */
 const ZORB_SPD = 118;                     /* the storm orb drifts, it does not fly */
@@ -366,10 +370,26 @@ const ZORB_ARM = 165;                     /* how far the lightning arm reaches *
 const ZORB_ZAP_GAP = 0.11;
 const ZORB_STACKS = 5;                    /* shock stacks a direct orb hit lands */
 const CHAIN_ZAP_GAP = 0.2;                /* stagger between storm bricks firing */
+const CHAIN_JUMP_GAP = 0.1;               /* delay between one leap and the next */
+const CHAIN_MAX_NODES = 40;               /* ceiling on one forked bolt */
+const CHAIN_FORK_MAX = 2;                 /* ranks of Crackling Storm: 2 then 3 ways */
+const WHIRL_MAX = 2;                      /* ranks of Blademaster */
+const WHIRL_SPIN = 13;                    /* rad/s the hero turns while whirling */
+const WHIRL_TICK = 0.18;                  /* per-foe cooldown inside the whirl */
+const WHIRL_MUL = 0.5;                    /* each tick lands for half a swing */
+const WHIRL_SLOW = [1, 0.58, 0.8];        /* move speed by rank */
+const TOTEM_MAX = 2;                      /* ranks of Lingering Vortex */
+const TOTEM_EVERY = [0, 6, 3];            /* seconds between totems, by rank */
+const TOTEM_LIFE  = [0, 9, 12];
+const TOTEM_MUL   = [0, 1/3, 0.55];       /* share of vortex damage it deals */
+const TOTEM_TICK = 0.3;
 const FREEZE_STUN_T = 3.0;                /* Absolute Zero: frozen solid this long */
 const BLAST_SPLIT_MAX = 2;                /* Scattershot: 3 shards, then 9 */
 const ORBIT_PULSE_RATE = 1.5;             /* rad/s of the tidal sweep — slow on purpose */
-const ORBIT_PULSE_MIN = 0.18;             /* how far in the ring collapses */
+/* The tide breathes OUTWARD. Collapsing the ring onto the hero looked like the
+   bricks had fallen off; pushing it out past its own cap is the point. */
+const ORBIT_PULSE_IN  = 0.88;
+const ORBIT_PULSE_OUT = 1.62;
 /* Sturdy Plates stops here — and MORE Life raises the ceiling with it */
 function heartCap(){ return Math.round(HEART_MAX * (player.hpMore || 1)); }
 const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
@@ -787,7 +807,7 @@ function newPlayer(){
     /* defence */
     armour:0, incArmour:0, suppress:0,
     atkRate:0.34, atkCd:0,
-    combo:0, comboTimer:0, swing:null, reach:0, xpMul:1,
+    combo:0, comboTimer:0, swing:null, reach:0, xpMul:1, blademaster:0, whirl:false, whirlAng:0,
     dash:{t:0, cd:0, cdMax:0.9, dir:{x:1,y:0}},
     invuln:0, flash:0, xp:0, xpNext:10, level:1, magnetR:95, magnetT:0,
     kx:0, ky:0,
@@ -812,11 +832,11 @@ function newPlayer(){
     blaster:{ n:0, dmg:2, rate:1.5, cd:0.8, spd:560, pierce:2, split:0 },
     storm:{ n:0, dmg:2, rate:6.5, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
-    vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0 },
+    vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
     freeze:{ n:0, r:190, dur:2.5, rate:10, cd:4, stun:0 },
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
-    chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5], gap:0 },
+    chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5], gap:0, fork:0 },
     bomb:{ n:0, dmg:2, r:62, rate:7, cd:3, cluster:0 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
@@ -860,7 +880,10 @@ function roundRect(g,x,y,w,h,r){
   g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
   g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
 }
-/* biome map: 8 alternating sectors, heavy jitter, seeded blotches + cave pockets */
+/* ONE biome per run, rolled at world build. The old map carved itself into eight
+   sectors plus blotches, which made every run look like the same patchwork; a
+   world that commits to being a desert or a swamp reads as a place. Caves are
+   still carved out underneath it. */
 const BIOMES = {
   forest: ['#4f9a37','#55a43c','#4a9133','#59ab40'],
   desert: ['#d3bc7e','#ccb474','#dcc689','#c9b276'],
@@ -869,22 +892,17 @@ const BIOMES = {
   cave:   ['#6e6a62','#67635c','#767268','#5f5b55']
 };
 const BIOME_ORDER = ['forest','desert','stone','swamp'];
-let biomeBlobs = [];
-function biomeAt(x,y){
-  if(inCave(x,y)) return 'cave';
-  for(const b of biomeBlobs){
-    const dx0 = x-b.x, dy0 = y-b.y;
-    const gx0 = Math.floor(x/150), gy0 = Math.floor(y/150);
-    const wob = (hash2(gx0+b.seed, gy0-b.seed)-0.5)*180;
-    if(dx0*dx0 + dy0*dy0 < (b.r+wob)*(b.r+wob)) return b.kind;
-  }
-  const dx = x-CX, dy = y-CY;
-  const gx = Math.floor(x/180), gy = Math.floor(y/180);
-  const jx = (hash2(gx,gy)-0.5)*430, jy = (hash2(gx+57,gy+91)-0.5)*430;
-  const a = Math.atan2(dy+jy, dx+jx);
-  const s = Math.floor(((a+TAU)%TAU)/(TAU/8)) % 8;
-  return BIOME_ORDER[s % BIOME_ORDER.length];
-}
+const BIOME_NAMES = { forest:'THE GREENWOOD', desert:'THE DUST FLATS',
+                      stone:'THE GREY REACH', swamp:'THE MIRE' };
+/* what grows where, now that a run has exactly one surface to fill */
+const BIOME_PROPS = {
+  forest: [['tree',26],['crate',6],['crystal',4]],
+  desert: [['cactus',20],['rock',12],['crate',5]],
+  stone:  [['rock',22],['crate',10],['crystal',8]],
+  swamp:  [['tree',20],['crate',8],['crystal',4]]
+};
+let runBiome = 'forest';
+function biomeAt(x,y){ return inCave(x,y) ? 'cave' : runBiome; }
 const spriteCache = new Map();
 function cellSprite(col){
   let s = spriteCache.get(col);
@@ -916,14 +934,8 @@ function buildGround(){
       break;
     }
   }
-  /* biome blotches break up the sector seams */
-  biomeBlobs = [];
-  for(let i=0;i<9;i++){
-    const bx = 320+rng()*(W.w-640), by = 320+rng()*(W.h-640);
-    if(Math.hypot(bx-CX, by-CY) < 640) continue;
-    biomeBlobs.push({ x:bx, y:by, r:230+rng()*300,
-      kind: BIOME_ORDER[(rng()*BIOME_ORDER.length)|0], seed:(rng()*900)|0 });
-  }
+  /* the whole surface is one biome, rolled per run */
+  runBiome = BIOME_ORDER[(rng()*BIOME_ORDER.length)|0];
   /* scattered lakes — count scales with the map, none in the spawn clearing or a cave */
   waters = [];
   const lakeTarget = Math.round(W.w*W.h/800000);
@@ -1029,12 +1041,9 @@ function buildProps(){
   for(const [tx,ty] of torchPos) addProp('torch', tx, ty, rng);
   const dens = (W.w*W.h)/(3600*2700);   /* quotas follow the map size */
   const quotas = [
-    ['forest','tree',16],['swamp','tree',8],
-    ['desert','cactus',10],['desert','rock',6],
-    ['stone','rock',10],['stone','crate',8],['forest','crate',4],['swamp','crate',5],
-    /* Rock Raiders crystals & cave boulders */
-    ['cave','boulder',9],['cave','crystal',14],
-    ['stone','crystal',6],['forest','crystal',3],['swamp','crystal',3]
+    ...(BIOME_PROPS[runBiome]||BIOME_PROPS.forest).map(([t,c])=>[runBiome,t,c]),
+    /* Rock Raiders crystals & cave boulders, whatever the surface is */
+    ['cave','boulder',9],['cave','crystal',14]
   ].map(([b,t,c])=>[b,t,Math.round(c*dens)]);
   let tries = 0;
   const tryCap = Math.round(3200*dens);
@@ -1149,9 +1158,16 @@ function addDust(x,y,n=3,col='rgba(220,225,210,'){
 function addRing(x,y,r0,speed,max,color,lw=6,life=0.5){
   particles.push({kind:'ring', x, y, r:Math.max(1,r0), v:Math.max(1,speed), max, color, lw, life, maxLife:life});
 }
-function addZap(x1,y1,x2,y2,link=0){
+function addZap(x1,y1,x2,y2,link=0,hostile=false){
   particles.push({kind:'zap', x1,y1,x2,y2, vx:0, vy:0, life:0.16, max:0.16,
-    seed:rnd(TAU), link});
+    seed:rnd(TAU), link, hostile});
+}
+/* hearts read as 6, 5.5, 5.25 — never 5.000000001, and never a bare 5 when
+   there is half of one left */
+function fmtHp(v){
+  const r = Math.round(v*100)/100;
+  if(Number.isInteger(r)) return String(r);
+  return Math.abs((r*10) % 1) < 1e-9 ? r.toFixed(1) : r.toFixed(2);
 }
 function addDmg(x,y,txt,color='#fff',size=17){
   dmgTexts.push({x:x+rnd(-8,8), y:y-30, txt, color, size, life:0.8, vy:-52});
@@ -1162,6 +1178,12 @@ function addDmg(x,y,txt,color='#fff',size=17){
    nearest same-kind group so they can eventually merge. Lag-safe: runs
    ~once a second, capped work per pass. */
 function mergeSweep(){
+  /* while the magnet is up, nothing gravitates anywhere except to the hero — the
+     merge used to keep hauling studs off toward their join points and fight it */
+  if(player && player.magnetT > 0){
+    for(const pk of pickups) pk.seeking = false;
+    return;
+  }
   if(pickups.length < 12) return;
   const NEED = { stud1:10, stud5:8, stud20:5, stud50:4, stud100:5 };
   const OUT  = { stud1:2,  stud5:2, stud20:2, stud50:2, stud100:2 };
@@ -1264,12 +1286,34 @@ function hitR(e){
   const s = e.scale || 1;
   return Math.max(e.r || 0, (e.golem ? 23 : 15) * s);
 }
+/* FRIEND OR FOE, AT A GLANCE.
+   Everything the hero puts on the screen is drawn pale — bleached toward white.
+   Everything a monster puts on the screen is drawn deep and saturated. The hue
+   still says which element it is, the VALUE says whose it is. This matters most
+   for bombs: the player's used to be the same amber as an enemy firebomb, so a
+   crater on the floor told you nothing about whether to stand in it. */
+const FX = {
+  friend: {
+    ring:'#fff2c4', ringHot:'#ffd98a', spark:'#fffaf0',
+    bricks:['#fff2c4','#ffd98a','#ffe89a'],
+    zap:'#dff2ff', zapCore:'#ffffff',
+    brick:'#ffe89a', brickStud:'#ffd166',
+    frost:'#f2fbff', frostDeep:'#cfeaff'
+  },
+  foe: {
+    ring:'#c2410c', ringHot:'#7c2d12', spark:'#e2620f',
+    bricks:['#c2410c','#7c2d12','#3a2f2a'],
+    zap:'#e0a81a', zapCore:'#ffe95a',
+    frost:'#79b4dc', frostDeep:'#3f7ba8'
+  }
+};
 function explode(x,y,r,dmg,opts={}){
-  addRing(x,y,10,r*4.2,r*1.35,'#ffb900',9,0.4);
-  addRing(x,y,6,r*3.4,r,'#ff6a2a',5,0.32);
-  addSparks(x,y,16,'#ffd166');
+  const C = opts.hostile ? FX.foe : FX.friend;
+  addRing(x,y,10,r*4.2,r*1.35,C.ring,9,0.4);
+  addRing(x,y,6,r*3.4,r,C.ringHot,5,0.32);
+  addSparks(x,y,16,C.spark);
   for(let i=0;i<3;i++) addDust(x+rnd(-r/3,r/3), y+rnd(-r/3,r/3), 2,'rgba(90,85,75,');
-  spawnBricks(x,y, opts.brickCols||[PAL.red,PAL.dred,PAL.orange], 10, 220);
+  spawnBricks(x,y, opts.brickCols||C.bricks, 10, 220);
   SFX.boomSmall(); addShake(opts.shake??0.35);
   if(!opts.hostile){
     for(const e of enemies){
@@ -1501,7 +1545,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     flash:0, hitCd:0, atkCd:rnd(0.5,1.5)*atkS, kx:0, ky:0, mode:'chase', modeT:0,
     strafe:Math.random()<0.5?1:-1, strafeT:rnd(1,3), elite, magic, dead:false, phase:rnd(TAU),
     aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
-    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1, stunT:0,
+    stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1, stunT:0, totCd:0,
     shade:d.shade||0, zorb:d.zorb||0,
     /* elites are sharper dodgers, but evade is capped well under certainty */
     evade: d.evade ? Math.min(EVADE_CAP, d.evade * (elite?1.25:1) * (magic?1.1:1)) : 0,
@@ -1581,13 +1625,16 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     /* attacks meet armour, scaled against the size of this very hit */
     d *= (1 - armourDR(e.armour||0, d));
   }
-  d = Math.max(1, Math.round(d));
-  e.hp -= d; e.flash = 1;
+  /* fractions survive all the way to the health bar. Rounding every hit to a
+     whole point was quietly handing out free damage on small hits and eating the
+     back half of the big ones. */
+  d = Math.max(0.05, Math.round(d*100)/100);
+  e.hp = Math.round((e.hp - d)*100)/100; e.flash = 1;
   const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
   e.kx += Math.cos(kdir)*kb*kbm;
   e.ky += Math.sin(kdir)*kb*kbm;
   addSparks(e.x, e.y-18*e.scale, 5, crit?'#ffd166':'#fff2b0');
-  addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+d,
+  addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
     suppressed?'#9fd4ff' : crit?'#ffd166':'#ffffff', crit?21:16);
   addShake(crit?0.13:0.08);
   SFX.hit();
@@ -1806,11 +1853,14 @@ function applyAilment(elem, src, stacks){
 }
 /* Burn ticks bypass the post-hit invulnerability — otherwise a damage-over-time
    effect would never land a single point. */
-function ailmentDamage(n){
+/* `n` may be a fraction of a heart. The floating number is only spawned once a
+   whole point has burned away, or the screen would be a blizzard of -0.01. */
+function ailmentDamage(n, quiet){
   const p = player;
   if(godMode || p.dead || state!=='play') return;
-  p.hp -= n; p.flash = 1; redFlash = Math.max(redFlash, 0.35);
-  addDmg(p.x, p.y-44, '-'+n, '#ff8a3c', 16);
+  p.hp = Math.round((p.hp - n)*100)/100;
+  p.flash = 1; redFlash = Math.max(redFlash, 0.35);
+  if(!quiet) addDmg(p.x, p.y-44, '-'+fmtHp(n), '#ff8a3c', 16);
   if(p.hp<=0){ p.hp=0; playerDie(); }
 }
 /* Chill slows you down and slows your swing; shock makes hits land harder. */
@@ -1839,8 +1889,12 @@ function updateAilments(dt){
       f.t -= dt;
     }
     p.burn.list = p.burn.list.filter(f=>f.t > 0);
+    /* it bites continuously; the number only pops once a whole heart has gone */
     p.burn.acc += deal;
-    while(p.burn.acc >= 1){ p.burn.acc -= 1; ailmentDamage(1); }
+    const show = p.burn.acc >= 1;
+    if(show) p.burn.acc -= 1;
+    if(deal > 0) ailmentDamage(deal, !show);
+    if(show) addDmg(p.x, p.y-44, '-1', '#ff8a3c', 16);
     if(Math.random() < 0.5)
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40), vx:rnd(-14,14), vy:rnd(-80,-30),
         life:0.4, max:0.4, color: Math.random()<0.5?'#ff9a3c':'#ffd166'});
@@ -1885,9 +1939,10 @@ function playerDamage(n, src, elem, spell){
   } else {
     d *= (1 - armourDR(armourValue(), d));
   }
-  n = Math.max(1, Math.round(d));
+  n = Math.max(0.05, Math.round(d*100)/100);
   if(elem) applyAilment(elem, src);
-  p.hp -= n; p.invuln = 1.1; p.flash = 1; redFlash = 0.6;
+  p.hp = Math.round((p.hp - n)*100)/100;
+  p.invuln = 1.1; p.flash = 1; redFlash = 0.6;
   const a = angTo(src, p);
   p.kx = Math.cos(a)*280; p.ky = Math.sin(a)*280;
   addShake(0.5); SFX.hurt();
@@ -2258,10 +2313,11 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
     apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.orbit.n < ORBIT_MAX_N,
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} orbiting bricks (now ${player.orbit.n + c.n})`
-      : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes`,
-    apply:c=>{ player.orbit.n += c.n; } },
+      : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes (max ${ORBIT_MAX_N})`,
+    apply:c=>{ player.orbit.n = Math.min(ORBIT_MAX_N, player.orbit.n + c.n); } },
   { id:'orbitpow', name:'Heavy Orbit', icon:'orbit', cls:'SPELL', req:()=>player.orbit.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), r:Math.round(6*m), s:Math.round(2*m)}),
     desc:c=>`Orbit +${c.v} dmg, +${c.r} reach (cap ${ORBIT_MAX_R}), +${c.s} size (cap ${ORBIT_MAX_SIZE})`,
@@ -2274,10 +2330,11 @@ const UPGRADES = [
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
     apply:c=>{ player.orbit.spd = Math.min(ORBIT_MAX_SPD, player.orbit.spd*(1+c.v)); } },
   { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.blaster.n < BLAST_MAX_N,
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bricks per volley (now ${player.blaster.n + c.n})`
-      : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor`,
-    apply:c=>{ player.blaster.n += c.n; } },
+      : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor (max ${BLAST_MAX_N})`,
+    apply:c=>{ player.blaster.n = Math.min(BLAST_MAX_N, player.blaster.n + c.n); } },
   { id:'blastpow', name:'Blaster Power', icon:'blaster', cls:'SPELL', req:()=>player.blaster.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.8)), p:m>=2.4?1:0}),
     desc:c=>`Blaster +${c.v} dmg${c.p?` and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
@@ -2433,7 +2490,38 @@ const UPGRADES = [
         : `The smaller bricks shatter again: 9 shards per brick, each for a ninth — `+
           `a shotgun instead of a pistol`;
     },
-    apply:c=>{ player.blaster.split = Math.min(BLAST_SPLIT_MAX, (player.blaster.split||0) + 1); } }
+    apply:c=>{ player.blaster.split = Math.min(BLAST_SPLIT_MAX, (player.blaster.split||0) + 1); } },
+  { id:'chainfork', name:'Crackling Storm', icon:'chain', cls:'SPELL', minRar:'legendary',
+    req:()=>player.chain.n>0 && (player.chain.fork||0) < CHAIN_FORK_MAX,
+    calc:m=>({n:1}),
+    desc:c=>{
+      const ways = 2 + (player.chain.fork||0);
+      return `Every leap FORKS ${ways} ways instead of one — a bolt walks the pack as `+
+        `a branching tree (1 → ${ways} → ${ways*ways} → …). Each fork carries a `+
+        `${ways} way split of the damage.`;
+    },
+    apply:c=>{ player.chain.fork = Math.min(CHAIN_FORK_MAX, (player.chain.fork||0) + 1); } },
+  { id:'blademaster', name:'Blademaster', icon:'sword', cls:'OFFENSE', minRar:'legendary',
+    req:()=>player.blademaster < WHIRL_MAX,
+    calc:m=>({n:1}),
+    desc:c=> player.blademaster===0
+      ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
+        `reach for ${Math.round(WHIRL_MUL*100)}% of a swing every ${WHIRL_TICK.toFixed(2)}s. `+
+        `You move at ${Math.round(WHIRL_SLOW[1]*100)}% speed while whirling and cannot roll.`
+      : `The whirl costs you less footing — ${Math.round(WHIRL_SLOW[2]*100)}% speed instead `+
+        `of ${Math.round(WHIRL_SLOW[1]*100)}%. Still no rolling.`,
+    apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
+  { id:'vortextotem', name:'Lingering Vortex', icon:'vortex', cls:'SPELL', minRar:'legendary',
+    req:()=>player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
+    calc:m=>({n:1}),
+    desc:c=>{
+      const lv = (player.vortex.totem||0) + 1;
+      return `Every ${TOTEM_EVERY[lv]}s you leave a whirlwind standing where you are. It `+
+        `does not follow you — it stays for ${TOTEM_LIFE[lv]}s, shredding anything that `+
+        `walks in for ${Math.round(TOTEM_MUL[lv]*100)}% of your vortex damage.`;
+    },
+    apply:c=>{ player.vortex.totem = Math.min(TOTEM_MAX, (player.vortex.totem||0) + 1);
+      player.vortex.totemCd = 0; } }
 ];
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
@@ -2558,14 +2646,14 @@ function buildCheatRows(){
 
   const misc = document.getElementById('cheatMisc');
   misc.innerHTML = [
-    ['heal','FULL HEARTS'], ['hearts','+20 MAX HEARTS'], ['studs','+1000 STUDS'],
+    ['heal','FULL HEARTS'], ['hearts','+50 MAX HEARTS'], ['studs','+1000 STUDS'],
     ['level','+5 LEVELS'], ['clear','CLEAR THE FIELD'], ['god','TOGGLE GOD MODE']
   ].map(([k,label])=>`<div class="cheatbtn${k==='god'&&godMode?' got':''}" data-misc="${k}">${label}</div>`).join('');
   for(const el of misc.children)
     el.addEventListener('click', ()=>{
       const k = el.dataset.misc, p = player;
       if(k==='heal') p.hp = p.maxHp;
-      else if(k==='hearts'){ p.maxHp = Math.min(HEART_MAX, p.maxHp+20); p.hp = p.maxHp; }
+      else if(k==='hearts'){ p.maxHp = Math.min(heartCap(), p.maxHp+50); p.hp = p.maxHp; }
       else if(k==='studs') p.studs += 1000;
       else if(k==='level'){ for(let i=0;i<5;i++){ p.level++; p.incAll += 0.05; } }
       else if(k==='clear'){ for(const e of enemies) e.dead = true; }
@@ -2666,8 +2754,8 @@ function spellSummaries(){
       `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
       `${per(d)} per hit — ${p.orbit.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
       `A foe can be struck every ${hitCd.toFixed(2)}s`+
-      (p.orbit.pulse ? `\nTidal Orbit: the ring sweeps from ${Math.round(p.orbit.r*ORBIT_PULSE_MIN)} `+
-        `out to ${Math.round(p.orbit.r)} and back, raking everything between` : '') });
+      (p.orbit.pulse ? `\nTidal Orbit: the ring breathes from ${Math.round(p.orbit.r*ORBIT_PULSE_IN)} `+
+        `out to ${Math.round(p.orbit.r*ORBIT_PULSE_OUT)} — past its own cap — and back` : '') });
   }
   if(p.blaster.n>0){
     const d = calcDamage(p.blaster.dmg,'spell');
@@ -2686,6 +2774,7 @@ function spellSummaries(){
   if(p.chain.n>0 && p.chain.zappers>0){
     const d = calcDamage(p.chain.dmg,'spell');
     const leaps = p.chain.n - 1;
+    const ways = 1 + (p.chain.fork||0) + (p.chain.fork ? 1 : 0);
     let total = d;
     const steps = [];
     for(let i=1;i<=leaps;i++){
@@ -2701,7 +2790,10 @@ function spellSummaries(){
         ? `Leaps land for ${steps.join(' / ')}${leaps>4?' …':''} of the opening — a longer chain holds up better\n`
         : `No leaps yet — take another Storm Brick to start chaining\n`)+
       `${p.chain.n} target${p.chain.n>1?'s':''} per bolt: ${per(total)} down the chain\n`+
-      `All ${zn} bricks firing: ${per(total*zn)}` });
+      `All ${zn} bricks firing: ${per(total*zn)}\n`+
+      `Each leap lands ${CHAIN_JUMP_GAP.toFixed(2)}s after the one before it`+
+      (p.chain.fork ? `\nCrackling Storm ×${p.chain.fork}: every leap forks ${ways} ways `+
+        `(up to ${CHAIN_MAX_NODES} foes per bolt), each fork carrying a ${ways} way split` : '') });
   }
   if(p.storm.n>0){
     const d = calcDamage(p.storm.dmg,'melee'), blades = p.storm.n*p.storm.count;
@@ -2721,6 +2813,9 @@ function spellSummaries(){
       `Spins for ${dur.toFixed(1)}s every ${p.vortex.rate.toFixed(2)}s\n`+
       `${per(d)} damage per tick, one tick per foe every ${tick.toFixed(2)}s\n`+
       `Radius ${Math.round(p.vortex.r + (p.vortex.n-1)*10)}\n`+
+      (p.vortex.totem ? `Lingering Vortex ×${p.vortex.totem}: one stays behind every `+
+        `${TOTEM_EVERY[p.vortex.totem]}s for ${TOTEM_LIFE[p.vortex.totem]}s at `+
+        `${Math.round(TOTEM_MUL[p.vortex.totem]*100)}% damage\n` : '')+
       `Up to ${per(d*Math.floor(dur/tick))} to a foe that stays inside` });
   }
   if(p.bomb.n>0){
@@ -2823,7 +2918,11 @@ function renderCharSheet(){
   const comboAvg = (light*2 + spin)/3;             /* every third swing is the spin */
 
   const vitals = sBlock('VITALS', [
-    sRow('Hearts', `${p.hp} / ${p.maxHp}`, p.maxHp>=HEART_MAX ? 'at the maximum' : `${HEART_MAX-p.maxHp} more possible`),
+    sRow('Hearts', `${fmtHp(p.hp)} / ${p.maxHp}`,
+      p.maxHp>=heartCap() ? 'at the maximum' : `${heartCap()-p.maxHp} more possible`,
+      `Hearts are continuous, not whole steps: a hit for 1.4 takes 1.40 off you, and a `+
+      `heart that is part full is drawn part lit.\n\nRegeneration fills the heart you `+
+      `are standing on from 0.00 upward instead of waiting to bank a whole point.`),
     sRow('Armour', Math.round(armourValue()),
       p.curse.armor>0 ? `BRITTLE — cut from ${Math.round(p.armour*(1+p.incArmour))}`
         : p.armour>0 ? `${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased)`
@@ -2867,6 +2966,13 @@ function renderCharSheet(){
   const sword = sBlock('SWORD', [
     sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(56+p.reach)} reach · arc swing`),
     sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(64+p.reach)} reach · every 3rd swing, full circle`),
+    ...(p.blademaster>0 ? [sRow('Blademaster', '×'+p.blademaster,
+      `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed, no roll`,
+      `Holding the swing button spins you up instead of swinging. Everything inside `+
+      `${Math.round(56+p.reach)} reach takes ${Math.round(WHIRL_MUL*100)}% of a light swing `+
+      `every ${WHIRL_TICK.toFixed(2)}s — that is ${(swordDamage([WHIRL_MUL])/WHIRL_TICK).toFixed(1)} `+
+      `per second, held.\n\nYou walk at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
+      `it is up and cannot roll out of anything.`)] : []),
     sRow('Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
@@ -2963,7 +3069,13 @@ function renderCharSheet(){
       `-${Math.round((1-chillMul())*100)}% move speed and swing rate`),
     sRow('Shock', p.shock.stacks>0 ? '×'+Math.round(p.shock.stacks) : 'none',
       `+${Math.round(shockCritChance()*100)}% chance a hit on you crits for ×1.8`),
-    sRow('Stack ceiling', '×'+AIL_MAX, 'chill and shock both cap here')
+    sRow('Stack ceiling', '×'+AIL_MAX, 'chill and shock both cap here'),
+    sRow('Whose effect is that?', 'pale = yours', 'deep = theirs',
+      `Anything YOU put on the floor is drawn bleached toward white — your bombs `+
+      `land as pale gold craters, your blaster bricks are cream, your lightning is `+
+      `white-blue.\n\nAnything a MONSTER puts down is deep and saturated: ember-red `+
+      `fire, dark amber lightning.\n\nSame hue for the same element, so a firebomb `+
+      `still reads as fire — the brightness tells you whether to stand in it.`)
   ]);
 
   const curseRows = CURSE_KEYS.map(k=>
@@ -3147,13 +3259,12 @@ function updatePlayer(dt){
   if(p.slowT>0 && Math.random()<0.25)
     particles.push({kind:'spark', x:p.x+rnd(-14,14), y:p.y-rnd(10,40), vx:rnd(-15,15), vy:-30,
       life:0.5, max:0.5, color:'#bfe3ff'});
+  /* regen is continuous now: the heart you are standing on fills from 0.00 up,
+     instead of nothing happening until a whole point has been banked */
   const regen = cursedRegen();
-  p.regenAcc = (regen>0 && p.hp<p.maxHp) ? p.regenAcc + regen*dt : 0;
-  if(p.regenAcc >= 1){
-    const g = Math.floor(p.regenAcc);
-    p.regenAcc -= g;
-    p.hp = Math.min(p.maxHp, p.hp+g);
-  }
+  if(regen>0 && p.hp<p.maxHp)
+    p.hp = Math.round(Math.min(p.maxHp, p.hp + regen*dt)*100)/100;
+  p.regenAcc = regen>0 ? (p.hp - Math.floor(p.hp)) : 0;   /* the sliver, for the bar */
   updateAilments(dt);
   p.blinkT -= dt; if(p.blinkT<=0){ p.blink=0.12; p.blinkT=rnd(2,4.5); } p.blink = Math.max(0,p.blink-dt);
   const aimA = Math.atan2(mouse.wy-p.y, mouse.wx-p.x);
@@ -3162,7 +3273,30 @@ function updatePlayer(dt){
   let ay = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0);
   const al = Math.hypot(ax,ay)||1; ax/=al; ay/=al;
   p.moving = (ax!==0||ay!==0);
-  const spdMul = chillMul();   /* chill stacks are the only movement penalty */
+  /* Blademaster: holding the swing button spins the hero up into a whirl. It is a
+     stance, not an attack — it replaces swinging, costs footing, and locks out
+     the roll while it is up. */
+  p.whirl = p.blademaster>0 && mouse.down && p.stunT<=0 && p.dash.t<=0 && !p.dead;
+  if(p.whirl){
+    p.whirlAng += WHIRL_SPIN*dt;
+    p.swing = null;                       /* the whirl and a swing are exclusive */
+    const reach = 56 + p.reach;
+    const dmg = swordDamage([WHIRL_MUL]);
+    for(const en of enemies){
+      if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
+      if(dist(p,en) < reach + hitR(en)){
+        en.whirlCd = WHIRL_TICK;
+        hitEnemy(en, dmg, angTo(p,en), 90, 'sword', {spin:true});
+      }
+    }
+    for(let i=0;i<2;i++){
+      const a2 = p.whirlAng + i*Math.PI;
+      if(Math.random()<0.5)
+        particles.push({kind:'spark', x:p.x+Math.cos(a2)*reach*0.9, y:p.y-14+Math.sin(a2)*reach*0.6,
+          vx:rnd(-30,30), vy:rnd(-40,10), life:0.18, max:0.18, color:'#e8eef2'});
+    }
+  } else p.whirlAng = 0;
+  const spdMul = chillMul() * (p.whirl ? WHIRL_SLOW[p.blademaster] : 1);
   let vx, vy;
   if(p.stunT > 0){
     vx = 0; vy = 0; p.moving = false;      /* frozen solid — no moving, no swinging */
@@ -3180,12 +3314,12 @@ function updatePlayer(dt){
   p.x += (vx + p.kx)*dt; p.y += (vy + p.ky)*dt;
   p.kx *= Math.max(0,1-8*dt); p.ky *= Math.max(0,1-8*dt);
   collideWorld(p);
-  if(keys.Space && p.dash.cd<=0 && !p.swing && p.stunT<=0){
+  if(keys.Space && p.dash.cd<=0 && !p.swing && p.stunT<=0 && !p.whirl){
     p.dash.t = 0.18; p.dash.cd = p.dash.cdMax;
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
     SFX.dash(); addDust(p.x,p.y,5);
   }
-  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0) startSwing(aimA);
+  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0 && !p.whirl) startSwing(aimA);
   if(p.swing){
     const s = p.swing;
     s.t += dt;
@@ -3237,7 +3371,7 @@ function updatePlayer(dt){
     /* Tidal Orbit: the ring breathes in to the hero and back out to full reach,
        so the bricks rake everything between instead of holding one circle */
     const rNow = orb.pulse
-      ? orb.r * (ORBIT_PULSE_MIN + (1-ORBIT_PULSE_MIN)*(0.5 - 0.5*Math.cos(vtime*ORBIT_PULSE_RATE)))
+      ? orb.r * (ORBIT_PULSE_IN + (ORBIT_PULSE_OUT-ORBIT_PULSE_IN)*(0.5 - 0.5*Math.cos(vtime*ORBIT_PULSE_RATE)))
       : orb.r;
     orb.rNow = rNow;
     for(let i=0;i<orb.n;i++){
@@ -3265,8 +3399,11 @@ function updatePlayer(dt){
       const shards = Math.pow(3, bl.split||0);
       const each = calcDamage(bl.dmg,'spell') / shards;
       const sz = Math.pow(0.62, bl.split||0);
-      for(let i=0;i<bl.n;i++){
-        const ang = aimA + (i-(bl.n-1)/2)*0.17;
+      /* the ceiling is on PROJECTILES, so Scattershot trades brick count for
+         shard count rather than multiplying its way to three hundred of them */
+      const bricks = Math.max(1, Math.min(bl.n, Math.floor(BLAST_MAX_SHOTS/shards)));
+      for(let i=0;i<bricks;i++){
+        const ang = aimA + (i-(bricks-1)/2)*0.17;
         for(let k=0;k<shards;k++){
           const spread = shards>1 ? (k-(shards-1)/2) * (0.30/Math.max(1,shards-1)) * (shards>3?2.2:1) : 0;
           projectiles.push({ kind:'pbrick',
@@ -3331,6 +3468,20 @@ function updatePlayer(dt){
         SFX.vortex();
       }
     }
+    /* the legendary: leave one standing where you are and walk away from it */
+    if(vx2.totem){
+      vx2.totemCd -= dt;
+      if(vx2.totemCd <= 0){
+        const lv = vx2.totem;
+        vx2.totemCd = TOTEM_EVERY[lv];
+        const rr = vx2.r + (vx2.n-1)*10;
+        projectiles.push({ kind:'vtotem', x:p.x, y:p.y, px:p.x, py:p.y,
+          r:rr, life:TOTEM_LIFE[lv], max:TOTEM_LIFE[lv],
+          dmg:calcDamage(vx2.dmg,'melee')*TOTEM_MUL[lv], seed:rnd(TAU) });
+        addRing(p.x, p.y, 12, 300, rr, '#b9c6d2', 5, 0.4);
+        SFX.vortex();
+      }
+    }
   }
   /* block freeze — pure AoE slow, no damage */
   const fz = p.freeze;
@@ -3340,8 +3491,8 @@ function updatePlayer(dt){
       fz.cd = fz.rate;
       const rr = fz.r + (fz.n-1)*30;
       const dur = fz.dur + (fz.n-1)*1.2;
-      addRing(p.x, p.y, 20, 420, rr, '#bfe3ff', 8, 0.5);
-      addRing(p.x, p.y, 10, 300, rr*0.7, '#dff2ff', 5, 0.4);
+      addRing(p.x, p.y, 20, 420, rr, FX.friend.frostDeep, 8, 0.5);
+      addRing(p.x, p.y, 10, 300, rr*0.7, FX.friend.frost, 5, 0.4);
       SFX.freeze();
       let cnt = 0;
       for(const en of enemies){
@@ -3354,7 +3505,7 @@ function updatePlayer(dt){
             addSparks(en.x, en.y-16, 6, '#ffffff');
           }
           cnt++;
-          addSparks(en.x, en.y-16, 3, '#dff2ff');
+          addSparks(en.x, en.y-16, 3, FX.friend.frost);
         }
       }
       if(cnt>0) addDmg(p.x, p.y-52, (fz.stun?'FROZEN SOLID ×':'FROZEN ×')+cnt, '#bfe3ff', 16);
@@ -3419,30 +3570,51 @@ function updatePlayer(dt){
       chn.cds[z] = chn.rate;                          /* only consumed when it actually fires */
       chn.gap = CHAIN_ZAP_GAP;
       fired = true;
-      /* Walk the whole chain FIRST, so the falloff can be stretched across the
-         foes this bolt will actually reach rather than a fixed per-leap cut. */
-      const targets = [];
-      const hitSet = new Set();
-      let cur = pick(pool);
-      while(cur && targets.length < chn.n){
-        targets.push(cur); hitSet.add(cur);
-        let nxt=null, best=1e9;
-        for(const e2 of enemies){
-          if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
-          const dd = dist(e2,cur);
-          if(dd<340 && dd<best){ best=dd; nxt=e2; }
+      /* Plot the whole bolt FIRST, so the falloff can be stretched across the
+         foes it will actually reach rather than a fixed per-leap cut. With
+         Crackling Storm every step forks, so this is a tree, not a line. */
+      const branch = 1 + (chn.fork||0);
+      const root = pick(pool);
+      claimed.add(root);
+      const hitSet = new Set([root]);
+      const origin = chainBrickPos(p, z, zappers);
+      /* nodes: {e, depth, fx, fy} — fx/fy is where the arc comes FROM */
+      const nodes = [{ e:root, depth:0, fx:origin.x, fy:origin.y }];
+      let frontier = [nodes[0]];
+      for(let depth=1; depth<=chn.n-1 && frontier.length && nodes.length<CHAIN_MAX_NODES; depth++){
+        const next = [];
+        for(const node of frontier){
+          /* the `branch` nearest foes this bolt has not touched yet */
+          const near = [];
+          for(const e2 of enemies){
+            if(e2.dead||e2.state!=='active'||hitSet.has(e2)) continue;
+            const dd = dist(e2, node.e);
+            if(dd < 340) near.push({e:e2, dd});
+          }
+          near.sort((a2,b2)=>a2.dd-b2.dd);
+          for(let k=0; k<branch && k<near.length && nodes.length<CHAIN_MAX_NODES; k++){
+            const tg = near[k].e;
+            if(hitSet.has(tg)) continue;
+            hitSet.add(tg);
+            const n2 = { e:tg, depth, fx:node.e.x, fy:node.e.y-14 };
+            nodes.push(n2); next.push(n2);
+          }
         }
-        cur = nxt;
+        frontier = next;
       }
-      claimed.add(targets[0]);
-      const leaps = targets.length - 1;
-      let from = chainBrickPos(p, z, zappers);
-      for(let i=0;i<targets.length;i++){
-        const tg = targets[i];
-        const dmg = i===0 ? zapDmg : zapDmg * chainLeapFrac(i, leaps);
-        addZap(from.x, from.y, tg.x, tg.y-14, i);
-        hitEnemy(tg, dmg, angTo(from,tg), 0, 'chain', {spin:true});
-        from = {x:tg.x, y:tg.y-14};
+      let deepest = 0;
+      for(const n2 of nodes) deepest = Math.max(deepest, n2.depth);
+      /* Each jump lands a tenth of a second after the one before it, so the bolt
+         visibly walks down the pack instead of resolving in a single frame. */
+      for(const n2 of nodes){
+        const dmg = (n2.depth===0 ? zapDmg : zapDmg * chainLeapFrac(n2.depth, deepest))
+          / Math.pow(branch, n2.depth);     /* a fork splits the damage it carries */
+        const fire = ()=>{
+          addZap(n2.fx, n2.fy, n2.e.x, n2.e.y-14, n2.depth);
+          if(n2.e.dead || n2.e.state!=='active') return;
+          hitEnemy(n2.e, dmg, angTo({x:n2.fx,y:n2.fy}, n2.e), 0, 'chain', {spin:true});
+        };
+        if(n2.depth===0) fire(); else schedule(n2.depth*CHAIN_JUMP_GAP, fire);
       }
     }
     if(fired) SFX.thunder();
@@ -3451,7 +3623,14 @@ function updatePlayer(dt){
   for(const pk of pickups){
     pk.t += dt;
     const d = dist(pk,p);
-    if(d < mr && pk.z<20){
+    if(p.magnetT > 0 && pk.z < 20){
+      /* a magnet is not a gentle tug: every stud on the field drops what it was
+         doing and flies straight in, at a flat speed rather than accelerating */
+      const a = angTo(pk,p);
+      pk.seeking = false;
+      pk.vx = Math.cos(a)*MAGNET_SPEED;
+      pk.vy = Math.sin(a)*MAGNET_SPEED;
+    } else if(d < mr && pk.z<20){
       const closeness = clamp(1 - d/mr, 0, 1);
       const pull = (500 + 2400*Math.pow(closeness,1.5)) * pm;
       const a = angTo(pk,p);
@@ -3460,11 +3639,11 @@ function updatePlayer(dt){
     if(d < 26 && pk.z<16){
       pk.got = true;
       if(pk.kind==='heart'){
-        if(p.hp<p.maxHp){ p.hp++; addDmg(p.x,p.y-46,'+1','#ff8a8a',18); }
+        if(p.hp<p.maxHp){ p.hp = Math.min(p.maxHp, p.hp+1); addDmg(p.x,p.y-46,'+1','#ff8a8a',18); }
         else { spawnStuds(p.x,p.y,3); }
         SFX.heart();
       } else if(pk.kind==='gheart'){
-        p.maxHp = Math.min(HEART_MAX, p.maxHp+1);
+        p.maxHp = Math.min(heartCap(), p.maxHp+1);
         p.hp = p.maxHp;
         addDmg(p.x, p.y-56, 'MAX HEART!', '#ffd166', 19);
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
@@ -3819,7 +3998,8 @@ function updateEnemy(e, dt){
   }
   e.flash = Math.max(0, e.flash-4*dt);
   e.orbCd -= dt;
-  e.vortCd -= dt;
+  e.vortCd -= dt; e.whirlCd = Math.max(0, (e.whirlCd||0) - dt);
+  e.totCd = Math.max(0, (e.totCd||0) - dt);
   e.slowT = Math.max(0, e.slowT - dt);
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
@@ -5145,11 +5325,11 @@ function updateProjectiles(dt){
         }
         if(Math.random()<0.8)
           particles.push({kind:'spark', x:pr.x+rnd(-10,10), y:pr.y+rnd(-8,8),
-            vx:rnd(-40,40), vy:rnd(-50,-5), life:0.4, max:0.4, color:'#dff2ff'});
+            vx:rnd(-40,40), vy:rnd(-50,-5), life:0.4, max:0.4, color:FX.foe.frost});
       }
       if(pr.kind==='frostbolt' && Math.random()<0.4)
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-20,20), vy:rnd(-20,20),
-          life:0.25, max:0.25, color:'#bfe3ff'});
+          life:0.25, max:0.25, color:FX.foe.frostDeep});
       if(pr.kind==='hexbolt' && Math.random()<0.6)
         particles.push({kind:'spark', x:pr.x, y:pr.y, vx:rnd(-25,25), vy:rnd(-25,25),
           life:0.3, max:0.3, color:CURSES[pr.curse].col});
@@ -5178,7 +5358,7 @@ function updateProjectiles(dt){
             pr.kind==='skull' ? true : undefined);   /* skulls are spells, arrows are not */
           pr.dead=true;
           if(pr.kind==='frostrock'){
-            addRing(pr.x,pr.y,16,300,110,'#dff2ff',7,0.45);
+            addRing(pr.x,pr.y,16,300,110,FX.foe.frost,7,0.45);
             spawnBricks(pr.x,pr.y,['#cfeaff','#7fb9e0','#4d86ad'],7,180);
             SFX.freeze();
           }
@@ -5194,6 +5374,23 @@ function updateProjectiles(dt){
         }
       }
     }
+    else if(pr.kind==='vtotem'){
+      pr.life -= dt;
+      if(pr.life<=0){ pr.dead = true; addSparks(pr.x, pr.y-10, 8, '#cfd6dd'); }
+      for(const e of enemies){
+        if(e.dead || e.state!=='active' || e.totCd>0) continue;
+        if(dist(pr,e) < pr.r + hitR(e)){
+          e.totCd = TOTEM_TICK;
+          hitEnemy(e, pr.dmg, angTo(pr,e), 120, 'sword', {spin:true});
+        }
+      }
+      if(Math.random()<0.6){
+        const a2 = rnd(TAU);
+        particles.push({kind:'spark', x:pr.x+Math.cos(a2)*pr.r*0.85,
+          y:pr.y+Math.sin(a2)*pr.r*0.55, vx:rnd(-30,30), vy:rnd(-30,10),
+          life:0.22, max:0.22, color:'#e8eef2'});
+      }
+    }
     else if(pr.kind==='zorb'){
       /* A slow ball of lightning with one arm of it whipping round clockwise.
          The arm is the threat while it travels; the ball itself, if it reaches
@@ -5207,7 +5404,7 @@ function updateProjectiles(dt){
       if(pr.zapCd <= 0 && !pr.dead){
         pr.zapCd = ZORB_ZAP_GAP;
         const ex = pr.x + Math.cos(pr.ang)*ZORB_ARM, ey = pr.y + Math.sin(pr.ang)*ZORB_ARM*0.8;
-        addZap(pr.x, pr.y, ex, ey, 1);
+        addZap(pr.x, pr.y, ex, ey, 1, true);
         for(let i=0;i<2;i++){
           const t = rnd(0.2,1);
           particles.push({kind:'spark', x:lerp(pr.x,ex,t), y:lerp(pr.y,ey,t),
@@ -5239,12 +5436,12 @@ function updateProjectiles(dt){
       if(Math.random()<0.7){
         const a = rnd(TAU), rr = pr.r*rnd(0.2,1);
         particles.push({kind:'spark', x:pr.x+Math.cos(a)*rr, y:pr.y+Math.sin(a)*rr*0.7,
-          vx:rnd(-40,40), vy:rnd(-60,-10), life:0.5, max:0.5, color:'#dff2ff'});
+          vx:rnd(-40,40), vy:rnd(-60,-10), life:0.5, max:0.5, color:FX.foe.frost});
       }
       if(pr.t>=pr.dur){
         pr.dead = true;
-        addRing(pr.x,pr.y,20,340,pr.r,'#dff2ff',8,0.45);
-        addSparks(pr.x,pr.y,14,'#bfe3ff');
+        addRing(pr.x,pr.y,20,340,pr.r,FX.foe.frost,8,0.45);
+        addSparks(pr.x,pr.y,14,FX.foe.frostDeep);
         SFX.freeze(); addShake(0.25);
         if(!player.dead){
           const d = dist(pr, player);
@@ -5265,7 +5462,7 @@ function updateProjectiles(dt){
         if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < hitR(e) + 15*(pr.sz||1)){
           pr.hit.add(e);
           hitEnemy(e, pr.dmg, Math.atan2(pr.vy,pr.vx), 150, 'blaster', {spin:true});
-          addSparks(pr.x, pr.y, 3, '#ff8a8a');
+          addSparks(pr.x, pr.y, 3, FX.friend.spark);
           pr.pierce--;
           if(pr.pierce<0){ pr.dead=true; break; }
         }
@@ -5382,14 +5579,14 @@ function updateProjectiles(dt){
         pr.dead=true;
         if(pr.kind==='molten'){
           const fr = pr.fr || 66;
-          explode(pr.x, pr.y, fr*0.6, 0, {hostile:true, brickCols:['#fe8a18','#d3242b'], shake:0.15});
+          explode(pr.x, pr.y, fr*0.6, 0, {hostile:true, shake:0.15});
           hazards.push({kind:'lava', x:pr.x, y:pr.y, r:fr, life:6.5, max:6.5});
           SFX.boomSmall();
           continue;
         }
         if(pr.kind==='fireball'){
           const fr = pr.fr || 46;
-          explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, brickCols:['#fe8a18','#8a2f1d'], shake:0.12});
+          explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
           hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
           if(dist(pr,player)<fr*0.87 && !player.dead){
@@ -5400,7 +5597,7 @@ function updateProjectiles(dt){
         }
         if(pr.kind==='meteor'){
           const fr = pr.fr || 54;
-          explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, brickCols:['#ff8a5a','#3a2f2a'], shake:0.18});
+          explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
           hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
           if(dist(pr,player)<fr*0.85 && !player.dead){
@@ -5452,7 +5649,7 @@ function updateFx(dt){
     if(h.kind==='frost'){
       if(Math.random()<0.3)
         particles.push({kind:'spark', x:h.x+rnd(-h.r*0.8,h.r*0.8), y:h.y+rnd(-h.r*0.5,h.r*0.5),
-          vx:rnd(-12,12), vy:rnd(-40,-8), life:rnd(0.4,0.8), max:0.8, color:'#dff2ff'});
+          vx:rnd(-12,12), vy:rnd(-40,-8), life:rnd(0.4,0.8), max:0.8, color:FX.foe.frost});
       if(!player.dead && dist(h, player) < h.r*0.9) applyAilment('frost', null);
       for(const en of enemies)
         if(!en.dead && en.state==='active' && !en.golem && !en.mini && dist(h,en) < h.r*0.9)
@@ -6499,13 +6696,15 @@ function drawFireball(c, pr, big){
 }
 
 /* =============================== RENDER =============================== */
+/* every one of these is thrown BY a monster, so they all sit on the deep side of
+   the palette — the player's own lobbed bomb is the pale one */
 const LOB_CONF = {
   vbrick:{rr:62, sc:1,   cols:['#23272b','#3a3f44'], tele:40},
   jrock: {rr:80, sc:1.35,cols:['#8b8f8a','#6d6e68'], tele:52},
-  spit:  {rr:46, sc:0.7, cols:['#3d7a2b','#8ac24a'], tele:28},
-  molten:{rr:66, sc:0.85,cols:['#fe8a18','#d3242b'], tele:34},
-  fireball:{rr:44, sc:0.7,cols:['#fe8a18','#8a2f1d'], tele:26},
-  meteor:{rr:50, sc:1,   cols:['#ff8a5a','#3a2f2a'], tele:30}
+  spit:  {rr:46, sc:0.7, cols:['#2f5e23','#5f8f33'], tele:28},
+  molten:{rr:66, sc:0.85,cols:['#c2410c','#7c2d12'], tele:34},
+  fireball:{rr:44, sc:0.7,cols:['#c2410c','#5c1f0e'], tele:26},
+  meteor:{rr:50, sc:1,   cols:['#b5370d','#2a1f1a'], tele:30}
 };
 function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -6862,7 +7061,7 @@ function render(){
     const lc = LOB_CONF[pr.kind];
     if(lc && (pr.delay>0 || pr.t<pr.dur-0.15)){
       const k = clamp(pr.t/pr.dur,0,1);
-      ctx.strokeStyle = `rgba(255,90,50,${0.4+0.3*Math.sin(vtime*16)})`; ctx.lineWidth=3.5;
+      ctx.strokeStyle = `rgba(226,98,15,${0.45+0.35*Math.sin(vtime*16)})`; ctx.lineWidth=3.5;
       ctx.beginPath(); ctx.arc(pr.tx, pr.ty, lc.tele*(1-k*0.4), 0, TAU); ctx.stroke();
     }
     if(pr.kind==='blizzard'){
@@ -6914,6 +7113,51 @@ function render(){
   if(player && (!player.dead || player.deadT<0.05)) list.push({y:player.y, f:()=>drawHero(ctx)});
   list.sort((a,b)=>a.y-b.y);
   for(const it of list) it.f();
+  /* Lingering Vortex totems — the same whirlwind, standing still and unlit by the
+     hero's own glow so you can tell it is not following you */
+  for(const pr of projectiles){
+    if(pr.kind!=='vtotem' || pr.dead) continue;
+    const k = clamp(pr.life/1.2, 0, 1);            /* fades out at the end */
+    ctx.save();
+    ctx.globalAlpha = k;
+    groundDisc(ctx, pr.x, pr.y, pr.r, 'rgba(150,166,182,0.10)');
+    ctx.setLineDash([10,8]);
+    groundRing(ctx, pr.x, pr.y, pr.r, 3, `rgba(150,166,182,${0.35+0.25*Math.sin(vtime*11+pr.seed)})`);
+    ctx.setLineDash([]);
+    for(let ri=0; ri<2; ri++){
+      const n2 = 3+ri, rr = pr.r*(0.6+ri*0.42), w = ri? -3.6 : 4.8;
+      for(let i=0;i<n2;i++){
+        const a = vtime*w + i*TAU/n2 + pr.seed + ri;
+        const bx = pr.x + Math.cos(a)*rr, by = pr.y + Math.sin(a)*rr*0.72;
+        ctx.save(); ctx.translate(bx,by); ctx.rotate(a+Math.PI/2);
+        drawBlade(ctx, 0.38, false);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+  /* Blademaster whirl — a ring of motion blur and the blade caught mid-sweep */
+  if(player && player.whirl && !player.dead){
+    const reach = 56 + player.reach;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    for(let i=0;i<3;i++){
+      const a0 = player.whirlAng - i*0.55;
+      ctx.strokeStyle = `rgba(232,238,242,${0.5 - i*0.15})`;
+      ctx.lineWidth = 5 - i*1.2;
+      ctx.beginPath();
+      ctx.ellipse(player.x, player.y-14, reach, reach*0.62, 0, a0-0.8, a0+0.25);
+      ctx.stroke();
+    }
+    for(const side of [0, Math.PI]){
+      const a = player.whirlAng + side;
+      const bx = player.x + Math.cos(a)*reach*0.92, by = player.y-14 + Math.sin(a)*reach*0.58;
+      ctx.save(); ctx.translate(bx,by); ctx.rotate(a+Math.PI/2);
+      drawBlade(ctx, 0.8, true);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
   /* blade vortex — 3 rows of spinning blades */
   if(player && player.vortex.n>0 && player.vortex.t>0 && !player.dead){
     const v = player.vortex;
@@ -6951,7 +7195,7 @@ function render(){
     ctx.fillStyle='rgba(15,20,25,0.65)';
     roundRect(ctx, bxx-1, byy-1, bw+2, 7, 3); ctx.fill();
     ctx.fillStyle = '#7fdc7e';
-    roundRect(ctx, bxx, byy, Math.max(2,bw*clamp(player.regenAcc,0,1)), 5, 2.5); ctx.fill();
+    roundRect(ctx, bxx, byy, Math.max(2,bw*clamp(player.hp - Math.floor(player.hp),0,1)), 5, 2.5); ctx.fill();
   }
   /* hovering storm bricks — one per zapper */
   if(player && player.chain.n>0 && player.chain.zappers>0 && !player.dead){
@@ -7042,7 +7286,7 @@ function render(){
         ctx.fillStyle = `rgba(255,140,50,${0.07+0.10*k2})`;
         ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, TAU); ctx.fill();
         ctx.setLineDash([14,10]);
-        ctx.strokeStyle = `rgba(255,150,60,${0.5+0.4*Math.sin(vtime*(urgent?30:12))})`;
+        ctx.strokeStyle = `rgba(255,242,196,${0.55+0.4*Math.sin(vtime*(urgent?30:12))})`;
         ctx.lineWidth = urgent ? 7 : 5;
         ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, TAU); ctx.stroke();
         ctx.setLineDash([]);
@@ -7088,9 +7332,9 @@ function render(){
     else if(pr.kind==='pbrick'){
       const z = pr.sz || 1;
       ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(pr.spin); ctx.scale(z, z);
-      ctx.fillStyle = '#ff6a5a'; ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=1.6/z;
+      ctx.fillStyle = FX.friend.brick; ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=1.6/z;
       roundRect(ctx,-8,-4.5,16,9,2); ctx.fill(); ctx.stroke();
-      drawStudG(ctx,-3.5,0,2,'#d3242b'); drawStudG(ctx,3.5,0,2,'#d3242b');
+      drawStudG(ctx,-3.5,0,2,FX.friend.brickStud); drawStudG(ctx,3.5,0,2,FX.friend.brickStud);
       ctx.restore();
     }
     else if(pr.kind==='wblade'){
@@ -7103,8 +7347,11 @@ function render(){
     }
     else if(LOB_CONF[pr.kind] || pr.kind==='bomb'){
       const lc = LOB_CONF[pr.kind] || {sc:1, cols:[PAL.red, PAL.dred]};
+      /* the hero's bomb is bleached gold so it can never be mistaken for one of
+         the deep-ember firebombs raining down on the same patch of floor */
       const cols = pr.kind==='bomb'
-        ? (pr.gen ? ['#fe8a18','#b5540a'] : [PAL.red, PAL.dred]) : lc.cols;
+        ? (pr.gen ? ['#fff6d8', FX.friend.brickStud] : [FX.friend.brick, FX.friend.ringHot])
+        : lc.cols;
       const sc = (lc.sc || 1) * (pr.kind==='bomb' ? Math.pow(0.7, pr.gen||0) : 1);
       ctx.fillStyle='rgba(15,30,20,0.25)';
       ctx.beginPath(); ctx.ellipse(pr.x, pr.y, 10*sc, 4*sc, 0, 0, TAU); ctx.fill();
@@ -7127,7 +7374,8 @@ function render(){
       ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(0.5,p.r*(2-k)),0,TAU); ctx.fill();
     } else if(p.kind==='zap'){
       ctx.globalAlpha = k;
-      ctx.strokeStyle = '#8fd4ff'; ctx.lineWidth = Math.max(1.2, 2.8*Math.pow(0.8,p.link||0));
+      const ZC = p.hostile ? FX.foe : FX.friend;
+      ctx.strokeStyle = ZC.zap; ctx.lineWidth = Math.max(1.2, 2.8*Math.pow(0.8,p.link||0));
       ctx.beginPath();
       const segs = 6;
       ctx.moveTo(p.x1,p.y1);
@@ -7139,9 +7387,9 @@ function render(){
       }
       ctx.lineTo(p.x2,p.y2);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = '#dff2ff';
+      ctx.strokeStyle = p.hostile ? 'rgba(255,233,90,0.9)' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = ZC.zapCore;
       ctx.beginPath(); ctx.arc(p.x2,p.y2,3*k+1,0,TAU); ctx.fill();
       ctx.globalAlpha = 1;
     } else {
@@ -7434,13 +7682,27 @@ function heartPath(c,x,y,s){
   c.bezierCurveTo(x+s*0.8, y-s*0.85, x+s*1.15, y+s*0.12, x, y+s*0.9);
   c.closePath();
 }
-function drawHeartAt(x,y,full,col,pulse){
+/* `frac` is how much of this heart is left, 0..1. A part-heart is drawn at
+   proportional opacity AND clipped to a rising level, so you can read "half a
+   heart" at a glance and still watch it drain hundredth by hundredth. */
+function drawHeartAt(x,y,frac,col,pulse){
+  frac = clamp(frac, 0, 1);
   ctx.save(); ctx.translate(x,y); ctx.scale(pulse,pulse);
   heartPath(ctx,0,0,10);
-  ctx.fillStyle = full ? col : 'rgba(20,28,34,0.55)';
+  ctx.fillStyle = 'rgba(20,28,34,0.55)';
   ctx.fill();
+  if(frac > 0){
+    ctx.save();
+    heartPath(ctx,0,0,10);
+    ctx.clip();
+    /* a full heart is solid; a partial one fades as it empties but never vanishes */
+    ctx.globalAlpha = frac >= 1 ? 1 : 0.42 + 0.58*frac;
+    ctx.fillStyle = col;
+    ctx.fillRect(-11, 11 - 24*frac, 22, 24);
+    ctx.restore();
+  }
   ctx.strokeStyle='rgba(15,20,25,0.7)'; ctx.lineWidth=2.2; ctx.stroke();
-  if(full){ ctx.fillStyle='rgba(255,255,255,0.65)';
+  if(frac >= 1){ ctx.fillStyle='rgba(255,255,255,0.65)';
     ctx.beginPath(); ctx.ellipse(-4,-3,2.7,1.8,-0.5,0,TAU); ctx.fill(); }
   ctx.restore();
 }
@@ -7502,23 +7764,26 @@ function renderHUD(){
   const p = player;
   let xpY;
   if(p.hp > HEART_POOL_AT || (p.hp > HEART_POOL_AT-3 && p.maxHp > HEART_POOL_AT)){
+    /* too many hearts to draw one each: three symbolic ones, a third of the pool apiece */
+    const third = Math.max(1, p.maxHp/3);
     for(let i=0;i<3;i++)
-      drawHeartAt(34+i*28, 36, i<Math.min(3,Math.ceil(p.hp/Math.max(1,Math.ceil(p.maxHp/3)))), HEART_ROW_COLS[0], 1);
+      drawHeartAt(34+i*28, 36, (p.hp - i*third)/third, HEART_ROW_COLS[0], 1);
+    const txt = fmtHp(p.hp);
     ctx.font='700 30px "Titan One"'; ctx.textAlign='left'; ctx.textBaseline='middle';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=5;
-    ctx.strokeText(p.hp, 122, 38);
-    ctx.fillStyle='#ffd76e'; ctx.fillText(p.hp, 122, 38);
+    ctx.strokeText(txt, 122, 38);
+    ctx.fillStyle='#ffd76e'; ctx.fillText(txt, 122, 38);
     ctx.font='600 12px Fredoka'; ctx.fillStyle='#c9d2ce';
-    ctx.fillText('/ '+p.maxHp, 122+String(p.hp).length*19+8, 40);
+    ctx.fillText('/ '+p.maxHp, 122+txt.length*17+8, 40);
     xpY = 66;
   } else {
     const rows = Math.ceil(p.maxHp/HEARTS_PER_ROW);
     for(let i=0;i<p.maxHp;i++){
       const row = Math.floor(i/HEARTS_PER_ROW);
       const col = i%HEARTS_PER_ROW;
-      const full = i < p.hp;
-      const lowPulse = (p.hp<=4 && full && row===0) ? 1+Math.sin(vtime*6)*0.1 : 1;
-      drawHeartAt(34 + col*28, 36 + row*25, full, HEART_ROW_COLS[row%HEART_ROW_COLS.length], lowPulse);
+      const frac = clamp(p.hp - i, 0, 1);
+      const lowPulse = (p.hp<=4 && frac>0 && row===0) ? 1+Math.sin(vtime*6)*0.1 : 1;
+      drawHeartAt(34 + col*28, 36 + row*25, frac, HEART_ROW_COLS[row%HEART_ROW_COLS.length], lowPulse);
     }
     xpY = 36 + rows*25 + 8;
   }
