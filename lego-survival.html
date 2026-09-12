@@ -344,6 +344,7 @@ const MERGE_DRIFT = 150;      /* how far a stud will look for a neighbour to joi
 const MERGE_CREEP = 42;       /* px/s — a settle, not a flight */
 const MERGE_AGE   = 3.0;      /* a stud has to lie still this long before it drifts */
 const HEART_REGEN = 0.015;    /* what a heart on the ground is worth now */
+const REGEN_STALL = 0.5;      /* seconds regeneration is held after taking a hit */
 const MAGNET_SPEED = 1500;    /* px/s straight at the hero while a magnet is up */
 const HEARTS_PER_ROW = 16;
 const HEART_MAX = 999;
@@ -405,7 +406,7 @@ const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
 const REGEN_MAX   = 1.20;  /* hearts per second */
 const HEART_CHANCE_MAX = 0.35;
-const BLAST_MIN_RATE = 0.30;
+const BLAST_MIN_RATE = 2.00;   /* a volley of piercing bricks is not a machine gun */
 const STORM_MIN_RATE = 2.00;
 const VORTEX_MIN_RATE = 3.00;
 const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
@@ -851,10 +852,12 @@ function newPlayer(){
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
     curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
-    regenRate:0, regenAcc:0,
+    regenRate:0, regenAcc:0, regenStall:0,
     crit:0.1, studMul:1, heartChance:0, hpMore:1,
     orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[], pulse:0 },
-    blaster:{ n:0, dmg:2, rate:1.5, cd:0.8, spd:560, pierce:2, split:0 },
+    /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
+       exactly one pick and the volley can never become a spray of piercing bricks */
+    blaster:{ n:0, dmg:2, rate:2.4, cd:0.8, spd:560, pierce:2, split:0 },
     storm:{ n:0, dmg:2, rate:6.5, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
@@ -1005,12 +1008,17 @@ function wallBrick(bx,by,w,h){
   drawStudG(ctx, bx+w*0.7, by+h/2, 7.5, base);
 }
 function drawGround(vx,vy,vw,vh){
-  ctx.fillStyle = '#4f9a37';
+  /* The backdrop used to be hardcoded forest green, and the studded cell tiles
+     never quite meet on fractional device pixels — so a grass-green grid showed
+     through the seams whatever the ground was actually made of, caves included.
+     The backdrop is now the run's own base colour AND every tile is drawn a
+     pixel oversized so the seams close entirely. */
+  ctx.fillStyle = (BIOMES[runBiome] || BIOMES.forest)[0];
   ctx.fillRect(vx,vy,vw,vh);
   const ix0 = Math.max(0, Math.floor(vx/CS)), ix1 = Math.min(Math.ceil(W.w/CS)-1, Math.ceil((vx+vw)/CS));
   const iy0 = Math.max(0, Math.floor(vy/CS)), iy1 = Math.min(Math.ceil(W.h/CS)-1, Math.ceil((vy+vh)/CS));
   for(let iy=iy0; iy<=iy1; iy++) for(let ix=ix0; ix<=ix1; ix++)
-    ctx.drawImage(cellSprite(cellColorKey(ix,iy)), ix*CS, iy*CS);
+    ctx.drawImage(cellSprite(cellColorKey(ix,iy)), ix*CS, iy*CS, CS+1, CS+1);
   for(const w of waters){
     if(w.x > vx+vw || w.x+w.w < vx || w.y > vy+vh || w.y+w.h < vy) continue;
     /* sand shelf */
@@ -1619,7 +1627,11 @@ function randomSpawnPos(){
   }
   return {x:clamp((player?player.x:CX)+520, lo, hiX), y:clamp((player?player.y:CY)+520, lo, hiY)};
 }
+/* Knockback was throwing bodies far enough that a crowd came apart instead of
+   closing in. Every impulse now goes through this one scale. */
+const KB_SCALE = 0.45;
 function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
+  kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
   /* EVADE: the shade's whole defence. It is rolled before anything else and it
      takes the hit away entirely — no armour, no suppression, no chip damage. */
@@ -1897,6 +1909,7 @@ function ailmentDamage(n, quiet){
   const p = player;
   if(godMode || p.dead || state!=='play') return;
   p.hp = Math.round((p.hp - n)*100)/100;
+  p.regenStall = REGEN_STALL;
   p.flash = 1; redFlash = Math.max(redFlash, 0.35);
   if(!quiet) addDmg(p.x, p.y-44, '-'+fmtHp(n), '#ff8a3c', 16);
   if(p.hp<=0){ p.hp=0; playerDie(); }
@@ -1990,9 +2003,10 @@ function playerDamage(n, src, elem, spell){
   n = Math.max(0.05, Math.round(d*100)/100);
   if(elem) applyAilment(elem, src);
   p.hp = Math.round((p.hp - n)*100)/100;
+  p.regenStall = REGEN_STALL;
   p.invuln = 1.1; p.flash = 1; redFlash = 0.6;
   const a = angTo(src, p);
-  p.kx = Math.cos(a)*280; p.ky = Math.sin(a)*280;
+  p.kx = Math.cos(a)*280*KB_SCALE; p.ky = Math.sin(a)*280*KB_SCALE;
   addShake(0.5); SFX.hurt();
   if(p.hp<=0){ p.hp=0; playerDie(); }
 }
@@ -2332,14 +2346,38 @@ const ICONS = {
   freeze:'<path d="M12 2 v20 M2 12 h20 M5 5 l14 14 M19 5 L5 19"/><circle cx="12" cy="12" r="3"/>',
   force:'<path d="M3 12 h8"/><path d="M12 7 l8 5 -8 5 Z"/><circle cx="4.5" cy="12" r="1.8"/>',
   xp:'<path d="M12 3 l2.3 5.7 6.1 0.5 -4.6 4 1.4 6 -5.2-3.2 -5.2 3.2 1.4-6 -4.6-4 6.1-0.5 Z"/>',
-  chain:'<path d="M7 12 a5 5 0 0 1 5-5 h2 M17 12 a5 5 0 0 1 -5 5 h-2"/><path d="M13 7 l3-3 M11 17 l-3 3"/><circle cx="12" cy="12" r="1.6"/>'
+  chain:'<path d="M7 12 a5 5 0 0 1 5-5 h2 M17 12 a5 5 0 0 1 -5 5 h-2"/><path d="M13 7 l3-3 M11 17 l-3 3"/><circle cx="12" cy="12" r="1.6"/>',
+  /* One glyph per idea. Armour was a heart, fire resistance was a bomb, spell
+     suppression was a snowflake and every "triggers faster" card was a lightning
+     bolt — so the art told you nothing about what you were picking. */
+  shield:'<path d="M12 2.6 l7.4 3 v5.2 c0 4.4 -3 8 -7.4 9.6 c-4.4 -1.6 -7.4 -5.2 -7.4 -9.6 V5.6 Z"/>',
+  shieldplus:'<path d="M12 2.6 l7.4 3 v5.2 c0 4.4 -3 8 -7.4 9.6 c-4.4 -1.6 -7.4 -5.2 -7.4 -9.6 V5.6 Z"/><path d="M12 8.4 v6 M9 11.4 h6"/>',
+  ward:'<path d="M12 2.6 l7.4 3 v5.2 c0 4.4 -3 8 -7.4 9.6 c-4.4 -1.6 -7.4 -5.2 -7.4 -9.6 V5.6 Z"/><path d="M8.4 12.4 l2.6 2.6 4.6 -5.6"/>',
+  flame:'<path d="M12 2.4 c3.4 4.2 5.4 6.4 5.4 9.4 a5.4 5.4 0 0 1 -10.8 0 c0 -2.2 1.4 -3.8 2.8 -5.4 c.6 1.6 1.4 2.2 2 2.6 c.4 -2.6 -.8 -4.6 .6 -6.6 Z"/>',
+  snow:'<path d="M12 2.5 v19 M3.8 7.2 l16.4 9.6 M20.2 7.2 l-16.4 9.6"/><path d="M12 6 l-2.2 -2 M12 6 l2.2 -2 M12 18 l-2.2 2 M12 18 l2.2 2"/>',
+  prism:'<path d="M12 3.4 L20.4 18.6 H3.6 Z"/><path d="M2 12 h4.6 M17.4 12 h4.6 M12 20.4 v2"/>',
+  clock:'<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2 V12 l3.8 2.2"/>',
+  burst:'<circle cx="12" cy="12" r="3"/><path d="M12 1.8 V5 M12 19 v3.2 M1.8 12 H5 M19 12 h3.2 M4.8 4.8 l2.3 2.3 M16.9 16.9 l2.3 2.3 M19.2 4.8 l-2.3 2.3 M7.1 16.9 l-2.3 2.3"/>',
+  fist:'<path d="M7.4 11.6 V8.4 a2.1 2.1 0 0 1 4.2 0 v3.2 M11.6 11.6 V7.2 a2.1 2.1 0 0 1 4.2 0 v4.4 M15.8 11.6 V9 a2.1 2.1 0 0 1 4.2 0 v5.6 a6.4 6.4 0 0 1 -6.4 6.4 h-2.8 a5.4 5.4 0 0 1 -5.4 -5.4 v-4.6 a2.1 2.1 0 0 1 4.2 0"/>',
+  spin:'<path d="M20.4 12 a8.4 8.4 0 1 1 -3.4 -6.7"/><path d="M17 2.4 l.4 3.4 -3.4 .2"/><path d="M12 12 l7 -7"/>',
+  arcane:'<path d="M12 2.6 l2.7 6.7 6.7 2.7 -6.7 2.7 -2.7 6.7 -2.7 -6.7 -6.7 -2.7 6.7 -2.7 Z"/>',
+  gift:'<rect x="3.4" y="9.6" width="17.2" height="11.4" rx="1.6"/><path d="M2.6 9.6 h18.8 M12 9.6 V21"/><path d="M12 9.6 C8 9.6 6 8 6 6.4 A2.6 2.6 0 0 1 12 6 a2.6 2.6 0 0 1 6 .4 c0 1.6 -2 3.2 -6 3.2 Z"/>',
+  totem:'<path d="M12 21.4 V7.6"/><ellipse cx="12" cy="6.6" rx="5.4" ry="2.8"/><ellipse cx="12" cy="12.4" rx="3.8" ry="2"/><path d="M8.6 21.4 h6.8"/>',
+  tide:'<circle cx="12" cy="12" r="2.6"/><path d="M12 4.2 a7.8 7.8 0 0 1 7.8 7.8 M12 19.8 A7.8 7.8 0 0 1 4.2 12"/><path d="M19.8 12 l2 -2.2 M19.8 12 l2 2.2 M4.2 12 l-2 -2.2 M4.2 12 l-2 2.2"/>',
+  split:'<path d="M2.6 12 h6"/><path d="M8.6 12 L17 5.6 M8.6 12 h8.4 M8.6 12 L17 18.4"/><path d="M17 5.6 l-.4 2.6 2.6 -.6 M17 18.4 l-.4 -2.6 2.6 .6 M17 12 l2.4 0"/>',
+  fork:'<path d="M5.4 3 l4.8 7.2 H7.2 l3.6 5.6"/><path d="M10.2 10.2 l6.4 -2.8 M10.2 10.2 l6.6 6.6 M10.2 10.2 l-1 7.4"/>',
+  boomerang:'<path d="M4.6 7.4 a10 10 0 0 1 13.2 12.2"/><path d="M4.6 7.4 l4 1.6 M4.6 7.4 l1.4 -4"/><path d="M17.8 19.6 l-3.4 -1.4 M17.8 19.6 l-1.2 -3.6"/>',
+  bomblets:'<circle cx="9.4" cy="14.4" r="5.4"/><path d="M12.6 9.8 l2 -2.6"/><circle cx="18.2" cy="7.2" r="2"/><circle cx="19" cy="14.6" r="1.6"/><circle cx="14.8" cy="19.6" r="1.4"/>',
+  zapper:'<rect x="7.6" y="3.4" width="8.8" height="6.4" rx="1.4"/><path d="M12 9.8 l-2.6 5 h2.2 l-1.6 5.8 4.6 -7.2 h-2.4 l1.4 -3.6"/>',
+  icecube:'<path d="M12 2.8 l7.4 4.2 v9 L12 20.2 4.6 16 V7 Z"/><path d="M4.6 7 L12 11.2 l7.4 -4.2 M12 11.2 V20.2"/>',
+  nofav:'<circle cx="12" cy="12" r="8.6"/><path d="M6.6 17.4 L17.4 6.6"/>'
 };
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     calc:m=>({v:Math.max(1,Math.round(m))}),
     desc:c=>`+${c.v} flat sword damage (now ${(swordBase()+c.v).toFixed(0)})`,
     apply:c=>{ player.flatSword += c.v; } },
-  { id:'bladem', name:'Blade Mastery', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
+  { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% increased melee damage (now ${Math.round((player.incMelee+c.v)*100)}%)`,
     apply:c=>{ player.incMelee += c.v; } },
@@ -2347,15 +2385,15 @@ const UPGRADES = [
     calc:m=>({v:0.06+0.04*m}),
     desc:c=>`${Math.round(c.v*100)}% more damage with everything — sword, blades and spells alike (now ×${(player.moreAll*(1+c.v)).toFixed(2)})`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
-  { id:'armor', name:'Reinforced Armour', icon:'heart', cls:'DEFENSE',
+  { id:'armor', name:'Reinforced Armour', icon:'shield', cls:'DEFENSE',
     calc:m=>({v:Math.round(14+10*m)}),
     desc:c=>`+${c.v} flat armour (now ${Math.round((player.armour+c.v)*(1+player.incArmour))})`,
     apply:c=>{ player.armour += c.v; } },
-  { id:'armorinc', name:'Plated Rig', icon:'heart', cls:'DEFENSE', req:()=>player.armour>0,
+  { id:'armorinc', name:'Plated Rig', icon:'shieldplus', cls:'DEFENSE', req:()=>player.armour>0,
     calc:m=>({v:0.14+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% increased armour (now ${Math.round(player.armour*(1+player.incArmour+c.v))})`,
     apply:c=>{ player.incArmour += c.v; } },
-  { id:'suppress', name:'Spell Suppression', icon:'freeze', cls:'DEFENSE', minRar:'uncommon',
+  { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
     req:()=>player.suppress < 1,
     calc:m=>({v:0.08+0.06*m}),
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%)`,
@@ -2365,7 +2403,7 @@ const UPGRADES = [
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${Math.min(c.v, REACH_MAX-player.reach)} sword attack range (now ${Math.round(56+Math.min(REACH_MAX,player.reach+c.v))}, cap ${56+REACH_MAX})`,
     apply:c=>{ player.reach = Math.min(REACH_MAX, player.reach + c.v); } },
-  { id:'aspd', name:'Swift Hands', icon:'bolt', cls:'OFFENSE',
+  { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
     req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`Swing ${Math.round(c.v*100)}% faster (now every ${Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)).toFixed(2)}s, floor ${ATK_RATE_MIN.toFixed(2)}s)`,
@@ -2375,12 +2413,12 @@ const UPGRADES = [
     calc:m=>({v:0.35+0.30*m}),
     desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (now ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%)`,
     apply:c=>{ player.incCrit += c.v; } },
-  { id:'critpow', name:'Heavy Crits', icon:'target', cls:'OFFENSE', minRar:'uncommon',
+  { id:'critpow', name:'Heavy Crits', icon:'burst', cls:'OFFENSE', minRar:'uncommon',
     req:()=>player.critMultPct < CRIT_MULT_CAP,
     calc:m=>({v:Math.round(12+9*m)}),
     desc:c=>`+${c.v}% to critical strike multiplier (now ${Math.min(CRIT_MULT_CAP, player.critMultPct+c.v)}%)`,
     apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
-  { id:'hp', name:'Sturdy Plates', icon:'heart', cls:'DEFENSE',
+  { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
     req:()=>player.maxHp < heartCap(),
     calc:m=>({v:Math.max(2,Math.round(2*m))}),
     desc:c=>`+${c.v} max hearts, heal ${c.v} (cap ${heartCap()})`,
@@ -2390,7 +2428,7 @@ const UPGRADES = [
     calc:m=>({v:0.06+0.04*m}),
     desc:c=>`Regenerate ${(c.v).toFixed(2)} more hearts per second (now ${Math.min(REGEN_MAX,player.regenRate+c.v).toFixed(2)}/s, cap ${REGEN_MAX.toFixed(2)}/s)`,
     apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
-  { id:'heart', name:'Generous Smith', icon:'heartplus', cls:'DEFENSE',
+  { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
     calc:m=>({v:Math.round(3+2*m)}),
     desc:c=>`+${c.v}% heart drop chance (now ${Math.round(Math.min(HEART_CHANCE_MAX,player.heartChance+c.v/100)*100)}%, cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
@@ -2418,12 +2456,12 @@ const UPGRADES = [
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`+${Math.round(c.v*100)}% XP gained`,
     apply:c=>{ player.xpMul += c.v; } },
-  { id:'resfire', name:'Flameguard Plates', icon:'bomb', cls:'DEFENSE', minRar:'rare',
+  { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.fire < RES_CAP,
     calc:m=>({v:0.08+0.07*m}),
     desc:c=>`+${Math.round(c.v*100)}% fire resistance (now ${Math.round(Math.min(RES_CAP,player.res.fire+c.v)*100)}%)`,
     apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
-  { id:'resfrost', name:'Thermal Lining', icon:'freeze', cls:'DEFENSE', minRar:'rare',
+  { id:'resfrost', name:'Thermal Lining', icon:'snow', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.frost < RES_CAP,
     calc:m=>({v:0.08+0.07*m}),
     desc:c=>`+${Math.round(c.v*100)}% frost resistance (now ${Math.round(Math.min(RES_CAP,player.res.frost+c.v)*100)}%)`,
@@ -2433,7 +2471,7 @@ const UPGRADES = [
     calc:m=>({v:0.08+0.07*m}),
     desc:c=>`+${Math.round(c.v*100)}% lightning resistance (now ${Math.round(Math.min(RES_CAP,player.res.shock+c.v)*100)}%)`,
     apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
-  { id:'resall', name:'Elementalist Bricks', icon:'heart', cls:'DEFENSE', minRar:'rare',
+  { id:'resall', name:'Elementalist Bricks', icon:'prism', cls:'DEFENSE', minRar:'rare',
     req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
     calc:m=>({v:0.05+0.045*m}),
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
@@ -2450,7 +2488,7 @@ const UPGRADES = [
     apply:c=>{ player.orbit.dmg+=c.v;
       player.orbit.r = Math.min(ORBIT_MAX_R, player.orbit.r + c.r);
       player.orbit.size = Math.min(ORBIT_MAX_SIZE, player.orbit.size + c.s); } },
-  { id:'orbitspd', name:'Swift Orbit', icon:'bolt', cls:'SPELL',
+  { id:'orbitspd', name:'Swift Orbit', icon:'clock', cls:'SPELL',
     req:()=>player.orbit.n>0 && player.orbit.spd<ORBIT_MAX_SPD,
     calc:m=>({v:0.22+0.12*m}),
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
@@ -2466,12 +2504,12 @@ const UPGRADES = [
     desc:c=>`Blaster +${c.v} dmg${c.p?` and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
     apply:c=>{ player.blaster.dmg+=c.v;
       player.blaster.pierce = Math.min(BLAST_MAX_PIERCE, player.blaster.pierce + c.p); } },
-  { id:'blastrate', name:'Rapid Blaster', icon:'bolt', cls:'SPELL',
+  { id:'blastrate', name:'Rapid Blaster', icon:'clock', cls:'SPELL',
     req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (now ${Math.max(BLAST_MIN_RATE,player.blaster.rate*(1-c.v)).toFixed(2)}s, floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.blaster.rate = Math.max(BLAST_MIN_RATE, player.blaster.rate*(1-c.v)); } },
-  { id:'orbm', name:'Orb Mastery', icon:'orbit', cls:'SPELL', minRar:'uncommon',
+  { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% increased spell damage (now ${Math.round((player.incSpell+c.v)*100)}%)`,
     apply:c=>{ player.incSpell += c.v; } },
@@ -2484,7 +2522,7 @@ const UPGRADES = [
         : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}${tail}`;
     },
     apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
-  { id:'chainbrick', name:'Chain Lightning Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
+  { id:'chainbrick', name:'Chain Lightning Brick', icon:'zapper', cls:'SPELL', minRar:'uncommon',
     req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
     calc:m=>({n:spellCount(m)}),
     desc:c=>{
@@ -2496,7 +2534,7 @@ const UPGRADES = [
     calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
     desc:c=>`+${c.v} flat storm brick damage (opening strike now ${calcDamage(player.chain.dmg+c.v,'spell').toFixed(1)})`,
     apply:c=>{ player.chain.dmg += c.v; } },
-  { id:'chainrate', name:'Charged Storm', icon:'bolt', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
+  { id:'chainrate', name:'Charged Storm', icon:'clock', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.chain.rate = Math.max(CHAIN_MIN_RATE, player.chain.rate*(1-c.v)); } },
@@ -2510,7 +2548,7 @@ const UPGRADES = [
     desc:c=>`Storm blades +${c.v} dmg, +${Math.round(c.s*100)}% size (cap ×${STORM_MAX_SIZE.toFixed(1)})`,
     apply:c=>{ player.storm.dmg+=c.v;
       player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
-  { id:'stormrate', name:'Storm Caller', icon:'bolt', cls:'SPELL',
+  { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
     req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (now ${Math.max(STORM_MIN_RATE,player.storm.rate*(1-c.v)).toFixed(2)}s, floor ${STORM_MIN_RATE.toFixed(2)}s)`,
@@ -2525,7 +2563,7 @@ const UPGRADES = [
     calc:m=>({v:Math.round(8*m)}),
     desc:c=>`Vortex area +${c.v} radius (cap ${VORTEX_MAX_R})`,
     apply:c=>{ player.vortex.r = Math.min(VORTEX_MAX_R, player.vortex.r + c.v); } },
-  { id:'vortexrate', name:'Vortex Speed', icon:'bolt', cls:'SPELL',
+  { id:'vortexrate', name:'Vortex Speed', icon:'clock', cls:'SPELL',
     req:()=>player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
@@ -2541,7 +2579,7 @@ const UPGRADES = [
     calc:m=>({v:Math.round(28*m)}),
     desc:c=>`Freeze radius +${c.v} (cap ${FREEZE_MAX_R})`,
     apply:c=>{ player.freeze.r = Math.min(FREEZE_MAX_R, player.freeze.r + c.v); } },
-  { id:'freezc', name:'Winter Wind', icon:'bolt', cls:'SPELL',
+  { id:'freezc', name:'Winter Wind', icon:'clock', cls:'SPELL',
     req:()=>player.freeze.n>0 && player.freeze.rate > FREEZE_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster (floor ${FREEZE_MIN_RATE.toFixed(1)}s)`,
@@ -2559,12 +2597,12 @@ const UPGRADES = [
     calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
     desc:c=>`Bombs +${c.v} flat damage, +${Math.round(c.r*100)}% radius (now ${Math.round(Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)))})`,
     apply:c=>{ player.bomb.dmg += c.v; player.bomb.r = Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)); } },
-  { id:'bombcd', name:'Quick Fuse', icon:'bolt', cls:'SPELL',
+  { id:'bombcd', name:'Quick Fuse', icon:'clock', cls:'SPELL',
     req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster (now ${Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)).toFixed(2)}s, floor ${BOMB_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.bomb.rate = Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)); } },
-  { id:'cluster', name:'Cluster Charge', icon:'bomb', cls:'SPELL', minRar:'legendary',
+  { id:'cluster', name:'Cluster Charge', icon:'bomblets', cls:'SPELL', minRar:'legendary',
     req:()=>player.bomb.n>0 && player.bomb.cluster < CLUSTER_MAX,
     calc:m=>({n:1}),
     desc:c=>{
@@ -2574,21 +2612,21 @@ const UPGRADES = [
         : `Bomblets burst again — a third wave at ${Math.round(CLUSTER_FALLOFF*CLUSTER_FALLOFF*100)}% damage`;
     },
     apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } },
-  { id:'stormback', name:'Returning Blades', icon:'storm', cls:'SPELL', minRar:'legendary',
+  { id:'stormback', name:'Returning Blades', icon:'boomerang', cls:'SPELL', minRar:'legendary',
     req:()=>player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
     calc:m=>({n:1}),
     desc:c=> player.storm.boomer===0
       ? 'Storm blades stop fading at the end of their flight — each one wheels around and cuts its way back to you'
       : 'You catch every returning blade and hurl it straight back out: four passes per blade',
     apply:c=>{ player.storm.boomer = Math.min(BOOMER_MAX, player.storm.boomer + 1); } },
-  { id:'orbitpulse', name:'Tidal Orbit', icon:'orbit', cls:'SPELL', minRar:'legendary',
+  { id:'orbitpulse', name:'Tidal Orbit', icon:'tide', cls:'SPELL', minRar:'legendary',
     req:()=>player.orbit.n>0 && !player.orbit.pulse,
     calc:m=>({n:1}),
     desc:c=>`Your guardian bricks stop holding their ring — they sweep all the way `+
       `in to you and back out to ${Math.round(player.orbit.r)} reach, over and over, `+
       `raking everything between`,
     apply:c=>{ player.orbit.pulse = 1; } },
-  { id:'freezestun', name:'Absolute Zero', icon:'freeze', cls:'SPELL', minRar:'legendary',
+  { id:'freezestun', name:'Absolute Zero', icon:'icecube', cls:'SPELL', minRar:'legendary',
     req:()=>player.freeze.n>0 && !player.freeze.stun,
     calc:m=>({n:1}),
     desc:c=>`Block Freeze no longer just slows — it freezes every caught foe SOLID `+
@@ -2605,7 +2643,7 @@ const UPGRADES = [
     apply:c=>{ const p = player;
       p.hpMore = (p.hpMore||1) * 2;
       p.maxHp = Math.round(p.maxHp*2); p.hp = Math.round(p.hp*2); } },
-  { id:'blastsplit', name:'Scattershot Bricks', icon:'blaster', cls:'SPELL', minRar:'legendary',
+  { id:'blastsplit', name:'Scattershot Bricks', icon:'split', cls:'SPELL', minRar:'legendary',
     req:()=>player.blaster.n>0 && (player.blaster.split||0) < BLAST_SPLIT_MAX,
     calc:m=>({n:1}),
     desc:c=>{
@@ -2617,7 +2655,7 @@ const UPGRADES = [
           `a shotgun instead of a pistol`;
     },
     apply:c=>{ player.blaster.split = Math.min(BLAST_SPLIT_MAX, (player.blaster.split||0) + 1); } },
-  { id:'chainfork', name:'Crackling Storm', icon:'chain', cls:'SPELL', minRar:'legendary',
+  { id:'chainfork', name:'Crackling Storm', icon:'fork', cls:'SPELL', minRar:'legendary',
     req:()=>player.chain.n>0 && (player.chain.fork||0) < CHAIN_FORK_MAX,
     calc:m=>({n:1}),
     desc:c=>{
@@ -2627,7 +2665,7 @@ const UPGRADES = [
         `${ways} way split of the damage.`;
     },
     apply:c=>{ player.chain.fork = Math.min(CHAIN_FORK_MAX, (player.chain.fork||0) + 1); } },
-  { id:'blademaster', name:'Blademaster', icon:'sword', cls:'OFFENSE', minRar:'legendary',
+  { id:'blademaster', name:'Blademaster', icon:'spin', cls:'OFFENSE', minRar:'legendary',
     req:()=>player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
     desc:c=> player.blademaster===0
@@ -2637,7 +2675,7 @@ const UPGRADES = [
       : `The whirl costs you less footing — ${Math.round(WHIRL_SLOW[2]*100)}% speed instead `+
         `of ${Math.round(WHIRL_SLOW[1]*100)}%. Still no rolling.`,
     apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
-  { id:'vortextotem', name:'Lingering Vortex', icon:'vortex', cls:'SPELL', minRar:'legendary',
+  { id:'vortextotem', name:'Lingering Vortex', icon:'totem', cls:'SPELL', minRar:'legendary',
     req:()=>player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
     calc:m=>({n:1}),
     desc:c=>{
@@ -2653,7 +2691,7 @@ const UPGRADES = [
    mastery that scales them) heavier in every wave and level reward. */
 const FAV_WEIGHT = 3.2;
 const FAVOURITES = [
-  { id:'none',    name:'No Favourite', icon:'xp',      ids:[] },
+  { id:'none',    name:'No Favourite', icon:'nofav',   ids:[] },
   { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastrate','orbm'] },
@@ -2662,7 +2700,7 @@ const FAVOURITES = [
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
-  { id:'tough',   name:'Tough Bricks', icon:'heart',
+  { id:'tough',   name:'Tough Bricks', icon:'shield',
     ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
 ];
 let favourite = FAVOURITES[0];
@@ -3398,7 +3436,9 @@ function updatePlayer(dt){
      hp to hundredths meant anything under 0.6/s produced a per-frame increment
      smaller than the rounding step — it was rounded straight back off and
      nothing below that rate ever healed at all. */
-  const regen = cursedRegen();
+  /* getting hit knocks the wind out of it — no ticking for half a second */
+  p.regenStall = Math.max(0, (p.regenStall||0) - dt);
+  const regen = p.regenStall > 0 ? 0 : cursedRegen();
   if(regen > 0 && p.hp < p.maxHp){
     p.regenAcc += regen*dt;
     if(p.regenAcc >= 0.01){
@@ -3421,6 +3461,8 @@ function updatePlayer(dt){
   p.whirl = p.blademaster>0 && mouse.down && p.stunT<=0 && p.dash.t<=0 && !p.dead;
   if(p.whirl){
     p.whirlAng += WHIRL_SPIN*dt;
+    /* the legs keep working under the crouch, whether or not you are walking */
+    p.walk += dt*16;
     p.swing = null;                       /* the whirl and a swing are exclusive */
     const reach = 56 + p.reach;
     const dmg = swordDamage([WHIRL_MUL]);
@@ -3429,6 +3471,19 @@ function updatePlayer(dt){
       if(dist(p,en) < reach + hitR(en)){
         en.whirlCd = WHIRL_TICK;
         hitEnemy(en, dmg, angTo(p,en), 90, 'sword', {spin:true});
+      }
+    }
+    /* and it takes the scenery with it — chests, crates, trees, the lot */
+    p.whirlPropCd = (p.whirlPropCd||0) - dt;
+    if(p.whirlPropCd <= 0){
+      p.whirlPropCd = WHIRL_TICK;
+      for(const pr of props){
+        if(pr.dead || pr.indestructible) continue;
+        if(dist(pr, p) < reach + pr.r){
+          pr.hp--; pr.flash = 1;
+          addSparks(pr.x, pr.y-8, 3, '#e8eef2');
+          if(pr.hp <= 0) breakProp(pr);
+        }
       }
     }
     for(let i=0;i<2;i++){
@@ -5001,7 +5056,7 @@ function maceSpin(b, dt, tier, enr, toP){
     return false;
   }
   b.whirlA = (b.whirlA||0) + MACE_SPIN_RATE*dt;
-  b.moving = true; b.walk += dt*5;
+  b.moving = true; b.walk += dt*14;
   /* it closes on you while it spins, slowly — you cannot just back off forever */
   const creep = b.speed*0.42*(enr?1.3:1);
   b.x += Math.cos(toP)*creep*dt; b.y += Math.sin(toP)*creep*dt;
@@ -6217,7 +6272,9 @@ function drawGolem(c, e){
 /* =============================== DRAW: MINIFIGURE =============================== */
 function drawFigure(c, o){
   const s = o.s, T = col=> o.flash>0 ? mixc(col,'#ffffff',Math.min(1,o.flash*0.85)) : col;
-  const C = o.colors, mv = o.moving?1:0, w = o.walk;
+  const C = o.colors, w = o.walk;
+  /* a whirl drives the legs even when the hero is turning on the spot */
+  const mv = (o.moving || o.whirlA !== undefined) ? 1 : 0;
   const bob = Math.abs(Math.sin(w))*2.2*s*mv + Math.sin(vtime*2+(o.phase||0))*0.5;
   let fx = (o.face && o.face.x) || 0, fy = (o.face && o.face.y) || 1;
   const fln = Math.hypot(fx,fy);
@@ -6234,10 +6291,15 @@ function drawFigure(c, o){
   if(o.lord){ c.setLineDash([3,3]); c.strokeStyle='rgba(220,200,255,0.6)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,2,20*s,8*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.translate(0,-bob);
-  /* A WHIRL leans the whole body into the turn. Together with the arms thrown
-     out below and a face that rotates with it, the figure is genuinely spinning
-     on the spot rather than standing still while a blade orbits them. */
-  if(o.whirlA !== undefined) c.rotate(Math.sin(o.whirlA)*0.20);
+  /* A WHIRL. The body drops into a crouch, leans into the turn and keeps
+     turning — east, south, west, north and round again — while the weapon is
+     held straight OUT from the hand. The blade never twirls on its own; the
+     hero is what rotates. */
+  if(o.whirlA !== undefined){
+    c.translate(0, 4*s);
+    c.scale(1.06, 0.84);              /* hunched down over the swing */
+    c.rotate(Math.sin(o.whirlA*2)*0.10);
+  }
   c.lineWidth = 2; c.lineJoin='round';
   const OL = 'rgba(20,30,40,0.5)';
   if(o.style==='boss'){
@@ -6304,11 +6366,13 @@ function drawFigure(c, o){
   const handL = { x: shL.x + Math.sin(aL)*armLen, y: shL.y + Math.cos(aL)*armLen };
   const handR2 = gripR ? {x:shR.x+(gripR.x-shR.x)*0.85, y:shR.y+(gripR.y-shR.y)*0.85}
     : { x: shR.x + Math.sin(aR)*armLen, y: shR.y + Math.cos(aR)*armLen };
-  /* both arms straight out, opposite each other, riding the spin */
+  /* the weapon arm reaches out along the turn; the other braces across the chest */
   if(o.whirlA !== undefined){
-    const wl = 17*s;
-    handL.x = shL.x - Math.cos(o.whirlA)*wl; handL.y = shL.y - Math.sin(o.whirlA)*wl*0.62;
-    handR2.x = shR.x + Math.cos(o.whirlA)*wl; handR2.y = shR.y + Math.sin(o.whirlA)*wl*0.62;
+    const wl = 19*s;
+    handR2.x = shR.x + Math.cos(o.whirlA)*wl;
+    handR2.y = shR.y + Math.sin(o.whirlA)*wl*0.62;
+    handL.x = shL.x - Math.cos(o.whirlA)*7*s;
+    handL.y = shL.y - Math.sin(o.whirlA)*4*s + 5*s;
   }
   c.strokeStyle = T(C.torso); c.lineWidth = 6*s; c.lineCap='round';
   c.beginPath(); c.moveTo(shL.x,shL.y); c.lineTo(handL.x,handL.y); c.stroke();
@@ -6332,13 +6396,14 @@ function drawFigure(c, o){
   c.beginPath(); c.arc(handR2.x,handR2.y,handR,0,TAU); c.fill(); c.stroke();
   if(o.weapon==='sword' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA + 0.5 : aR+0.6);
-    drawBlade(c, s*(o.whirlA !== undefined ? 1.05 : 0.9), o.whirlA !== undefined);
+    /* dead-on the turn angle: the blade sticks out radially and stays there */
+    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.6);
+    drawBlade(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
   if(o.weapon==='mace' && (!o.armsUp || o.whirlA !== undefined)){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA + 0.35 : aR+0.5);
+    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.5);
     drawMace(c, s*(o.whirlA !== undefined ? 1.15 : 1));
     c.restore();
   }
