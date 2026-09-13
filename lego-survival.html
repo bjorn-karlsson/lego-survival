@@ -206,6 +206,7 @@
       <span><kbd>SPACE</kbd> <b>roll</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>F1</kbd> <b>test bench</b></span>
+      <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>sound</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
@@ -343,8 +344,8 @@ const MERGE_NEAR  = 62;       /* how close two studs must be to count as one pil
 const MERGE_DRIFT = 150;      /* how far a stud will look for a neighbour to join */
 const MERGE_CREEP = 42;       /* px/s — a settle, not a flight */
 const MERGE_AGE   = 3.0;      /* a stud has to lie still this long before it drifts */
-const HEART_REGEN = 0.015;    /* what a heart on the ground is worth now */
-const REGEN_STALL = 0.5;      /* seconds regeneration is held after taking a hit */
+const HEART_REGEN = 0.010;    /* what a heart on the ground is worth now */
+const REGEN_STALL = 2.0;      /* seconds regeneration is held after taking a hit */
 const MAGNET_SPEED = 1500;    /* px/s straight at the hero while a magnet is up */
 const HEARTS_PER_ROW = 16;
 const HEART_MAX = 999;
@@ -404,7 +405,7 @@ const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
-const REGEN_MAX   = 1.20;  /* hearts per second */
+const REGEN_MAX   = 0.70;  /* hearts per second */
 const HEART_CHANCE_MAX = 0.35;
 const BLAST_MIN_RATE = 2.00;   /* a volley of piercing bricks is not a machine gun */
 const STORM_MIN_RATE = 2.00;
@@ -733,6 +734,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
+  if(e.code==='KeyL' && (state==='play'||state==='pause')) clogToggle();
   if(e.code==='Escape' && state==='char') toggleChar();
   if(e.code==='F1' && (state==='play'||state==='cheat')){ e.preventDefault(); toggleCheat(); }
   if(e.code==='Escape' && state==='cheat') toggleCheat();
@@ -758,7 +760,7 @@ let vtime = 0;
 let frameRaw = 1/60;   /* real seconds of the frame being drawn */
 let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
-let props=[], solids=[], waters=[], flowers=[], hazards=[];
+let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[];
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
 let banner = null;
 let choices = [], taken = {};
@@ -1637,6 +1639,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      takes the hit away entirely — no armour, no suppression, no chip damage. */
   if(e.evade && Math.random() < e.evade){
     addDmg(e.x, e.y-40*(e.scale||1), 'EVADED', '#c9b8e8', 14);
+    clogPush('ev|'+(e.bname||e.type), (e.bname||e.type)+' evaded', '#c9b8e8');
     addSparks(e.x, e.y-18, 4, '#9b45d6');
     e.flash = 0.25;
     return;
@@ -1647,6 +1650,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       const px2 = e.x + Math.cos(fromAtt)*16*e.scale, py2 = e.y - 20*e.scale + Math.sin(fromAtt)*10*e.scale;
       addSparks(px2, py2, 4, '#cfd6dd');
       addDmg(e.x, e.y-42*e.scale, 'BLOCKED', '#cfd6dd', 14);
+      clogPush('bl|'+e.type, e.type+' blocked', '#cfd6dd');
       SFX.clank();
       e.kx += Math.cos(kdir)*kb*0.06; e.ky += Math.sin(kdir)*kb*0.06;
       e.flash = 0.3;
@@ -1679,10 +1683,12 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     suppressed?'#9fd4ff' : crit?'#ffd166':'#ffffff', crit?21:16);
   addShake(crit?0.13:0.08);
   SFX.hit();
+  logDealt(e, d, source, crit, suppressed);
   if(e.hp<=0) killEnemy(e, source);
 }
 function killEnemy(e, source){
   e.dead = true; player.kills++;
+  logKill(e);
   if(e.type==='direbat'){
     /* it doesn't die quietly — it splits into the small ones */
     const n = irnd(3,5);
@@ -1754,10 +1760,12 @@ function killEnemy(e, source){
    bonus climbs at half the rate. Studs are untouched — the complaint was about
    monsters, so the stud curve stays exactly where it was. */
 const MOB_XP_SCALE = 0.5;
-const MOB_XP_WAVE_DIV = 10;      /* studs still use 6 */
+const MOB_XP_WAVE_DIV = 10;
+const STUD_XP_SCALE = 0.45;      /* studs were the other half of the problem */
+const STUD_XP_WAVE_DIV = 10;
 function gainXp(n, fromMob){
   const p = player;
-  const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : 6);
+  const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : STUD_XP_WAVE_DIV);
   p.xp += n * waveBonus * p.xpMul;
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*1.3+5);
@@ -1765,6 +1773,7 @@ function gainXp(n, fromMob){
     if(p.hp < p.maxHp) p.hp++;
     addRing(p.x,p.y,10,300,110,'#ffb900',6,0.5);
     addDmg(p.x, p.y-50, 'LEVEL UP!', '#ffb900', 22);
+    logEvent('LEVEL '+p.level, '#ffb900');
     SFX.levelup();
     queuePick('level');
   }
@@ -1889,6 +1898,7 @@ function applyAilment(elem, src, stacks){
     if(!b.list) b.list = [];
     b.list.push({ dps: 3*take/BURN_DUR, t: BURN_DUR });
     addDmg(p.x, p.y-58, 'BURNING ×'+b.list.length, '#ff8a3c', 15);
+    clogPush('ail|fire', 'burning ×'+b.list.length, '#ff8a3c');
     /* the fifth fire is spent branding you, and the pile carries on from there */
     if(b.list.length >= AIL_BREAK){
       b.list.splice(0, AIL_BREAK);
@@ -1898,6 +1908,7 @@ function applyAilment(elem, src, stacks){
     p.chill.stacks += (take >= 0.5 ? 1 : 0.5);
     p.chill.t = Math.max(p.chill.t, 5 * take);
     addDmg(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
+    clogPush('ail|frost', 'chilled ×'+Math.round(p.chill.stacks), '#bfe3ff');
     if(p.chill.stacks >= AIL_BREAK) ailmentBreak('frost', src);
   } else if(elem==='shock'){
     /* a storm orb dumps a whole handful at once, thinned by your resistance */
@@ -1905,6 +1916,7 @@ function applyAilment(elem, src, stacks){
     p.shock.stacks += add;
     p.shock.t = Math.max(p.shock.t, 6 * take);
     addDmg(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
+    clogPush('ail|shock', 'shocked ×'+Math.round(p.shock.stacks), '#ffe95a');
     if(p.shock.stacks >= AIL_BREAK) ailmentBreak('shock', src);
   }
 }
@@ -1919,6 +1931,7 @@ function ailmentDamage(n, quiet){
   p.regenStall = REGEN_STALL;
   p.flash = 1; redFlash = Math.max(redFlash, 0.35);
   if(!quiet) addDmg(p.x, p.y-44, '-'+fmtHp(n), '#ff8a3c', 16);
+  logTaken(n, {type:'ailment'}, null, false, false);
   if(p.hp<=0){ p.hp=0; playerDie(); }
 }
 /* Chill slows you down and slows your swing; shock makes hits land harder. */
@@ -1994,20 +2007,22 @@ function playerDamage(n, src, elem, spell){
   let d = n;
   if(elem) d *= elemTake(elem) * elemPower(src);
   /* shock leaves you open — hits against a shocked hero crit */
+  let scrit = false, supp = false;
   if(p.shock.stacks > 0 && Math.random() < shockCritChance()){
-    d *= 1.8;
+    d *= 1.8; scrit = true;
     addDmg(p.x, p.y-64, 'SHOCK CRIT!', '#ffe95a', 18);
     addShake(0.2);
   }
   if(isSpell){
     if(Math.random() < suppressChance()){
-      d *= SUPPRESS_TAKEN;
+      d *= SUPPRESS_TAKEN; supp = true;
       addDmg(p.x, p.y-70, 'SUPPRESSED', '#9fd4ff', 16);
     }
   } else {
     d *= (1 - armourDR(armourValue(), d));
   }
   n = Math.max(0.05, Math.round(d*100)/100);
+  logTaken(n, src, elem, supp, scrit);
   if(elem) applyAilment(elem, src);
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
@@ -2203,6 +2218,7 @@ function shuffleArr(a){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
+  logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   queueTrackForWave(n);
   wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4; wave.raidIdx = 0;
   const boss = n%5===0;
@@ -2432,8 +2448,8 @@ const UPGRADES = [
     apply:c=>{ player.maxHp=Math.min(heartCap(),player.maxHp+c.v); player.hp=Math.min(player.maxHp,player.hp+c.v); } },
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
     req:()=>player.regenRate < REGEN_MAX,
-    calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`Regenerate ${(c.v).toFixed(2)} more hearts per second (now ${Math.min(REGEN_MAX,player.regenRate+c.v).toFixed(2)}/s, cap ${REGEN_MAX.toFixed(2)}/s)`,
+    calc:m=>({v:0.035+0.022*m}),
+    desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second (now ${Math.min(REGEN_MAX,player.regenRate+c.v).toFixed(3)}/s, cap ${REGEN_MAX.toFixed(2)}/s)`,
     apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
   { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
@@ -3866,7 +3882,7 @@ function updatePlayer(dt){
         SFX.fortune();
       } else {
         p.studs += pk.val * fort;
-        gainXp(pk.xp * fort);
+        gainXp(pk.xp * fort * STUD_XP_SCALE);
         const TT = STUD_TIERS[pk.kind];
         if(TT && TT.label){
           addDmg(p.x, p.y-56, '+'+(TT.val*fort)+' '+TT.label+'!', sh(TT.col,0.35), 16);
@@ -4986,14 +5002,19 @@ function golemStomp(e, G){
 /* The frost golem's boulder and the ember golem's bomb cluster. Neither of them
    stomps: stone owns that. */
 function golemThrow(e, G){
-  const a = e.lockA;
+  let a = e.lockA;
   if(e.golem==='ice'){
+    /* LEAD IT. The boulder crosses the arena at 660px/s and was aimed at where
+       you were standing when the wind-up began — by the time it arrived you had
+       walked out of a 25px-wide rock. It now aims where you are going. */
+    const lead = leadPlayer(e.x, e.y - 22, 0.42, 0.85);
+    a = Math.atan2(lead.y - (e.y-22), lead.x - e.x);
     /* a boulder that skates the length of the field and freezes the lane it
        crossed — the trail is the real attack, the rock is just the delivery */
     projectiles.push({kind:'frostrock', x:e.x, y:e.y-22, owner:'enemy',
-      vx:Math.cos(a)*660, vy:Math.sin(a)*660, life:1.9, dmg:2,
+      vx:Math.cos(a)*620, vy:Math.sin(a)*620, life:2.1, dmg:3,
       spin:rnd(TAU), trailD:0, trailLife:rnd(5,8), tr:48,
-      fr:0, big:true});
+      fr:0, big:true, hitR:26});
     addSparks(e.x, e.y-20, 12, '#dff2ff');
     SFX.freeze();
   } else {
@@ -5054,6 +5075,8 @@ function bossRingHit(b){
    then whirls on the spot with the whole thing extended, walking slowly at you
    the entire time. Anything the head passes through gets hit. */
 const MACE_WIND = 0.55, MACE_SPIN_T = 2.3, MACE_SPIN_RATE = 11, MACE_TICK = 0.4;
+const SKULL_VOLLEYS = [5, 10];     /* rings per barrage, by tier */
+const SKULL_VOLLEY_GAP = 0.5;      /* seconds between them */
 function maceSpin(b, dt, tier, enr, toP){
   b.modeT += dt;
   if(b.modeT < MACE_WIND){
@@ -5107,6 +5130,7 @@ function bossSummon(b, count, kinds, elites){
   }
 }
 function updateBoss(b, dt, toP, dP){
+  if(b.slamHold > 0) b.slamHold -= dt;
   if(b.super){ updateSuperBoss(b, dt, toP, dP); return; }
   const enr = b.hp < b.maxHp*0.5;
   const spd = b.speed*(enr?1.45:1);
@@ -5222,19 +5246,34 @@ function updateBoss(b, dt, toP, dP){
         b.modeT=0;
       }
     }
+    /* THE BARRAGE. One compass of skulls was a single thing to walk out of.
+       It now fires five to ten of them in a row, half a second apart, each
+       compass rotated a little from the last so the gaps keep moving. */
     else if(b.mode==='ringWind'){
       b.modeT += dt; b.moving=false;
-      if(b.modeT>=0.7){
-        b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.7:2.5;
+      if(b.volleys===undefined){
+        b.volleys = SKULL_VOLLEYS[0] + Math.min(SKULL_VOLLEYS[1]-SKULL_VOLLEYS[0], tier) + (enr?2:0);
+        b.volleyT = 0.55;                 /* a beat to wind up before the first */
+        b.volleySpin = rnd(TAU);
+      }
+      b.volleyT -= dt;
+      if(b.volleyT <= 0 && b.volleys > 0){
+        b.volleys--;
+        b.volleyT = SKULL_VOLLEY_GAP;
+        b.volleySpin += 0.31;             /* twist each ring off the last one */
         const n = (enr?14:10) + Math.min(4,tier);
         for(let i=0;i<n;i++){
-          const a2 = i/n*TAU + rnd(-0.06,0.06);
+          const a2 = b.volleySpin + i/n*TAU + rnd(-0.05,0.05);
           projectiles.push({kind:'skull', x:b.x, y:b.y-20,
             vx:Math.cos(a2)*235, vy:Math.sin(a2)*235,
             owner:'enemy', dmg:1, life:4.2, homing:false});
         }
         addRing(b.x,b.y,20,420,150,'#cfd6dd',7,0.45);
         SFX.bomb();
+      }
+      if(b.volleys <= 0 && b.volleyT <= 0){
+        b.volleys = undefined;
+        b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.2:3.2;
       }
     }
     /* NEW mechanic: homing skull curse */
@@ -5530,43 +5569,97 @@ function updateBoss(b, dt, toP, dP){
   }
 }
 /* NEW: SUPER BOSSES — bigger, meaner, signature mechanic */
-/* THE QUAKE. The Omega carries a mace and never used it for anything. Now it
-   heaves the thing overhead, drives it into the floor, and a wave rolls out of
-   the impact — and the wave BROADENS as it travels, so the further out you are
-   the harder it is to find a gap to stand in. */
-const QUAKE_WIND = 0.9;        /* overhead, before the hammer falls */
-const QUAKE_MAX = 175;         /* how far the wave reaches */
-const QUAKE_SPEED = 300;
-const QUAKE_W0 = 13, QUAKE_W1 = 42;   /* band half-width at the centre and at full reach */
-function quakeBand(q){ return QUAKE_W0 + (QUAKE_W1-QUAKE_W0)*clamp(q.r/QUAKE_MAX, 0, 1); }
-function startQuake(b){
-  b.quake = { r: 8, hit:false };
-  addShake(0.7);
-  addRing(b.x, b.y, 14, 200, 70, '#cfd6dd', 9, 0.45);
-  spawnBricks(b.x, b.y+8, ['#3a4045','#2c3136','#8b8f8a'], 16, 210);
-  addDust(b.x, b.y, 9, 'rgba(150,150,145,');
+/* THE QUAKE. The Omega heaves its mace overhead and drives it into the floor.
+   Three shockwaves roll out of the impact, each one further than the last, and
+   riding each wave is an arc of STONE SPIKES that tear up out of the ground in
+   a 180-degree fan pointed at the hero — the Path of Exile slam. The spikes are
+   what actually hits you; the rings are the tell that tells you where they are
+   about to come up. */
+const QUAKE_WIND = 0.9;           /* overhead, before the hammer falls */
+const QUAKE_WAVES = 3;
+const QUAKE_RADII = [130, 240, 360];   /* each wave reaches further than the last */
+const QUAKE_MAX = QUAKE_RADII[QUAKE_RADII.length-1];   /* how far the last wave reaches */
+const QUAKE_GAP = 0.42;           /* seconds between one wave and the next */
+const QUAKE_SPEED = 430;
+const QUAKE_W0 = 14, QUAKE_W1 = 46;
+const QUAKE_ARC = Math.PI;        /* the fan the spikes erupt in: 180 degrees */
+const QUAKE_SPIKES = 13;          /* per wave */
+const SPIKE_RISE = 0.16, SPIKE_HOLD = 0.2, SPIKE_SINK = 0.3;
+function quakeBand(q){ return QUAKE_W0 + (QUAKE_W1-QUAKE_W0)*clamp(q.r/q.max, 0, 1); }
+function startQuake(b, toP){
+  /* one entry per wave; they are launched one after another, not all at once */
+  b.quakes = [];
+  b.quakeQueue = { left: QUAKE_WAVES, t: 0, a: toP };
+  b.spikes = b.spikes || [];
+  b.slamHold = 0.55;              /* the mace stays buried while the floor breaks */
+  addShake(0.8);
+  spawnBricks(b.x, b.y+8, ['#3a4045','#2c3136','#8b8f8a'], 18, 230);
+  addDust(b.x, b.y, 11, 'rgba(150,150,145,');
   addDmg(b.x, b.y-86*(b.scale||1), 'QUAKE!', '#cfd6dd', 24);
   SFX.slam(); SFX.bomb();
 }
+/* A spike: it bursts up out of the floor, stands for a beat, then sinks back. */
+function addSpike(x, y, a, dmg){
+  spikes.push({ x, y, a, dmg, t:0, life:SPIKE_RISE+SPIKE_HOLD+SPIKE_SINK, hit:false,
+                h: rnd(30, 46), w: rnd(8, 13), seed:rnd(TAU) });
+}
+function spikeHeight(sp){
+  if(sp.t < SPIKE_RISE) return sp.h * (sp.t/SPIKE_RISE);
+  if(sp.t < SPIKE_RISE+SPIKE_HOLD) return sp.h;
+  return sp.h * Math.max(0, 1 - (sp.t-SPIKE_RISE-SPIKE_HOLD)/SPIKE_SINK);
+}
+function updateSpikes(dt){
+  for(const sp of spikes){
+    sp.t += dt;
+    /* it only bites on the way up, while it is actually tearing through */
+    if(!sp.hit && sp.t >= SPIKE_RISE*0.45 && sp.t < SPIKE_RISE+SPIKE_HOLD
+       && !player.dead && dist(sp, player) < 20 + player.r){
+      if(player.dash.t>0){ sp.hit = true; perfectDodge(sp.x, sp.y); }
+      else if(player.invuln<=0){ playerDamage(sp.dmg, sp); sp.hit = true; }
+    }
+    if(sp.t >= sp.life) sp.dead = true;
+  }
+  spikes = spikes.filter(sp=>!sp.dead);
+}
 function quakeTick(b, dt){
-  const q = b.quake;
-  q.r += QUAKE_SPEED*dt;
-  const band = quakeBand(q);
-  if(!q.hit && !player.dead){
-    /* measured on the squashed ground plane the wave is drawn on */
-    const d = Math.hypot(player.x-b.x, (player.y-b.y)/GROUND_SQUASH);
-    if(Math.abs(d - q.r) < band + player.r*0.5){
-      if(player.dash.t>0){ q.hit = true; perfectDodge(player.x, player.y); }
-      else if(player.invuln<=0){ playerDamage(b.dmg+1, b); q.hit = true; }
+  /* release the waves in sequence */
+  const q0 = b.quakeQueue;
+  if(q0){
+    q0.t -= dt;
+    if(q0.t <= 0){
+      const idx = QUAKE_WAVES - q0.left;
+      b.quakes.push({ r:10, max:QUAKE_RADII[idx], idx, next:0, a:q0.a });
+      addRing(b.x, b.y, 14, 260, 80 + idx*30, '#cfd6dd', 9-idx*2, 0.4);
+      addShake(0.35);
+      SFX.slam();
+      q0.left--; q0.t = QUAKE_GAP;
+      if(q0.left <= 0) b.quakeQueue = null;
     }
   }
-  /* rubble thrown up along the crest */
-  if(Math.random() < 0.8){
-    const a = rnd(TAU);
-    particles.push({kind:'spark', x:b.x+Math.cos(a)*q.r, y:b.y+Math.sin(a)*q.r*GROUND_SQUASH,
-      vx:rnd(-40,40), vy:rnd(-90,-30), life:0.32, max:0.32, color:'#b9c0c6'});
+  for(const q of b.quakes){
+    const prev = q.r;
+    q.r += QUAKE_SPEED*dt;
+    /* spikes erupt along the crest as it passes, inside the 180 fan */
+    const step = q.max / QUAKE_SPIKES;
+    while(q.next*step <= q.r && q.next <= QUAKE_SPIKES){
+      const rr = Math.max(18, q.next*step);
+      const count = 3 + q.idx*2;
+      for(let i=0;i<count;i++){
+        const off = (i/(count-1) - 0.5) * QUAKE_ARC + rnd(-0.08, 0.08);
+        const a = q.a + off;
+        addSpike(b.x + Math.cos(a)*rr, b.y + Math.sin(a)*rr*GROUND_SQUASH, a, b.dmg+1);
+      }
+      q.next++;
+    }
+    if(Math.random() < 0.9){
+      const a = q.a + rnd(-QUAKE_ARC/2, QUAKE_ARC/2);
+      particles.push({kind:'spark', x:b.x+Math.cos(a)*q.r, y:b.y+Math.sin(a)*q.r*GROUND_SQUASH,
+        vx:rnd(-40,40), vy:rnd(-110,-40), life:0.34, max:0.34, color:'#b9c0c6'});
+    }
+    if(q.r > q.max) q.dead = true;
   }
-  if(q.r > QUAKE_MAX) b.quake = null;
+  b.quakes = b.quakes.filter(q=>!q.dead);
+  if(!b.quakes.length && !b.quakeQueue) b.quake = null;
 }
 function updateSuperBoss(b, dt, toP, dP){
   const enr = b.hp < b.maxHp*0.5;
@@ -5595,8 +5688,9 @@ function updateSuperBoss(b, dt, toP, dP){
       particles.push({kind:'spark', x:b.x+rnd(-30,30), y:b.y-rnd(50,110),
         vx:rnd(-14,14), vy:-40, life:0.35, max:0.35, color:'#cfd6dd'});
     if(b.modeT>=QUAKE_WIND){
-      b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.6:2.4;
-      startQuake(b);
+      b.mode='recover'; b.modeT=0; b.nextAtk = enr?2.2:3.2;
+      b.quake = true;
+      startQuake(b, toP);
     }
   }
   else if(b.mode==='slamWind'){
@@ -5698,7 +5792,7 @@ function updateSuperBoss(b, dt, toP, dP){
     if(b.modeT>0.4){ b.mode='chase'; }
   }
   collideWorld(b);
-  if(b.quake) quakeTick(b, dt);
+  if(b.quake || (b.quakes && b.quakes.length)) quakeTick(b, dt);
   if(b.ring){
     b.ring.r += 380*dt;
     bossRingHit(b);
@@ -5775,12 +5869,16 @@ function updateProjectiles(dt){
           life:0.3, max:0.3, color:CURSES[pr.curse].col});
       if(pr.life<=0) pr.dead=true;
       for(const s of solids){
+        /* a thrown boulder shoulders straight through saplings and crates; only
+           something its own size stops it */
+        if(pr.kind==='frostrock' && s.r < 20) continue;
         if(dist(pr,s) < s.r){ pr.dead=true; addDust(pr.x,pr.y,2); break; }
       }
       /* swept, not sampled: a 660px/s boulder covers 11px a frame and used to be
          able to step straight over the hero between two frames */
       if(pr.owner==='enemy' && !player.dead &&
-         segDist(pr.px, pr.py, pr.x, pr.y, player.x, player.y) < player.r+7+(pr.big?5:0)){
+         segDist(pr.px, pr.py, pr.x, pr.y, player.x, player.y)
+           < player.r + (pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0))){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x, pr.y); pr.dead=true; }
         }
@@ -6100,6 +6198,7 @@ function updateFx(dt){
       playerDamage(1, h, 'fire');
   }
   hazards = hazards.filter(h=>h.life>0);
+  updateSpikes(dt);
   mergeT -= dt;
   if(mergeT<=0){ mergeT = 1.2; mergeSweep(); }
   for(const s of sched) s.t -= dt;
@@ -6423,6 +6522,15 @@ function drawFigure(c, o){
     aR = 0;
   }
   if(o.armsUp){ aL = -2.6; aR = 2.6; gripR = null; }
+  /* THE SLAM. `o.slam` runs 0 (mace overhead, both hands on the haft) to 1 (mace
+     driven into the floor in front). The far arm crosses over to grip it, which
+     is what sells the weight — one-handing a slam looks like a wave. */
+  if(o.slam !== undefined){
+    const k = clamp(o.slam, 0, 1);
+    aL = -2.75 + k*3.95;
+    aR =  2.70 - k*1.45;
+    gripR = null;
+  }
   const armLen = 12*s, handR = (o.style==='brute'?5:3.5)*s;
   const shL = {x:-10*s, y:-26.5*s}, shR = {x:10*s, y:-26.5*s};
   const handL = { x: shL.x + Math.sin(aL)*armLen, y: shL.y + Math.cos(aL)*armLen };
@@ -6455,7 +6563,9 @@ function drawFigure(c, o){
   }
   c.fillStyle = T(C.hands); c.strokeStyle = OL;
   c.beginPath(); c.arc(handL.x,handL.y,handR,0,TAU); c.fill(); c.stroke();
-  c.beginPath(); c.arc(handR2.x,handR2.y,handR,0,TAU); c.fill(); c.stroke();
+  /* The weapon goes down BEFORE the weapon hand, so the grip passes behind the
+     fist and the fist closes over it. Drawn the other way round the pommel sat
+     on top of the hand and nobody appeared to be holding anything. */
   if(o.weapon==='sword' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
     /* dead-on the turn angle: the blade sticks out radially and stays there */
@@ -6463,10 +6573,12 @@ function drawFigure(c, o){
     drawBlade(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
-  if(o.weapon==='mace' && (!o.armsUp || o.whirlA !== undefined)){
+  if(o.weapon==='mace' && (!o.armsUp || o.whirlA !== undefined || o.slam !== undefined)){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.5);
-    drawMace(c, s*(o.whirlA !== undefined ? 1.15 : 1));
+    /* overhead at -2.0, through the arc, into the floor at +1.1 */
+    c.rotate(o.slam !== undefined ? (-2.0 + clamp(o.slam,0,1)*3.1)
+      : o.whirlA !== undefined ? o.whirlA : aR+0.5);
+    drawMace(c, s*((o.whirlA !== undefined || o.slam !== undefined) ? 1.15 : 1));
     c.restore();
   }
   if(o.weapon==='greatsword' && (!o.armsUp || o.whirlA !== undefined)){
@@ -6481,15 +6593,40 @@ function drawFigure(c, o){
     c.restore();
   }
   if(o.weapon==='staff' && !o.armsUp){
-    c.save(); c.translate(handR2.x,handR2.y); c.rotate(aR+1.1);
-    c.strokeStyle = T('#4a3524'); c.lineWidth=2.4*s;
-    c.beginPath(); c.moveTo(0,10*s); c.lineTo(0,-28*s); c.stroke();
+    c.save(); c.translate(handR2.x,handR2.y);
+    /* a bossstaff is planted upright, not carried at an angle */
+    c.rotate(o.staffUpright ? 0 : aR+1.1);
+    c.strokeStyle = T('#4a3524'); c.lineWidth=(o.staffUpright?3.4:2.4)*s;
+    c.beginPath(); c.moveTo(0,(o.staffUpright?16:10)*s); c.lineTo(0,-(o.staffUpright?36:28)*s); c.stroke();
+    if(o.staffUpright){
+      /* bone rings down the shaft */
+      c.strokeStyle = T(sh(C.head,-0.1)); c.lineWidth = 1.6*s;
+      for(const ry of [-8, 0, 8]){
+        c.beginPath(); c.moveTo(-3.6*s, ry*s); c.lineTo(3.6*s, ry*s); c.stroke();
+      }
+      /* a claw cradling the orb */
+      c.strokeStyle = T(C.head); c.lineWidth = 2.4*s; c.lineCap='round';
+      for(const sgn of [-1, 1]){
+        c.beginPath();
+        c.moveTo(sgn*2*s, -32*s);
+        c.quadraticCurveTo(sgn*8*s, -37*s, sgn*4.5*s, -44*s);
+        c.stroke();
+      }
+      c.lineCap='butt';
+    }
     const orb = o.orbCol || '#a5ff5a';
+    const orbY = o.staffUpright ? -39 : -31;
+    const orbR = (o.staffUpright ? 5.2 : 3.4) + (o.castGlow?Math.sin(vtime*18)*1.2:0);
+    c.fillStyle = `rgba(${prs(orb).join(',')},0.30)`;
+    c.beginPath(); c.arc(0,orbY*s,orbR*2*s,0,TAU); c.fill();
     c.fillStyle = T(orb);
-    c.beginPath(); c.arc(0,-31*s,(3.4+(o.castGlow?Math.sin(vtime*18)*1.2:0))*s,0,TAU); c.fill();
+    c.beginPath(); c.arc(0,orbY*s,orbR*s,0,TAU); c.fill();
     c.strokeStyle = OL; c.lineWidth=1.4; c.stroke();
     c.restore();
   }
+  /* the weapon hand, last, closing over whatever it is holding */
+  c.fillStyle = T(C.hands); c.strokeStyle = OL;
+  c.beginPath(); c.arc(handR2.x,handR2.y,handR,0,TAU); c.fill(); c.stroke();
   const hy2 = -37*s, hr = 8.5*s;
   c.fillStyle = T(C.head); c.strokeStyle = OL;
   c.beginPath(); c.arc(0,hy2,hr,0,TAU); c.fill(); c.stroke();
@@ -7530,20 +7667,29 @@ function render(){
         ctx.setLineDash([]);
         groundRing(ctx, e.x, e.y, 24 + (QUAKE_MAX-24)*(1-k), 4, 'rgba(255,255,255,0.9)');
       }
-      if(e.quake){
-        /* the wave itself: a band that broadens as it rolls outward, drawn as
-           three nested rings so the crest reads as a thickening swell */
-        const q = e.quake, band = quakeBand(q);
-        const fade = clamp(1 - q.r/QUAKE_MAX, 0, 1);
-        for(let i=-1;i<=1;i++){
-          const rr = Math.max(2, q.r + i*band*0.62);
-          groundRing(ctx, e.x, e.y, rr, Math.max(2, band*(i===0?0.9:0.5)),
-            `rgba(220,228,234,${(i===0?0.85:0.4)*(0.35+0.65*fade)})`);
+      if(e.quakes && e.quakes.length){
+        /* each wave is an ARC, not a ring — it only exists inside the 180 fan
+           the spikes are coming up in, so the shape tells you where to stand */
+        for(const q of e.quakes){
+          const band = quakeBand(q);
+          const fade = clamp(1 - q.r/q.max, 0, 1);
+          ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, GROUND_SQUASH);
+          for(let i=-1;i<=1;i++){
+            const rr = Math.max(2, q.r + i*band*0.62);
+            ctx.strokeStyle = `rgba(220,228,234,${(i===0?0.85:0.38)*(0.3+0.7*fade)})`;
+            ctx.lineWidth = Math.max(2, band*(i===0?0.9:0.5));
+            ctx.beginPath(); ctx.arc(0, 0, rr, q.a-QUAKE_ARC/2, q.a+QUAKE_ARC/2); ctx.stroke();
+          }
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = Math.max(1.5, band*0.32);
+          ctx.beginPath(); ctx.arc(0, 0, q.r, q.a-QUAKE_ARC/2, q.a+QUAKE_ARC/2); ctx.stroke();
+          /* dust dragging behind the crest */
+          ctx.fillStyle = `rgba(150,150,145,${0.10*fade})`;
+          ctx.beginPath(); ctx.moveTo(0,0);
+          ctx.arc(0, 0, Math.max(2, q.r-band), q.a-QUAKE_ARC/2, q.a+QUAKE_ARC/2);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
         }
-        groundRing(ctx, e.x, e.y, q.r, Math.max(1.5, band*0.35), 'rgba(255,255,255,0.9)');
-        /* a dust skirt dragging behind the crest */
-        groundDisc(ctx, e.x, e.y, Math.max(2, q.r-band),
-          `rgba(150,150,145,${0.10*fade})`);
       }
       if(e.mode==='maceWind'){
         /* the circle the head sweeps, and a bright wedge racing round it */
@@ -7643,6 +7789,37 @@ function render(){
         ctx.setLineDash([]);
       }
     }
+  }
+  /* STONE SPIKES. Drawn after the ground and before the bodies, so they stand
+     between the hero and the floor: a shadow at the base, a jagged rock tooth
+     rising out of it, and a dusty collar where it broke through. */
+  for(const sp of spikes){
+    const h = spikeHeight(sp);
+    if(h < 1) continue;
+    const w = sp.w;
+    ctx.save(); ctx.translate(sp.x, sp.y);
+    ctx.fillStyle = 'rgba(15,20,25,0.26)';
+    ctx.beginPath(); ctx.ellipse(0, 1, w*1.35, w*0.52, 0, 0, TAU); ctx.fill();
+    /* the tooth */
+    ctx.fillStyle = '#8b8f8a';
+    ctx.strokeStyle = 'rgba(25,30,35,0.65)'; ctx.lineWidth = 2; ctx.lineJoin='round';
+    ctx.beginPath();
+    ctx.moveTo(-w, 2);
+    ctx.lineTo(-w*0.55, -h*0.62);
+    ctx.lineTo(Math.sin(sp.seed)*w*0.25, -h);
+    ctx.lineTo(w*0.62, -h*0.55);
+    ctx.lineTo(w, 2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    /* a lit face so it reads as three-dimensional */
+    ctx.fillStyle = '#a8ada8';
+    ctx.beginPath();
+    ctx.moveTo(-w*0.2, 2); ctx.lineTo(-w*0.5, -h*0.6);
+    ctx.lineTo(Math.sin(sp.seed)*w*0.25, -h); ctx.lineTo(w*0.1, -h*0.4);
+    ctx.closePath(); ctx.fill();
+    /* broken collar */
+    ctx.fillStyle = 'rgba(170,170,162,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, 2, w*1.15, w*0.4, 0, 0, TAU); ctx.fill();
+    ctx.restore();
   }
   for(const pr of projectiles){
     const lc = LOB_CONF[pr.kind];
@@ -8126,6 +8303,182 @@ function drawShade(c, e){
     c.beginPath(); c.ellipse(0,1,16,6.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
+/* THE DREAD ROOST is a BAT, not a minifig that happens to have wings. No legs,
+   no arms, no helmet: a furred body slung between two huge membrane wings, ears
+   up, snout down, claws tucked. Everything hangs off the hover bob, because it
+   never touches the ground. The wings spread wide to screech out a summon and
+   fold into a spearhead when it dives. */
+function drawBatBoss(c, e){
+  const s = (e.scale||1) * 1.06;
+  const fl = e.flash>0 ? Math.min(1, e.flash*0.85) : 0;
+  const T = col=> fl ? mixc(col,'#ffffff',fl) : col;
+  const hov = e.hover||0, ph = e.phase||0;
+  const diving  = (e.mode==='swoop' || e.mode==='swoopWind');
+  const casting = (e.mode==='roostWind'||e.mode==='hexWind'||e.mode==='batsWind');
+  /* the beat: frantic on the dive, slow and heavy while it screeches */
+  const beat = diving ? 18 : (casting ? 5.5 : 8.5);
+  const flap = Math.sin(hov*beat + ph);
+  /* how far the wings are thrown open, and how far back they are swept */
+  const sp    = diving ? 0.60 : (casting ? 1.14 : 1);
+  const sweep = diving ? 0.62 : (casting ? -0.18 : 0);
+  const z = (diving ? 30 : 22) + Math.sin(hov*2.4 + ph)*6 + flap*4;
+  const dir = (e.face && e.face.x < 0) ? -1 : 1;
+  const hi = casting ? 1 : 0;
+
+  /* it is high up, so the shadow is small, soft and lags under the body */
+  c.fillStyle = 'rgba(15,20,30,0.26)';
+  c.beginPath(); c.ellipse(e.x, e.y, 22*s - z*0.18, 8*s - z*0.05, 0, 0, TAU); c.fill();
+  if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.4;
+    c.beginPath(); c.ellipse(e.x,e.y,26*s,9.5*s,0,0,TAU); c.stroke(); }
+  if(e.magic){ c.setLineDash([6,5]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.4;
+    c.beginPath(); c.ellipse(e.x,e.y,27*s,10*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
+  /* the violet haze it hunts inside */
+  c.fillStyle = `rgba(181,143,214,${0.09 + 0.05*Math.sin(hov*3+ph) + hi*0.07})`;
+  c.beginPath(); c.ellipse(e.x, e.y - z - 26*s, 54*s, 36*s, 0, 0, TAU); c.fill();
+
+  c.save(); c.translate(e.x, e.y - z); c.scale(dir*s, s);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+
+  /* ---- the wings, both behind the body ---- */
+  for(const side of [-1, 1]){
+    c.save();
+    c.translate(side*7, -40);
+    /* the far wing sits a touch higher and darker, so the pair reads as depth */
+    const far = (side*dir < 0);
+    c.rotate(side*(flap*0.34 - 0.12 + sweep));
+    c.scale(sp, 1);
+    const tipY = -20 + flap*9;
+    const mem = far ? '#2e2740' : '#3c3454';
+    c.fillStyle = T(mem);
+    c.strokeStyle = 'rgba(12,9,20,0.7)'; c.lineWidth = 2.2;
+    /* leading edge out to the tip, then the scalloped trailing edge home */
+    c.beginPath();
+    c.moveTo(0, -4);
+    c.quadraticCurveTo(side*34, tipY - 22, side*70, tipY);
+    c.quadraticCurveTo(side*56, tipY + 16, side*50, tipY + 6);
+    c.quadraticCurveTo(side*38, tipY + 30, side*33, tipY + 14);
+    c.quadraticCurveTo(side*22, tipY + 38, side*18, tipY + 22);
+    c.quadraticCurveTo(side*9, tipY + 34, 0, 14);
+    c.closePath(); c.fill(); c.stroke();
+    /* finger bones fanning out of the shoulder to every scallop */
+    c.strokeStyle = far ? 'rgba(120,104,150,0.5)' : 'rgba(146,128,180,0.72)';
+    c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(side*2, -2); c.quadraticCurveTo(side*36, tipY - 16, side*69, tipY + 1);
+    c.moveTo(side*2, 0);  c.lineTo(side*49, tipY + 5);
+    c.moveTo(side*2, 2);  c.lineTo(side*32, tipY + 13);
+    c.moveTo(side*2, 4);  c.lineTo(side*17, tipY + 21);
+    c.stroke();
+    /* the thumb claw at the wrist */
+    c.fillStyle = T('#d8d2e6');
+    c.beginPath();
+    c.moveTo(side*44, tipY - 11); c.lineTo(side*53, tipY - 17); c.lineTo(side*46, tipY - 5);
+    c.closePath(); c.fill();
+    c.restore();
+  }
+
+  /* ---- the body: furred, hunched, no legs ---- */
+  c.strokeStyle = 'rgba(12,9,20,0.75)'; c.lineWidth = 2.4;
+  c.fillStyle = T('#4a3f5e');
+  c.beginPath(); c.ellipse(0, -34, 15, 20, 0, 0, TAU); c.fill(); c.stroke();
+  /* the chest ruff — a paler collar of fur */
+  c.fillStyle = T('#6b5c85');
+  c.beginPath();
+  c.moveTo(-13, -40);
+  c.quadraticCurveTo(0, -26, 13, -40);
+  c.quadraticCurveTo(0, -34, -13, -40);
+  c.closePath(); c.fill();
+  /* tufts of fur down the belly */
+  c.strokeStyle = 'rgba(30,22,45,0.5)'; c.lineWidth = 1.6;
+  c.beginPath();
+  c.moveTo(-6,-30); c.lineTo(-4,-22); c.moveTo(0,-29); c.lineTo(0,-20);
+  c.moveTo(6,-30); c.lineTo(4,-22);
+  c.stroke();
+  /* the hind claws, curled up under it the way a hanging bat holds them */
+  c.strokeStyle = 'rgba(12,9,20,0.7)'; c.lineWidth = 2.2;
+  for(const side of [-1, 1]){
+    const kick = diving ? 6 : Math.sin(hov*2.4 + ph + (side>0?0:1.1))*2.5;
+    c.fillStyle = T('#3a3350');
+    c.beginPath();
+    c.moveTo(side*6, -20); c.quadraticCurveTo(side*10, -13 + kick, side*7, -8 + kick);
+    c.quadraticCurveTo(side*4, -12 + kick, side*3, -19);
+    c.closePath(); c.fill(); c.stroke();
+    c.strokeStyle = T('#d8d2e6'); c.lineWidth = 1.8;
+    c.beginPath();
+    c.moveTo(side*7, -9 + kick); c.lineTo(side*10, -5 + kick);
+    c.moveTo(side*5, -9 + kick); c.lineTo(side*5, -4 + kick);
+    c.stroke();
+    c.strokeStyle = 'rgba(12,9,20,0.7)'; c.lineWidth = 2.2;
+  }
+
+  /* ---- the head: ears up, snout out, no helmet in sight ---- */
+  const nod = diving ? 5 : Math.sin(hov*2.4 + ph)*1.6;
+  c.save(); c.translate(0, -56 + nod);
+  /* ears, twitching independently */
+  for(const side of [-1, 1]){
+    const tw = Math.sin(hov*3.3 + ph + (side>0?0:2.1))*0.09;
+    c.save(); c.rotate(side*(0.34) + tw);
+    c.fillStyle = T('#4a3f5e');
+    c.beginPath();
+    c.moveTo(side*2, -4); c.quadraticCurveTo(side*13, -16, side*9, -30);
+    c.quadraticCurveTo(side*2, -20, side*(-1), -5);
+    c.closePath(); c.fill(); c.stroke();
+    /* the pink inner ear */
+    c.fillStyle = T('#8d6fae');
+    c.beginPath();
+    c.moveTo(side*3, -7); c.quadraticCurveTo(side*10, -16, side*8, -25);
+    c.quadraticCurveTo(side*4, -18, side*2, -8);
+    c.closePath(); c.fill();
+    c.restore();
+  }
+  /* skull */
+  c.fillStyle = T('#5a4f70');
+  c.beginPath(); c.ellipse(0, 0, 13, 11, 0, 0, TAU); c.fill(); c.stroke();
+  /* snout, pushed forward so it reads as a muzzle and not a face plate */
+  c.fillStyle = T('#6b5c85');
+  c.beginPath(); c.ellipse(3, 5, 8.5, 6.5, 0.1, 0, TAU); c.fill(); c.stroke();
+  c.fillStyle = 'rgba(20,12,30,0.85)';
+  c.beginPath(); c.ellipse(5.5, 2.5, 2.4, 1.7, 0.3, 0, TAU); c.fill();
+  /* eyes: two coals, wide open on the dive */
+  const eg = 0.6 + 0.4*Math.sin(vtime*5 + ph) + (diving?0.4:0);
+  c.fillStyle = `rgba(255,59,48,${0.3*Math.min(1,eg)})`;
+  c.beginPath(); c.arc(-4.5,-2,6,0,TAU); c.arc(5,-3,6,0,TAU); c.fill();
+  c.fillStyle = T('#ff3b30');
+  c.beginPath(); c.ellipse(-4.5,-2, 3, diving?3:2.4, 0, 0, TAU);
+  c.ellipse(5,-3, 3, diving?3:2.4, 0, 0, TAU); c.fill();
+  c.fillStyle = 'rgba(255,220,210,0.9)';
+  c.beginPath(); c.arc(-5.4,-3,1,0,TAU); c.arc(4.1,-4,1,0,TAU); c.fill();
+  /* the mouth: shut while it hunts, thrown open to screech */
+  if(casting || diving){
+    c.fillStyle = 'rgba(28,10,20,0.95)';
+    c.beginPath(); c.ellipse(3, 8, 5.5, 4 + (casting?1.6*Math.abs(flap):0), 0, 0, TAU);
+    c.fill(); c.stroke();
+  }
+  c.fillStyle = '#eef0ee';
+  c.beginPath(); c.moveTo(-1.5, 8.5); c.lineTo(-0.4, 14); c.lineTo(1, 8.5); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(5.5, 8.5); c.lineTo(6.6, 14); c.lineTo(7.8, 8.5); c.closePath(); c.fill();
+  /* the sovereign's crown, small and bone-coloured, sat between the ears */
+  if(e.super || e.bkey==='batsovereign'){
+    c.fillStyle = PAL.gold; c.strokeStyle = 'rgba(60,40,10,0.6)'; c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(-8, -11); c.lineTo(-8, -18); c.lineTo(-4, -14); c.lineTo(0, -20);
+    c.lineTo(4, -14); c.lineTo(8, -18); c.lineTo(8, -11);
+    c.closePath(); c.fill(); c.stroke();
+  }
+  c.restore();
+
+  /* it is still made of bricks under all that fur */
+  drawStudG(c, -5, -52, 3, T('#3a3350'));
+  drawStudG(c, 5, -52, 3, T('#3a3350'));
+
+  if(e.slowT>0){
+    c.globalAlpha = 0.4;
+    c.fillStyle = 'rgba(150,215,255,0.5)';
+    c.beginPath(); c.ellipse(0,-42,24,26,0,0,TAU); c.fill();
+    c.globalAlpha = 1;
+  }
+  c.restore();
+}
 function drawEnemy(c, e){
   if(e.state==='build'){
     const t = clamp(e.buildT,0,1);
@@ -8169,6 +8522,10 @@ function drawEnemy(c, e){
       c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
       c.fillRect(e.x-w3/2, e.y-88*e.scale, w3*clamp(e.hp/e.maxHp,0,1), 5);
     }
+    return;
+  }
+  if(e.type==='boss' && e.bkey==='batsovereign'){
+    drawBatBoss(c, e);
     return;
   }
   if(e.type==='cryptbat' || e.type==='direbat'){
@@ -8217,14 +8574,24 @@ function drawEnemy(c, e){
     if(e.bkey==='lavabrick'||e.bkey==='ultralava') o.lava = true;
     if(e.bkey==='ashtyrant'){ o.lava = true; o.horns = true; }
     if(e.bkey==='omegathane'){ o.horns = true; }
-    if(e.bkey==='batsovereign'){ o.wings = true; o.horns = true;
-      o.z = 14 + Math.sin((e.hover||0)*3.1)*7;
-      o.armsUp = (e.mode==='roostWind'||e.mode==='hexWind'||e.mode==='batsWind'); }
     /* the bosses that WHIRL carry a greatsword; the Omega keeps the mace,
        because its whole new mechanic is driving that mace into the floor */
     if(e.bkey==='brickthane'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'); }
-    if(e.bkey==='omegathane'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'||e.mode==='quakeWind'); }
-    if(e.bkey==='bonebaron'||e.bkey==='megabaron'){ o.armsUp = (e.mode==='ringWind'||e.mode==='summonWind'||e.mode==='curseWind'||e.mode==='spiralWind'); }
+    if(e.bkey==='omegathane'){ o.weapon='mace';
+      o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind');
+      /* the quake is a SLAM: raise, hold it up there, then drive it home and
+         leave it in the floor while the ground is still coming apart */
+      if(e.mode==='quakeWind'){
+        const k = clamp(e.modeT/QUAKE_WIND, 0, 1);
+        o.slam = k < 0.25 ? 1 - k/0.25 : (k < 0.8 ? 0 : (k-0.8)/0.2);
+      } else if((e.slamHold||0) > 0) o.slam = 1;
+    }
+    if(e.bkey==='bonebaron'||e.bkey==='megabaron'){
+      o.weapon='staff'; o.staffUpright = true; o.orbCol = '#c9b8e8';
+      /* the staff stays in hand through every cast — arms only go up to summon */
+      o.armsUp = (e.mode==='summonWind');
+      o.castGlow = (e.mode==='ringWind'||e.mode==='curseWind'||e.mode==='spiralWind');
+    }
     if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'||e.mode==='hellWind'); }
     if(e.bkey==='ashtyrant'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
@@ -8269,6 +8636,170 @@ function drawEnemy(c, e){
   }
 }
 
+/* =============================== COMBAT LOG =============================== */
+/* A scrolling record of every point of damage in and out, plus the running
+   totals that actually answer balance questions: what is killing you, what is
+   doing your killing, and how much damage per second either side is putting
+   out. Press L to show it. Nothing here changes the game — it only watches. */
+const CLOG_MAX = 200;        /* lines kept */
+const CLOG_SHOW = 14;        /* lines drawn */
+const CLOG_MERGE = 0.45;     /* seconds within which repeat hits fold into one line */
+const CLOG_WINDOW = 5;       /* seconds the DPS meters average over */
+let clogOn = false;
+let clog = [];
+let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
+let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
+let clogRun = { dealt:0, taken:0, kills:0, hits:0, crits:0 };
+let clogAilAcc = 0;
+function clogReset(){
+  clog = []; clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {};
+  clogRun = { dealt:0, taken:0, kills:0, hits:0, crits:0 };
+  clogAilAcc = 0;
+}
+function clogToggle(){
+  clogOn = !clogOn;
+  if(clogOn) clogPush(null, 'combat log on — L to hide', '#9fdc7e');
+}
+/* Lines merge while they repeat: twenty orbit ticks in a third of a second are
+   one line that counts up, not twenty lines that scroll the panel away. */
+function clogPush(key, txt, col){
+  if(!clogOn) return;
+  const last = clog[clog.length-1];
+  if(key && last && last.key===key && runTime - last.t0 < CLOG_MERGE){
+    last.n++; last.t = runTime; last.txt = txt+' ×'+last.n;
+    return;
+  }
+  clog.push({ key, t:runTime, t0:runTime, txt, col: col||'#c9d2ce', n:1, sum:0 });
+  if(clog.length > CLOG_MAX) clog.shift();
+}
+function clogPushDmg(key, pre, d, col){
+  if(!clogOn) return;
+  const last = clog[clog.length-1];
+  if(last && last.key===key && runTime - last.t0 < CLOG_MERGE){
+    last.n++; last.sum += d; last.t = runTime;
+    last.txt = pre+' '+fmtHp(last.sum)+'  ×'+last.n;
+    return;
+  }
+  clog.push({ key, t:runTime, t0:runTime, txt: pre+' '+fmtHp(d), col: col||'#c9d2ce', n:1, sum:d });
+  if(clog.length > CLOG_MAX) clog.shift();
+}
+function clogTrim(arr){
+  const cut = runTime - CLOG_WINDOW;
+  while(arr.length && arr[0].t < cut) arr.shift();
+}
+function clogRate(arr){
+  clogTrim(arr);
+  let s = 0; for(const e of arr) s += e.d;
+  return s / CLOG_WINDOW;
+}
+/* The totals are always kept — switching the log on mid-wave should not hand
+   you an empty ledger — but the text lines cost nothing while it is off. */
+function logDealt(e, d, source, crit, suppressed){
+  clogRun.dealt += d; clogRun.hits++; if(crit) clogRun.crits++;
+  clogSrc[source] = (clogSrc[source]||0) + d;
+  clogOutW.push({ t: runTime, d }); clogTrim(clogOutW);
+  if(!clogOn) return;
+  const name = e.bname || e.type;
+  const tag = (crit?' CRIT':'') + (suppressed?' SUPP':'') + (e.magic?' [magic]':'');
+  clogPushDmg('o|'+source+'|'+name, '→ '+name+'  ['+source+']'+tag,
+    d, crit ? '#ffd166' : '#bfe3ff');
+}
+function logTaken(n, src, elem, suppressed, shockCrit){
+  clogRun.taken += n;
+  const who = (src && (src.bname || src.type || src.kind)) || 'the world';
+  clogFrom[who] = (clogFrom[who]||0) + n;
+  clogInW.push({ t: runTime, d:n }); clogTrim(clogInW);
+  if(!clogOn) return;
+  /* burns tick every single frame — they go in the totals in full, but they only
+     earn a LINE once a whole heart of them has gone, or nothing else would be
+     readable while you are on fire */
+  if(src && src.type==='ailment'){
+    clogAilAcc += n;
+    if(clogAilAcc >= 1){
+      const whole = Math.floor(clogAilAcc); clogAilAcc -= whole;
+      clogPushDmg('i|ailment', 'ailments → you', whole, '#ff8a3c');
+    }
+    return;
+  }
+  const tag = (elem?' '+elem:'') + (suppressed?' SUPP':'') + (shockCrit?' SHOCK-CRIT':'');
+  clogPushDmg('i|'+who+'|'+(elem||''), who+' → you'+tag, n, '#ff8a6a');
+}
+function logKill(e){
+  clogRun.kills++;
+  if(!clogOn) return;
+  const name = e.bname || e.type;
+  /* plain words, not a skull glyph — the game's font has no dingbats and a
+     missing glyph draws as a tofu box */
+  if(e.type==='boss') clogPush(null, 'KILLED '+name, '#ffd166');
+  else clogPush('k|'+name, 'killed '+name + (e.elite?' (elite)':''), '#9fdc7e');
+}
+function logEvent(txt, col){ clogPush(null, txt, col); }
+function clogTop(obj, n){
+  return Object.keys(obj).sort((a,b)=> obj[b]-obj[a]).slice(0, n);
+}
+function renderCombatLog(){
+  if(!clogOn) return;
+  const w = 322, x = cw - w - 14, top = 108;
+  const bottom = ch - 96;
+  const h = Math.min(bottom - top, 118 + CLOG_SHOW*14);
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,14,19,0.76)';
+  roundRect(ctx, x, top, w, h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(150,170,190,0.28)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  let y = top + 15;
+  ctx.font = '700 12px "Titan One"'; ctx.fillStyle = '#ffd76e';
+  ctx.fillText('COMBAT LOG', x+12, y);
+  ctx.font = '600 10px Fredoka'; ctx.fillStyle = '#8e9aa4';
+  ctx.textAlign = 'right'; ctx.fillText('L to hide', x+w-12, y);
+  ctx.textAlign = 'left';
+  y += 17;
+  /* the meters: what you are doing right now, and what the run adds up to */
+  const out = clogRate(clogOutW), inc = clogRate(clogInW);
+  ctx.font = '700 11px Fredoka';
+  ctx.fillStyle = '#bfe3ff'; ctx.fillText('DPS out '+out.toFixed(1), x+12, y);
+  ctx.fillStyle = '#ff8a6a'; ctx.fillText('in '+inc.toFixed(1)+'/s', x+126, y);
+  ctx.fillStyle = '#c9d2ce';
+  ctx.fillText('kills '+clogRun.kills, x+208, y);
+  y += 15;
+  ctx.fillStyle = '#8e9aa4'; ctx.font = '600 10px Fredoka';
+  const critPct = clogRun.hits ? Math.round(clogRun.crits/clogRun.hits*100) : 0;
+  ctx.fillText('dealt '+Math.round(clogRun.dealt)+'  ·  taken '+clogRun.taken.toFixed(1)+
+    '  ·  crit '+critPct+'%  ·  hits '+clogRun.hits, x+12, y);
+  y += 15;
+  /* who is doing the work, and who is hurting you — the two lists that decide
+     what to buy next and what to run away from */
+  const srcs = clogTop(clogSrc, 3), froms = clogTop(clogFrom, 3);
+  ctx.font = '700 10px Fredoka';
+  ctx.fillStyle = '#bfe3ff';
+  ctx.fillText('TOP DAMAGE: ' + (srcs.length
+    ? srcs.map(k=> k+' '+Math.round(clogSrc[k]/Math.max(1,clogRun.dealt)*100)+'%').join('  ')
+    : '—'), x+12, y);
+  y += 14;
+  ctx.fillStyle = '#ff8a6a';
+  ctx.fillText('HURT BY: ' + (froms.length
+    ? froms.map(k=> k+' '+Math.round(clogFrom[k]/Math.max(0.01,clogRun.taken)*100)+'%').join('  ')
+    : '—'), x+12, y);
+  y += 12;
+  ctx.strokeStyle = 'rgba(150,170,190,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x+10, y); ctx.lineTo(x+w-10, y); ctx.stroke();
+  y += 12;
+  const rows = Math.max(0, Math.floor((top + h - 8 - y)/14));
+  const lines = clog.slice(-Math.min(rows, CLOG_SHOW));
+  ctx.font = '600 11px Fredoka';
+  for(const L of lines){
+    /* old lines fade, so your eye goes to what just happened */
+    const age = runTime - L.t;
+    ctx.globalAlpha = age > 6 ? 0.45 : (age > 2 ? 0.75 : 1);
+    ctx.fillStyle = '#5f6b75';
+    ctx.fillText(L.t.toFixed(1), x+12, y);
+    ctx.fillStyle = L.col;
+    ctx.fillText(L.txt, x+48, y);
+    y += 14;
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
 /* =============================== HUD =============================== */
 function heartPath(c,x,y,s){
   c.beginPath();
@@ -8552,6 +9083,7 @@ function renderHUD(){
       ctx.globalAlpha = 1;
     }
   }
+  renderCombatLog();
   if(banner){
     banner.t += frameRaw;
     const b = banner;
@@ -8657,10 +9189,11 @@ let titleClock = 0;
 /* =============================== GAME FLOW =============================== */
 function resetRun(demo){
   seed = (Math.random()*1e9)|0;
-  enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[];
+  enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave';
   rerollsUsed = 0; screenRerolls = 0;
+  clogReset();
   buildGround(); buildProps();
   navBuild();
   player = newPlayer();
