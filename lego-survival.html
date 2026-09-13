@@ -1738,7 +1738,7 @@ function killEnemy(e, source){
   if(Math.random() < chestChance)
     props.push({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16,
       rar: rollRarity('chest') });
-  gainXp(e.xp * (e.elite?2:1) * fort);
+  gainXp(e.xp * (e.elite?2:1) * fort * MOB_XP_SCALE, true);
   if(e.type==='boss'){
     tScale = 0.25;
     for(let i=0;i<3;i++) spawnStuds(e.x+rnd(-40,40), e.y+rnd(-40,40), 12);
@@ -1748,9 +1748,16 @@ function killEnemy(e, source){
     queuePick('boss');
   }
 }
-function gainXp(n){
+/* Levelling used to outrun the roster: by wave 20 the hero was several levels
+   past what the wave was built for, because a kill paid its base value times a
+   wave bonus that climbed forever. Monsters now pay half as much and their wave
+   bonus climbs at half the rate. Studs are untouched — the complaint was about
+   monsters, so the stud curve stays exactly where it was. */
+const MOB_XP_SCALE = 0.5;
+const MOB_XP_WAVE_DIV = 10;      /* studs still use 6 */
+function gainXp(n, fromMob){
   const p = player;
-  const waveBonus = 1 + wave.n/6;
+  const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : 6);
   p.xp += n * waveBonus * p.xpMul;
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*1.3+5);
@@ -2378,7 +2385,7 @@ const UPGRADES = [
     desc:c=>`+${c.v} flat sword damage (now ${(swordBase()+c.v).toFixed(0)})`,
     apply:c=>{ player.flatSword += c.v; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
-    calc:m=>({v:0.15+0.10*m}),
+    calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased melee damage (now ${Math.round((player.incMelee+c.v)*100)}%)`,
     apply:c=>{ player.incMelee += c.v; } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
@@ -2390,7 +2397,7 @@ const UPGRADES = [
     desc:c=>`+${c.v} flat armour (now ${Math.round((player.armour+c.v)*(1+player.incArmour))})`,
     apply:c=>{ player.armour += c.v; } },
   { id:'armorinc', name:'Plated Rig', icon:'shieldplus', cls:'DEFENSE', req:()=>player.armour>0,
-    calc:m=>({v:0.14+0.10*m}),
+    calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased armour (now ${Math.round(player.armour*(1+player.incArmour+c.v))})`,
     apply:c=>{ player.incArmour += c.v; } },
   { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
@@ -2410,12 +2417,12 @@ const UPGRADES = [
     apply:c=>{ player.atkRate = Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>critChance() < CRIT_CHANCE_CAP,
-    calc:m=>({v:0.35+0.30*m}),
+    calc:m=>({v:0.16+0.13*m}),
     desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (now ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%)`,
     apply:c=>{ player.incCrit += c.v; } },
   { id:'critpow', name:'Heavy Crits', icon:'burst', cls:'OFFENSE', minRar:'uncommon',
     req:()=>player.critMultPct < CRIT_MULT_CAP,
-    calc:m=>({v:Math.round(12+9*m)}),
+    calc:m=>({v:Math.round(6+4.5*m)}),
     desc:c=>`+${c.v}% to critical strike multiplier (now ${Math.min(CRIT_MULT_CAP, player.critMultPct+c.v)}%)`,
     apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
   { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
@@ -2458,22 +2465,22 @@ const UPGRADES = [
     apply:c=>{ player.xpMul += c.v; } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.fire < RES_CAP,
-    calc:m=>({v:0.08+0.07*m}),
+    calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% fire resistance (now ${Math.round(Math.min(RES_CAP,player.res.fire+c.v)*100)}%)`,
     apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
   { id:'resfrost', name:'Thermal Lining', icon:'snow', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.frost < RES_CAP,
-    calc:m=>({v:0.08+0.07*m}),
+    calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% frost resistance (now ${Math.round(Math.min(RES_CAP,player.res.frost+c.v)*100)}%)`,
     apply:c=>{ player.res.frost = Math.min(RES_CAP, player.res.frost + c.v); } },
   { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.shock < RES_CAP,
-    calc:m=>({v:0.08+0.07*m}),
+    calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% lightning resistance (now ${Math.round(Math.min(RES_CAP,player.res.shock+c.v)*100)}%)`,
     apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
   { id:'resall', name:'Elementalist Bricks', icon:'prism', cls:'DEFENSE', minRar:'rare',
     req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
-    calc:m=>({v:0.05+0.045*m}),
+    calc:m=>({v:0.025+0.022*m}),
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
     apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
@@ -2510,7 +2517,7 @@ const UPGRADES = [
     desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (now ${Math.max(BLAST_MIN_RATE,player.blaster.rate*(1-c.v)).toFixed(2)}s, floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.blaster.rate = Math.max(BLAST_MIN_RATE, player.blaster.rate*(1-c.v)); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
-    calc:m=>({v:0.15+0.10*m}),
+    calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased spell damage (now ${Math.round((player.incSpell+c.v)*100)}%)`,
     apply:c=>{ player.incSpell += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
@@ -5079,7 +5086,9 @@ function maceSpin(b, dt, tier, enr, toP){
   }
   return false;
 }
-function maceReach(b){ return 52*(b.scale||1) + 18; }
+/* The sweep is the whole point of the attack — at the old radius you could
+   stand a step back and watch it. It now reaches roughly twice as far. */
+function maceReach(b){ return 108*(b.scale||1) + 34; }
 function bossSummon(b, count, kinds, elites){
   const room = Math.max(0, MAX_ALIVE - enemies.length - 4);
   const n = Math.min(count, room);
@@ -5521,6 +5530,44 @@ function updateBoss(b, dt, toP, dP){
   }
 }
 /* NEW: SUPER BOSSES — bigger, meaner, signature mechanic */
+/* THE QUAKE. The Omega carries a mace and never used it for anything. Now it
+   heaves the thing overhead, drives it into the floor, and a wave rolls out of
+   the impact — and the wave BROADENS as it travels, so the further out you are
+   the harder it is to find a gap to stand in. */
+const QUAKE_WIND = 0.9;        /* overhead, before the hammer falls */
+const QUAKE_MAX = 175;         /* how far the wave reaches */
+const QUAKE_SPEED = 300;
+const QUAKE_W0 = 13, QUAKE_W1 = 42;   /* band half-width at the centre and at full reach */
+function quakeBand(q){ return QUAKE_W0 + (QUAKE_W1-QUAKE_W0)*clamp(q.r/QUAKE_MAX, 0, 1); }
+function startQuake(b){
+  b.quake = { r: 8, hit:false };
+  addShake(0.7);
+  addRing(b.x, b.y, 14, 200, 70, '#cfd6dd', 9, 0.45);
+  spawnBricks(b.x, b.y+8, ['#3a4045','#2c3136','#8b8f8a'], 16, 210);
+  addDust(b.x, b.y, 9, 'rgba(150,150,145,');
+  addDmg(b.x, b.y-86*(b.scale||1), 'QUAKE!', '#cfd6dd', 24);
+  SFX.slam(); SFX.bomb();
+}
+function quakeTick(b, dt){
+  const q = b.quake;
+  q.r += QUAKE_SPEED*dt;
+  const band = quakeBand(q);
+  if(!q.hit && !player.dead){
+    /* measured on the squashed ground plane the wave is drawn on */
+    const d = Math.hypot(player.x-b.x, (player.y-b.y)/GROUND_SQUASH);
+    if(Math.abs(d - q.r) < band + player.r*0.5){
+      if(player.dash.t>0){ q.hit = true; perfectDodge(player.x, player.y); }
+      else if(player.invuln<=0){ playerDamage(b.dmg+1, b); q.hit = true; }
+    }
+  }
+  /* rubble thrown up along the crest */
+  if(Math.random() < 0.8){
+    const a = rnd(TAU);
+    particles.push({kind:'spark', x:b.x+Math.cos(a)*q.r, y:b.y+Math.sin(a)*q.r*GROUND_SQUASH,
+      vx:rnd(-40,40), vy:rnd(-90,-30), life:0.32, max:0.32, color:'#b9c0c6'});
+  }
+  if(q.r > QUAKE_MAX) b.quake = null;
+}
 function updateSuperBoss(b, dt, toP, dP){
   const enr = b.hp < b.maxHp*0.5;
   const spd = b.speed*(enr?1.3:1);
@@ -5532,10 +5579,24 @@ function updateSuperBoss(b, dt, toP, dP){
     if(dP < b.r+player.r+4 && b.hitCd<=0){ playerDamage(b.dmg,b); b.hitCd=0.9; }
     if(b.nextAtk<=0){
       b.cycle = (b.cycle+1)%4;
-      const order = ['slamWind','missileWind','volleyWind','summonWind'];
+      /* the Omega swaps one step of its cycle for the quake — that mace is
+         finally load-bearing */
+      const order = b.bkey==='omegathane'
+        ? ['quakeWind','missileWind','volleyWind','summonWind']
+        : ['slamWind','missileWind','volleyWind','summonWind'];
       b.mode = b.cycle===3 ? b.sig+'Wind' : order[b.cycle % order.length];
       b.modeT = 0;
       SFX.roar();
+    }
+  }
+  else if(b.mode==='quakeWind'){
+    b.modeT += dt; b.moving=false; b.face={x:Math.cos(toP),y:Math.sin(toP)};
+    if(Math.random()<0.5)
+      particles.push({kind:'spark', x:b.x+rnd(-30,30), y:b.y-rnd(50,110),
+        vx:rnd(-14,14), vy:-40, life:0.35, max:0.35, color:'#cfd6dd'});
+    if(b.modeT>=QUAKE_WIND){
+      b.mode='recover'; b.modeT=0; b.nextAtk = enr?1.6:2.4;
+      startQuake(b);
     }
   }
   else if(b.mode==='slamWind'){
@@ -5637,6 +5698,7 @@ function updateSuperBoss(b, dt, toP, dP){
     if(b.modeT>0.4){ b.mode='chase'; }
   }
   collideWorld(b);
+  if(b.quake) quakeTick(b, dt);
   if(b.ring){
     b.ring.r += 380*dt;
     bossRingHit(b);
@@ -6407,6 +6469,12 @@ function drawFigure(c, o){
     drawMace(c, s*(o.whirlA !== undefined ? 1.15 : 1));
     c.restore();
   }
+  if(o.weapon==='greatsword' && (!o.armsUp || o.whirlA !== undefined)){
+    c.save(); c.translate(handR2.x,handR2.y);
+    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.55);
+    drawGreatsword(c, s*(o.whirlA !== undefined ? 1.1 : 0.95));
+    c.restore();
+  }
   if(o.weapon==='spear' && !o.armsUp){
     c.save(); c.translate(handR2.x,handR2.y); c.rotate(aR+1.25);
     drawSpear(c, s);
@@ -6662,6 +6730,37 @@ function drawBlade(c, s, bright){
   c.fillRect(-2.2*s,-6*s,3.4*s,12*s);
   c.strokeStyle = 'rgba(20,30,40,0.5)'; c.strokeRect(-2.2*s,-6*s,3.4*s,12*s);
   c.fillStyle = PAL.brown; c.fillRect(-7*s,-2.4*s,5*s,4.8*s); c.strokeRect(-7*s,-2.4*s,5*s,4.8*s);
+}
+/* A boss greatsword: a broad blade with a fuller, a winged crossguard and a
+   jewelled pommel. Drawn pointing along +x from the grip, like every other
+   weapon here, so the whirl can just rotate it. */
+function drawGreatsword(c, s){
+  c.lineJoin = 'round';
+  /* blade */
+  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 2;
+  c.fillStyle = '#e6edf2';
+  c.beginPath();
+  c.moveTo(6*s, -6.4*s);
+  c.lineTo(40*s, -5.2*s); c.lineTo(52*s, 0); c.lineTo(40*s, 5.2*s);
+  c.lineTo(6*s, 6.4*s);
+  c.closePath(); c.fill(); c.stroke();
+  /* fuller down the middle */
+  c.strokeStyle = '#aebcc6'; c.lineWidth = 1.8*s;
+  c.beginPath(); c.moveTo(9*s, 0); c.lineTo(41*s, 0); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.1*s;
+  c.beginPath(); c.moveTo(10*s, -2.6*s); c.lineTo(38*s, -2.2*s); c.stroke();
+  /* winged crossguard */
+  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 2;
+  c.fillStyle = PAL.gold;
+  c.beginPath();
+  c.moveTo(2*s, -11*s); c.lineTo(8*s, -4*s); c.lineTo(8*s, 4*s); c.lineTo(2*s, 11*s);
+  c.lineTo(-1.5*s, 7*s); c.lineTo(-1.5*s, -7*s);
+  c.closePath(); c.fill(); c.stroke();
+  /* grip and pommel */
+  c.fillStyle = '#4a3524';
+  roundRect(c, -12*s, -2.6*s, 11*s, 5.2*s, 2*s); c.fill(); c.stroke();
+  c.fillStyle = '#d3242b';
+  c.beginPath(); c.arc(-13.5*s, 0, 3.6*s, 0, TAU); c.fill(); c.stroke();
 }
 function drawMace(c, s){
   c.strokeStyle = 'rgba(20,30,40,0.5)'; c.lineWidth=2;
@@ -7422,6 +7521,30 @@ function render(){
         ctx.beginPath(); ctx.arc(e.x,e.y,(e.r+20)*pr2,0,TAU); ctx.stroke();
         ctx.setLineDash([]);
       }
+      if(e.mode==='quakeWind'){
+        /* the ground the hammer is about to break, tightening as it falls */
+        const k = clamp(e.modeT/QUAKE_WIND, 0, 1);
+        groundDisc(ctx, e.x, e.y, QUAKE_MAX, `rgba(207,214,221,${0.07+0.10*k})`);
+        ctx.setLineDash([18,13]);
+        groundRing(ctx, e.x, e.y, QUAKE_MAX, 6, `rgba(207,214,221,${0.5+0.35*Math.sin(vtime*18)})`);
+        ctx.setLineDash([]);
+        groundRing(ctx, e.x, e.y, 24 + (QUAKE_MAX-24)*(1-k), 4, 'rgba(255,255,255,0.9)');
+      }
+      if(e.quake){
+        /* the wave itself: a band that broadens as it rolls outward, drawn as
+           three nested rings so the crest reads as a thickening swell */
+        const q = e.quake, band = quakeBand(q);
+        const fade = clamp(1 - q.r/QUAKE_MAX, 0, 1);
+        for(let i=-1;i<=1;i++){
+          const rr = Math.max(2, q.r + i*band*0.62);
+          groundRing(ctx, e.x, e.y, rr, Math.max(2, band*(i===0?0.9:0.5)),
+            `rgba(220,228,234,${(i===0?0.85:0.4)*(0.35+0.65*fade)})`);
+        }
+        groundRing(ctx, e.x, e.y, q.r, Math.max(1.5, band*0.35), 'rgba(255,255,255,0.9)');
+        /* a dust skirt dragging behind the crest */
+        groundDisc(ctx, e.x, e.y, Math.max(2, q.r-band),
+          `rgba(150,150,145,${0.10*fade})`);
+      }
       if(e.mode==='maceWind'){
         /* the circle the head sweeps, and a bright wedge racing round it */
         const rr = maceReach(e);
@@ -8097,10 +8220,13 @@ function drawEnemy(c, e){
     if(e.bkey==='batsovereign'){ o.wings = true; o.horns = true;
       o.z = 14 + Math.sin((e.hover||0)*3.1)*7;
       o.armsUp = (e.mode==='roostWind'||e.mode==='hexWind'||e.mode==='batsWind'); }
-    if(e.bkey==='brickthane'||e.bkey==='omegathane'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'); }
+    /* the bosses that WHIRL carry a greatsword; the Omega keeps the mace,
+       because its whole new mechanic is driving that mace into the floor */
+    if(e.bkey==='brickthane'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'); }
+    if(e.bkey==='omegathane'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='volleyWind'||e.mode==='summonWind'||e.mode==='novaWind'||e.mode==='quakeWind'); }
     if(e.bkey==='bonebaron'||e.bkey==='megabaron'){ o.armsUp = (e.mode==='ringWind'||e.mode==='summonWind'||e.mode==='curseWind'||e.mode==='spiralWind'); }
-    if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'||e.mode==='hellWind'); }
-    if(e.bkey==='ashtyrant'){ o.weapon='mace'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
+    if(e.bkey==='lavabrick'||e.bkey==='ultralava'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='poolsWind'||e.mode==='volleyWind'||e.mode==='fanWind'||e.mode==='meteorWind'||e.mode==='hellWind'); }
+    if(e.bkey==='ashtyrant'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
   /* frostbite tint */
