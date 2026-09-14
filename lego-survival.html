@@ -421,6 +421,12 @@ const ZORB_STACKS = 5;                    /* shock stacks a direct orb hit lands
 const CHAIN_ZAP_GAP = 0.2;                /* stagger between storm bricks firing */
 const CHAIN_JUMP_GAP = 0.1;               /* delay between one leap and the next */
 const CHAIN_MAX_NODES = 40;               /* ceiling on one forked bolt */
+/* How far a bolt can walk. Nothing capped the chain before, so a stack of Storm
+   Bricks kept adding leaps for ever and one cast strolled through a whole wave.
+   Fifteen leaps — one per foe — past the opening strike, and the card stops
+   being offered once you are there. */
+const CHAIN_MAX_LEAPS = 15;
+function chainMaxTargets(){ return CHAIN_MAX_LEAPS + 1; }
 const CHAIN_FORK_MAX = 2;                 /* ranks of Crackling Storm: 2 then 3 ways */
 const WHIRL_MAX = 2;                      /* ranks of Blademaster */
 const WHIRL_SPIN = 13;                    /* rad/s the hero turns while whirling */
@@ -2944,14 +2950,17 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased spell damage — every brick you cast`,
     apply:c=>{ player.incSpell += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.chain.n < chainMaxTargets(),
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=>{
-      const n2 = player.chain.n + c.n, lp = n2-1;
+      const n2 = Math.min(chainMaxTargets(), player.chain.n + c.n), lp = n2-1;
       const tail = lp>0 ? ` — leaps land for ${Math.round(chainLeapStart(lp)*100)}%…${Math.round(chainLeapFloor(lp)*100)}% of the opening strike` : '';
-      return owned>0 ? `+${c.n} chain — every bolt now leaps to ${n2} foes${tail}`
-        : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}${tail}`;
+      const cap = ` (max ${CHAIN_MAX_LEAPS} leaps)`;
+      return owned>0 ? `+${n2 - player.chain.n} chain — every bolt now leaps to ${n2} foes${cap}${tail}`
+        : `Spell: a storm brick hovers by you, firing lightning that leaps to ${c.n} foe${c.n>1?'s':''}${cap}${tail}`;
     },
-    apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
+    apply:c=>{ player.chain.n = Math.min(chainMaxTargets(), player.chain.n + c.n);
+      if(player.chain.zappers<1) player.chain.zappers = 1; } },
   { id:'chainbrick', name:'Chain Lightning Brick', icon:'zapper', cls:'SPELL', minRar:'uncommon',
     req:()=>player.chain.n>0 && player.chain.zappers<chainMaxZappers(),
     calc:m=>({n:spellCount(m)}),
@@ -3523,7 +3532,9 @@ function spellSummaries(){
       (leaps>0
         ? `Leaps land for ${steps.join(' / ')}${leaps>4?' …':''} of the opening — a longer chain holds up better\n`
         : `No leaps yet — take another Storm Brick to start chaining\n`)+
-      `${p.chain.n} target${p.chain.n>1?'s':''} per bolt: ${per(total)} down the chain\n`+
+      `${p.chain.n} target${p.chain.n>1?'s':''} per bolt`+
+      (leaps>=CHAIN_MAX_LEAPS ? ` (${CHAIN_MAX_LEAPS}-leap cap reached)` : '')+
+      `: ${per(total)} down the chain\n`+
       `All ${zn} bricks firing: ${per(total*zn)}\n`+
       `Each leap lands ${CHAIN_JUMP_GAP.toFixed(2)}s after the one before it`+
       (p.chain.fork ? `\nCrackling Storm ×${p.chain.fork}: every leap forks ${ways} ways `+
