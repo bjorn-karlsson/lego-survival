@@ -441,6 +441,69 @@ const ORBIT_PULSE_IN  = 0.88;
 const ORBIT_PULSE_OUT = 1.62;
 /* Sturdy Plates stops here — and MORE Life raises the ceiling with it */
 function heartCap(){ return Math.round(HEART_MAX * (player.hpMore || 1)); }
+/* =============================== THE POOL ===============================
+   Every number the hero has is built the same way, in this order:
+
+       (base + every flat add) × (1 + every increase ADDED TOGETHER) × each MORE
+
+   Two things follow from that, and both used to be wrong somewhere:
+   · increases share ONE pool per stat, so +4% and +4% is +8%, not 1.04²;
+   · a MORE is stored and applied last, so doubling your hearts keeps doubling
+     the ones you find AFTERWARDS. Writing `maxHp = maxHp*2` once was the bug —
+     it multiplied the hearts you had and nothing you would ever add later.
+
+   So no card writes a derived number any more. A card adds to a pool and
+   syncStats() rebuilds every value that pool feeds. */
+const HP_BASE = 6;             /* hearts before any brick */
+const SPEED_BASE = 215;        /* px/s */
+const ATK_BASE = 0.34;         /* seconds per swing */
+const DASH_BASE = 0.9;         /* seconds between rolls */
+const MAGNET_BASE = 95;        /* stud pickup radius */
+const ORBIT_SPD_BASE = 2.6;
+const BLAST_RATE_BASE = 2.4, CHAIN_RATE_BASE = 2.2, STORM_RATE_BASE = 6.5;
+const VORTEX_RATE_BASE = 9, FREEZE_RATE_BASE = 10, BOMB_RATE_BASE = 7;
+const BOMB_R_BASE = 62;
+function pool(base, flat, inc, more){
+  return (base + (flat||0)) * (1 + (inc||0)) * (more||1);
+}
+/* A cooldown is the other side of the same coin: "20% faster" is an INCREASE to
+   rate, so the interval it leaves you is base / (1 + increases). It approaches
+   the floor and never passes it, and two 20% cards are 40% rather than 36%. */
+function paceOf(base, inc, floor){ return Math.max(floor, base / (1 + (inc||0))); }
+/* Rebuild every derived number from its pools. Cheap, and called after anything
+   that can move one — a brick, a starting perk, a rebuild. */
+function syncStats(){
+  const p = player;
+  if(!p) return;
+  const i = p.inc;
+  p.maxHp = Math.max(1, Math.min(heartCap(),
+    Math.round(pool(HP_BASE, p.hpFlat, i.hp, p.hpMore))));
+  if(p.hp > p.maxHp) p.hp = p.maxHp;
+  p.speed   = Math.min(SPEED_MAX,  pool(SPEED_BASE, 0, i.speed, 1));
+  p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
+  p.studMul = pool(1, 0, i.studs, 1);
+  p.atkRate = paceOf(ATK_BASE, i.atk, ATK_RATE_MIN);
+  p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
+  p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, i.orbitSpd, 1));
+  p.blaster.rate = paceOf(BLAST_RATE_BASE, i.blastRate, BLAST_MIN_RATE);
+  p.chain.rate   = paceOf(CHAIN_RATE_BASE, i.chainRate, CHAIN_MIN_RATE);
+  p.storm.rate   = paceOf(STORM_RATE_BASE, i.stormRate, STORM_MIN_RATE);
+  p.vortex.rate  = paceOf(VORTEX_RATE_BASE, i.vortexRate, VORTEX_MIN_RATE);
+  p.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, 1/(1 + i.vortexRate*0.5));
+  p.freeze.rate  = paceOf(FREEZE_RATE_BASE, i.freezeRate, FREEZE_MIN_RATE);
+  p.bomb.rate    = paceOf(BOMB_RATE_BASE, i.bombRate, BOMB_MIN_RATE);
+  p.bomb.r = Math.min(BOMB_MAX_R, pool(BOMB_R_BASE, 0, i.bombR, 1));
+}
+/* Max hearts, and the healing that comes with them. The heal is whatever the
+   POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
+function addMaxHp(flat){
+  const p = player, before = p.maxHp;
+  p.hpFlat += flat;
+  syncStats();
+  const gained = p.maxHp - before;
+  if(gained > 0) p.hp = Math.min(p.maxHp, p.hp + gained);
+  return gained;
+}
 const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
@@ -861,6 +924,7 @@ let player = null;
 let buildLog = [];
 function applyPick(u, rar){
   u.apply(u.calc(RARITY[rar].mult));
+  syncStats();          /* one brick can move several pools; rebuild them all */
   logEvent('took '+u.name+' ('+rar+')', RARITY[rar].col);
   taken[u.id] = (taken[u.id]||0)+1;
   buildLog.push({ id:u.id, rar });
@@ -903,7 +967,7 @@ function showBanner(text, sub, color='#ffb900', dur=1.7, size=54){ banner = {tex
 /* =============================== PLAYER =============================== */
 function newPlayer(){
   return {
-    x:CX, y:CY-40, r:13, hp:6, maxHp:6, speed:215,
+    x:CX, y:CY-40, r:13, hp:HP_BASE, maxHp:HP_BASE, speed:SPEED_BASE,
     /* offence, in PoE terms */
     flatSword:0,          /* flat added sword damage */
     incMelee:0,           /* increased melee damage — sword, bladestorm, vortex */
@@ -913,10 +977,17 @@ function newPlayer(){
     critBase:CRIT_BASE, incCrit:0, critMultPct:CRIT_MULT_BASE,
     /* defence */
     armour:0, incArmour:0, suppress:0,
-    atkRate:0.34, atkCd:0,
+    /* Every INCREASE the hero owns, one additive pool per stat, and the flat
+       hearts that sit under the hp pool. Nothing here is ever read directly by
+       the game — syncStats() turns them into the numbers that are. */
+    hpFlat:0, hpMore:1,
+    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0,
+          orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
+          vortexRate:0, freezeRate:0, bombRate:0, bombR:0 },
+    atkRate:ATK_BASE, atkCd:0,
     combo:0, comboTimer:0, swing:null, reach:0, xpMul:1, blademaster:0, whirl:false, whirlAng:0,
-    dash:{t:0, cd:0, cdMax:0.9, dir:{x:1,y:0}},
-    invuln:0, flash:0, xp:0, xpNext:10, level:1, magnetR:95, magnetT:0,
+    dash:{t:0, cd:0, cdMax:DASH_BASE, dir:{x:1,y:0}},
+    invuln:0, flash:0, xp:0, xpNext:10, level:1, magnetR:MAGNET_BASE, magnetT:0,
     kx:0, ky:0,
     fortuneT:0, fortuneMul:1, slowT:0,
     /* RAGE doubles every point of damage you deal and stacks to 8x; WARD piles
@@ -944,19 +1015,19 @@ function newPlayer(){
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
     curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
     regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0,
-    crit:0.1, studMul:1, heartChance:0, hpMore:1,
-    orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[], pulse:0 },
+    crit:0.1, studMul:1, heartChance:0,
+    orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], pulse:0 },
     /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
        exactly one pick and the volley can never become a spray of piercing bricks */
-    blaster:{ n:0, dmg:2, rate:2.4, cd:0.8, spd:560, pierce:2, split:0 },
-    storm:{ n:0, dmg:2, rate:6.5, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
+    blaster:{ n:0, dmg:2, rate:BLAST_RATE_BASE, cd:0.8, spd:560, pierce:2, split:0 },
+    storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
-    vortex:{ n:0, dmg:3, rate:9, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
-    freeze:{ n:0, r:190, dur:2.5, rate:10, cd:4, stun:0 },
+    vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
+    freeze:{ n:0, r:190, dur:2.5, rate:FREEZE_RATE_BASE, cd:4, stun:0 },
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
-    chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5], gap:0, fork:0 },
-    bomb:{ n:0, dmg:2, r:62, rate:7, cd:3, cluster:0 },
+    chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0 },
+    bomb:{ n:0, dmg:2, r:BOMB_R_BASE, rate:BOMB_RATE_BASE, cd:3, cluster:0 },
     /* raised by a favourite's starting perk, once, at the beginning of a run */
     capUp:{ orbit:0, blaster:0, chain:0, bomb:0 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
@@ -1912,8 +1983,11 @@ const WARD_MAX = 2;
 function wardArmour(){ return player.wardT > 0 ? WARD_ARMOUR * player.wardN : 0; }
 function wardRes(){ return player.wardT > 0 ? WARD_RES * player.wardN : 0; }
 function armourValue(){
-  return Math.max(0, player.armour * (1 + player.incArmour) * (1 - player.curse.armor)
-    + wardArmour());
+  /* the ward is FLAT armour, so it joins the flat pool and the increases apply
+     to it too — it used to be bolted on after, which made increased armour
+     quietly worth less while a ward was up */
+  return Math.max(0, (player.armour + wardArmour()) * (1 + player.incArmour)
+    * (1 - player.curse.armor));
 }
 function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
@@ -2583,7 +2657,7 @@ const UPGRADES = [
     req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`Swing ${Math.round(c.v*100)}% faster (floor ${ATK_RATE_MIN.toFixed(2)}s per swing)`,
-    apply:c=>{ player.atkRate = Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)); } },
+    apply:c=>{ player.inc.atk += c.v; syncStats(); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>critChance() < CRIT_CHANCE_CAP,
     calc:m=>({v:0.16+0.13*m}),
@@ -2597,8 +2671,8 @@ const UPGRADES = [
   { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
     req:()=>player.maxHp < heartCap(),
     calc:m=>({v:Math.max(2,Math.round(2*m))}),
-    desc:c=>`+${c.v} max hearts, heal ${c.v} (cap ${heartCap()})`,
-    apply:c=>{ player.maxHp=Math.min(heartCap(),player.maxHp+c.v); player.hp=Math.min(player.maxHp,player.hp+c.v); } },
+    desc:c=>`+${c.v} FLAT max hearts, and heal what they add (cap ${heartCap()})`,
+    apply:c=>{ addMaxHp(c.v); } },
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
     req:()=>player.regenRate < REGEN_MAX,
     calc:m=>({v:0.035+0.022*m}),
@@ -2613,21 +2687,21 @@ const UPGRADES = [
     req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
     desc:c=>`+${Math.round(c.v*100)}% move speed (cap ${SPEED_MAX} px/s)`,
-    apply:c=>{ player.speed = Math.min(SPEED_MAX, player.speed*(1+c.v)); } },
+    apply:c=>{ player.inc.speed += c.v; syncStats(); } },
   { id:'roll', name:'Phantom Roll', icon:'roll', cls:'UTILITY',
     req:()=>player.dash.cdMax > DASH_CD_MIN,
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`Roll cooldown -${Math.round(c.v*100)}% (floor ${DASH_CD_MIN.toFixed(2)}s)`,
-    apply:c=>{ player.dash.cdMax = Math.max(DASH_CD_MIN, player.dash.cdMax*(1-c.v)); } },
+    apply:c=>{ player.inc.roll += c.v; syncStats(); } },
   { id:'mag', name:'Magnet Bricks', icon:'magnet', cls:'UTILITY',
     req:()=>player.magnetR < MAGNET_MAX,
     calc:m=>({v:0.20+0.15*m}),
     desc:c=>`+${Math.round(c.v*100)}% stud pickup range (cap ${MAGNET_MAX})`,
-    apply:c=>{ player.magnetR = Math.min(MAGNET_MAX, player.magnetR*(1+c.v)); } },
+    apply:c=>{ player.inc.magnet += c.v; syncStats(); } },
   { id:'greed', name:'Golden Touch', icon:'coin', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`+${Math.round(c.v*100)}% studs from every source`,
-    apply:c=>{ player.studMul *= (1+c.v); } },
+    apply:c=>{ player.inc.studs += c.v; syncStats(); } },
   { id:'wisdom', name:'Stud Wisdom', icon:'xp', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`+${Math.round(c.v*100)}% XP gained`,
@@ -2668,7 +2742,7 @@ const UPGRADES = [
     req:()=>player.orbit.n>0 && player.orbit.spd<ORBIT_MAX_SPD,
     calc:m=>({v:0.22+0.12*m}),
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
-    apply:c=>{ player.orbit.spd = Math.min(ORBIT_MAX_SPD, player.orbit.spd*(1+c.v)); } },
+    apply:c=>{ player.inc.orbitSpd += c.v; syncStats(); } },
   { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL', minRar:'uncommon',
     req:()=>player.blaster.n < blastMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -2684,7 +2758,7 @@ const UPGRADES = [
     req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
-    apply:c=>{ player.blaster.rate = Math.max(BLAST_MIN_RATE, player.blaster.rate*(1-c.v)); } },
+    apply:c=>{ player.inc.blastRate += c.v; syncStats(); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased spell damage — every brick you cast`,
@@ -2712,7 +2786,7 @@ const UPGRADES = [
   { id:'chainrate', name:'Charged Storm', icon:'clock', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
-    apply:c=>{ player.chain.rate = Math.max(CHAIN_MIN_RATE, player.chain.rate*(1-c.v)); } },
+    apply:c=>{ player.inc.chainRate += c.v; syncStats(); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm — wider sweeping spirals`
@@ -2727,7 +2801,7 @@ const UPGRADES = [
     req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (floor ${STORM_MIN_RATE.toFixed(2)}s)`,
-    apply:c=>{ player.storm.rate = Math.max(STORM_MIN_RATE, player.storm.rate*(1-c.v)); } },
+    apply:c=>{ player.inc.stormRate += c.v; syncStats(); } },
   { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
@@ -2742,8 +2816,7 @@ const UPGRADES = [
     req:()=>player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
-    apply:c=>{ player.vortex.rate = Math.max(VORTEX_MIN_RATE, player.vortex.rate*(1-c.v));
-      player.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, player.vortex.hitMul*(1-c.v*0.5)); } },
+    apply:c=>{ player.inc.vortexRate += c.v; syncStats(); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer deep-freeze`
@@ -2758,7 +2831,7 @@ const UPGRADES = [
     req:()=>player.freeze.n>0 && player.freeze.rate > FREEZE_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster (floor ${FREEZE_MIN_RATE.toFixed(1)}s)`,
-    apply:c=>{ player.freeze.rate = Math.max(FREEZE_MIN_RATE, player.freeze.rate*(1-c.v)); } },
+    apply:c=>{ player.inc.freezeRate += c.v; syncStats(); } },
   { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL', minRar:'uncommon',
     req:()=>player.bomb.n < bombMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -2768,12 +2841,12 @@ const UPGRADES = [
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
     calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
     desc:c=>`+${c.v} FLAT base damage to every bomb, +${Math.round(c.r*100)}% blast radius (cap ${BOMB_MAX_R})`,
-    apply:c=>{ player.bomb.dmg += c.v; player.bomb.r = Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)); } },
+    apply:c=>{ player.bomb.dmg += c.v; player.inc.bombR += c.r; syncStats(); } },
   { id:'bombcd', name:'Quick Fuse', icon:'clock', cls:'SPELL',
     req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster (floor ${BOMB_MIN_RATE.toFixed(1)}s)`,
-    apply:c=>{ player.bomb.rate = Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)); } },
+    apply:c=>{ player.inc.bombRate += c.v; syncStats(); } },
   { id:'cluster', name:'Cluster Charge', icon:'bomblets', cls:'SPELL', minRar:'legendary',
     req:()=>player.bomb.n>0 && player.bomb.cluster < CLUSTER_MAX,
     calc:m=>({n:1}),
@@ -2813,8 +2886,11 @@ const UPGRADES = [
         (now>1 ? ' — ×4 in total' : ' — and it can be found once more, for ×4');
     },
     apply:c=>{ const p = player;
-      p.hpMore = (p.hpMore||1) * 2;
-      p.maxHp = Math.round(p.maxHp*2); p.hp = Math.round(p.hp*2); } },
+      const before = p.maxHp;
+      p.hpMore = (p.hpMore||1) * 2;     /* stored — it keeps multiplying what comes later */
+      syncStats();
+      /* you keep the same share of a bigger bar */
+      p.hp = Math.min(p.maxHp, Math.round(p.hp * (p.maxHp/Math.max(1,before))*100)/100); } },
   { id:'blastsplit', name:'Scattershot Bricks', icon:'split', cls:'SPELL', minRar:'legendary',
     req:()=>player.blaster.n>0 && (player.blaster.split||0) < BLAST_SPLIT_MAX,
     calc:m=>({n:1}),
@@ -2872,11 +2948,10 @@ const FAV_WEIGHT = 3.2;
 const FAV_PERKS = {
   none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
-    apply(p){ p.flatSword += 0.5; p.maxHp += 1; p.hp += 1; p.armour += 10;
-      p.incAll += 0.05; p.speed = Math.min(SPEED_MAX, p.speed*1.04);
-      p.studMul *= 1.10; p.xpMul += 0.10; } },
+    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armour += 10;
+      p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpMul += 0.10; } },
   sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
-    apply(p){ p.flatSword += 1; p.atkRate = Math.max(ATK_RATE_MIN, p.atkRate*0.92);
+    apply(p){ p.flatSword += 1; p.inc.atk += 0.09;
       p.reach = Math.min(REACH_MAX, p.reach + 8); } },
   orbit: { lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
@@ -2889,27 +2964,26 @@ const FAV_PERKS = {
     apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
   storm: { lines:['Start with 1 bladestorm', '+2 blades per burst',
                   '-10% bladestorm cooldown'],
-    apply(p){ p.storm.n = 1; p.storm.count += 2;
-      p.storm.rate = Math.max(STORM_MIN_RATE, p.storm.rate*0.90); } },
+    apply(p){ p.storm.n = 1; p.storm.count += 2; p.inc.stormRate += 0.11; } },
   vortex: { lines:['Start with 1 blade vortex', '+20% vortex radius',
                    '-10% vortex cooldown'],
     apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
-      p.vortex.rate = Math.max(VORTEX_MIN_RATE, p.vortex.rate*0.90); } },
+      p.inc.vortexRate += 0.11; } },
   freeze: { lines:['Start with 1 block freeze', '+20% freeze radius',
                    '+0.5s freeze duration'],
     apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
   bomb: { lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
-    apply(p){ p.capUp.bomb += 1; p.bomb.n = 1;
-      p.bomb.r = Math.min(BOMB_MAX_R, Math.round(p.bomb.r*1.15)); } },
+    apply(p){ p.capUp.bomb += 1; p.bomb.n = 1; p.inc.bombR += 0.15; } },
   tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
-    apply(p){ p.maxHp += 2; p.hp += 2; p.armour += 25;
+    apply(p){ p.hpFlat += 2; p.hp += 2; p.armour += 25;
       for(const el of ELEMENTS) p.res[el] = Math.min(RES_CAP, p.res[el] + 0.08);
       p.regenRate = Math.min(REGEN_MAX, p.regenRate + 0.02); } }
 };
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];
   if(f) try { f.apply(player); } catch(e){}
+  syncStats();
 }
 const FAVOURITES = [
   { id:'none',    name:'No Favourite', icon:'nofav',   ids:[] },
@@ -3120,7 +3194,7 @@ function buildCheatRows(){
     el.addEventListener('click', ()=>{
       const k = el.dataset.misc, p = player;
       if(k==='heal') p.hp = p.maxHp;
-      else if(k==='hearts'){ p.maxHp = Math.min(heartCap(), p.maxHp+50); p.hp = p.maxHp; }
+      else if(k==='hearts'){ addMaxHp(50); p.hp = p.maxHp; }
       else if(k==='studs') p.studs += 1000;
       else if(k==='level'){ for(let i=0;i<5;i++){ p.level++; p.incAll += 0.05; } }
       else if(k==='clear'){ for(const e of enemies) e.dead = true; }
@@ -3463,7 +3537,7 @@ function previewPick(u, c){
   const save = heroClone();
   if(!save) return [];
   let after = before;
-  try { u.apply(c); after = statSnapshot(); } catch(e){}
+  try { u.apply(c); syncStats(); after = statSnapshot(); } catch(e){}
   Object.assign(player, save);
   const rows = [];
   for(let i=0;i<STAT_PROBES.length;i++){
@@ -3605,19 +3679,21 @@ function renderCharSheet(){
 
   const vitals = sBlock('VITALS', [
     sRow('Hearts', `${fmtHp(p.hp)} / ${p.maxHp}`,
-      p.maxHp>=heartCap() ? 'at the maximum' : `${heartCap()-p.maxHp} more possible`,
+      p.maxHp>=heartCap() ? 'at the maximum'
+        : `(${HP_BASE} + ${p.hpFlat} flat)${p.hpMore>1?` × ${p.hpMore} MORE`:''}`,
       `Hearts are continuous, not whole steps: a hit for 1.4 takes 1.40 off you, and a `+
       `heart that is part full is drawn part lit.\n\nRegeneration fills the heart you `+
       `are standing on from 0.00 upward instead of waiting to bank a whole point.`),
     sRow('Armour', Math.round(armourValue()),
-      p.curse.armor>0 ? `BRITTLE — cut from ${Math.round(p.armour*(1+p.incArmour))}`
-        : p.armour>0 ? `${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased)`
+      p.curse.armor>0 ? `BRITTLE — cut from ${Math.round((p.armour+wardArmour())*(1+p.incArmour))}`
+        : (p.armour+wardArmour())>0
+          ? `${p.armour}${wardArmour()?` + ${wardArmour()} ward`:''} flat × (1 + ${Math.round(p.incArmour*100)}% increased)`
         : 'no armour — attack hits land in full',
       `ARMOUR reduces ATTACK hits — never spells.\n`+
       `Damage reduction = Armour / (Armour + 5 × hit damage),\n`+
       `so a big hit punches through armour that shrugs off a small one.\n`+
       `Flat armour adds to the total; increased armour is additive in its own pool.\n\n`+
-      `Yours: ${p.armour} flat × (1 + ${Math.round(p.incArmour*100)}% increased) = ${Math.round(armourValue())}\n`+
+      `Yours: ${p.armour + wardArmour()} flat × (1 + ${Math.round(p.incArmour*100)}% increased) = ${Math.round(armourValue())}\n`+
       `A 6-damage hit: ${Math.round(armourValue())} / (${Math.round(armourValue())} + 30) = `+
       `${Math.round(armourDR(armourValue(),6)*100)}% less → you take ${(6*(1-armourDR(armourValue(),6))).toFixed(1)}`),
     sRow('Attack mitigation',
@@ -3643,7 +3719,8 @@ function renderCharSheet(){
   ], sBar(p.hp/Math.max(1,p.maxHp), '#d3242b'));
 
   const move = sBlock('MOVEMENT', [
-    sRow('Move speed', Math.round(p.speed)+' px/s', `×${(p.speed/215).toFixed(2)} of base`),
+    sRow('Move speed', Math.round(p.speed)+' px/s',
+      `${SPEED_BASE} base × (1 + ${Math.round(p.inc.speed*100)}% increased)`),
     sRow('Roll cooldown', p.dash.cdMax.toFixed(2)+'s', 'SPACE — invulnerable while rolling'),
     sRow('Roll distance', Math.round(640*0.18)+' px', 'a perfect dodge refunds bomb cooldown'),
     sRow('Chilled', p.chill.stacks>0 ? '×'+Math.round(p.chill.stacks) : 'no',
@@ -3663,7 +3740,7 @@ function renderCharSheet(){
     sRow('Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
-        : `${p.atkRate.toFixed(2)}s per swing`),
+        : `${p.atkRate.toFixed(2)}s per swing — ${ATK_BASE}s base / (1 + ${Math.round(p.inc.atk*100)}%)`),
     sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target')
   ]);
 
@@ -4387,7 +4464,7 @@ function updatePlayer(dt){
            pickup — and it still does not simply refill you, which is what made
            wave 40 survivable with every debuff in the game stacked on. */
         const room = p.maxHp < heartCap();
-        if(room){ p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); }
+        if(room) addMaxHp(1);
         else spawnStuds(p.x, p.y, 3);
         p.regenBoostT = HEART_REGEN_T;
         addDmg(p.x, p.y-46, room ? '+1 HEART · ×2 REGEN' : '×2 REGEN', '#ff8a8a', 17);
@@ -4395,8 +4472,7 @@ function updatePlayer(dt){
         logEvent('heart — '+(room?'+1 max heart, ':'')+'regeneration doubled for '+HEART_REGEN_T+'s', '#ff8a8a');
         SFX.heart();
       } else if(pk.kind==='gheart'){
-        p.maxHp = Math.min(heartCap(), p.maxHp+3);
-        p.hp = Math.min(p.maxHp, p.hp+3);    /* the new hearts arrive full, no refill */
+        addMaxHp(3);                         /* the new hearts arrive full, no refill */
         addDmg(p.x, p.y-56, '+3 MAX HEARTS!', '#ffd166', 19);
         logEvent('golden heart — '+p.maxHp+' hearts', '#ffd166');
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
@@ -10078,6 +10154,7 @@ function resetRun(demo){
   buildGround(); buildProps();
   navBuild();
   player = newPlayer();
+  syncStats();
   if(!demo) applyFavPerks();
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
   if(demo){
