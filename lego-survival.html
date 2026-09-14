@@ -86,6 +86,12 @@
   .card.mini .rtag{font-size:8px;padding:2px 6px;border-radius:6px;top:-9px;left:-7px}
   .card.mini .ctag{font-size:7.5px;letter-spacing:1px;padding:1px 6px;bottom:5px}
   .card.mini .stack{font-size:9px;padding:2px 6px;top:-9px;right:-7px;border-radius:6px}
+  /* the rarity hint only shows on the card you are actually reading, so the
+     wall of bricks stays clean */
+  .card.mini .rscroll{position:absolute;top:-9px;right:-7px;font-size:7.5px;font-weight:600;
+    color:#1b2a34;background:#ffd76e;border-radius:6px;padding:2px 6px;letter-spacing:.3px;
+    pointer-events:none;opacity:0;transition:opacity .1s}
+  .card.mini:hover .rscroll{opacity:1}
   .card.mini:hover{transform:scale(1.62) translateY(-8px);z-index:40;
     box-shadow:0 14px 0 rgba(0,0,0,.4)}
   .card.mini:hover p{max-height:none}
@@ -167,6 +173,7 @@
   #cmpPanel .was{color:#8e9aa4}
   #cmpPanel .up{color:#7fdc7e}
   #cmpPanel .down{color:#ff6a5a}
+  #cmpPanel .fresh{color:#e8ebe9}
   #cmpPanel .cmpnone{font-size:11.5px;color:#c9d2ce;line-height:1.5;text-align:center;padding:4px 2px}
   /* ---- character sheet ---- */
   #charScreen{justify-content:flex-start;overflow:hidden}
@@ -276,7 +283,7 @@
       <div class="cheatrow" id="cheatWaves"></div>
       <div class="seclabel">DIFFICULTY</div>
       <div class="cheatrow" id="cheatDiffs"></div>
-      <div class="seclabel">GRANT A BRICK — LEFT-CLICK FOR +1, RIGHT-CLICK TO RESET IT TO ZERO (hover for a now → next comparison; greyed-out is already at its cap)</div>
+      <div class="seclabel">GRANT A BRICK — LEFT-CLICK FOR +1, RIGHT-CLICK TO RESET IT TO ZERO, SHIFT+SCROLL FOR ANOTHER RARITY (hover for a now → next comparison; greyed-out is already at its cap)</div>
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
@@ -378,7 +385,6 @@ const MERGE_NEAR  = 62;       /* how close two studs must be to count as one pil
 const MERGE_DRIFT = 150;      /* how far a stud will look for a neighbour to join */
 const MERGE_CREEP = 42;       /* px/s — a settle, not a flight */
 const MERGE_AGE   = 3.0;      /* a stud has to lie still this long before it drifts */
-const HEART_REGEN = 0.010;    /* what a heart on the ground is worth now */
 const REGEN_STALL = 2.0;      /* seconds regeneration is held after taking a hit */
 const MAGNET_SPEED = 1500;    /* px/s straight at the hero while a magnet is up */
 const HEARTS_PER_ROW = 16;
@@ -450,9 +456,12 @@ const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
 const BOOMER_LEGS = [0, 1, 3];
 const CLUSTER_MAX   = 2;                  /* how many times a bomb may split */
 const CLUSTER_FALLOFF = 0.45;             /* each split generation hits for this much of the last */
-const FORTUNE_CAP = 8;
-const RAGE_CAP = 8;            /* rage doubles per brick: 2x, 4x, 8x and no further */
+/* Ground buffs all stop at DOUBLE. Stacking them to 8x turned a lucky drop into
+   a free wave; one of each is a strong minute, not an off switch. */
+const FORTUNE_CAP = 2;
+const RAGE_CAP = 2;
 const BUFF_T = 30;             /* every ground buff runs the same thirty seconds */
+const HEART_REGEN_T = 30;      /* how long a heart doubles your regeneration for */
 const CHAIN_MAX_ZAPPERS = 5;
 /* Every hard cap can be nudged by a FAVOURITE's starting perk — one extra brick
    in the ring, one more zapper, one more bomb in the compass. `capUp` is only
@@ -934,7 +943,7 @@ function newPlayer(){
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
     curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
-    regenRate:0, regenAcc:0, regenStall:0,
+    regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0,
     crit:0.1, studMul:1, heartChance:0, hpMore:1,
     orbit:{ n:0, dmg:2, spd:2.6, r:78, size:9, pos:[], pulse:0 },
     /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
@@ -1817,20 +1826,20 @@ function killEnemy(e, source){
   spawnStuds(e.x, e.y, amount);
   if(Math.random() < 0.07 + player.heartChance + (e.elite?0.15:0))
     pickups.push(makePickup('heart', e.x, e.y));
-  const magChance = e.type==='boss' ? 1 : (0.006 + (e.elite?0.012:0));
+  const magChance = e.type==='boss' ? 1 : (0.004 + (e.elite?0.009:0));
   if(Math.random() < magChance)
     pickups.push(makePickup('magnet', e.x+rnd(-10,10), e.y+rnd(-10,10)));
   const ghChance = e.type==='boss' ? 1 : (0.003 + (e.elite?0.006:0));
   if(Math.random() < ghChance)
     pickups.push(makePickup('gheart', e.x+rnd(-14,14), e.y+rnd(-14,14)));
-  const fcChance = e.type==='boss' ? 1 : (0.0035 + (e.elite?0.008:0));
+  const fcChance = e.type==='boss' ? 1 : (0.0018 + (e.elite?0.004:0));
   if(Math.random() < fcChance)
     pickups.push(makePickup('fortune', e.x+rnd(-18,18), e.y+rnd(-18,18)));
   /* the two combat bricks: rage doubles what you deal, ward soaks what you take */
-  const rgChance = e.type==='boss' ? 1 : (0.003 + (e.elite?0.007:0));
+  const rgChance = e.type==='boss' ? 1 : (0.0015 + (e.elite?0.0035:0));
   if(Math.random() < rgChance)
     pickups.push(makePickup('rage', e.x+rnd(-22,22), e.y+rnd(-22,22)));
-  const wdChance = e.type==='boss' ? 1 : (0.003 + (e.elite?0.007:0));
+  const wdChance = e.type==='boss' ? 1 : (0.0015 + (e.elite?0.0035:0));
   if(Math.random() < wdChance)
     pickups.push(makePickup('ward', e.x+rnd(-26,26), e.y+rnd(-26,26)));
   
@@ -1899,7 +1908,7 @@ function armourDR(armour, hit){
 /* WARD: flat armour and flat resistance, stacking while the brick is live. */
 const WARD_ARMOUR = 40;      /* armour per stack */
 const WARD_RES = 0.12;       /* resistance per stack, before the usual cap */
-const WARD_MAX = 4;
+const WARD_MAX = 2;
 function wardArmour(){ return player.wardT > 0 ? WARD_ARMOUR * player.wardN : 0; }
 function wardRes(){ return player.wardT > 0 ? WARD_RES * player.wardN : 0; }
 function armourValue(){
@@ -1955,7 +1964,12 @@ function updateCurses(dt){
         life:0.5, max:0.5, color: CURSES[pick(live)].col});
   }
 }
-function cursedRegen(){ return player.regenRate * (1 - player.curse.regen); }
+/* A heart doubles what you regenerate for half a minute. It multiplies the rate
+   AFTER the curse takes its cut, so a withered hero still gets the full doubling
+   of whatever they have left. */
+function cursedRegen(){
+  return player.regenRate * (1 - player.curse.regen) * (player.regenBoostT > 0 ? 2 : 1);
+}
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
 function elemPower(src){ return 1 + 0.25*((src && src.buffStacks) || 0); }
@@ -2537,7 +2551,7 @@ const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     /* common barely sharpens it; rare and epic are a real weapon upgrade */
     calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8])}),
-    desc:c=>`+${fmtHp(c.v)} flat sword damage`,
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to the sword — before any increase`,
     apply:c=>{ player.flatSword = Math.round((player.flatSword + c.v)*100)/100; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
@@ -2646,7 +2660,7 @@ const UPGRADES = [
     apply:c=>{ player.orbit.n = Math.min(orbitMaxN(), player.orbit.n + c.n); } },
   { id:'orbitpow', name:'Heavy Orbit', icon:'orbit', cls:'SPELL', req:()=>player.orbit.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), r:Math.round(6*m), s:Math.round(2*m)}),
-    desc:c=>`Orbit +${c.v} dmg, +${c.r} reach (cap ${ORBIT_MAX_R}), +${c.s} size (cap ${ORBIT_MAX_SIZE})`,
+    desc:c=>`+${c.v} FLAT base damage to every guardian brick, +${c.r} ring reach (cap ${ORBIT_MAX_R}), +${c.s} brick size (cap ${ORBIT_MAX_SIZE})`,
     apply:c=>{ player.orbit.dmg+=c.v;
       player.orbit.r = Math.min(ORBIT_MAX_R, player.orbit.r + c.r);
       player.orbit.size = Math.min(ORBIT_MAX_SIZE, player.orbit.size + c.s); } },
@@ -2663,7 +2677,7 @@ const UPGRADES = [
     apply:c=>{ player.blaster.n = Math.min(blastMaxN(), player.blaster.n + c.n); } },
   { id:'blastpow', name:'Blaster Power', icon:'blaster', cls:'SPELL', req:()=>player.blaster.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.8)), p:m>=2.4?1:0}),
-    desc:c=>`Blaster +${c.v} dmg${c.p?` and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
+    desc:c=>`+${c.v} FLAT base damage to every blaster brick${c.p?`, and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
     apply:c=>{ player.blaster.dmg+=c.v;
       player.blaster.pierce = Math.min(BLAST_MAX_PIERCE, player.blaster.pierce + c.p); } },
   { id:'blastrate', name:'Rapid Blaster', icon:'clock', cls:'SPELL',
@@ -2693,7 +2707,7 @@ const UPGRADES = [
     apply:c=>{ player.chain.zappers = Math.min(chainMaxZappers(), player.chain.zappers + c.n); } },
   { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
-    desc:c=>`+${c.v} flat storm brick damage (opening strike now ${calcDamage(player.chain.dmg+c.v,'spell').toFixed(1)})`,
+    desc:c=>`+${c.v} FLAT base damage to the storm brick — the opening strike and every leap off it`,
     apply:c=>{ player.chain.dmg += c.v; } },
   { id:'chainrate', name:'Charged Storm', icon:'clock', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
@@ -2706,7 +2720,7 @@ const UPGRADES = [
     apply:c=>{ player.storm.n += c.n; } },
   { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), s:0.15*m}),
-    desc:c=>`Storm blades +${c.v} dmg, +${Math.round(c.s*100)}% size (cap ×${STORM_MAX_SIZE.toFixed(1)})`,
+    desc:c=>`+${c.v} FLAT base damage to every bladestorm blade, +${Math.round(c.s*100)}% blade size (cap ×${STORM_MAX_SIZE.toFixed(1)})`,
     apply:c=>{ player.storm.dmg+=c.v;
       player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
   { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
@@ -2722,7 +2736,7 @@ const UPGRADES = [
   { id:'vortexarea', name:'Vortex Reach', icon:'vortex', cls:'SPELL',
     req:()=>player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
     calc:m=>({v:Math.round(8*m)}),
-    desc:c=>`Vortex area +${c.v} radius (cap ${VORTEX_MAX_R})`,
+    desc:c=>`+${c.v} blade vortex radius (cap ${VORTEX_MAX_R})`,
     apply:c=>{ player.vortex.r = Math.min(VORTEX_MAX_R, player.vortex.r + c.v); } },
   { id:'vortexrate', name:'Vortex Speed', icon:'clock', cls:'SPELL',
     req:()=>player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
@@ -2738,7 +2752,7 @@ const UPGRADES = [
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
     req:()=>player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
     calc:m=>({v:Math.round(28*m)}),
-    desc:c=>`Freeze radius +${c.v} (cap ${FREEZE_MAX_R})`,
+    desc:c=>`+${c.v} block freeze radius (cap ${FREEZE_MAX_R})`,
     apply:c=>{ player.freeze.r = Math.min(FREEZE_MAX_R, player.freeze.r + c.v); } },
   { id:'freezc', name:'Winter Wind', icon:'clock', cls:'SPELL',
     req:()=>player.freeze.n>0 && player.freeze.rate > FREEZE_MIN_RATE,
@@ -2753,7 +2767,7 @@ const UPGRADES = [
     apply:c=>{ player.bomb.n = Math.min(bombMaxN(), player.bomb.n + c.n); } },
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
     calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
-    desc:c=>`Bombs +${c.v} flat damage and +${Math.round(c.r*100)}% blast radius (cap ${BOMB_MAX_R})`,
+    desc:c=>`+${c.v} FLAT base damage to every bomb, +${Math.round(c.r*100)}% blast radius (cap ${BOMB_MAX_R})`,
     apply:c=>{ player.bomb.dmg += c.v; player.bomb.r = Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)); } },
   { id:'bombcd', name:'Quick Fuse', icon:'clock', cls:'SPELL',
     req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
@@ -2966,6 +2980,29 @@ const BENCH_SECTIONS = [
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombcd','cluster'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] }
 ];
+/* The bench shows one brick at one tier at a time, and SHIFT+SCROLL walks that
+   tier up and down — between the brick's own minimum and the highest it can
+   actually roll at, which is epic for everything except the legendary-only
+   bricks. Reading a card at common and at epic side by side is the whole point
+   of the bench when you are balancing numbers. */
+const benchRar = {};
+function benchRange(u){
+  const lo = rarRank(u.minRar || 'common');
+  const hi = (u.minRar === 'legendary') ? LEGENDARY_RANK : rarRank('epic');
+  return [lo, Math.max(lo, hi)];
+}
+function benchRarOf(u){
+  const [lo, hi] = benchRange(u);
+  return RAR_ORDER[clamp(benchRar[u.id] ?? hi, lo, hi)];
+}
+function benchRarStep(u, dir){
+  const [lo, hi] = benchRange(u);
+  const cur = clamp(benchRar[u.id] ?? hi, lo, hi);
+  const next = clamp(cur + dir, lo, hi);
+  if(next === cur) return false;
+  benchRar[u.id] = next;
+  return true;
+}
 /* =============================== TEST BENCH =============================== */
 /* A developer shortcut: hand yourself any brick at epic and max it out, or jump
    straight to a wave. F1 toggles it during play. */
@@ -2976,7 +3013,7 @@ function grantOne(id){
   const u = UPGRADES.find(x=>x.id===id);
   if(!u) return;
   try { if(u.req && !u.req()) { buildCheatRows(); return; } } catch(e){ return; }
-  applyPick(u, u.minRar === 'legendary' ? 'legendary' : 'epic');
+  applyPick(u, benchRarOf(u));
   buildCheatRows();
 }
 function revokeAll(id){
@@ -3014,16 +3051,19 @@ function buildCheatRows(){
        sitting at its cap is shown greyed out rather than clickable */
     let open = true;
     try{ open = !u.req || !!u.req(); }catch(e){ open = false; }
-    const R = RARITY[u.minRar || 'common'];
+    const rar = benchRarOf(u);
+    const R = RARITY[rar];
+    const [lo, hi] = benchRange(u);
     let body = '';
-    try{ body = esc(u.desc(u.calc(RARITY.epic.mult), owned)); }catch(e){ body = ''; }
+    try{ body = esc(u.desc(u.calc(R.mult), owned)); }catch(e){ body = ''; }
     return `<div class="card mini${open?'':' capped'}" data-up="${u.id}">
       ${owned?`<div class="stack">x${owned}</div>`:''}
       <div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
       <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
       <h3>${esc(u.name)}</h3><p>${body}</p>
-      <div class="rtag" style="background:${R.col}">${u.minRar?R.name+'+':'ANY'}</div>
+      <div class="rtag" style="background:${R.col}">${R.name}</div>
+      ${hi>lo?`<div class="rscroll">⇅ shift+scroll</div>`:''}
       <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
     </div>`;
   };
@@ -3049,9 +3089,25 @@ function buildCheatRows(){
       ev.preventDefault();
       cmpHide(); revokeAll(el.dataset.up); SFX.click();
     });
-    /* the bench gets the same now -> next panel the reward screen has */
-    if(u) cmpWire(el, u, u.calc(RARITY[u.minRar==='legendary'?'legendary':'epic'].mult),
-      u.name + ' · ' + (u.minRar==='legendary' ? 'LEGENDARY' : 'EPIC'));
+    if(!u) continue;
+    /* the bench gets the same now -> next panel the reward screen has, at
+       whatever tier this card is currently being read at */
+    const rar = benchRarOf(u);
+    cmpWire(el, u, u.calc(RARITY[rar].mult), u.name + ' · ' + RARITY[rar].name);
+    el.addEventListener('wheel', ev=>{
+      if(!ev.shiftKey) return;
+      ev.preventDefault();
+      if(!benchRarStep(u, ev.deltaY > 0 ? -1 : 1)) return;
+      SFX.click();
+      /* rebuild, then put the panel back over the card the mouse is still on */
+      buildCheatRows();
+      const again = document.querySelector(`#cheatUps .card.mini[data-up="${u.id}"]`);
+      if(again){
+        const r2 = benchRarOf(u);
+        try { cmpShow(u, u.calc(RARITY[r2].mult), again, u.name + ' · ' + RARITY[r2].name); }
+        catch(e){ cmpHide(); }
+      }
+    }, { passive:false });
   }
 
   const misc = document.getElementById('cheatMisc');
@@ -3286,7 +3342,10 @@ function swordDps(){
 /* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
 const STAT_PROBES = [
   { g:'SWORD', k:'Sword hit',       get:()=> swordDamage(),            fmt:v=>fmtHp(v) },
+  { g:'SWORD', k:'Spin swing',      get:()=> swordDamage()*1.4,        fmt:v=>fmtHp(v) },
   { g:'SWORD', k:'Sustained DPS',   get:()=> swordDps(),               fmt:v=>v.toFixed(1) },
+  { g:'SWORD', k:'Whirl DPS',       get:()=> player.blademaster>0 ? swordDamage([WHIRL_MUL])/WHIRL_TICK : 0,
+    fmt:v=>v.toFixed(1), zero:true },
   { g:'SWORD', k:'Swing rate',      get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
   { g:'SWORD', k:'Reach',           get:()=> 56+player.reach,          fmt:v=>Math.round(v)+' px' },
   { g:'SWORD', k:'Crit chance',     get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
@@ -3315,31 +3374,64 @@ const STAT_PROBES = [
   { g:'GUARDIAN BRICK', k:'Bricks',         get:()=> player.orbit.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'GUARDIAN BRICK', k:'Ring reach',     get:()=> player.orbit.n ? player.orbit.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'GUARDIAN BRICK', k:'Spin speed',     get:()=> player.orbit.n ? player.orbit.spd : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'GUARDIAN BRICK', k:'DPS to one foe',  get:()=> orbitDps(), fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICK BLASTER', k:'Interval',        get:()=> player.blaster.n ? player.blaster.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BRICK BLASTER', k:'Volley DPS',       get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n/player.blaster.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? calcDamage(player.chain.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'STORM BRICK', k:'Targets per bolt',  get:()=> player.chain.n, fmt:v=>Math.round(v)+'', zero:true },
+  /* the leaps written out one by one, so a chain brick shows you what the second
+     and third foe in the line are actually going to take */
+  { g:'STORM BRICK', k:'1st leap',          get:()=> chainLeapDmg(1), fmt:v=>v.toFixed(2), zero:true },
+  { g:'STORM BRICK', k:'2nd leap',          get:()=> chainLeapDmg(2), fmt:v=>v.toFixed(2), zero:true },
+  { g:'STORM BRICK', k:'3rd leap',          get:()=> chainLeapDmg(3), fmt:v=>v.toFixed(2), zero:true },
   { g:'STORM BRICK', k:'Damage down a bolt',get:()=> chainBoltTotal(), fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Hovering bricks',   get:()=> Math.min(chainMaxZappers(), player.chain.zappers), fmt:v=>Math.round(v)+'', zero:true },
   { g:'STORM BRICK', k:'Interval',          get:()=> player.chain.n ? player.chain.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'STORM BRICK', k:'DPS, all bricks',   get:()=> player.chain.n ? chainBoltTotal()*Math.min(chainMaxZappers(), player.chain.zappers)/player.chain.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADESTORM', k:'Damage per blade',   get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BLADESTORM', k:'Blades per burst',   get:()=> player.storm.n*player.storm.count, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BLADESTORM', k:'Burst damage',       get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADESTORM', k:'Interval',           get:()=> player.storm.n ? player.storm.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADESTORM', k:'Burst DPS',          get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count/player.storm.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADE VORTEX', k:'Damage per tick',  get:()=> player.vortex.n ? calcDamage(player.vortex.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BLADE VORTEX', k:'Duration',         get:()=> player.vortex.n ? player.vortex.dur + (player.vortex.n-1)*0.4 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BLADE VORTEX', k:'Radius',           get:()=> player.vortex.n ? player.vortex.r + (player.vortex.n-1)*10 : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BLADE VORTEX', k:'Interval',         get:()=> player.vortex.n ? player.vortex.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADE VORTEX', k:'DPS to one foe',   get:()=> vortexDps(), fmt:v=>v.toFixed(1), zero:true },
   { g:'BOMB VOLLEY', k:'Damage per blast',  get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BOMB VOLLEY', k:'Bombs',             get:()=> player.bomb.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BOMB VOLLEY', k:'Blast radius',      get:()=> player.bomb.n ? player.bomb.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BOMB VOLLEY', k:'Interval',          get:()=> player.bomb.n ? player.bomb.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BOMB VOLLEY', k:'Volley DPS',        get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell')*player.bomb.n/player.bomb.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLOCK FREEZE', k:'Radius',           get:()=> player.freeze.n ? player.freeze.r + (player.freeze.n-1)*30 : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur + (player.freeze.n-1)*1.2 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true }
 ];
+/* what the Nth leap of a bolt lands for, in the chain you would have */
+function chainLeapDmg(i){
+  const p = player;
+  const leaps = p.chain.n - 1;
+  if(!p.chain.n || leaps < i) return 0;
+  return calcDamage(p.chain.dmg,'spell') * chainLeapFrac(i, leaps);
+}
+/* a guardian brick can strike the same foe every hitCd, and there are n of them */
+function orbitDps(){
+  const p = player;
+  if(!p.orbit.n) return 0;
+  const hitCd = clamp(0.5*2.6/p.orbit.spd, 0.05, 0.5);
+  return calcDamage(p.orbit.dmg,'spell') / hitCd;
+}
+/* the vortex ticks while it is up, then waits for its cooldown */
+function vortexDps(){
+  const p = player;
+  if(!p.vortex.n) return 0;
+  const tick = 0.24*p.vortex.hitMul;
+  const dur = p.vortex.dur + (p.vortex.n-1)*0.4;
+  return calcDamage(p.vortex.dmg,'melee') * Math.floor(dur/tick) / p.vortex.rate;
+}
 /* everything one bolt deals down the whole chain, leaps included */
 function chainBoltTotal(){
   const p = player;
@@ -3378,11 +3470,15 @@ function previewPick(u, c){
     const s = STAT_PROBES[i], a = before[i], b = after[i];
     if(a === null || b === null) continue;
     if(Math.abs(b-a) < 1e-9) continue;
+    /* A spell you do not own yet has no "before" to compare against, so the row
+       is neutral — an interval of 10s on a freeze you are picking up for the
+       first time is not a downgrade, it is simply what it costs. */
+    const fresh = !!s.zero && (a === 0 || b === 0);
     const better = (b > a) === (s.hi !== false);
     rows.push({ g:s.g, k:s.k,
       from: (s.zero && a === 0) ? '—' : s.fmt(a),
       to:   (s.zero && b === 0) ? '—' : s.fmt(b),
-      up: better });
+      up: better, fresh });
   }
   return rows;
 }
@@ -3409,7 +3505,7 @@ function cmpShow(u, c, anchor, title, avoid){
     for(const r of rows){
       if(r.g !== g){ g = r.g; html += `<div class="cmpg">${esc(g)}</div>`; }
       html += `<div class="cmprow"><span>${esc(r.k)}</span>`+
-        `<b><i class="was">${esc(r.from)}</i> → <i class="${r.up?'up':'down'}">${esc(r.to)}</i></b></div>`;
+        `<b><i class="was">${esc(r.from)}</i> → <i class="${r.fresh?'fresh':(r.up?'up':'down')}">${esc(r.to)}</i></b></div>`;
     }
   }
   el.innerHTML = html;
@@ -3539,8 +3635,9 @@ function renderCharSheet(){
       `Yours: ${Math.round(suppressChance()*100)}% chance.\n`+
       `A 10-damage spell hit averages ${(10*(1 - suppressChance()*(1-SUPPRESS_TAKEN))).toFixed(1)} against you.`),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
-      p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
-        : p.regenRate>0 ? `one heart every ${(1/p.regenRate).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
+      p.regenBoostT>0 ? `DOUBLED by a heart — ${Math.ceil(p.regenBoostT)}s left`
+        : p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
+        : p.regenRate>0 ? `one heart every ${(1/cursedRegen()).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
     sRow('Hit invulnerability', '1.10s', 'after taking a hit'),
     sRow('Heart drop rate', pct(0.07 + p.heartChance), 'per monster (elites drop more)')
   ], sBar(p.hp/Math.max(1,p.maxHp), '#d3242b'));
@@ -3858,6 +3955,12 @@ function updatePlayer(dt){
   if(p.fortuneT>0){
     p.fortuneT -= dt;
     if(p.fortuneT<=0) p.fortuneMul = 1;
+  }
+  if(p.regenBoostT > 0){
+    p.regenBoostT -= dt;
+    if(p.regenBoostT > 0 && p.regenRate > 0 && Math.random()<0.12)
+      particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-10+rnd(-20,6), vx:0, vy:-45,
+        life:0.45, max:0.45, color:'#ff8a8a'});
   }
   if(p.rageT>0){
     p.rageT -= dt;
@@ -4279,21 +4382,23 @@ function updatePlayer(dt){
     if(d < 26 && pk.z<16){
       pk.got = true;
       if(pk.kind==='heart'){
-        /* A heart no longer tops you up — it leaves you regenerating a little
-           faster for the rest of the run. Raw healing on every drop is exactly
-           what made wave 40 survivable with every debuff in the game stacked on
-           you: the hearts out-healed the whole pile. */
-        if(p.regenRate < REGEN_MAX){
-          p.regenRate = Math.min(REGEN_MAX, p.regenRate + HEART_REGEN);
-          addDmg(p.x, p.y-46, '+'+HEART_REGEN.toFixed(2)+' REGEN', '#ff8a8a', 16);
-          logEvent('heart — regeneration now '+p.regenRate.toFixed(3)+'/s', '#ff8a8a');
-        } else { spawnStuds(p.x,p.y,3); }
+        /* A heart is two things now: one more heart on the bar for good, and
+           thirty seconds of DOUBLED regeneration. It is a buff as much as a
+           pickup — and it still does not simply refill you, which is what made
+           wave 40 survivable with every debuff in the game stacked on. */
+        const room = p.maxHp < heartCap();
+        if(room){ p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); }
+        else spawnStuds(p.x, p.y, 3);
+        p.regenBoostT = HEART_REGEN_T;
+        addDmg(p.x, p.y-46, room ? '+1 HEART · ×2 REGEN' : '×2 REGEN', '#ff8a8a', 17);
+        addRing(pk.x, pk.y, 8, 300, 90, '#ff8a8a', 6, 0.5);
+        logEvent('heart — '+(room?'+1 max heart, ':'')+'regeneration doubled for '+HEART_REGEN_T+'s', '#ff8a8a');
         SFX.heart();
       } else if(pk.kind==='gheart'){
-        p.maxHp = Math.min(heartCap(), p.maxHp+1);
-        p.hp = Math.min(p.maxHp, p.hp+1);    /* the new heart arrives full, no refill */
-        addDmg(p.x, p.y-56, 'MAX HEART!', '#ffd166', 19);
-        logEvent('max heart — '+p.maxHp+' hearts', '#ffd166');
+        p.maxHp = Math.min(heartCap(), p.maxHp+3);
+        p.hp = Math.min(p.maxHp, p.hp+3);    /* the new hearts arrive full, no refill */
+        addDmg(p.x, p.y-56, '+3 MAX HEARTS!', '#ffd166', 19);
+        logEvent('golden heart — '+p.maxHp+' hearts', '#ffd166');
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
         SFX.heart(); SFX.levelup();
       } else if(pk.kind==='magnet'){
@@ -7628,16 +7733,63 @@ function drawProp(c, p){
   c.restore();
   if(p.flash>0) p.flash = Math.max(0, p.flash-0.08);
 }
+/* The prizes — hearts, magnets, fortunes, the two combat bricks — were the same
+   size as a stud and got lost in the litter of a cleared wave. Each now stands
+   in a BEACON: a pulsing ring painted on the floor, a soft column of its own
+   colour, and a chevron bobbing overhead. You can see them across the room. */
+const BEACONS = {
+  heart:  { col:'#ff5a4a', r:26 },
+  gheart: { col:'#ffd166', r:30 },
+  magnet: { col:'#9b45d6', r:28 },
+  fortune:{ col:'#fe8a18', r:28 },
+  rage:   { col:'#ff5a4a', r:28 },
+  ward:   { col:'#8fd4ff', r:28 }
+};
+function drawBeacon(c, pk, B){
+  const t = vtime*2.4 + pk.spin;
+  const pr5 = prs(B.col);
+  const rgb = pr5[0]+','+pr5[1]+','+pr5[2];
+  /* the ring on the floor, breathing */
+  const k = 0.5 + 0.5*Math.sin(t);
+  c.save(); c.scale(1, GROUND_SQUASH);
+  c.fillStyle = `rgba(${rgb},${0.10 + 0.07*k})`;
+  c.beginPath(); c.arc(0, 0, B.r*(0.82+0.18*k), 0, TAU); c.fill();
+  c.strokeStyle = `rgba(${rgb},${0.45 + 0.3*k})`;
+  c.lineWidth = 2.4;
+  c.beginPath(); c.arc(0, 0, B.r*(0.82+0.18*k), 0, TAU); c.stroke();
+  c.restore();
+  /* the column of light standing in it */
+  const g = c.createLinearGradient(0, -B.r*2.1, 0, 0);
+  g.addColorStop(0, `rgba(${rgb},0)`);
+  g.addColorStop(1, `rgba(${rgb},${0.20 + 0.10*k})`);
+  c.fillStyle = g;
+  c.beginPath();
+  c.moveTo(-B.r*0.42, 0); c.lineTo(B.r*0.42, 0);
+  c.lineTo(B.r*0.22, -B.r*2.1); c.lineTo(-B.r*0.22, -B.r*2.1);
+  c.closePath(); c.fill();
+  /* and a chevron pointing down at it */
+  const yy = -B.r*1.75 - Math.abs(Math.sin(t*0.9))*5;
+  c.fillStyle = `rgba(${rgb},0.95)`;
+  c.strokeStyle = 'rgba(15,20,25,0.55)'; c.lineWidth = 1.6; c.lineJoin='round';
+  c.beginPath();
+  c.moveTo(0, yy+7); c.lineTo(-6.5, yy-3); c.lineTo(-2.4, yy-3);
+  c.lineTo(-2.4, yy-8); c.lineTo(2.4, yy-8); c.lineTo(2.4, yy-3);
+  c.lineTo(6.5, yy-3); c.closePath();
+  c.fill(); c.stroke();
+}
 function drawPickup(c, pk){
   const bobz = Math.sin(vtime*3+pk.spin)*2;
   c.save(); c.translate(pk.x, pk.y);
   c.fillStyle='rgba(15,30,20,0.25)';
   c.beginPath(); c.ellipse(0,2,7,3,0,0,TAU); c.fill();
-  
+  const B = BEACONS[pk.kind];
+  if(B) drawBeacon(c, pk, B);
   c.translate(0, -pk.z - bobz);
+  /* the prizes are drawn half again as big as a stud, too */
+  if(B) c.scale(1.3, 1.3);
   if(pk.kind==='heart' || pk.kind==='gheart'){
     const gold = pk.kind==='gheart';
-    const s = gold ? 13 : 10;
+    const s = gold ? 14 : 12;
     c.fillStyle = gold ? PAL.gold : PAL.red;
     c.strokeStyle='rgba(20,30,40,0.55)'; c.lineWidth=2;
     c.beginPath();
@@ -9538,6 +9690,17 @@ function drawFortuneIcon(x,y,mult){
   ctx.fillText('×'+mult, 0, 9);
   ctx.restore();
 }
+function drawRegenIcon(x,y){
+  ctx.save(); ctx.translate(x,y);
+  heartPath(ctx,0,0,10);
+  ctx.fillStyle = '#ff8a8a'; ctx.fill();
+  ctx.strokeStyle='rgba(20,30,40,0.55)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth=2.2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(0,4); ctx.moveTo(-4,0); ctx.lineTo(4,0); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='700 8px Fredoka'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('×2', 0, 11);
+  ctx.restore();
+}
 function drawRageIcon(x,y,mult){
   ctx.save(); ctx.translate(x,y); ctx.rotate(Math.sin(vtime*4)*0.12);
   ctx.fillStyle = '#d3242b'; ctx.strokeStyle='rgba(20,30,40,0.55)'; ctx.lineWidth=1.6;
@@ -9785,6 +9948,9 @@ function renderHUD(){
   if(p.wardT>0)
     ab(cw-436, BUFF_T-p.wardT, BUFF_T, (x,y)=> drawWardIcon(x,y,p.wardN),
        '+'+wardArmour()+' arm · '+Math.ceil(p.wardT)+'s');
+  if(p.regenBoostT>0)
+    ab(cw-510, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
+       '×2 regen · '+Math.ceil(p.regenBoostT)+'s');
   if(musicToast){
     musicToast.life -= frameRaw;
     if(musicToast.life<=0) musicToast = null;
