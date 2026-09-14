@@ -3039,6 +3039,10 @@ const UPGRADES = [
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
     apply:c=>{ player.vortex.n += c.n; } },
+  { id:'vortexpow', name:'Whirling Edge', icon:'vortex', cls:'SPELL', req:()=>player.vortex.n>0,
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every vortex tick — before any increase`,
+    apply:c=>{ player.vortex.dmg = Math.round((player.vortex.dmg + c.v)*100)/100; } },
   { id:'vortexarea', name:'Vortex Reach', icon:'vortex', cls:'SPELL',
     req:()=>player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
     calc:m=>({v:Math.round(8*m)}),
@@ -3071,9 +3075,15 @@ const UPGRADES = [
       : `Spell: launch ${Math.min(bombMaxN(),c.n)} bomb${c.n>1?'s':''} in a compass spread`,
     apply:c=>{ player.bomb.n = Math.min(bombMaxN(), player.bomb.n + c.n); } },
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
-    desc:c=>`+${c.v} FLAT base damage to every bomb, +${Math.round(c.r*100)}% blast radius (cap ${BOMB_MAX_R})`,
-    apply:c=>{ player.bomb.dmg += c.v; player.inc.bombR += c.r; syncStats(); } },
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bomb — before any increase`,
+    apply:c=>{ player.bomb.dmg = Math.round((player.bomb.dmg + c.v)*100)/100; } },
+  { id:'bombarea', name:'Wide Blast', icon:'bomb', cls:'SPELL',
+    req:()=>player.bomb.n>0 && player.bomb.r < BOMB_MAX_R,
+    calc:m=>({r:0.06+0.03*m}),
+    desc:c=>`${Math.round(c.r*100)}% increased blast radius (cap ${BOMB_MAX_R}) — `+
+      `every bomb, and every bomblet that falls out of one`,
+    apply:c=>{ player.inc.bombR += c.r; syncStats(); } },
   { id:'bombcd', name:'Quick Fuse', icon:'clock', cls:'SPELL',
     req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
@@ -3225,9 +3235,9 @@ const FAVOURITES = [
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
   { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
-  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem','moredmg'] },
+  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
-  { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
+  { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
   { id:'tough',   name:'Tough Bricks', icon:'shield',
     ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
 ];
@@ -3283,8 +3293,8 @@ const BENCH_SECTIONS = [
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainrate','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
-  { name:'BLADE VORTEX',    ids:['vortex','vortexarea','vortexrate','vortextotem'] },
-  { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombcd','cluster'] },
+  { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
+  { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] }
 ];
 /* The bench shows one brick at one tier at a time, and SHIFT+SCROLL walks that
@@ -3719,6 +3729,7 @@ const STAT_PROBES = [
   { g:'BLADE VORTEX', k:'Duration',         get:()=> player.vortex.n ? player.vortex.dur + (player.vortex.n-1)*0.4 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BLADE VORTEX', k:'Radius',           get:()=> player.vortex.n ? player.vortex.r + (player.vortex.n-1)*10 : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BLADE VORTEX', k:'Interval',         get:()=> player.vortex.n ? player.vortex.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADE VORTEX', k:'Radius',           get:()=> player.vortex.n ? player.vortex.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BLADE VORTEX', k:'DPS to one foe',   get:()=> vortexDps(), fmt:v=>v.toFixed(1), zero:true },
   { g:'BOMB VOLLEY', k:'Damage per blast',  get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BOMB VOLLEY', k:'Bombs',             get:()=> player.bomb.n, fmt:v=>Math.round(v)+'', zero:true },
