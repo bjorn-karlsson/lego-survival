@@ -1914,13 +1914,20 @@ function killEnemy(e, source){
    is worth eight ordinary bodies; a chest is the one thing that stayed common
    enough to look for. */
 const DROP = {
-  heart:   0.0022,   /* ~1 every 450 bodies — four or five waves apart */
-  magnet:  0.0012,
-  fortune: 0.0009,
-  rage:    0.0007,
-  ward:    0.0007,
-  gheart:  0.0003,   /* the rarest thing a body can leave */
-  chest:   0.0035
+  /* A heart is only a regeneration burst now, so it is allowed to be common —
+     about seven a wave, something you pick up as you run past rather than
+     something you plan around. */
+  heart:   0.0560,
+  /* The rest sit where a chest sits: a bit under one a wave each, so a wave
+     usually turns up one or two of them and never a carpet. */
+  magnet:  0.0060,
+  fortune: 0.0060,
+  rage:    0.0058,
+  ward:    0.0058,
+  chest:   0.0060,
+  /* The exception. The golden heart is the only body drop that makes you
+     permanently stronger, so it stays rare — about one every five waves. */
+  gheart:  0.0016
 };
 const DROP_ELITE = 8;        /* an elite rolls every one of them eight times over */
 /* A boss always leaves the two things that keep a run going — a heart and a
@@ -2064,11 +2071,13 @@ function updateCurses(dt){
         life:0.5, max:0.5, color: CURSES[pick(live)].col});
   }
 }
-/* A heart doubles what you regenerate for half a minute. It multiplies the rate
-   AFTER the curse takes its cut, so a withered hero still gets the full doubling
-   of whatever they have left. */
+/* A heart doubles what you regenerate for half a minute, after the curse has
+   taken its cut — and it carries a floor, so a hero who owns no Repair Bricks
+   at all still gets something out of one instead of picking up a blank. */
+const HEART_BOOST_MIN = 0.08;      /* hearts/s while a heart is live */
 function cursedRegen(){
-  return player.regenRate * (1 - player.curse.regen) * (player.regenBoostT > 0 ? 2 : 1);
+  const base = player.regenRate * (1 - player.curse.regen);
+  return player.regenBoostT > 0 ? Math.max(base*2, HEART_BOOST_MIN) : base;
 }
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
@@ -3747,7 +3756,7 @@ function renderCharSheet(){
       `Yours: ${Math.round(suppressChance()*100)}% chance.\n`+
       `A 10-damage spell hit averages ${(10*(1 - suppressChance()*(1-SUPPRESS_TAKEN))).toFixed(1)} against you.`),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
-      p.regenBoostT>0 ? `DOUBLED by a heart — ${Math.ceil(p.regenBoostT)}s left`
+      p.regenBoostT>0 ? `a heart is doubling it (floor ${HEART_BOOST_MIN}/s) — ${Math.ceil(p.regenBoostT)}s left`
         : p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
         : p.regenRate>0 ? `one heart every ${(1/cursedRegen()).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
     sRow('Hit invulnerability', '1.10s', 'after taking a hit'),
@@ -4496,17 +4505,14 @@ function updatePlayer(dt){
     if(d < 26 && pk.z<16){
       pk.got = true;
       if(pk.kind==='heart'){
-        /* A heart is two things now: one more heart on the bar for good, and
-           thirty seconds of DOUBLED regeneration. It is a buff as much as a
-           pickup — and it still does not simply refill you, which is what made
-           wave 40 survivable with every debuff in the game stacked on. */
-        const room = p.maxHp < heartCap();
-        if(room) addMaxHp(1);
-        else spawnStuds(p.x, p.y, 3);
+        /* A heart does ONE thing: it makes you regenerate faster for half a
+           minute. No free maximum hearts — handing those out on every drop was
+           what let a hero walk into wave 40 with a health bar the length of the
+           screen. Picking another one up refreshes the clock. */
         p.regenBoostT = HEART_REGEN_T;
-        addDmg(p.x, p.y-46, room ? '+1 HEART · ×2 REGEN' : '×2 REGEN', '#ff8a8a', 17);
+        addDmg(p.x, p.y-46, '×2 REGEN', '#ff8a8a', 17);
         addRing(pk.x, pk.y, 8, 300, 90, '#ff8a8a', 6, 0.5);
-        logEvent('heart — '+(room?'+1 max heart, ':'')+'regeneration doubled for '+HEART_REGEN_T+'s', '#ff8a8a');
+        logEvent('heart — regeneration doubled for '+HEART_REGEN_T+'s', '#ff8a8a');
         SFX.heart();
       } else if(pk.kind==='gheart'){
         addMaxHp(3);                         /* the new hearts arrive full, no refill */
@@ -10063,7 +10069,7 @@ function renderHUD(){
        '+'+wardArmour()+' arm · '+Math.ceil(p.wardT)+'s');
   if(p.regenBoostT>0)
     ab(cw-510, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
-       '×2 regen · '+Math.ceil(p.regenBoostT)+'s');
+       cursedRegen().toFixed(2)+'/s · '+Math.ceil(p.regenBoostT)+'s');
   if(musicToast){
     musicToast.life -= frameRaw;
     if(musicToast.life<=0) musicToast = null;
