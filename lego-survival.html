@@ -426,7 +426,12 @@ const WHIRL_MAX = 2;                      /* ranks of Blademaster */
 const WHIRL_SPIN = 13;                    /* rad/s the hero turns while whirling */
 const WHIRL_TICK = 0.18;                  /* per-foe cooldown inside the whirl */
 const WHIRL_MUL = 0.5;                    /* each tick lands for half a swing */
-const WHIRL_SLOW = [1, 0.58, 0.8];        /* move speed by rank */
+/* Move speed while whirling, by rank. Rank 1 costs you nothing — a stance that
+   halved your footing was a trap you stopped using. Rank 2 makes you FASTER
+   than walking, which is the whole spin-to-win fantasy. */
+const WHIRL_SLOW = [1, 1.0, 1.5];
+/* and the blade bats things out of the air, some of the time */
+const WHIRL_DEFLECT = [0, 0.35, 0.55];
 const TOTEM_MAX = 2;                      /* ranks of Lingering Vortex */
 const TOTEM_EVERY = [0, 6, 3];            /* seconds between totems, by rank */
 const TOTEM_LIFE  = [0, 9, 12];
@@ -690,8 +695,19 @@ function audioInit(){
   const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return;
   try{
     A.ctx = new AC();
-    A.master = A.ctx.createGain(); A.master.gain.value = 0.9; A.master.connect(A.ctx.destination);
-    A.sfx = A.ctx.createGain(); A.sfx.gain.value = 0.85; A.sfx.connect(A.master);
+    A.master = A.ctx.createGain(); A.master.gain.value = 0.9;
+    /* Forty bricks popping at once used to add up to a wall of clipping fizz.
+       The master runs through a compressor so a busy moment ducks instead of
+       distorting, and every effect goes through a gentle lid on the top end so
+       nothing is all upper harmonics. */
+    A.comp = A.ctx.createDynamicsCompressor();
+    A.comp.threshold.value = -20; A.comp.knee.value = 24;
+    A.comp.ratio.value = 7; A.comp.attack.value = 0.004; A.comp.release.value = 0.16;
+    A.master.connect(A.comp); A.comp.connect(A.ctx.destination);
+    A.sfxLid = A.ctx.createBiquadFilter();
+    A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 7200; A.sfxLid.Q.value = 0.4;
+    A.sfxLid.connect(A.master);
+    A.sfx = A.ctx.createGain(); A.sfx.gain.value = 0.8; A.sfx.connect(A.sfxLid);
     A.mus = A.ctx.createGain(); A.mus.gain.value = 0.17; A.mus.connect(A.master);
     const nb = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
     const d = nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
@@ -723,33 +739,60 @@ function noiseHit(dur,vol,fc,fc1,type='bandpass',when=0,dest=A.sfx){
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
   s.connect(f); f.connect(g); g.connect(dest); s.start(t); s.stop(t+dur+0.02);
 }
+/* A cue that fires once per body in a crowd is not a cue, it is noise. `every`
+   drops a repeat of the same sound inside a short window, so a wave of six
+   monsters building at once is ONE thud and a hundred studs hoovered up by a
+   magnet is a run of notes rather than a solid tone. */
+const sfxLast = {};
+function every(key, gap){
+  const t = A.ctx ? A.ctx.currentTime : 0;
+  if(sfxLast[key] !== undefined && t - sfxLast[key] < gap) return false;
+  sfxLast[key] = t;
+  return true;
+}
 const SFX = {
-  swing(){ noiseHit(0.13,0.28,900,260,'bandpass'); },
-  hit(){ tone('triangle',190,70,0.09,0.5); noiseHit(0.05,0.3,2200,0,'bandpass'); },
-  brick(n=5){ for(let i=0;i<n;i++){ const w=rnd(0,0.07);
-    tone('square', rnd(1100,2700), rnd(500,900), 0.045, 0.13, A.sfx, w); } },
-  stud(k){ tone('sine', 660*Math.pow(2,Math.min(k,14)/12), 0, 0.14, 0.22);
-    tone('sine', 990*Math.pow(2,Math.min(k,14)/12), 0, 0.1, 0.1, A.sfx, 0.02); },
+  swing(){ noiseHit(0.13,0.26,820,240,'bandpass'); },
+  hit(){ if(!every('hit',0.035)) return;
+    tone('triangle',190,70,0.09,0.42); noiseHit(0.05,0.26,1900,0,'bandpass'); },
+  /* bricks are wood and plastic, not glass: fewer voices, lower, triangle */
+  brick(n=5){ const v = Math.min(4, n); for(let i=0;i<v;i++){ const w=rnd(0,0.06);
+    tone('triangle', rnd(620,1500), rnd(280,520), 0.055, 0.10, A.sfx, w); } },
+  stud(k){ if(!every('stud',0.045)) return;
+    tone('sine', 620*Math.pow(2,Math.min(k,12)/12), 0, 0.12, 0.17);
+    tone('sine', 930*Math.pow(2,Math.min(k,12)/12), 0, 0.09, 0.07, A.sfx, 0.02); },
   heart(){ tone('sine',520,0,0.15,0.2); tone('sine',780,0,0.2,0.2,A.sfx,0.09); },
   magnet(){ tone('sine',300,1400,0.4,0.25); tone('sine',450,2100,0.4,0.15,A.sfx,0.06); },
   fortune(){ [660,880,1100,1320].forEach((f,i)=> tone('triangle',f,0,0.14,0.2,A.sfx,i*0.07)); },
   dash(){ noiseHit(0.16,0.2,1400,300,'bandpass'); },
   hurt(){ tone('square',210,80,0.22,0.35); noiseHit(0.12,0.25,800,0,'lowpass'); },
-  bomb(){ tone('sine',110,35,0.5,0.8); noiseHit(0.4,0.5,3000,200,'lowpass'); },
-  boomSmall(){ tone('sine',140,50,0.3,0.4); noiseHit(0.2,0.25,1500,0,'lowpass'); },
-  levelup(){ [523,659,784,1046].forEach((f,i)=> tone('square',f,0,0.16,0.13,A.sfx,i*0.08)); },
-  pick(){ tone('square',880,1320,0.12,0.15); },
-  deflect(){ tone('square',1500,2400,0.1,0.2); },
-  clank(){ tone('square',2600,900,0.07,0.22); noiseHit(0.04,0.18,4000,0,'bandpass'); },
-  grunt(){ tone('sawtooth',130,60,0.3,0.25); },
-  roar(){ tone('sawtooth',90,45,0.8,0.5); tone('sawtooth',95,50,0.8,0.3,A.sfx,0.05); },
-  click(){ tone('square',700,0,0.06,0.15); },
-  build(){ tone('square',rnd(1400,2000),0,0.05,0.1); },
-  zap(){ tone('square',1900,600,0.08,0.14); },
+  bomb(){ if(!every('bomb',0.05)) return;
+    tone('sine',110,35,0.5,0.7); noiseHit(0.4,0.42,2400,180,'lowpass'); },
+  boomSmall(){ if(!every('boomSmall',0.05)) return;
+    tone('sine',140,50,0.3,0.34); noiseHit(0.2,0.2,1300,0,'lowpass'); },
+  levelup(){ [523,659,784,1046].forEach((f,i)=> tone('triangle',f,0,0.18,0.14,A.sfx,i*0.08)); },
+  pick(){ tone('triangle',760,1140,0.12,0.16); },
+  deflect(){ if(!every('deflect',0.05)) return;
+    tone('triangle',1150,1700,0.09,0.17); noiseHit(0.05,0.14,2600,900,'bandpass'); },
+  clank(){ if(!every('clank',0.05)) return;
+    tone('square',1700,640,0.07,0.15); noiseHit(0.04,0.13,2800,0,'bandpass'); },
+  grunt(){ if(!every('grunt',0.12)) return; tone('sawtooth',130,60,0.3,0.22); },
+  roar(){ tone('sawtooth',90,45,0.8,0.45); tone('sawtooth',95,50,0.8,0.26,A.sfx,0.05); },
+  click(){ tone('triangle',620,0,0.06,0.13); },
+  /* THE SPAWN. One shrill square blip per body meant a wave arriving sounded
+     like a fax machine. It is a soft low thud now, and only the first body of a
+     batch gets one — the rest arrive silently. */
+  build(){ if(!every('build',0.22)) return;
+    tone('triangle', rnd(300,380), 170, 0.10, 0.08);
+    noiseHit(0.07, 0.07, 700, 260, 'lowpass'); },
+  zap(){ if(!every('zap',0.04)) return;
+    tone('square',1250,430,0.08,0.11); noiseHit(0.04,0.10,3200,1200,'highpass'); },
   whoosh(){ noiseHit(0.35,0.3,700,200,'bandpass'); },
-  freeze(){ tone('sine',1800,300,0.35,0.22); noiseHit(0.3,0.15,5000,1200,'bandpass'); },
-  fireball(){ noiseHit(0.3,0.3,600,150,'lowpass'); tone('sawtooth',220,90,0.25,0.15); },
-  thunder(){ noiseHit(0.12,0.4,4000,300,'highpass'); tone('square',1200,80,0.15,0.3); },
+  freeze(){ if(!every('freeze',0.08)) return;
+    tone('sine',1500,280,0.35,0.18); noiseHit(0.3,0.12,4200,1100,'bandpass'); },
+  fireball(){ if(!every('fireball',0.05)) return;
+    noiseHit(0.3,0.26,560,140,'lowpass'); tone('sawtooth',220,90,0.25,0.13); },
+  thunder(){ if(!every('thunder',0.06)) return;
+    noiseHit(0.12,0.30,3000,260,'highpass'); tone('triangle',900,80,0.16,0.24); },
   vortex(){ noiseHit(0.5,0.32,500,1400,'bandpass'); tone('sawtooth',300,600,0.4,0.12); },
   slam(){ tone('sine',90,40,0.25,0.6); noiseHit(0.18,0.3,900,0,'lowpass'); }
 };
@@ -1480,6 +1523,81 @@ function hitR(e){
   if(!e) return 0;
   const s = e.scale || 1;
   return Math.max(e.r || 0, (e.golem ? 23 : 15) * s);
+}
+/* =============================== THE BODY ===============================
+   A minifig is drawn UPWARD from the point it stands on, so a circle centred on
+   that point is a circle around its FEET — which is why a bolt could pass clean
+   through a chest and still clip a shadow. Everything that can be hit is a
+   CAPSULE instead: a vertical segment from the hips to the top of the head with
+   a radius round it, which is the shape you can actually see.
+
+   `bodyLo`/`bodyHi` are the two ends of that segment, in world coordinates, and
+   they respect `z` so a hovering bat is hit where it hovers. */
+function bodyLo(o){ return o.y - 3*(o.scale||1) - (o.z||0); }
+function bodyHi(o){
+  const s = o.scale || 1;
+  /* bats and shades float, golems are enormous; everything else is a minifig */
+  const tall = o.golem ? 62 : o.type==='boss' ? 54 : 40;
+  return o.y - tall*s - (o.z||0);
+}
+function bodyRad(o){ return Math.max(9, (o.golem ? 20 : 12) * (o.scale||1)); }
+/* Distance from a point to a body. The segment is vertical, so this is just the
+   horizontal gap and however far the point is past either end — no need for the
+   general point-to-segment maths, and this runs tens of thousands of times a
+   frame. */
+function bodyDist(o, x, y){
+  const lo = bodyLo(o), hi = bodyHi(o);
+  const dx = x - o.x;
+  const dy = y > lo ? y - lo : (y < hi ? y - hi : 0);
+  return Math.hypot(dx, dy);
+}
+/* Distance between two segments — the honest test for a fast projectile against
+   a standing body, since both are lines and sampling either one drops hits. */
+function segSegDist(ax,ay,bx,by, cx,cy,dx,dy){
+  const ux = bx-ax, uy = by-ay, vx = dx-cx, vy = dy-cy;
+  const wx = ax-cx, wy = ay-cy;
+  const a = ux*ux+uy*uy, b = ux*vx+uy*vy, c = vx*vx+vy*vy;
+  const d = ux*wx+uy*wy, e = vx*wx+vy*wy;
+  const D = a*c - b*b;
+  let sN, sD = D, tN, tD = D;
+  if(D < 1e-9){ sN = 0; sD = 1; tN = e; tD = c; }
+  else {
+    sN = b*e - c*d; tN = a*e - b*d;
+    if(sN < 0){ sN = 0; tN = e; tD = c; }
+    else if(sN > sD){ sN = sD; tN = e + b; tD = c; }
+  }
+  if(tN < 0){
+    tN = 0;
+    if(-d < 0) sN = 0; else if(-d > a) sN = sD; else { sN = -d; sD = a; }
+  } else if(tN > tD){
+    tN = tD;
+    const t2 = -d + b;
+    if(t2 < 0) sN = 0; else if(t2 > a) sN = sD; else { sN = t2; sD = a; }
+  }
+  const sc = Math.abs(sN) < 1e-9 ? 0 : sN/sD;
+  const tc = Math.abs(tN) < 1e-9 ? 0 : tN/tD;
+  return Math.hypot(wx + sc*ux - tc*vx, wy + sc*uy - tc*vy);
+}
+/* Did something at (x,y) with radius r touch this body? Box-rejected first: the
+   great majority of calls are nowhere near and should cost two comparisons. */
+function hitsBody(o, x, y, r){
+  const rr = bodyRad(o) + (r||0);
+  const dx = x - o.x;
+  if(dx > rr || dx < -rr) return false;
+  const lo = bodyLo(o), hi = bodyHi(o);
+  if(y > lo + rr || y < hi - rr) return false;
+  const dy = y > lo ? y - lo : (y < hi ? y - hi : 0);
+  return dx*dx + dy*dy < rr*rr;
+}
+/* Did something that MOVED from (x0,y0) to (x1,y1) sweep through it? */
+function sweepsBody(o, x0, y0, x1, y1, r){
+  const rr = bodyRad(o) + (r||0);
+  const minx = (x0<x1?x0:x1) - rr, maxx = (x0>x1?x0:x1) + rr;
+  if(o.x < minx || o.x > maxx) return false;
+  const lo = bodyLo(o), hi = bodyHi(o);
+  const miny = (y0<y1?y0:y1) - rr, maxy = (y0>y1?y0:y1) + rr;
+  if(lo < miny || hi > maxy) return false;
+  return segSegDist(x0, y0, x1, y1, o.x, lo, o.x, hi) < rr;
 }
 /* FRIEND OR FOE, AT A GLANCE.
    Everything the hero puts on the screen is drawn pale — bleached toward white.
@@ -2954,9 +3072,10 @@ const UPGRADES = [
     desc:c=> player.blademaster===0
       ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
         `reach for ${Math.round(WHIRL_MUL*100)}% of a swing every ${WHIRL_TICK.toFixed(2)}s. `+
-        `You move at ${Math.round(WHIRL_SLOW[1]*100)}% speed while whirling and cannot roll.`
-      : `The whirl costs you less footing — ${Math.round(WHIRL_SLOW[2]*100)}% speed instead `+
-        `of ${Math.round(WHIRL_SLOW[1]*100)}%. Still no rolling.`,
+        `You walk at full speed while it is up and the blade turns aside `+
+        `${Math.round(WHIRL_DEFLECT[1]*100)}% of what is thrown at you — but you cannot roll.`
+      : `The whirl carries you: ${Math.round(WHIRL_SLOW[2]*100)}% move speed while spinning, `+
+        `and ${Math.round(WHIRL_DEFLECT[2]*100)}% of incoming missiles are batted away. Still no rolling.`,
     apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
   { id:'vortextotem', name:'Lingering Vortex', icon:'totem', cls:'SPELL', minRar:'legendary',
     req:()=>player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
@@ -3777,12 +3896,14 @@ function renderCharSheet(){
     sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(56+p.reach)} reach · arc swing`),
     sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(64+p.reach)} reach · every 3rd swing, full circle`),
     ...(p.blademaster>0 ? [sRow('Blademaster', '×'+p.blademaster,
-      `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed, no roll`,
+      `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed · `+
+      `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% deflect · no roll`,
       `Holding the swing button spins you up instead of swinging. Everything inside `+
       `${Math.round(56+p.reach)} reach takes ${Math.round(WHIRL_MUL*100)}% of a light swing `+
       `every ${WHIRL_TICK.toFixed(2)}s — that is ${(swordDamage([WHIRL_MUL])/WHIRL_TICK).toFixed(1)} `+
-      `per second, held.\n\nYou walk at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
-      `it is up and cannot roll out of anything.`)] : []),
+      `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
+      `it is up and cannot roll out of anything. The blade turns aside `+
+      `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% of the missiles that reach it.`)] : []),
     sRow('Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
@@ -4140,12 +4261,34 @@ function updatePlayer(dt){
     p.swing = null;                       /* the whirl and a swing are exclusive */
     const reach = 56 + p.reach;
     const dmg = swordDamage([WHIRL_MUL]);
-    for(const en of enemies){
+    for(const en of enemiesNear(p.x, p.y, reach + 80)){
       if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
       if(dist(p,en) < reach + hitR(en)){
         en.whirlCd = WHIRL_TICK;
         hitEnemy(en, dmg, angTo(p,en), 90, 'sword', {spin:true});
       }
+    }
+    /* THE BLADE IS IN THE WAY. A spinning sword turns aside some of what is
+       thrown at it — not everything, or the stance would be a shield, but often
+       enough that whirling into a volley is a real answer. Each missile gets
+       one roll as it reaches the ring. */
+    const defl = WHIRL_DEFLECT[p.blademaster] || 0;
+    for(const pr of projectiles){
+      if(pr.owner!=='enemy' || pr.dead || pr.kind==='hexbolt') continue;
+      if(pr.whirlRolled) continue;
+      if(dist(p, pr) > reach + 8) continue;
+      pr.whirlRolled = true;                 /* one roll per missile, not per frame */
+      if(Math.random() >= defl) continue;
+      /* sent back the way a deflected arrow is: at the nearest thing that is
+         not you, and it belongs to you now */
+      let tgt = null, best = 1e9;
+      for(const en of enemies){ if(en.dead||en.state!=='active') continue;
+        const dd = dist(pr,en); if(dd<best){ best=dd; tgt=en; } }
+      const a3 = tgt ? angTo(pr,tgt) : p.whirlAng;
+      pr.vx = Math.cos(a3)*460; pr.vy = Math.sin(a3)*460;
+      pr.owner = 'player'; pr.deflected = true; pr.homing = false;
+      addSparks(pr.x, pr.y, 5, '#ffe08a');
+      SFX.deflect();
     }
     /* and it takes the scenery with it — chests, crates, trees, the lot */
     p.whirlPropCd = (p.whirlPropCd||0) - dt;
@@ -4167,7 +4310,7 @@ function updatePlayer(dt){
           vx:rnd(-30,30), vy:rnd(-40,10), life:0.18, max:0.18, color:'#e8eef2'});
     }
   } else p.whirlAng = 0;
-  const spdMul = chillMul() * (p.whirl ? WHIRL_SLOW[p.blademaster] : 1);
+  const spdMul = chillMul() * (p.whirl ? (WHIRL_SLOW[p.blademaster] || 1) : 1);
   let vx, vy;
   if(p.stunT > 0){
     vx = 0; vy = 0; p.moving = false;      /* frozen solid — no moving, no swinging */
@@ -4197,7 +4340,7 @@ function updatePlayer(dt){
     const x = clamp(s.t/s.dur, 0, 1), e = 1-Math.pow(1-x,3);
     s.cur = lerp(s.from, s.to, e);
     if(x>0.1 && x<0.92){
-      for(const en of enemies){
+      for(const en of enemiesNear(p.x, p.y, s.reach + 80)){
         if(en.dead || en.state!=='active' || s.hit.has(en)) continue;
         const d = dist(p,en);
         const hr = hitR(en);
@@ -4250,9 +4393,9 @@ function updatePlayer(dt){
       const ox = p.x + Math.cos(ang)*rNow;
       const oy = p.y-12 + Math.sin(ang)*rNow*0.72;
       orb.pos.push({x:ox, y:oy, ang});
-      for(const en of enemies){
+      for(const en of enemiesNear(ox, oy, orb.size + 80)){
         if(en.dead || en.state!=='active' || en.orbCd>0) continue;
-        if(dist({x:ox,y:oy}, en) < orb.size + hitR(en) + 4){
+        if(hitsBody(en, ox, oy, orb.size + 4)){
           en.orbCd = hitCd;
           hitEnemy(en, calcDamage(orb.dmg,'spell'), angTo(p,en), 150, 'orbit', {spin:true});
           addRing(en.x, en.y, 6, 160, 40, '#ffd166', 3, 0.3);
@@ -4321,7 +4464,7 @@ function updatePlayer(dt){
       if(vx2.t<=0){ vx2.t = 0; vx2.cd = vx2.rate; }
       const vr = vx2.r + (vx2.n-1)*10;
       const vHit = 0.24 * vx2.hitMul;
-      for(const en of enemies){
+      for(const en of enemiesNear(p.x, p.y, vr + 80)){
         if(en.dead || en.state!=='active' || en.vortCd>0) continue;
         if(dist(p,en) < vr + hitR(en)){
           en.vortCd = vHit;
@@ -4366,7 +4509,7 @@ function updatePlayer(dt){
       addRing(p.x, p.y, 10, 300, rr*0.7, FX.friend.frost, 5, 0.4);
       SFX.freeze();
       let cnt = 0;
-      for(const en of enemies){
+      for(const en of enemiesNear(p.x, p.y, rr + 80)){
         if(en.dead || en.state!=='active') continue;
         if(dist(en,p) < rr + hitR(en)){
           en.slowT = Math.max(en.slowT, dur);
@@ -4820,6 +4963,73 @@ function slideAroundSolids(e, vx, vy, dt){
   return { x: nx*sp, y: ny*sp };
 }
 
+/* THE WAY OUT OF A PINCH. The nav grid only marks a cell when its CENTRE is
+   inside something, which is right — a 14px sapling must not wall off 144px of
+   ground — but it means the grid has never heard of the gap between two rocks
+   that a body can wedge itself into, or the inside corner of a lake. When a body
+   stops moving and is not in the grid's padded band, this is what it does: step
+   out along the sum of the normals of everything crowding it, turned a little to
+   one side so it walks AROUND rather than straight back the way it came. */
+function openWayOut(e){
+  let ox = 0, oy = 0, n = 0;
+  for(const b of nearBlockers(e, e.r + 48)){
+    const dx = e.x - b.x, dy = e.y - b.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const w = 1 / Math.max(6, d - (b.r||0));     /* the closest thing pushes hardest */
+    ox += dx/d*w; oy += dy/d*w; n++;
+  }
+  if(!n) return null;
+  const l = Math.hypot(ox, oy);
+  if(l < 1e-6) return null;
+  const a = Math.atan2(oy/l, ox/l) + (e.slideSign||1)*0.7;
+  return { x: e.x + Math.cos(a)*NAV.cs, y: e.y + Math.sin(a)*NAV.cs };
+}
+/* =============================== THE BUCKET GRID ===============================
+   Every spell in the game walked the whole enemy list to find what it hit. With
+   three hundred bodies and a hundred projectiles in the air that is thirty
+   thousand distance checks a frame, and it showed as a stutter whenever a wave
+   got big. The enemies go into coarse buckets once a frame instead, and a spell
+   asks only for the buckets it actually overlaps. */
+const EGRID = { cs:130, w:0, h:0, cells:null };
+function egridBuild(){
+  const w = Math.ceil(W.w/EGRID.cs), h = Math.ceil(W.h/EGRID.cs), n = w*h;
+  if(!EGRID.cells || EGRID.w !== w || EGRID.h !== h){
+    EGRID.w = w; EGRID.h = h;
+    EGRID.cells = new Array(n);
+    for(let i=0;i<n;i++) EGRID.cells[i] = [];
+  } else {
+    for(let i=0;i<n;i++) if(EGRID.cells[i].length) EGRID.cells[i].length = 0;
+  }
+  for(const e of enemies){
+    if(e.dead || e.state!=='active') continue;
+    const ix = clamp(Math.floor(e.x/EGRID.cs), 0, w-1);
+    const iy = clamp(Math.floor(e.y/EGRID.cs), 0, h-1);
+    EGRID.cells[iy*w+ix].push(e);
+  }
+}
+/* Everything within roughly `r` of (x,y). The caller still does the real
+   distance test — this only narrows the field. `out` is reused so a per-frame
+   query does not allocate. */
+const _nearBuf = [];
+function enemiesNear(x, y, r, out){
+  const res = out || _nearBuf;
+  res.length = 0;
+  if(!EGRID.cells){
+    for(const e of enemies) res.push(e);
+    return res;
+  }
+  const cs = EGRID.cs, w = EGRID.w, h = EGRID.h;
+  const x0 = clamp(Math.floor((x-r)/cs), 0, w-1), x1 = clamp(Math.floor((x+r)/cs), 0, w-1);
+  const y0 = clamp(Math.floor((y-r)/cs), 0, h-1), y1 = clamp(Math.floor((y+r)/cs), 0, h-1);
+  for(let iy=y0; iy<=y1; iy++){
+    const row = iy*w;
+    for(let ix=x0; ix<=x1; ix++){
+      const b = EGRID.cells[row+ix];
+      for(let k=0;k<b.length;k++) res.push(b[k]);
+    }
+  }
+  return res;
+}
 /* Steer `e` toward the player, pathing around geometry only when it has to.
    Returns a unit direction, or null to fall back to the caller's own steering. */
 function navSteer(e, dt){
@@ -5481,7 +5691,11 @@ function updateEnemy(e, dt){
     const toward = sp>0 ? (vx*Math.cos(toP) + vy*Math.sin(toP))/sp : 0;
     if(toward > 0.3){
       const dir = navSteer(e, dt);
-      if(dir){ navDir = dir; vx = dir.x*sp; vy = dir.y*sp; e.avoidT = 0; e.stuckT = 0; }
+      /* Having a path used to reset the stuck timer every frame, which silenced
+         the detector in exactly the case that needed it: a body following a path
+         straight into a rock it cannot pass. The timer now belongs to whether it
+         MOVED, and nothing else. */
+      if(dir){ navDir = dir; vx = dir.x*sp; vy = dir.y*sp; }
     } else { e.path = null; }
   } else if(committed){ e.path = null; }
   if((vx||vy) && !e.docile){
@@ -5489,30 +5703,44 @@ function updateEnemy(e, dt){
     if(slid){ vx = slid.x; vy = slid.y; }
   }
   if((vx||vy) && !e.docile){
-    /* last-resort nudge for anything the grid can't help (pinned against a body) */
     const want = Math.hypot(vx,vy)*dt;
     const moved = dist(e, {x:e._lx, y:e._ly});
-    if(want > 0.4 && moved < want*0.3) e.stuckT += dt;
-    else e.stuckT = 0;
-    if(e.stuckT > 0.45){
-      /* standing inside the padded band? walk back out to open ground. that is a
-         definite answer, where the old random sidestep was a coin flip that could
-         (and did) shove a body further into the corner it was already wedged in */
-      const esc = navEscape(e.x, e.y);
+    /* CROWDING IS NOT STUCK. Sixty bodies packed around the hero barely move and
+       that is correct — shoving them apart with an escape just makes the crowd
+       wander. Only a body held up by GEOMETRY gets rescued, which is the case
+       that could never fix itself. The geometry question is only ASKED of a body
+       that has already stopped moving: asking it of all three hundred every
+       frame was three hundred walks of the solid list, and it cost more than
+       everything it was there to fix. */
+    if(want > 0.4 && moved < want*0.35 && nearBlockers(e, e.r + 26).length > 0) e.stuckT += dt;
+    else e.stuckT = Math.max(0, e.stuckT - dt*2);
+    if(e.stuckT > 0.35){
+      e.stuckT = 0;
+      /* whatever it was following is demonstrably not working */
+      e.path = null; e.pathT = 0; e.slideT = 0;
+      /* inside the padded band the grid has a definite answer; wedged between
+         two things it has never heard of, the normals do */
+      const esc = navEscape(e.x, e.y) || openWayOut(e);
       e.avoidA = esc ? Math.atan2(esc.y-e.y, esc.x-e.x)
                      : toP + (Math.random()<0.5?1:-1)*Math.PI/2;
-      e.avoidT = esc ? 0.45 : 0.3;
-      e.stuckT = 0;
+      e.avoidT = 0.5;
     }
     e._lx = e.x; e._ly = e.y;
   }
-  /* a monster that HAS a path is never hijacked by the nudge — that override was
-     what turned a one-off bump into half a second of walking the wrong way */
+  /* The escape LEANS the path rather than replacing it. A path is a better idea
+     than a shove — in a dead-end pocket the path is the only way out and pushing
+     away from the rocks just walks back into the middle of it — but a body that
+     has stopped moving needs something added sideways to unwedge it. With no
+     path at all, the shove is all there is. */
   if(e.avoidT > 0){
     e.avoidT -= dt;
-    if(!navDir){
-      vx = Math.cos(e.avoidA)*e.speed*0.8;
-      vy = Math.sin(e.avoidA)*e.speed*0.8;
+    const ex = Math.cos(e.avoidA), ey = Math.sin(e.avoidA);
+    if(navDir){
+      const bx = navDir.x*0.62 + ex*0.38, by = navDir.y*0.62 + ey*0.38;
+      const bl = Math.hypot(bx, by) || 1;
+      vx = bx/bl*e.speed*0.95; vy = by/bl*e.speed*0.95;
+    } else {
+      vx = ex*e.speed*0.9; vy = ey*e.speed*0.9;
     }
   }
   if(e.slowT>0){ vx*=0.45; vy*=0.45; }   /* frozen enemies crawl */
@@ -6616,8 +6844,8 @@ function updateProjectiles(dt){
       /* swept, not sampled: a 660px/s boulder covers 11px a frame and used to be
          able to step straight over the hero between two frames */
       if(pr.owner==='enemy' && !player.dead &&
-         segDist(pr.px, pr.py, pr.x, pr.y, player.x, player.y)
-           < player.r + (pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0))){
+         sweepsBody(player, pr.px, pr.py, pr.x, pr.y,
+           (pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0)))){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x, pr.y); pr.dead=true; }
         }
@@ -6642,9 +6870,10 @@ function updateProjectiles(dt){
         }
       }
       if(pr.owner==='player'){
-        for(const e of enemies){
+        for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
+              Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 80)){
           if(e.dead||e.state!=='active') continue;
-          if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < hitR(e)+10){
+          if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 10)){
             hitEnemy(e, calcDamage(2,'melee'), Math.atan2(pr.vy,pr.vx),180,'arrow',{spin:true});
             pr.dead=true; break;
           }
@@ -6654,9 +6883,9 @@ function updateProjectiles(dt){
     else if(pr.kind==='vtotem'){
       pr.life -= dt;
       if(pr.life<=0){ pr.dead = true; addSparks(pr.x, pr.y-10, 8, '#cfd6dd'); }
-      for(const e of enemies){
+      for(const e of enemiesNear(pr.x, pr.y, pr.r + 80)){
         if(e.dead || e.state!=='active' || e.totCd>0) continue;
-        if(dist(pr,e) < pr.r + hitR(e)){
+        if(hitsBody(e, pr.x, pr.y, pr.r)){
           e.totCd = TOTEM_TICK;
           hitEnemy(e, pr.dmg, angTo(pr,e), 120, 'sword', {spin:true});
         }
@@ -6688,11 +6917,11 @@ function updateProjectiles(dt){
             vx:rnd(-40,40), vy:rnd(-40,40), life:0.2, max:0.2, color:'#ffe95a'});
         }
         if(!player.dead && player.dash.t<=0 && player.invuln<=0 &&
-           segDist(pr.x, pr.y, ex, ey, player.x, player.y-12) < player.r + 9)
+           sweepsBody(player, pr.x, pr.y, ex, ey, 9))
           playerDamage(1, pr, 'shock');
       }
       if(!pr.dead && !player.dead &&
-         segDist(pr.px, pr.py, pr.x, pr.y, player.x, player.y-12) < player.r + 17){
+         sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged = true; perfectDodge(pr.x, pr.y); pr.dead = true; }
         } else if(player.invuln<=0){
@@ -6734,9 +6963,10 @@ function updateProjectiles(dt){
     else if(pr.kind==='pbrick'){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*12;
       if(pr.life<=0) pr.dead=true;
-      for(const e of enemies){
+      for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
+            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 90)){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
-        if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < hitR(e) + 15*(pr.sz||1)){
+        if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 15*(pr.sz||1))){
           pr.hit.add(e);
           hitEnemy(e, pr.dmg, Math.atan2(pr.vy,pr.vx), 150, 'blaster', {spin:true});
           addSparks(pr.x, pr.y, 3, FX.friend.spark);
@@ -6766,9 +6996,10 @@ function updateProjectiles(dt){
         if(pr.phase==='out' && pr.legs>0) wbladeLeg(pr, false);
         else pr.dead = true;
       }
-      for(const e of enemies){
+      for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
+            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 90)){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
-        if(segDist(pr.px,pr.py,pr.x,pr.y,e.x,e.y) < hitR(e) + 9*pr.size + 6){
+        if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 9*pr.size + 6)){
           pr.hit.add(e);
           hitEnemy(e, pr.dmg, Math.atan2(pr.vy,pr.vx), 140, 'storm', {spin:true});
         }
@@ -6915,6 +7146,11 @@ function updateFx(dt){
     else { p.x += p.vx*dt; p.y += p.vy*dt; p.vx*=0.92; p.vy*=0.92; }
   }
   particles = particles.filter(p=>p.life>0);
+  /* A hard ceiling on sparks. Three hundred bodies burning, freezing and coming
+     apart at once could put several thousand of them on the screen, and past a
+     point they are not visible as anything but cost — the oldest go first. */
+  if(particles.length > PARTICLE_MAX) particles.splice(0, particles.length - PARTICLE_MAX);
+  if(debris.length > DEBRIS_MAX) debris.splice(0, debris.length - DEBRIS_MAX);
   for(const t of dmgTexts){ t.life-=dt; t.y += t.vy*dt; t.vy*=0.94; }
   dmgTexts = dmgTexts.filter(t=>t.life>0);
   for(const h of hazards){
@@ -6945,15 +7181,43 @@ function updateFx(dt){
   sched = sched.filter(s=>s.t>0);
   for(const s of fire) s.fn();
 }
+/* KEEPING BODIES OUT OF EACH OTHER. This compared every monster with every other
+   monster: three hundred of them is forty-five THOUSAND pairs a frame, and it
+   was the single most expensive thing in a big wave. Two bodies can only overlap
+   if they are within a bucket of each other, so each bucket is now checked
+   against itself and the four buckets after it — which covers every real pair
+   exactly once and skips the ninety-nine percent that were never close. */
+function sepPair(a, b){
+  if(a.state!=='active'||b.state!=='active') return;
+  if(a.type==='boss'||b.type==='boss') return;
+  const dx = a.x-b.x, dy = a.y-b.y, rr = a.r+b.r-2;
+  if(dx > rr || dx < -rr || dy > rr || dy < -rr) return;
+  const d2 = dx*dx + dy*dy;
+  if(d2 >= rr*rr || d2 < 0.0001) return;
+  const d = Math.sqrt(d2);
+  const push = (rr-d)/2, ax = dx/d, ay = dy/d;
+  a.x += ax*push; a.y += ay*push; b.x -= ax*push; b.y -= ay*push;
+}
+const SEP_NEIGHBOURS = [[1,0],[0,1],[1,1],[-1,1]];
 function separate(){
-  for(let i=0;i<enemies.length;i++) for(let j=i+1;j<enemies.length;j++){
-    const a=enemies[i], b=enemies[j];
-    if(a.state!=='active'||b.state!=='active') continue;
-    if(a.type==='boss'||b.type==='boss') continue;
-    const d = dist(a,b), rr = a.r+b.r-2;
-    if(d<rr && d>0.01){
-      const push = (rr-d)/2, ax=(a.x-b.x)/d, ay=(a.y-b.y)/d;
-      a.x += ax*push; a.y += ay*push; b.x -= ax*push; b.y -= ay*push;
+  egridBuild();                       /* bodies have moved since the last build */
+  if(!EGRID.cells){
+    for(let i=0;i<enemies.length;i++) for(let j=i+1;j<enemies.length;j++)
+      sepPair(enemies[i], enemies[j]);
+    return;
+  }
+  const w = EGRID.w, h = EGRID.h;
+  for(let iy=0; iy<h; iy++) for(let ix=0; ix<w; ix++){
+    const A = EGRID.cells[iy*w+ix];
+    const an = A.length;
+    if(!an) continue;
+    for(let i=0;i<an;i++) for(let j=i+1;j<an;j++) sepPair(A[i], A[j]);
+    for(let k=0;k<4;k++){
+      const nx = ix+SEP_NEIGHBOURS[k][0], ny = iy+SEP_NEIGHBOURS[k][1];
+      if(nx<0 || nx>=w || ny<0 || ny>=h) continue;
+      const B = EGRID.cells[ny*w+nx];
+      const bn = B.length;
+      for(let i=0;i<an;i++) for(let j=0;j<bn;j++) sepPair(A[i], B[j]);
     }
   }
 }
@@ -6962,6 +7226,22 @@ function separate(){
    and puddle in the game is, so an expanding wave visibly sweeps behind whatever
    is standing in it instead of hooping around them like a sphere. */
 const GROUND_SQUASH = 0.55;
+const PARTICLE_MAX = 900;    /* sparks on screen before the oldest are dropped */
+const DEBRIS_MAX = 260;      /* the same for flying bricks */
+/* =============================== THE VIEW ===============================
+   Nothing outside this rectangle is drawn. It is the visible world plus an
+   eighth of the screen on every side — a quarter bigger than the window in
+   total — so things never pop in at the edge, and a wave of three hundred
+   bodies does not pay to draw the two hundred nobody can see. */
+const VIEW = { x0:0, y0:0, x1:0, y1:0 };
+function viewSet(vx, vy, vw, vh){
+  const mx = vw*0.125, my = vh*0.125;
+  VIEW.x0 = vx-mx; VIEW.y0 = vy-my; VIEW.x1 = vx+vw+mx; VIEW.y1 = vy+vh+my;
+}
+function onScreen(o, pad){
+  const m = pad || 0;
+  return o.x >= VIEW.x0-m && o.x <= VIEW.x1+m && o.y >= VIEW.y0-m && o.y <= VIEW.y1+m;
+}
 function groundRing(c, x, y, r, lw, style){
   c.save(); c.translate(x, y); c.scale(1, GROUND_SQUASH);
   c.strokeStyle = style; c.lineWidth = lw / GROUND_SQUASH;
@@ -8230,6 +8510,7 @@ function render(){
   ctx.translate(cw/2+sx, ch/2+sy); ctx.scale(zoom,zoom); ctx.translate(-cam.x,-cam.y);
   const vx = clamp(cam.x - cw/2/zoom - 40, 0, W.w), vy = clamp(cam.y - ch/2/zoom - 40, 0, W.h);
   const vw = Math.min(cw/zoom+80, W.w-vx), vh = Math.min(ch/zoom+80, W.h-vy);
+  viewSet(vx, vy, vw, vh);
   drawGround(vx, vy, Math.max(1,vw), Math.max(1,vh));
   for(const w of waters){
     for(let i=0;i<4;i++){
@@ -8522,21 +8803,27 @@ function render(){
         }
       }
       if(e.mode==='maceWind'){
-        /* the circle the head sweeps, and a bright wedge racing round it */
+        /* The circle the head sweeps, and a bright wedge racing round it. A TRUE
+           circle — the hit test is `dist(b,player) < reach`, so drawing it
+           squashed put the north and south edges of the sweep outside anything
+           you could see coming. */
         const rr = maceReach(e);
         const winding = e.modeT < MACE_WIND;
-        groundDisc(ctx, e.x, e.y, rr, `rgba(255,209,102,${winding?0.10:0.18})`);
+        ctx.save();
+        ctx.fillStyle = `rgba(255,209,102,${winding?0.10:0.18})`;
+        ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, TAU); ctx.fill();
         ctx.setLineDash([14,10]);
-        groundRing(ctx, e.x, e.y, rr, 5, `rgba(255,209,102,${0.55+0.35*Math.sin(vtime*16)})`);
+        ctx.strokeStyle = `rgba(255,209,102,${0.55+0.35*Math.sin(vtime*16)})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, TAU); ctx.stroke();
         ctx.setLineDash([]);
         if(!winding && e.whirlA!==undefined){
-          ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, GROUND_SQUASH);
           ctx.fillStyle = 'rgba(255,240,180,0.28)';
-          ctx.beginPath(); ctx.moveTo(0,0);
-          ctx.arc(0, 0, rr, e.whirlA-1.1, e.whirlA);
+          ctx.beginPath(); ctx.moveTo(e.x, e.y);
+          ctx.arc(e.x, e.y, rr, e.whirlA-1.1, e.whirlA);
           ctx.closePath(); ctx.fill();
-          ctx.restore();
         }
+        ctx.restore();
       }
       if(e.mode==='slamWind'){
         const pulling = e.modeT < BOSS_PULL_T;
@@ -8652,6 +8939,7 @@ function render(){
     ctx.restore();
   }
   for(const pr of projectiles){
+    if(!onScreen(pr, 90)) continue;
     const lc = LOB_CONF[pr.kind];
     if(lc && (pr.delay>0 || pr.t<pr.dur-0.15)){
       const k = clamp(pr.t/pr.dur,0,1);
@@ -8689,7 +8977,7 @@ function render(){
       ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(2, rr*(1-k)), 0, TAU); ctx.stroke();
     }
   }
-  for(const pk of pickups) drawPickup(ctx, pk);
+  for(const pk of pickups) if(onScreen(pk, 60)) drawPickup(ctx, pk);
   if(player && player.magnetT>0 && !player.dead){
     ctx.setLineDash([8,10]);
     ctx.strokeStyle = `rgba(255,214,110,${0.45+0.3*Math.sin(vtime*6)})`;
@@ -8698,10 +8986,10 @@ function render(){
     ctx.setLineDash([]);
   }
   const list = [];
-  for(const p of props) if(!p.dead && p.x>vx-160 && p.x<vx+vw+160 && p.y>vy-200 && p.y<vy+vh+160)
+  for(const p of props) if(!p.dead && onScreen(p, 120))
     list.push({y:p.y, f:()=>drawProp(ctx,p)});
   for(const e of enemies){
-    if(e.x<vx-180 || e.x>vx+vw+180 || e.y<vy-220 || e.y>vy+vh+220) continue;
+    if(!onScreen(e, 120)) continue;
     list.push({y:e.y, f:()=>drawEnemy(ctx,e)});
   }
   if(player && (!player.dead || player.deadT<0.05)) list.push({y:player.y, f:()=>drawHero(ctx)});
@@ -8710,7 +8998,7 @@ function render(){
   /* Lingering Vortex totems — the same whirlwind, standing still and unlit by the
      hero's own glow so you can tell it is not following you */
   for(const pr of projectiles){
-    if(pr.kind!=='vtotem' || pr.dead) continue;
+    if(pr.kind!=='vtotem' || pr.dead || !onScreen(pr, 120)) continue;
     const k = clamp(pr.life/1.2, 0, 1);            /* fades out at the end */
     ctx.save();
     ctx.globalAlpha = k;
@@ -8730,17 +9018,23 @@ function render(){
     }
     ctx.restore();
   }
-  /* Blademaster whirl — the trailing arc. The blade itself is on the figure now,
-     held in the hero's hand and swung round with the body. */
+  /* Blademaster whirl — the trailing arc. It is drawn as a TRUE CIRCLE, not a
+     squashed one: the hit test is a circle, so a flattened drawing meant the
+     blade struck a foot above and below the ring you could see. */
   if(player && player.whirl && !player.dead){
     const reach = 56 + player.reach;
     ctx.save();
+    /* the floor the whirl actually covers */
+    ctx.fillStyle = 'rgba(232,238,242,0.07)';
+    ctx.beginPath(); ctx.arc(player.x, player.y, reach, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(232,238,242,0.22)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(player.x, player.y, reach, 0, TAU); ctx.stroke();
     for(let i=0;i<4;i++){
       const a0 = player.whirlAng - i*0.42;
       ctx.strokeStyle = `rgba(232,238,242,${0.42 - i*0.10})`;
       ctx.lineWidth = 6 - i*1.2;
       ctx.beginPath();
-      ctx.ellipse(player.x, player.y-14, reach, reach*0.62, 0, a0-0.55, a0+0.18);
+      ctx.arc(player.x, player.y, reach, a0-0.55, a0+0.18);
       ctx.stroke();
     }
     ctx.restore();
@@ -8832,6 +9126,7 @@ function render(){
     }
   }
   for(const pr of projectiles){
+    if(!onScreen(pr, 90)) continue;
     if(pr.kind==='arrow') drawArrow(ctx,pr);
     else if(pr.kind==='skull') drawSkull(ctx,pr);
     else if(pr.kind==='frostbolt') drawFrostbolt(ctx,pr);
@@ -8951,8 +9246,9 @@ function render(){
       ctx.restore();
     }
   }
-  for(const d of debris) drawDebris(ctx,d);
+  for(const d of debris) if(onScreen(d, 30)) drawDebris(ctx,d);
   for(const p of particles){
+    if(!onScreen(p, 40)) continue;
     const k = clamp(p.life/(p.maxLife||p.max),0,1);
     if(p.kind==='ring'){
       ctx.strokeStyle = p.color; ctx.globalAlpha = k; ctx.lineWidth = Math.max(0.5,p.lw*k+1);
@@ -8988,6 +9284,7 @@ function render(){
   }
   ctx.textAlign='center';
   for(const t of dmgTexts){
+    if(!onScreen(t, 60)) continue;
     const k = clamp(t.life/0.8,0,1);
     ctx.font = `700 ${t.size}px Fredoka`;
     ctx.globalAlpha = k;
@@ -10294,6 +10591,7 @@ function update(dt, raw){
     mouse.wx = cam.x + (mouse.x - cw/2)/zoom;
     mouse.wy = cam.y + (mouse.y - ch/2)/zoom;
     updatePlayer(dt);
+    egridBuild();
     for(const e of enemies) updateEnemy(e, dt);
     separate();
     enemies = enemies.filter(e=>!e.dead);
