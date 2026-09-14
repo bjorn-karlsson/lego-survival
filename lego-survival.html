@@ -70,7 +70,12 @@
     border-radius:9px;padding:3px 8px;box-shadow:0 3px 0 #000}
   /* the test bench shows the real reward cards at half size — hovering one
      lifts it back to full scale so the whole description is readable */
-  #cheatUps{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:10px 4px 16px}
+  #cheatUps{display:flex;flex-direction:column;gap:8px;padding:6px 4px 16px}
+  .benchsec{width:100%}
+  .benchhead{font-family:'Titan One';font-size:10.5px;letter-spacing:2.5px;color:#ffe6a3;
+    text-align:left;margin:2px 0 6px 4px;display:flex;align-items:center;gap:9px}
+  .benchhead::after{content:'';flex:1;height:2px;border-radius:1px;background:rgba(255,230,163,.25)}
+  .benchrow{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-start;padding-bottom:2px}
   .card.mini{width:132px;padding:9px 9px 20px;border-radius:11px;border-width:2px;
     box-shadow:0 5px 0 rgba(0,0,0,.35);transform-origin:center bottom;font-size:11px}
   .card.mini .band{height:7px;border-radius:5px;margin-bottom:8px}
@@ -138,6 +143,31 @@
   .fav span{font-size:10px;font-weight:600;color:#f0e6e6;line-height:1.12;text-align:center}
   .fav.on{background:rgba(255,185,0,.22);border-color:#ffb900;box-shadow:0 0 0 2px rgba(255,185,0,.3)}
   .fav.on span{color:#fff}
+  /* what a favourite hands you at the start of a run, on hover */
+  .fav[data-tip]{position:relative}
+  .fav[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:118%;
+    transform:translateX(-50%);white-space:pre;background:#12181d;border:2px solid #ffb900;
+    border-radius:12px;padding:10px 14px;font-size:12px;font-weight:500;color:#f2f3f2;
+    line-height:1.55;text-align:left;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.7);
+    font-family:'Fredoka'}
+  .fav[data-tip]:hover::before{content:'';position:absolute;left:50%;bottom:110%;
+    transform:translateX(-50%);border:7px solid transparent;border-top-color:#ffb900;z-index:51}
+  /* ---- the reward comparison panel ---- */
+  #cmpPanel{position:fixed;z-index:60;width:286px;max-height:78vh;overflow:hidden;
+    background:#12181d;border:2px solid #ffb900;border-radius:14px;padding:10px 12px 11px;
+    box-shadow:0 12px 34px rgba(0,0,0,.7);font-family:'Fredoka';pointer-events:none}
+  #cmpPanel .cmphead{font-family:'Titan One';font-size:12.5px;letter-spacing:1px;color:#ffd76e;
+    text-align:center;padding-bottom:7px;margin-bottom:6px;border-bottom:1px solid rgba(255,185,0,.28)}
+  #cmpPanel .cmpg{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;color:#8e9aa4;
+    margin:7px 0 3px}
+  #cmpPanel .cmprow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-size:12px;padding:2px 0;color:#dfe4e2;font-weight:500}
+  #cmpPanel .cmprow b{font-weight:700;white-space:nowrap}
+  #cmpPanel .cmprow i{font-style:normal}
+  #cmpPanel .was{color:#8e9aa4}
+  #cmpPanel .up{color:#7fdc7e}
+  #cmpPanel .down{color:#ff6a5a}
+  #cmpPanel .cmpnone{font-size:11.5px;color:#c9d2ce;line-height:1.5;text-align:center;padding:4px 2px}
   /* ---- character sheet ---- */
   #charScreen{justify-content:flex-start;overflow:hidden}
   .sheet{width:min(1180px,96vw);max-height:94vh;margin:3vh 0;display:flex;flex-direction:column;
@@ -239,14 +269,14 @@
   <div class="sheet">
     <div class="sheethead">
       <h2>TEST BENCH</h2>
-      <div class="sheetsub">Give yourself anything, jump to any wave. F1 or ESC to close.</div>
+      <div class="sheetsub">Give yourself anything, jump to any wave. Hover a brick to see what it would change. F1 or ESC to close.</div>
     </div>
     <div class="sheetbody">
       <div class="seclabel">WAVE</div>
       <div class="cheatrow" id="cheatWaves"></div>
       <div class="seclabel">DIFFICULTY</div>
       <div class="cheatrow" id="cheatDiffs"></div>
-      <div class="seclabel">GRANT A BRICK — LEFT-CLICK FOR +1, RIGHT-CLICK TO RESET IT TO ZERO (hover to read; greyed-out is already at its cap)</div>
+      <div class="seclabel">GRANT A BRICK — LEFT-CLICK FOR +1, RIGHT-CLICK TO RESET IT TO ZERO (hover for a now → next comparison; greyed-out is already at its cap)</div>
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
@@ -424,6 +454,15 @@ const FORTUNE_CAP = 8;
 const RAGE_CAP = 8;            /* rage doubles per brick: 2x, 4x, 8x and no further */
 const BUFF_T = 30;             /* every ground buff runs the same thirty seconds */
 const CHAIN_MAX_ZAPPERS = 5;
+/* Every hard cap can be nudged by a FAVOURITE's starting perk — one extra brick
+   in the ring, one more zapper, one more bomb in the compass. `capUp` is only
+   ever set at the start of a run, so the ceilings are otherwise exactly where
+   they have always been. */
+function capUp(k){ return (player && player.capUp && player.capUp[k]) || 0; }
+function orbitMaxN(){ return ORBIT_MAX_N + capUp('orbit'); }
+function blastMaxN(){ return BLAST_MAX_N + capUp('blaster'); }
+function chainMaxZappers(){ return CHAIN_MAX_ZAPPERS + capUp('chain'); }
+function bombMaxN(){ return BOMB_MAX + capUp('bomb'); }
 const CHAIN_MIN_RATE = 1.0;    /* a storm brick never fires faster than once a second */
 /* Chain falloff is a curve, not a flat percentage, and SPECCING INTO IT FLATTENS
    THE CURVE. Every leap is measured against the opening strike; how much a leap
@@ -833,6 +872,7 @@ function rebuildWithout(id){
   for(const k of Object.keys(p)) delete p[k];
   Object.assign(p, blank, carry);
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
+  applyFavPerks();                      /* nor is the favourite's starting kit */
   taken = {}; buildLog = [];
   for(const e of keep){
     const u = UPGRADES.find(x=>x.id===e.id);
@@ -908,6 +948,8 @@ function newPlayer(){
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
     chain:{ n:0, zappers:0, dmg:2, rate:2.2, r:430, cds:[1.5], gap:0, fork:0 },
     bomb:{ n:0, dmg:2, r:62, rate:7, cd:3, cluster:0 },
+    /* raised by a favourite's starting perk, once, at the beginning of a run */
+    capUp:{ orbit:0, blaster:0, chain:0, bomb:0 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
   };
@@ -2495,48 +2537,48 @@ const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     /* common barely sharpens it; rare and epic are a real weapon upgrade */
     calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8])}),
-    desc:c=>`+${fmtHp(c.v)} flat sword damage (now ${fmtHp(swordBase()+c.v)})`,
+    desc:c=>`+${fmtHp(c.v)} flat sword damage`,
     apply:c=>{ player.flatSword = Math.round((player.flatSword + c.v)*100)/100; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased melee damage (now ${Math.round((player.incMelee+c.v)*100)}%)`,
+    desc:c=>`${Math.round(c.v*100)}% increased melee damage — sword, bladestorm and vortex`,
     apply:c=>{ player.incMelee += c.v; } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
     calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`${Math.round(c.v*100)}% more damage with everything — sword, blades and spells alike (now ×${(player.moreAll*(1+c.v)).toFixed(2)})`,
+    desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside the increased pool`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
   { id:'armor', name:'Reinforced Armour', icon:'shield', cls:'DEFENSE',
     calc:m=>({v:Math.round(14+10*m)}),
-    desc:c=>`+${c.v} flat armour (now ${Math.round((player.armour+c.v)*(1+player.incArmour))})`,
+    desc:c=>`+${c.v} flat armour — less damage from attacks, never from spells`,
     apply:c=>{ player.armour += c.v; } },
   { id:'armorinc', name:'Plated Rig', icon:'shieldplus', cls:'DEFENSE', req:()=>player.armour>0,
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased armour (now ${Math.round(player.armour*(1+player.incArmour+c.v))})`,
+    desc:c=>`${Math.round(c.v*100)}% increased armour`,
     apply:c=>{ player.incArmour += c.v; } },
   { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
     req:()=>player.suppress < 1,
     calc:m=>({v:0.08+0.06*m}),
-    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage (now ${Math.round(Math.min(1,player.suppress+c.v)*100)}%)`,
+    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
     apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     req:()=>player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
-    desc:c=>`+${Math.min(c.v, REACH_MAX-player.reach)} sword attack range (now ${Math.round(56+Math.min(REACH_MAX,player.reach+c.v))}, cap ${56+REACH_MAX})`,
+    desc:c=>`+${c.v} sword attack range (cap ${56+REACH_MAX})`,
     apply:c=>{ player.reach = Math.min(REACH_MAX, player.reach + c.v); } },
   { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
     req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
-    desc:c=>`Swing ${Math.round(c.v*100)}% faster (now every ${Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)).toFixed(2)}s, floor ${ATK_RATE_MIN.toFixed(2)}s)`,
+    desc:c=>`Swing ${Math.round(c.v*100)}% faster (floor ${ATK_RATE_MIN.toFixed(2)}s per swing)`,
     apply:c=>{ player.atkRate = Math.max(ATK_RATE_MIN, player.atkRate*(1-c.v)); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>critChance() < CRIT_CHANCE_CAP,
     calc:m=>({v:0.16+0.13*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (now ${(clamp(CRIT_BASE*(1+player.incCrit+c.v),0,CRIT_CHANCE_CAP)*100).toFixed(1)}%)`,
+    desc:c=>`${Math.round(c.v*100)}% increased critical strike chance (cap ${Math.round(CRIT_CHANCE_CAP*100)}%)`,
     apply:c=>{ player.incCrit += c.v; } },
   { id:'critpow', name:'Heavy Crits', icon:'burst', cls:'OFFENSE', minRar:'uncommon',
     req:()=>player.critMultPct < CRIT_MULT_CAP,
     calc:m=>({v:Math.round(6+4.5*m)}),
-    desc:c=>`+${c.v}% to critical strike multiplier (now ${Math.min(CRIT_MULT_CAP, player.critMultPct+c.v)}%)`,
+    desc:c=>`+${c.v}% to critical strike multiplier (cap ${CRIT_MULT_CAP}%)`,
     apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
   { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
     req:()=>player.maxHp < heartCap(),
@@ -2546,27 +2588,27 @@ const UPGRADES = [
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
     req:()=>player.regenRate < REGEN_MAX,
     calc:m=>({v:0.035+0.022*m}),
-    desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second (now ${Math.min(REGEN_MAX,player.regenRate+c.v).toFixed(3)}/s, cap ${REGEN_MAX.toFixed(2)}/s)`,
+    desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second (cap ${REGEN_MAX.toFixed(2)}/s)`,
     apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
   { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
     calc:m=>({v:Math.round(3+2*m)}),
-    desc:c=>`+${c.v}% heart drop chance (now ${Math.round(Math.min(HEART_CHANCE_MAX,player.heartChance+c.v/100)*100)}%, cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
+    desc:c=>`+${c.v}% heart drop chance (cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
     apply:c=>{ player.heartChance = Math.min(HEART_CHANCE_MAX, player.heartChance + c.v/100); } },
   { id:'spd', name:'Sprint Studs', icon:'boot', cls:'UTILITY',
     req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
-    desc:c=>`+${Math.round(c.v*100)}% move speed (now ${Math.round(Math.min(SPEED_MAX,player.speed*(1+c.v)))}, cap ${SPEED_MAX})`,
+    desc:c=>`+${Math.round(c.v*100)}% move speed (cap ${SPEED_MAX} px/s)`,
     apply:c=>{ player.speed = Math.min(SPEED_MAX, player.speed*(1+c.v)); } },
   { id:'roll', name:'Phantom Roll', icon:'roll', cls:'UTILITY',
     req:()=>player.dash.cdMax > DASH_CD_MIN,
     calc:m=>({v:0.10+0.05*m}),
-    desc:c=>`Roll cooldown -${Math.round(c.v*100)}% (now ${Math.max(DASH_CD_MIN,player.dash.cdMax*(1-c.v)).toFixed(2)}s, floor ${DASH_CD_MIN.toFixed(2)}s)`,
+    desc:c=>`Roll cooldown -${Math.round(c.v*100)}% (floor ${DASH_CD_MIN.toFixed(2)}s)`,
     apply:c=>{ player.dash.cdMax = Math.max(DASH_CD_MIN, player.dash.cdMax*(1-c.v)); } },
   { id:'mag', name:'Magnet Bricks', icon:'magnet', cls:'UTILITY',
     req:()=>player.magnetR < MAGNET_MAX,
     calc:m=>({v:0.20+0.15*m}),
-    desc:c=>`+${Math.round(c.v*100)}% stud pickup range (now ${Math.round(Math.min(MAGNET_MAX,player.magnetR*(1+c.v)))}, cap ${MAGNET_MAX})`,
+    desc:c=>`+${Math.round(c.v*100)}% stud pickup range (cap ${MAGNET_MAX})`,
     apply:c=>{ player.magnetR = Math.min(MAGNET_MAX, player.magnetR*(1+c.v)); } },
   { id:'greed', name:'Golden Touch', icon:'coin', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
@@ -2579,17 +2621,17 @@ const UPGRADES = [
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
-    desc:c=>`+${Math.round(c.v*100)}% fire resistance (now ${Math.round(Math.min(RES_CAP,player.res.fire+c.v)*100)}%)`,
+    desc:c=>`+${Math.round(c.v*100)}% fire resistance (cap ${Math.round(RES_CAP*100)}%)`,
     apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
   { id:'resfrost', name:'Thermal Lining', icon:'snow', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.frost < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
-    desc:c=>`+${Math.round(c.v*100)}% frost resistance (now ${Math.round(Math.min(RES_CAP,player.res.frost+c.v)*100)}%)`,
+    desc:c=>`+${Math.round(c.v*100)}% frost resistance (cap ${Math.round(RES_CAP*100)}%)`,
     apply:c=>{ player.res.frost = Math.min(RES_CAP, player.res.frost + c.v); } },
   { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.shock < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
-    desc:c=>`+${Math.round(c.v*100)}% lightning resistance (now ${Math.round(Math.min(RES_CAP,player.res.shock+c.v)*100)}%)`,
+    desc:c=>`+${Math.round(c.v*100)}% lightning resistance (cap ${Math.round(RES_CAP*100)}%)`,
     apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
   { id:'resall', name:'Elementalist Bricks', icon:'prism', cls:'DEFENSE', minRar:'rare',
     req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
@@ -2597,11 +2639,11 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
     apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
-    req:()=>player.orbit.n < ORBIT_MAX_N,
+    req:()=>player.orbit.n < orbitMaxN(),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} orbiting bricks (now ${player.orbit.n + c.n})`
-      : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes (max ${ORBIT_MAX_N})`,
-    apply:c=>{ player.orbit.n = Math.min(ORBIT_MAX_N, player.orbit.n + c.n); } },
+    desc:(c,owned)=> owned>0 ? `+${c.n} orbiting brick${c.n>1?'s':''} (cap ${orbitMaxN()})`
+      : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes (max ${orbitMaxN()})`,
+    apply:c=>{ player.orbit.n = Math.min(orbitMaxN(), player.orbit.n + c.n); } },
   { id:'orbitpow', name:'Heavy Orbit', icon:'orbit', cls:'SPELL', req:()=>player.orbit.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.9)), r:Math.round(6*m), s:Math.round(2*m)}),
     desc:c=>`Orbit +${c.v} dmg, +${c.r} reach (cap ${ORBIT_MAX_R}), +${c.s} size (cap ${ORBIT_MAX_SIZE})`,
@@ -2614,11 +2656,11 @@ const UPGRADES = [
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
     apply:c=>{ player.orbit.spd = Math.min(ORBIT_MAX_SPD, player.orbit.spd*(1+c.v)); } },
   { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL', minRar:'uncommon',
-    req:()=>player.blaster.n < BLAST_MAX_N,
+    req:()=>player.blaster.n < blastMaxN(),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} bricks per volley (now ${player.blaster.n + c.n})`
-      : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor (max ${BLAST_MAX_N})`,
-    apply:c=>{ player.blaster.n = Math.min(BLAST_MAX_N, player.blaster.n + c.n); } },
+    desc:(c,owned)=> owned>0 ? `+${c.n} brick${c.n>1?'s':''} per volley (cap ${blastMaxN()})`
+      : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor (max ${blastMaxN()})`,
+    apply:c=>{ player.blaster.n = Math.min(blastMaxN(), player.blaster.n + c.n); } },
   { id:'blastpow', name:'Blaster Power', icon:'blaster', cls:'SPELL', req:()=>player.blaster.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.8)), p:m>=2.4?1:0}),
     desc:c=>`Blaster +${c.v} dmg${c.p?` and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
@@ -2627,11 +2669,11 @@ const UPGRADES = [
   { id:'blastrate', name:'Rapid Blaster', icon:'clock', cls:'SPELL',
     req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
     calc:m=>({v:0.13+0.06*m}),
-    desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (now ${Math.max(BLAST_MIN_RATE,player.blaster.rate*(1-c.v)).toFixed(2)}s, floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
+    desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.blaster.rate = Math.max(BLAST_MIN_RATE, player.blaster.rate*(1-c.v)); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased spell damage (now ${Math.round((player.incSpell+c.v)*100)}%)`,
+    desc:c=>`${Math.round(c.v*100)}% increased spell damage — every brick you cast`,
     apply:c=>{ player.incSpell += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
@@ -2643,13 +2685,12 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.n += c.n; if(player.chain.zappers<1) player.chain.zappers = 1; } },
   { id:'chainbrick', name:'Chain Lightning Brick', icon:'zapper', cls:'SPELL', minRar:'uncommon',
-    req:()=>player.chain.n>0 && player.chain.zappers<CHAIN_MAX_ZAPPERS,
+    req:()=>player.chain.n>0 && player.chain.zappers<chainMaxZappers(),
     calc:m=>({n:spellCount(m)}),
     desc:c=>{
-      const now = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n);
-      return `+${c.n} storm brick${c.n>1?'s':''} — ${now} zapper${now>1?'s':''} firing at once (max ${CHAIN_MAX_ZAPPERS})`;
+      return `+${c.n} storm brick${c.n>1?'s':''} hovering by you, each firing its own bolt (max ${chainMaxZappers()})`;
     },
-    apply:c=>{ player.chain.zappers = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers + c.n); } },
+    apply:c=>{ player.chain.zappers = Math.min(chainMaxZappers(), player.chain.zappers + c.n); } },
   { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
     calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
     desc:c=>`+${c.v} flat storm brick damage (opening strike now ${calcDamage(player.chain.dmg+c.v,'spell').toFixed(1)})`,
@@ -2660,7 +2701,7 @@ const UPGRADES = [
     apply:c=>{ player.chain.rate = Math.max(CHAIN_MIN_RATE, player.chain.rate*(1-c.v)); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm (now ${player.storm.n + c.n}) — wider sweeping spirals`
+    desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm — wider sweeping spirals`
       : `Spell: a whirl of ${c.n*8} swords bursts out of you`,
     apply:c=>{ player.storm.n += c.n; } },
   { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
@@ -2671,11 +2712,11 @@ const UPGRADES = [
   { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
     req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
-    desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (now ${Math.max(STORM_MIN_RATE,player.storm.rate*(1-c.v)).toFixed(2)}s, floor ${STORM_MIN_RATE.toFixed(2)}s)`,
+    desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (floor ${STORM_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.storm.rate = Math.max(STORM_MIN_RATE, player.storm.rate*(1-c.v)); } },
   { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.vortex.n + c.n}) — longer & wider whirlwind`
+    desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
     apply:c=>{ player.vortex.n += c.n; } },
   { id:'vortexarea', name:'Vortex Reach', icon:'vortex', cls:'SPELL',
@@ -2691,7 +2732,7 @@ const UPGRADES = [
       player.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, player.vortex.hitMul*(1-c.v*0.5)); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} stacks (now ${player.freeze.n + c.n}) — longer deep-freeze`
+    desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer deep-freeze`
       : 'Spell: flash-freeze all enemies around you — no damage, pure crowd control',
     apply:c=>{ player.freeze.n += c.n; } },
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
@@ -2705,22 +2746,19 @@ const UPGRADES = [
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster (floor ${FREEZE_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.freeze.rate = Math.max(FREEZE_MIN_RATE, player.freeze.rate*(1-c.v)); } },
   { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL', minRar:'uncommon',
-    req:()=>player.bomb.n < BOMB_MAX,
+    req:()=>player.bomb.n < bombMaxN(),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=>{
-      const now = Math.min(BOMB_MAX, player.bomb.n + c.n);
-      return owned>0 ? `+${c.n} bombs — compass spread (now ${now} of ${BOMB_MAX})`
-        : `Spell: launch ${Math.min(BOMB_MAX,c.n)} bomb${c.n>1?'s':''} in a compass spread`;
-    },
-    apply:c=>{ player.bomb.n = Math.min(BOMB_MAX, player.bomb.n + c.n); } },
+    desc:(c,owned)=> owned>0 ? `+${c.n} bomb${c.n>1?'s':''} in the compass spread (cap ${bombMaxN()})`
+      : `Spell: launch ${Math.min(bombMaxN(),c.n)} bomb${c.n>1?'s':''} in a compass spread`,
+    apply:c=>{ player.bomb.n = Math.min(bombMaxN(), player.bomb.n + c.n); } },
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
     calc:m=>({v:Math.max(1,Math.round(m)), r:0.06+0.03*m}),
-    desc:c=>`Bombs +${c.v} flat damage, +${Math.round(c.r*100)}% radius (now ${Math.round(Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)))})`,
+    desc:c=>`Bombs +${c.v} flat damage and +${Math.round(c.r*100)}% blast radius (cap ${BOMB_MAX_R})`,
     apply:c=>{ player.bomb.dmg += c.v; player.bomb.r = Math.min(BOMB_MAX_R, player.bomb.r*(1+c.r)); } },
   { id:'bombcd', name:'Quick Fuse', icon:'clock', cls:'SPELL',
     req:()=>player.bomb.n>0 && player.bomb.rate > BOMB_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
-    desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster (now ${Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)).toFixed(2)}s, floor ${BOMB_MIN_RATE.toFixed(1)}s)`,
+    desc:c=>`Bombs launch ${Math.round(c.v*100)}% faster (floor ${BOMB_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.bomb.rate = Math.max(BOMB_MIN_RATE, player.bomb.rate*(1-c.v)); } },
   { id:'cluster', name:'Cluster Charge', icon:'bomblets', cls:'SPELL', minRar:'legendary',
     req:()=>player.bomb.n>0 && player.bomb.cluster < CLUSTER_MAX,
@@ -2757,8 +2795,8 @@ const UPGRADES = [
     calc:m=>({n:1}),
     desc:c=>{
       const now = (player.hpMore||1);
-      return `100% MORE maximum hearts — ${player.maxHp} becomes ${player.maxHp*2}`+
-        (now>1 ? ' (×4 total)' : ' (can be found once more)');
+      return `100% MORE maximum hearts`+
+        (now>1 ? ' — ×4 in total' : ' — and it can be found once more, for ×4');
     },
     apply:c=>{ const p = player;
       p.hpMore = (p.hpMore||1) * 2;
@@ -2810,6 +2848,55 @@ const UPGRADES = [
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
 const FAV_WEIGHT = 3.2;
+/* WHAT YOU START WITH. Picking a favourite used to do one thing — weight its
+   bricks into the reward pool — so the first five minutes of every run were
+   identical. Each one now also opens with its own kit: the spell already in
+   hand, and one bonus that belongs to it (usually a cap raised by one, so the
+   ceiling you are building towards is yours alone). Taking no favourite trades
+   all of that for a little of everything.
+   `lines` is what the hover panel shows; `apply` is what actually happens. */
+const FAV_PERKS = {
+  none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
+                 '+5% increased damage', '+4% move speed', '+10% studs and XP'],
+    apply(p){ p.flatSword += 0.5; p.maxHp += 1; p.hp += 1; p.armour += 10;
+      p.incAll += 0.05; p.speed = Math.min(SPEED_MAX, p.speed*1.04);
+      p.studMul *= 1.10; p.xpMul += 0.10; } },
+  sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
+    apply(p){ p.flatSword += 1; p.atkRate = Math.max(ATK_RATE_MIN, p.atkRate*0.92);
+      p.reach = Math.min(REACH_MAX, p.reach + 8); } },
+  orbit: { lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
+                  '+10% ring reach'],
+    apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
+  blaster: { lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
+                    '+1 pierce'],
+    apply(p){ p.capUp.blaster += 1; p.blaster.n = 1; p.blaster.pierce += 1; } },
+  chain: { lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
+                  'Its bolt already leaps to a second foe'],
+    apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
+  storm: { lines:['Start with 1 bladestorm', '+2 blades per burst',
+                  '-10% bladestorm cooldown'],
+    apply(p){ p.storm.n = 1; p.storm.count += 2;
+      p.storm.rate = Math.max(STORM_MIN_RATE, p.storm.rate*0.90); } },
+  vortex: { lines:['Start with 1 blade vortex', '+20% vortex radius',
+                   '-10% vortex cooldown'],
+    apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
+      p.vortex.rate = Math.max(VORTEX_MIN_RATE, p.vortex.rate*0.90); } },
+  freeze: { lines:['Start with 1 block freeze', '+20% freeze radius',
+                   '+0.5s freeze duration'],
+    apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
+  bomb: { lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
+    apply(p){ p.capUp.bomb += 1; p.bomb.n = 1;
+      p.bomb.r = Math.min(BOMB_MAX_R, Math.round(p.bomb.r*1.15)); } },
+  tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
+                  '+0.02 hearts/s regeneration'],
+    apply(p){ p.maxHp += 2; p.hp += 2; p.armour += 25;
+      for(const el of ELEMENTS) p.res[el] = Math.min(RES_CAP, p.res[el] + 0.08);
+      p.regenRate = Math.min(REGEN_MAX, p.regenRate + 0.02); } }
+};
+function applyFavPerks(){
+  const f = FAV_PERKS[favourite.id];
+  if(f) try { f.apply(player); } catch(e){}
+}
 const FAVOURITES = [
   { id:'none',    name:'No Favourite', icon:'nofav',   ids:[] },
   { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
@@ -2861,6 +2948,24 @@ function buildDiffRow(){
   setDifficulty(DIFFS[saved] ? saved : 'hard');
 }
 
+/* The order the bench files its bricks in: by what they are for, not by the
+   order they happen to be declared. Ids that do not appear here still show up,
+   under EVERYTHING ELSE, so a new brick is never invisible. */
+const BENCH_SECTIONS = [
+  { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
+  { name:'DAMAGE',          ids:['orbm','moredmg'] },
+  { name:'CRITICALS',       ids:['crit','critpow'] },
+  { name:'SURVIVAL',        ids:['hp','regen','heart','armor','armorinc','suppress','morehp'] },
+  { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
+  { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
+  { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitspd','orbitpulse'] },
+  { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastrate','blastsplit'] },
+  { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainrate','chainfork'] },
+  { name:'BLADESTORM',      ids:['storm','stormpow','stormrate','stormback'] },
+  { name:'BLADE VORTEX',    ids:['vortex','vortexarea','vortexrate','vortextotem'] },
+  { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombcd','cluster'] },
+  { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] }
+];
 /* =============================== TEST BENCH =============================== */
 /* A developer shortcut: hand yourself any brick at epic and max it out, or jump
    straight to a wave. F1 toggles it during play. */
@@ -2898,7 +3003,12 @@ function buildCheatRows(){
     el.addEventListener('click', ()=>{ setDifficulty(el.dataset.diff); SFX.click(); buildCheatRows(); });
 
   const ups = document.getElementById('cheatUps');
-  ups.innerHTML = UPGRADES.map(u=>{
+  /* The bench used to be one long undifferentiated wall of cards in whatever
+     order UPGRADES happens to be written in. It is filed now: the sword first,
+     then damage, crit, defence, utility, and one section per SPELL with that
+     spell's own bricks — its legendary last, because that is what you scroll
+     looking for. Inside a section the order is common brick first, rarest last. */
+  const cardHtml = u=>{
     const owned = taken[u.id]||0;
     /* the bench can only hand out what the run could actually reach, so a brick
        sitting at its cap is shown greyed out rather than clickable */
@@ -2916,16 +3026,32 @@ function buildCheatRows(){
       <div class="rtag" style="background:${R.col}">${u.minRar?R.name+'+':'ANY'}</div>
       <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
     </div>`;
-  }).join('');
-  for(const el of ups.children){
+  };
+  const byId = {}; for(const u of UPGRADES) byId[u.id] = u;
+  const used = new Set();
+  const take = ids=> ids.map(id=>byId[id]).filter(u=>{ if(!u || used.has(u.id)) return false;
+    used.add(u.id); return true; });
+  const sections = [];
+  for(const s of BENCH_SECTIONS) sections.push([s.name, take(s.ids)]);
+  /* anything new that has not been filed yet still shows up, at the bottom */
+  const rest = UPGRADES.filter(u=>!used.has(u.id));
+  if(rest.length) sections.push(['EVERYTHING ELSE', rest]);
+  ups.innerHTML = sections.filter(([,list])=>list.length).map(([name,list])=>
+    `<div class="benchsec"><div class="benchhead">${name}</div>
+      <div class="benchrow">${list.map(cardHtml).join('')}</div></div>`).join('');
+  for(const el of ups.querySelectorAll('.card.mini')){
+    const u = byId[el.dataset.up];
     el.addEventListener('click', ()=>{
       if(el.classList.contains('capped')){ SFX.click(); return; }
-      grantOne(el.dataset.up); SFX.pick();
+      cmpHide(); grantOne(el.dataset.up); SFX.pick();
     });
     el.addEventListener('contextmenu', ev=>{
       ev.preventDefault();
-      revokeAll(el.dataset.up); SFX.click();
+      cmpHide(); revokeAll(el.dataset.up); SFX.click();
     });
+    /* the bench gets the same now -> next panel the reward screen has */
+    if(u) cmpWire(el, u, u.calc(RARITY[u.minRar==='legendary'?'legendary':'epic'].mult),
+      u.name + ' · ' + (u.minRar==='legendary' ? 'LEGENDARY' : 'EPIC'));
   }
 
   const misc = document.getElementById('cheatMisc');
@@ -2968,12 +3094,16 @@ function toggleCheat(){
 function buildFavRow(){
   const row = document.getElementById('favRow');
   if(!row) return;
-  row.innerHTML = FAVOURITES.map(f=>
-    `<div class="fav" data-fav="${f.id}">
+  row.innerHTML = FAVOURITES.map(f=>{
+    const perk = FAV_PERKS[f.id];
+    const tip = perk ? 'YOU START WITH\n' + perk.lines.map(l=>'· '+l).join('\n') +
+      (f.ids.length ? '\n\nand its bricks come up more often' : '') : '';
+    return `<div class="fav" data-fav="${f.id}"${tip?` data-tip="${esc(tip)}"`:''}>
       <svg viewBox="0 0 24 24" fill="none" stroke="#ffd76e" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">${ICONS[f.icon]||''}</svg>
       <span>${f.name}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   for(const el of row.children)
     el.addEventListener('click', ()=>{ SFX.click(); setFavourite(el.dataset.fav); });
   let saved = 'none';
@@ -3075,7 +3205,7 @@ function spellSummaries(){
       total += d*fr;
       if(steps.length < 4) steps.push(Math.round(fr*100)+'%');
     }
-    const zn = Math.min(CHAIN_MAX_ZAPPERS, p.chain.zappers);
+    const zn = Math.min(chainMaxZappers(), p.chain.zappers);
     out.push({ id:'chain', icon:'chain', name:'Storm Brick', head:per(d)+' opening strike', tip:
       `${zn} zapper${zn>1?'s, each on its own':' on a'} ${p.chain.rate.toFixed(2)}s cooldown\n`+
       `Opening strike ${per(d)} — ${p.chain.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
@@ -3123,7 +3253,7 @@ function spellSummaries(){
         ` — about ${per(tot)} from one bomb\n`;
     }
     out.push({ id:'bombplus', icon:'bomb', name:'Bomb Volley', head:per(d)+' per blast', tip:
-      `${p.bomb.n} bomb${p.bomb.n>1?'s':''} of ${BOMB_MAX} every ${p.bomb.rate.toFixed(2)}s\n`+
+      `${p.bomb.n} bomb${p.bomb.n>1?'s':''} of ${bombMaxN()} every ${p.bomb.rate.toFixed(2)}s\n`+
       clusterLine+
       `${per(d)} in a ${Math.round(p.bomb.r)} radius — ${p.bomb.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
@@ -3137,6 +3267,172 @@ function spellSummaries(){
         `— no moving, no attacks, no abilities` : '') });
   }
   return out;
+}
+/* =============================== WHAT A BRICK DOES =============================== */
+/* Cards used to end in "(now 47%)", which told you where you ended up but never
+   what you were comparing it against. Instead every number a brick can move is
+   a PROBE: hovering a reward applies it to a copy of the hero, reads every probe
+   again, and lists only what actually moved, as now -> next. Because the probes
+   include every spell's damage, one "+18% increased spell damage" card shows its
+   effect on the blaster, the storm brick and the bombs all at once, on separate
+   lines, which is the only honest way to read it. */
+function swordDps(){
+  const p = player;
+  const light = swordDamage(), spin = light*1.4;
+  const swingT = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  const critAvg = 1 + critChance()*(critMult()-1);
+  return ((light*2 + spin)/3) * (1/swingT) * critAvg;
+}
+/* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
+const STAT_PROBES = [
+  { g:'SWORD', k:'Sword hit',       get:()=> swordDamage(),            fmt:v=>fmtHp(v) },
+  { g:'SWORD', k:'Sustained DPS',   get:()=> swordDps(),               fmt:v=>v.toFixed(1) },
+  { g:'SWORD', k:'Swing rate',      get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
+  { g:'SWORD', k:'Reach',           get:()=> 56+player.reach,          fmt:v=>Math.round(v)+' px' },
+  { g:'SWORD', k:'Crit chance',     get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
+  { g:'SWORD', k:'Crit damage',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'Increased all',  get:()=> player.incAll*100,        fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'More damage',    get:()=> player.moreAll,           fmt:v=>'×'+v.toFixed(2) },
+  { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
+  { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
+  { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
+  { g:'DEFENCE', k:'Suppression',   get:()=> suppressChance()*100,     fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Regeneration',  get:()=> cursedRegen(),            fmt:v=>v.toFixed(3)+'/s' },
+  { g:'DEFENCE', k:'Fire res',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Frost res',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Lightning res', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Heart drops',   get:()=> (0.07+player.heartChance)*100, fmt:v=>v.toFixed(1)+'%' },
+  { g:'UTILITY', k:'Move speed',    get:()=> player.speed,             fmt:v=>Math.round(v)+' px/s' },
+  { g:'UTILITY', k:'Roll cooldown', get:()=> player.dash.cdMax,        fmt:v=>v.toFixed(2)+'s', hi:false },
+  { g:'UTILITY', k:'Pickup range',  get:()=> player.magnetR,           fmt:v=>Math.round(v)+' px' },
+  { g:'UTILITY', k:'Stud gain',     get:()=> player.studMul,           fmt:v=>'×'+v.toFixed(2) },
+  { g:'UTILITY', k:'XP gain',       get:()=> player.xpMul,             fmt:v=>'×'+v.toFixed(2) },
+  /* ---- the spells. A spell you do not own reads as a dash, so taking one for
+     the first time shows up as "— -> 2.40" rather than a silent zero. ---- */
+  { g:'GUARDIAN BRICK', k:'Damage per hit', get:()=> player.orbit.n ? calcDamage(player.orbit.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'GUARDIAN BRICK', k:'Bricks',         get:()=> player.orbit.n, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'GUARDIAN BRICK', k:'Ring reach',     get:()=> player.orbit.n ? player.orbit.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'GUARDIAN BRICK', k:'Spin speed',     get:()=> player.orbit.n ? player.orbit.spd : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
+  { g:'BRICK BLASTER', k:'Interval',        get:()=> player.blaster.n ? player.blaster.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? calcDamage(player.chain.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'STORM BRICK', k:'Targets per bolt',  get:()=> player.chain.n, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'STORM BRICK', k:'Damage down a bolt',get:()=> chainBoltTotal(), fmt:v=>v.toFixed(1), zero:true },
+  { g:'STORM BRICK', k:'Hovering bricks',   get:()=> Math.min(chainMaxZappers(), player.chain.zappers), fmt:v=>Math.round(v)+'', zero:true },
+  { g:'STORM BRICK', k:'Interval',          get:()=> player.chain.n ? player.chain.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADESTORM', k:'Damage per blade',   get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BLADESTORM', k:'Blades per burst',   get:()=> player.storm.n*player.storm.count, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'BLADESTORM', k:'Burst damage',       get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count : 0, fmt:v=>v.toFixed(1), zero:true },
+  { g:'BLADESTORM', k:'Interval',           get:()=> player.storm.n ? player.storm.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADE VORTEX', k:'Damage per tick',  get:()=> player.vortex.n ? calcDamage(player.vortex.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BLADE VORTEX', k:'Duration',         get:()=> player.vortex.n ? player.vortex.dur + (player.vortex.n-1)*0.4 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
+  { g:'BLADE VORTEX', k:'Radius',           get:()=> player.vortex.n ? player.vortex.r + (player.vortex.n-1)*10 : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'BLADE VORTEX', k:'Interval',         get:()=> player.vortex.n ? player.vortex.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BOMB VOLLEY', k:'Damage per blast',  get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BOMB VOLLEY', k:'Bombs',             get:()=> player.bomb.n, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'BOMB VOLLEY', k:'Blast radius',      get:()=> player.bomb.n ? player.bomb.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'BOMB VOLLEY', k:'Interval',          get:()=> player.bomb.n ? player.bomb.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLOCK FREEZE', k:'Radius',           get:()=> player.freeze.n ? player.freeze.r + (player.freeze.n-1)*30 : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur + (player.freeze.n-1)*1.2 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
+  { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true }
+];
+/* everything one bolt deals down the whole chain, leaps included */
+function chainBoltTotal(){
+  const p = player;
+  if(!p.chain.n) return 0;
+  const d = calcDamage(p.chain.dmg,'spell');
+  const leaps = p.chain.n - 1;
+  let total = d;
+  for(let i=1;i<=leaps;i++) total += d*chainLeapFrac(i, leaps);
+  return total;
+}
+function statSnapshot(){
+  const out = [];
+  for(const s of STAT_PROBES){
+    let v = null;
+    try { v = s.get(); } catch(e){ v = null; }
+    out.push(typeof v === 'number' && isFinite(v) ? v : null);
+  }
+  return out;
+}
+/* Try a brick on without keeping it: clone the hero, apply, read, put it back.
+   structuredClone copes with the Sets and arrays the player carries; the JSON
+   path is only there for a browser that lacks it. */
+function heroClone(){
+  try { return structuredClone(player); }
+  catch(e){ try { return JSON.parse(JSON.stringify(player)); } catch(e2){ return null; } }
+}
+function previewPick(u, c){
+  const before = statSnapshot();
+  const save = heroClone();
+  if(!save) return [];
+  let after = before;
+  try { u.apply(c); after = statSnapshot(); } catch(e){}
+  Object.assign(player, save);
+  const rows = [];
+  for(let i=0;i<STAT_PROBES.length;i++){
+    const s = STAT_PROBES[i], a = before[i], b = after[i];
+    if(a === null || b === null) continue;
+    if(Math.abs(b-a) < 1e-9) continue;
+    const better = (b > a) === (s.hi !== false);
+    rows.push({ g:s.g, k:s.k,
+      from: (s.zero && a === 0) ? '—' : s.fmt(a),
+      to:   (s.zero && b === 0) ? '—' : s.fmt(b),
+      up: better });
+  }
+  return rows;
+}
+/* The floating panel. One per document, moved and refilled as you hover. */
+let cmpEl = null;
+function cmpPanel(){
+  if(!cmpEl){
+    cmpEl = document.createElement('div');
+    cmpEl.id = 'cmpPanel';
+    cmpEl.className = 'hidden';
+    document.body.appendChild(cmpEl);
+  }
+  return cmpEl;
+}
+function cmpHide(){ if(cmpEl) cmpEl.classList.add('hidden'); }
+function cmpShow(u, c, anchor, title, avoid){
+  const el = cmpPanel();
+  const rows = previewPick(u, c);
+  let html = `<div class="cmphead">${esc(title || u.name)}</div>`;
+  if(!rows.length){
+    html += `<div class="cmpnone">changes how the spell behaves rather than a number — read the card</div>`;
+  } else {
+    let g = null;
+    for(const r of rows){
+      if(r.g !== g){ g = r.g; html += `<div class="cmpg">${esc(g)}</div>`; }
+      html += `<div class="cmprow"><span>${esc(r.k)}</span>`+
+        `<b><i class="was">${esc(r.from)}</i> → <i class="${r.up?'up':'down'}">${esc(r.to)}</i></b></div>`;
+    }
+  }
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+  /* Anchored beside the card — but on the reward screen it is anchored outside
+     the whole ROW of cards, on whichever side the hovered card is furthest from,
+     so reading one card never hides the two you are choosing between. */
+  const a = anchor.getBoundingClientRect();
+  const box = avoid ? avoid.getBoundingClientRect() : a;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const leftSide = (a.left + a.right)/2 > window.innerWidth/2;
+  let x = leftSide ? box.left - w - 16 : box.right + 16;
+  if(x + w > window.innerWidth - 8) x = box.left - w - 16;
+  if(x < 8) x = box.right + 16;
+  if(x + w > window.innerWidth - 8) x = Math.max(8, window.innerWidth - w - 8);
+  let y = a.top;
+  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  el.style.left = Math.round(x)+'px';
+  el.style.top = Math.round(Math.max(8, y))+'px';
+}
+function cmpWire(el, u, c, title, avoid){
+  el.addEventListener('mouseenter', ()=>{ try { cmpShow(u, c, el, title, avoid); } catch(e){ cmpHide(); } });
+  el.addEventListener('mouseleave', cmpHide);
 }
 function rerollCost(){ return 25 + rerollsUsed*20; }
 function renderCards(){
@@ -3163,7 +3459,8 @@ function renderCards(){
       el.style.boxShadow = `0 8px 0 rgba(0,0,0,.35), 0 0 40px ${R.col}, 0 0 90px ${R.col}`;
     else if(card.rar==='rare'||card.rar==='epic')
       el.style.boxShadow = `0 8px 0 rgba(0,0,0,.35), 0 0 22px ${R.col}`;
-    el.addEventListener('click', ()=> chooseUpgrade(i));
+    el.addEventListener('click', ()=>{ cmpHide(); chooseUpgrade(i); });
+    cmpWire(el, card.t, card.c, card.t.name, wrap);
     wrap.appendChild(el);
   });
   if(chest) return;   /* no reroll UI on chest rewards — the single card is the pick */
@@ -3514,6 +3811,7 @@ function doReroll(){
 }
 function chooseUpgrade(i){
   if(state!=='upgrade' || !choices[i]) return;
+  cmpHide();          /* however the screen was left — click, 1/2/3 or X */
   const card = choices[i];
   applyPick(card.t, card.rar);
   SFX.pick();
@@ -3532,6 +3830,7 @@ function rejectValue(){
 }
 function rejectReward(){
   if(state!=='upgrade' || !choices.length) return;
+  cmpHide();
   const paid = rejectValue();
   player.studs += paid;
   SFX.stud(6); SFX.pick();
@@ -3874,7 +4173,7 @@ function updatePlayer(dt){
       const minR = bo.n>1 ? Math.min(bo.r*2, 380) : 0;
       const rng0 = clamp(Math.max(minR, dist(p,{x:tx0,y:ty0})), 60, 400);
       const T = clamp(rng0/460, 0.32, 0.8);
-      const count = Math.min(BOMB_MAX, bo.n);
+      const count = Math.min(bombMaxN(), bo.n);
       for(let i=0;i<count;i++){
         const off = BOMB_DIRS[i % BOMB_DIRS.length];
         projectiles.push({ kind:'bomb', x:p.x, y:p.y-10, sx:p.x, sy:p.y-10,
@@ -3894,7 +4193,7 @@ function updatePlayer(dt){
      foes are in range, so it fires the instant one appears. */
   const chn = p.chain;
   if(chn.n>0 && chn.zappers>0){
-    const zappers = Math.min(CHAIN_MAX_ZAPPERS, chn.zappers);
+    const zappers = Math.min(chainMaxZappers(), chn.zappers);
     /* every brick runs its own cooldown, staggered so they don't all dump at once */
     while(chn.cds.length < zappers) chn.cds.push(chn.rate * chn.cds.length / zappers);
     chn.cds.length = zappers;
@@ -8216,7 +8515,7 @@ function render(){
   }
   /* hovering storm bricks — one per zapper */
   if(player && player.chain.n>0 && player.chain.zappers>0 && !player.dead){
-    const zn = Math.min(CHAIN_MAX_ZAPPERS, player.chain.zappers);
+    const zn = Math.min(chainMaxZappers(), player.chain.zappers);
     for(let z=0; z<zn; z++){
       const bp = chainBrickPos(player, z, zn);
       const ph = z*1.3;
@@ -9441,7 +9740,7 @@ function renderHUD(){
     f: clamp(p.freeze.cd/p.freeze.rate,0,1),
     label:'FREEZE', icon:(x,y)=> drawFreezeIcon(x,y) });
   if(p.chain.n>0 && p.chain.zappers>0) autos.push({f:clamp(Math.min(...p.chain.cds)/p.chain.rate,0,1),
-    label:'CHAIN '+Math.min(CHAIN_MAX_ZAPPERS,p.chain.zappers)+'×'+p.chain.n, icon:(x,y)=>{
+    label:'CHAIN '+Math.min(chainMaxZappers(),p.chain.zappers)+'×'+p.chain.n, icon:(x,y)=>{
     ctx.strokeStyle='#8fd4ff'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath(); ctx.moveTo(x-8,y-5); ctx.lineTo(x-2,y-1); ctx.lineTo(x-7,y+2); ctx.lineTo(x+3,y+6); ctx.stroke();
     ctx.fillStyle='#8fd4ff';
@@ -9613,6 +9912,7 @@ function resetRun(demo){
   buildGround(); buildProps();
   navBuild();
   player = newPlayer();
+  if(!demo) applyFavPerks();
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
   if(demo){
     for(let i=0;i<4;i++){ const sp = randomSpawnPos();
