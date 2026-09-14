@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`54 bricks to collect` · `37 monsters` · `8 bosses` · `10 builds` · `1 file`
+`57 bricks to collect` · `37 monsters` · `8 bosses` · `10 builds` · `1 file`
 
 </div>
 
@@ -36,7 +36,7 @@ runs exactly the same in fallback type.
 ## The loop
 
 You are a minifig in a field of studs. Waves of brick monsters walk at you and come apart
-when hit. Every wave, every level and every chest hands you a **brick** — one of 54
+when hit. Every wave, every level and every chest hands you a **brick** — one of 57
 upgrades — and the bricks compound into a build. Survive long enough and the ground is a
 carpet of studs, the screen is a storm of lightning, and a three-storey skeleton is
 throwing its own ribcage at you.

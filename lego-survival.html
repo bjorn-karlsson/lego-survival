@@ -408,6 +408,24 @@ const STORM_MAX_SIZE = 2.2; /* storm blades stop growing here */
 const VORTEX_MAX_R = 210;
 const FREEZE_MAX_R = 420;
 const BLAST_MAX_PIERCE = 8;
+/* A blaster brick shatters on the first thing it touches until you buy it the
+   right to carry on, and every foe it goes through costs it a slice of its
+   damage — 15% a foe at one pierce, easing to 10% once you have bought the lot,
+   so stacking pierce is worth more than the first rank suggested it would be. */
+const BLAST_FALL_MAX = 0.15;
+const BLAST_FALL_MIN = 0.10;
+function blastPierceFall(p){
+  if(p <= 0) return 0;
+  const t = Math.min(1, (p-1) / Math.max(1, BLAST_MAX_PIERCE-1));
+  return BLAST_FALL_MAX + (BLAST_FALL_MIN - BLAST_FALL_MAX)*t;
+}
+/* A blaster brick's total, across every foe one shard walks through. */
+function blastPierceTotal(p){
+  const f = blastPierceFall(p);
+  let t = 0;
+  for(let i=0; i<=p; i++) t += Math.pow(1-f, i);
+  return t;
+}
 const ORBIT_MAX_N = 15;                   /* guardian bricks in the ring */
 const BLAST_MAX_N = 40;                   /* bricks per volley */
 const BLAST_MAX_SHOTS = 40;               /* projectiles per volley, shards included */
@@ -1069,7 +1087,7 @@ function newPlayer(){
     orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], pulse:0 },
     /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
        exactly one pick and the volley can never become a spray of piercing bricks */
-    blaster:{ n:0, dmg:2, rate:BLAST_RATE_BASE, cd:0.8, spd:560, pierce:2, split:0 },
+    blaster:{ n:0, dmg:2, rate:BLAST_RATE_BASE, cd:0.8, spd:560, pierce:0, split:0 },
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
@@ -2748,6 +2766,11 @@ function rollRarity(mode){
    multiplier handed out 1 / 2 / 2 / 4 / 5, so common, uncommon and rare all
    felt like the same card. `byRar` maps the multiplier a calc() is handed back
    to the tier it came from and reads the value straight off a table. */
+/* Every FLAT damage brick in the game reads off this one ladder, the way the
+   sword always has. Deriving the number from the rarity multiplier instead
+   rounded three tiers into the same +1, so a common Storm Surge and a rare one
+   were the same card wearing different colours. */
+const FLAT_SPELL = [0.5, 1, 3, 5, 8];
 const RAR_MULTS = RAR_ORDER.map(r=> RARITY[r].mult);
 function byRar(m, table){
   let best = 0, bd = Infinity;
@@ -2919,10 +2942,15 @@ const UPGRADES = [
       : `Spell: ${c.n} brick${c.n>1?'s':''} circle${c.n>1?'':'s'} you, smashing foes (max ${orbitMaxN()})`,
     apply:c=>{ player.orbit.n = Math.min(orbitMaxN(), player.orbit.n + c.n); } },
   { id:'orbitpow', name:'Heavy Orbit', icon:'orbit', cls:'SPELL', req:()=>player.orbit.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m*0.9)), r:Math.round(6*m), s:Math.round(2*m)}),
-    desc:c=>`+${c.v} FLAT base damage to every guardian brick, +${c.r} ring reach (cap ${ORBIT_MAX_R}), +${c.s} brick size (cap ${ORBIT_MAX_SIZE})`,
-    apply:c=>{ player.orbit.dmg+=c.v;
-      player.orbit.r = Math.min(ORBIT_MAX_R, player.orbit.r + c.r);
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every guardian brick — before any increase`,
+    apply:c=>{ player.orbit.dmg = Math.round((player.orbit.dmg + c.v)*100)/100; } },
+  { id:'orbitring', name:'Wide Orbit', icon:'orbit', cls:'SPELL',
+    req:()=>player.orbit.n>0 && (player.orbit.r<ORBIT_MAX_R || player.orbit.size<ORBIT_MAX_SIZE),
+    calc:m=>({r:Math.round(6*m), s:Math.round(2*m)}),
+    desc:c=>`+${c.r} ring reach (cap ${ORBIT_MAX_R}) and +${c.s} brick size (cap ${ORBIT_MAX_SIZE}) — `+
+      `the ring sweeps a wider circle and each brick covers more of it`,
+    apply:c=>{ player.orbit.r = Math.min(ORBIT_MAX_R, player.orbit.r + c.r);
       player.orbit.size = Math.min(ORBIT_MAX_SIZE, player.orbit.size + c.s); } },
   { id:'orbitspd', name:'Swift Orbit', icon:'clock', cls:'SPELL',
     req:()=>player.orbit.n>0 && player.orbit.spd<ORBIT_MAX_SPD,
@@ -2936,10 +2964,20 @@ const UPGRADES = [
       : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor (max ${blastMaxN()})`,
     apply:c=>{ player.blaster.n = Math.min(blastMaxN(), player.blaster.n + c.n); } },
   { id:'blastpow', name:'Blaster Power', icon:'blaster', cls:'SPELL', req:()=>player.blaster.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m*0.8)), p:m>=2.4?1:0}),
-    desc:c=>`+${c.v} FLAT base damage to every blaster brick${c.p?`, and +1 pierce (cap ${BLAST_MAX_PIERCE})`:''}`,
-    apply:c=>{ player.blaster.dmg+=c.v;
-      player.blaster.pierce = Math.min(BLAST_MAX_PIERCE, player.blaster.pierce + c.p); } },
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every blaster brick — before any increase`,
+    apply:c=>{ player.blaster.dmg = Math.round((player.blaster.dmg + c.v)*100)/100; } },
+  { id:'blastpierce', name:'Piercing Bricks', icon:'blaster', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.blaster.n>0 && player.blaster.pierce<BLAST_MAX_PIERCE,
+    calc:m=>({p: byRar(m, [1, 1, 2, 3, 4])}),
+    desc:c=>{
+      const now = player.blaster.pierce;
+      const next = Math.min(BLAST_MAX_PIERCE, now + c.p);
+      const loss = Math.round(blastPierceFall(next)*100);
+      return `+${next-now} pierce (cap ${BLAST_MAX_PIERCE}) — a brick walks through `+
+        `${next+1} foes instead of ${now+1}, losing ${loss}% of its damage on each one`;
+    },
+    apply:c=>{ player.blaster.pierce = Math.min(BLAST_MAX_PIERCE, player.blaster.pierce + c.p); } },
   { id:'blastrate', name:'Rapid Blaster', icon:'clock', cls:'SPELL',
     req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
     calc:m=>({v:0.13+0.06*m}),
@@ -2969,9 +3007,9 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.zappers = Math.min(chainMaxZappers(), player.chain.zappers + c.n); } },
   { id:'chainpow', name:'Storm Surge', icon:'chain', cls:'SPELL', req:()=>player.chain.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m*0.45))}),
-    desc:c=>`+${c.v} FLAT base damage to the storm brick — the opening strike and every leap off it`,
-    apply:c=>{ player.chain.dmg += c.v; } },
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to the storm brick — the opening strike and every leap off it`,
+    apply:c=>{ player.chain.dmg = Math.round((player.chain.dmg + c.v)*100)/100; } },
   { id:'chainrate', name:'Charged Storm', icon:'clock', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
@@ -2982,10 +3020,15 @@ const UPGRADES = [
       : `Spell: a whirl of ${c.n*8} swords bursts out of you`,
     apply:c=>{ player.storm.n += c.n; } },
   { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
-    calc:m=>({v:Math.max(1,Math.round(m*0.9)), s:0.15*m}),
-    desc:c=>`+${c.v} FLAT base damage to every bladestorm blade, +${Math.round(c.s*100)}% blade size (cap ×${STORM_MAX_SIZE.toFixed(1)})`,
-    apply:c=>{ player.storm.dmg+=c.v;
-      player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bladestorm blade — before any increase`,
+    apply:c=>{ player.storm.dmg = Math.round((player.storm.dmg + c.v)*100)/100; } },
+  { id:'stormsize', name:'Broad Blades', icon:'storm', cls:'SPELL',
+    req:()=>player.storm.n>0 && player.storm.size<STORM_MAX_SIZE,
+    calc:m=>({s:0.15*m}),
+    desc:c=>`+${Math.round(c.s*100)}% blade size (cap ×${STORM_MAX_SIZE.toFixed(1)}) — `+
+      `a bigger blade sweeps a wider spiral and catches more on the way out`,
+    apply:c=>{ player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
   { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
     req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
@@ -3147,7 +3190,7 @@ const FAV_PERKS = {
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
   blaster: { lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
-                    '+1 pierce'],
+                    '+1 pierce — bricks carry through one foe instead of shattering'],
     apply(p){ p.capUp.blaster += 1; p.blaster.n = 1; p.blaster.pierce += 1; } },
   chain: { lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
                   'Its bolt already leaps to a second foe'],
@@ -3178,10 +3221,10 @@ function applyFavPerks(){
 const FAVOURITES = [
   { id:'none',    name:'No Favourite', icon:'nofav',   ids:[] },
   { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
-  { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitspd','orbm'] },
-  { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastrate','orbm'] },
+  { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
+  { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
-  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormrate','stormback','bladem','moredmg'] },
+  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombcd','orbm'] },
@@ -3236,10 +3279,10 @@ const BENCH_SECTIONS = [
   { name:'SURVIVAL',        ids:['hp','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
-  { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitspd','orbitpulse'] },
-  { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastrate','blastsplit'] },
+  { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
+  { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainrate','chainfork'] },
-  { name:'BLADESTORM',      ids:['storm','stormpow','stormrate','stormback'] },
+  { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombcd','cluster'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] }
@@ -3511,7 +3554,11 @@ function spellSummaries(){
         ? `Scattershot ×${p.blaster.split}: each brick becomes ${shards} shards of ${per(each)} — `+
           `the ${per(d)} is SPLIT, not multiplied\n`
         : `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`)+
-      `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'}\n`+
+      (p.blaster.pierce>0
+        ? `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'} — `+
+          `${Math.round(blastPierceFall(p.blaster.pierce)*100)}% less on each one, `+
+          `${per(each*blastPierceTotal(p.blaster.pierce))} down a full line\n`
+        : `Shatters on the first foe it touches — take Piercing Bricks to carry on\n`)+
       `Full volley: ${per(d*p.blaster.n)} across ${p.blaster.n*shards} projectile${p.blaster.n*shards>1?'s':''}` });
   }
   if(p.chain.n>0 && p.chain.zappers>0){
@@ -3639,11 +3686,16 @@ const STAT_PROBES = [
   { g:'GUARDIAN BRICK', k:'Damage per hit', get:()=> player.orbit.n ? calcDamage(player.orbit.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'GUARDIAN BRICK', k:'Bricks',         get:()=> player.orbit.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'GUARDIAN BRICK', k:'Ring reach',     get:()=> player.orbit.n ? player.orbit.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'GUARDIAN BRICK', k:'Brick size',     get:()=> player.orbit.n ? player.orbit.size : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'GUARDIAN BRICK', k:'Spin speed',     get:()=> player.orbit.n ? player.orbit.spd : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'GUARDIAN BRICK', k:'DPS to one foe',  get:()=> orbitDps(), fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
+  { g:'BRICK BLASTER', k:'Pierce',          get:()=> player.blaster.n ? player.blaster.pierce : 0, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'BRICK BLASTER', k:'Damage down a line',get:()=> player.blaster.n
+      ? calcDamage(player.blaster.dmg,'spell')/Math.pow(3,player.blaster.split||0)*blastPierceTotal(player.blaster.pierce) : 0,
+    fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICK BLASTER', k:'Interval',        get:()=> player.blaster.n ? player.blaster.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
   { g:'BRICK BLASTER', k:'Volley DPS',       get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n/player.blaster.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? calcDamage(player.chain.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
@@ -3660,6 +3712,7 @@ const STAT_PROBES = [
   { g:'BLADESTORM', k:'Damage per blade',   get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BLADESTORM', k:'Blades per burst',   get:()=> player.storm.n*player.storm.count, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BLADESTORM', k:'Burst damage',       get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count : 0, fmt:v=>v.toFixed(1), zero:true },
+  { g:'BLADESTORM', k:'Blade size',         get:()=> player.storm.n ? player.storm.size : 0, fmt:v=>'×'+v.toFixed(2), zero:true },
   { g:'BLADESTORM', k:'Interval',           get:()=> player.storm.n ? player.storm.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
   { g:'BLADESTORM', k:'Burst DPS',          get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count/player.storm.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADE VORTEX', k:'Damage per tick',  get:()=> player.vortex.n ? calcDamage(player.vortex.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
@@ -4467,7 +4520,8 @@ function updatePlayer(dt){
             x:p.x, y:p.y-14,
             vx:Math.cos(ang+spread)*bl.spd*rnd(0.94,1.06),
             vy:Math.sin(ang+spread)*bl.spd*rnd(0.94,1.06),
-            life:1.15, dmg:each, sz, pierce:bl.pierce, hit:new Set(), spin:rnd(TAU) });
+            life:1.15, dmg:each, sz, pierce:bl.pierce, pfall:blastPierceFall(bl.pierce),
+            hit:new Set(), spin:rnd(TAU) });
         }
       }
       SFX.zap();
@@ -7010,8 +7064,10 @@ function updateProjectiles(dt){
             Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 90)){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
         if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 15*(pr.sz||1))){
+          /* each foe it has already gone through has taken a slice out of it */
+          const worn = Math.pow(1 - (pr.pfall||0), pr.hit.size);
           pr.hit.add(e);
-          hitEnemy(e, pr.dmg, Math.atan2(pr.vy,pr.vx), 150, 'blaster', {spin:true});
+          hitEnemy(e, pr.dmg*worn, Math.atan2(pr.vy,pr.vx), 150, 'blaster', {spin:true});
           addSparks(pr.x, pr.y, 3, FX.friend.spark);
           pr.pierce--;
           if(pr.pierce<0){ pr.dead=true; break; }
