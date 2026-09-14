@@ -18,15 +18,19 @@
     background-size:44px 44px}
   .boxplate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;
     box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25);
-    padding:8px 36px 30px;text-align:center;max-width:900px;transform:rotate(-.5deg)}
-  .topstuds{display:flex;justify-content:center;gap:18px;padding:14px 0 0}
+    padding:4px 34px 18px;text-align:center;max-width:820px;transform:rotate(-.5deg);
+    transform-origin:center center}
+  /* the logo canvas is drawn at 760x400 for crispness but SHOWN much smaller —
+     it was most of why the title screen ran off the bottom of the window */
+  #titleCanvas{display:block;width:min(520px,70vw);height:auto;margin:-8px auto -10px}
+  .topstuds{display:flex;justify-content:center;gap:18px;padding:8px 0 0}
   .topstuds span{width:20px;height:20px;border-radius:50%;background:#d3242b;
     box-shadow:inset 0 -4px 0 rgba(0,0,0,.28),inset 0 3px 0 rgba(255,255,255,.3),0 0 0 2px rgba(0,0,0,.12)}
-  .badge{display:inline-block;background:#ffb900;color:#1b2a34;font-family:'Titan One';font-size:13px;
-    letter-spacing:3px;padding:6px 18px;border-radius:20px;box-shadow:0 3px 0 #c78c00;margin-top:8px}
-  .tag{font-size:18px;color:#fff;margin-top:2px;font-weight:600;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+  .badge{display:inline-block;background:#ffb900;color:#1b2a34;font-family:'Titan One';font-size:12px;
+    letter-spacing:3px;padding:5px 16px;border-radius:20px;box-shadow:0 3px 0 #c78c00;margin-top:6px}
+  .tag{font-size:16px;color:#fff;margin-top:0;font-weight:600;text-shadow:0 2px 0 rgba(0,0,0,.35)}
   .btn{font-family:'Titan One',cursive;font-size:22px;letter-spacing:1px;color:#1b2a34;background:#ffb900;
-    border:none;border-radius:14px;padding:14px 38px;cursor:pointer;box-shadow:0 6px 0 #c78c00,0 12px 22px rgba(0,0,0,.35);
+    border:none;border-radius:14px;padding:12px 34px;cursor:pointer;box-shadow:0 6px 0 #c78c00,0 12px 22px rgba(0,0,0,.35);
     transition:transform .08s, box-shadow .08s}
   .btn:hover{transform:translateY(-2px);box-shadow:0 8px 0 #c78c00,0 16px 26px rgba(0,0,0,.4)}
   .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #c78c00}
@@ -38,9 +42,10 @@
   kbd{display:inline-block;min-width:30px;text-align:center;padding:4px 8px;border-radius:7px;background:#f4f1ea;
     color:#1b2a34;font-family:'Fredoka';font-weight:700;font-size:13px;
     box-shadow:0 3px 0 #b9b4a7,0 5px 8px rgba(0,0,0,.3);margin:0 3px}
-  .ctl{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin-top:24px;font-size:14px;color:#ffe9e9;font-weight:500}
+  .ctl{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:14px;font-size:13px;color:#ffe9e9;font-weight:500}
   .ctl b{color:#ffd76e;font-weight:600}
-  .best{margin-top:14px;font-size:13px;color:#ffd0d0}
+  .best{margin-top:8px;font-size:12.5px;color:#ffd0d0}
+  #titleScreen .gap20{height:6px}
   .gap20{height:20px}.gap26{height:26px}
   #upgradeScreen h2{font-family:'Titan One';font-size:38px;color:#ffb900;text-shadow:0 4px 0 rgba(0,0,0,.4);letter-spacing:1px}
   #upgradeScreen .sub{color:#dfe4e2;margin:6px 0 26px;font-size:16px}
@@ -110,27 +115,27 @@
   .btnrow{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
   /* ---- favourite picker ---- */
-  .favhead{margin:16px 0 8px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
+  .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #diffRow{display:flex;gap:10px;justify-content:center}
-  .diff{min-width:126px;padding:9px 14px 8px;border-radius:13px;cursor:pointer;
+  .diff{min-width:118px;padding:7px 13px 6px;border-radius:13px;cursor:pointer;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);
     font-family:'Titan One';font-size:13px;letter-spacing:1px;color:#f0e6e6;
     transition:transform .1s, background .1s, border-color .1s}
   .diff:hover{transform:translateY(-3px);background:rgba(9,13,17,.5)}
   .diff.on{background:rgba(255,255,255,.14)}
-  .diffblurb{margin:8px auto 0;max-width:520px;font-size:12.5px;color:#ffdada;font-weight:500;min-height:34px}
+  .diffblurb{margin:6px auto 0;max-width:520px;font-size:12px;color:#ffdada;font-weight:500;min-height:26px}
   .cheatrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
   .cheatbtn{background:rgba(9,13,17,.45);border:1px solid rgba(255,255,255,.22);border-radius:10px;
     padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
   .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
   .cheatbtn.got{border-color:#4b9b41;color:#a5e06e}
-  #favRow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:460px;margin:0 auto}
-  .fav{display:flex;flex-direction:column;align-items:center;gap:3px;width:80px;padding:8px 4px 7px;
+  #favRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:540px;margin:0 auto}
+  .fav{display:flex;flex-direction:column;align-items:center;gap:2px;width:74px;padding:6px 3px 5px;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);border-radius:13px;
     cursor:pointer;transition:transform .1s, background .1s, border-color .1s}
   .fav:hover{transform:translateY(-3px);background:rgba(9,13,17,.5)}
-  .fav svg{width:24px;height:24px}
-  .fav span{font-size:10.5px;font-weight:600;color:#f0e6e6;line-height:1.15;text-align:center}
+  .fav svg{width:21px;height:21px}
+  .fav span{font-size:10px;font-weight:600;color:#f0e6e6;line-height:1.12;text-align:center}
   .fav.on{background:rgba(255,185,0,.22);border-color:#ffb900;box-shadow:0 0 0 2px rgba(255,185,0,.3)}
   .fav.on span{color:#fff}
   /* ---- character sheet ---- */
@@ -205,7 +210,6 @@
       <span><kbd>LMB</kbd> <b>swing sword</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
-      <span><kbd>F1</kbd> <b>test bench</b></span>
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>sound</b></span>
@@ -545,7 +549,19 @@ function resize(){
   zoom = Math.min(zoom, 3);
   reclampCam();
 }
-window.addEventListener('resize', resize); resize();
+/* The title plate is laid out at its natural size and then scaled to fit the
+   window, so it never runs off the bottom on a short screen — and never sits
+   there shrunken on a tall one. */
+function fitTitle(){
+  const el = document.querySelector('#titleScreen .boxplate');
+  if(!el) return;
+  el.style.transform = 'rotate(-.5deg)';
+  const h = el.offsetHeight;
+  if(!h) return;
+  const k = Math.min(1, (window.innerHeight - 26) / h);
+  el.style.transform = k < 1 ? `rotate(-.5deg) scale(${k.toFixed(3)})` : 'rotate(-.5deg)';
+}
+window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
 
 /* =============================== AUDIO =============================== */
 const A = { ctx:null, master:null, sfx:null, mus:null, muted:false, noiseBuf:null, delay:null };
@@ -734,7 +750,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
-  if(e.code==='KeyL' && (state==='play'||state==='pause')) clogToggle();
+  if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
   if(e.code==='F1' && (state==='play'||state==='cheat')){ e.preventDefault(); toggleCheat(); }
   if(e.code==='Escape' && state==='cheat') toggleCheat();
@@ -748,7 +764,16 @@ window.addEventListener('mousedown', e=>{
   everInput = true;
   try{ window.focus(); }catch(err){}
   try{ cv.focus(); }catch(err){}
-  if(e.button===0) mouse.down = true;
+  if(e.button===0){
+    /* the combat log swallows its own clicks — poking a tab must not also
+       swing the sword at whatever is standing behind the panel */
+    if(clogHit(e.clientX, e.clientY)){
+      const t = clogTabAt(e.clientX, e.clientY);
+      if(t >= 0){ clogView = t; SFX.pick(); }
+      return;
+    }
+    mouse.down = true;
+  }
 });
 window.addEventListener('mouseup', e=>{ if(e.button===0) mouse.down=false; });
 window.addEventListener('contextmenu', e=> e.preventDefault());
@@ -779,6 +804,7 @@ let player = null;
 let buildLog = [];
 function applyPick(u, rar){
   u.apply(u.calc(RARITY[rar].mult));
+  logEvent('took '+u.name+' ('+rar+')', RARITY[rar].col);
   taken[u.id] = (taken[u.id]||0)+1;
   buildLog.push({ id:u.id, rar });
 }
@@ -1363,6 +1389,10 @@ function explode(x,y,r,dmg,opts={}){
 const EDEF = {
   imp:     { hp:3,  speed:88,  r:12, scale:0.78, dmg:1, xp:2, studs:[2,4],
              col:{head:PAL.red, torso:PAL.dred, legs:'#2b2f33', hands:PAL.hyellow, hair:'#8f161d'}, style:'imp' },
+  /* the imp that got fed: same charge, twice the size, and it does not fall
+     over to one swing the way its little brothers do */
+  superimp:{ hp:20, speed:74,  r:17, scale:1.38, dmg:2, xp:10, studs:[9,15], armourMul:1.6, bigimp:1,
+             col:{head:'#c4241f', torso:'#6e0f14', legs:'#241f22', hands:'#ff8a6a', hair:'#5e0d10'}, style:'imp' },
   archer:  { hp:2,  speed:66,  r:12, scale:0.8,  dmg:1, xp:3, studs:[3,5], fire:2.3,
              col:{head:PAL.white, torso:'#c9cecb', legs:'#9ba19d', hands:PAL.white, hair:'#5c5e59'}, style:'skel' },
   boneling:{ hp:2,  speed:128, r:10, scale:0.66, dmg:1, xp:2, studs:[2,3],
@@ -1564,7 +1594,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   /* steep HP curve so wave 20/30 stay hard */
   const hpS  = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp;
   /* flat armour, fed into the same DR curve the player uses */
-  const armour = lvl * 1.1 * (type==='bastion' ? 1.8 : 1)
+  const armour = lvl * 1.1 * (type==='bastion' ? 1.8 : 1) * (d.armourMul || 1)
     * (RANGED_SET.has(type) ? 0.45 : 1) * (elite ? 1.4 : 1) * (d.golem ? 1.6 : 1);
   /* spell suppression: the arcane ones shrug off half a spell hit */
   const suppress = magic ? 0.30 : (typeof type === 'string' && type.endsWith('lord')) ? 0.20 : 0;
@@ -1639,7 +1669,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      takes the hit away entirely — no armour, no suppression, no chip damage. */
   if(e.evade && Math.random() < e.evade){
     addDmg(e.x, e.y-40*(e.scale||1), 'EVADED', '#c9b8e8', 14);
-    clogPush('ev|'+(e.bname||e.type), (e.bname||e.type)+' evaded', '#c9b8e8');
+    clogRun.evaded++;
+    logEventK('ev|'+(e.bname||e.type), (e.bname||e.type)+' evaded your hit', '#c9b8e8');
     addSparks(e.x, e.y-18, 4, '#9b45d6');
     e.flash = 0.25;
     return;
@@ -1650,7 +1681,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       const px2 = e.x + Math.cos(fromAtt)*16*e.scale, py2 = e.y - 20*e.scale + Math.sin(fromAtt)*10*e.scale;
       addSparks(px2, py2, 4, '#cfd6dd');
       addDmg(e.x, e.y-42*e.scale, 'BLOCKED', '#cfd6dd', 14);
-      clogPush('bl|'+e.type, e.type+' blocked', '#cfd6dd');
+      clogRun.blocked++;
+      logEventK('bl|'+e.type, e.type+' blocked with its shield', '#cfd6dd');
       SFX.clank();
       e.kx += Math.cos(kdir)*kb*0.06; e.ky += Math.sin(kdir)*kb*0.06;
       e.flash = 0.3;
@@ -1817,6 +1849,8 @@ function addBrand(elem){
   p.brand[elem] = (p.brand[elem] || 0) + 1;
   p.brandT[elem] = BRAND_T;
   addDmg(p.x, p.y-84, BRAND_NAME[elem]+' ×'+p.brand[elem], BRAND_COL[elem], 18);
+  logEvent(BRAND_NAME[elem]+' ×'+p.brand[elem]+' — '+elem+' resistance '+
+    Math.round((1-elemTake(elem))*100)+'%', BRAND_COL[elem]);
 }
 function applyCurse(kind, src){
   const p = player, C = CURSES[kind];
@@ -1827,6 +1861,8 @@ function applyCurse(kind, src){
   if(p.curse[kind] > before){
     p.curseN[kind] = (p.curseN[kind] || 0) + 1;
     addDmg(p.x, p.y-62, C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+'!', C.col, 17);
+    logEvent(C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+' — -'+
+      Math.round(p.curse[kind]*100)+'% for '+Math.ceil(p.curse.t)+'s', C.col);
     addRing(p.x, p.y, 10, 260, 60, C.col, 4, 0.45);
   }
 }
@@ -1898,7 +1934,7 @@ function applyAilment(elem, src, stacks){
     if(!b.list) b.list = [];
     b.list.push({ dps: 3*take/BURN_DUR, t: BURN_DUR });
     addDmg(p.x, p.y-58, 'BURNING ×'+b.list.length, '#ff8a3c', 15);
-    clogPush('ail|fire', 'burning ×'+b.list.length, '#ff8a3c');
+    logEventK('ail|fire', 'burning ×'+b.list.length, '#ff8a3c');
     /* the fifth fire is spent branding you, and the pile carries on from there */
     if(b.list.length >= AIL_BREAK){
       b.list.splice(0, AIL_BREAK);
@@ -1908,7 +1944,7 @@ function applyAilment(elem, src, stacks){
     p.chill.stacks += (take >= 0.5 ? 1 : 0.5);
     p.chill.t = Math.max(p.chill.t, 5 * take);
     addDmg(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
-    clogPush('ail|frost', 'chilled ×'+Math.round(p.chill.stacks), '#bfe3ff');
+    logEventK('ail|frost', 'chilled ×'+Math.round(p.chill.stacks), '#bfe3ff');
     if(p.chill.stacks >= AIL_BREAK) ailmentBreak('frost', src);
   } else if(elem==='shock'){
     /* a storm orb dumps a whole handful at once, thinned by your resistance */
@@ -1916,7 +1952,7 @@ function applyAilment(elem, src, stacks){
     p.shock.stacks += add;
     p.shock.t = Math.max(p.shock.t, 6 * take);
     addDmg(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
-    clogPush('ail|shock', 'shocked ×'+Math.round(p.shock.stacks), '#ffe95a');
+    logEventK('ail|shock', 'shocked ×'+Math.round(p.shock.stacks), '#ffe95a');
     if(p.shock.stacks >= AIL_BREAK) ailmentBreak('shock', src);
   }
 }
@@ -2070,6 +2106,7 @@ const ROSTER = [
   { k:'knight',      at:9,  cost:8,  flavour:1 },
   { k:'stalker',     at:11, cost:9,  flavour:1 },
   { k:'lancer',      at:12, cost:10, flavour:1 },
+  { k:'superimp',    at:15, cost:11, flavour:1 },
   { k:'hexer',       at:14, cost:12, flavour:0.8 },
   { k:'revenant',    at:16, cost:14, flavour:1 },
   { k:'lobber',      at:17, cost:15, flavour:0.9 },
@@ -3861,23 +3898,27 @@ function updatePlayer(dt){
         if(p.regenRate < REGEN_MAX){
           p.regenRate = Math.min(REGEN_MAX, p.regenRate + HEART_REGEN);
           addDmg(p.x, p.y-46, '+'+HEART_REGEN.toFixed(2)+' REGEN', '#ff8a8a', 16);
+          logEvent('heart — regeneration now '+p.regenRate.toFixed(3)+'/s', '#ff8a8a');
         } else { spawnStuds(p.x,p.y,3); }
         SFX.heart();
       } else if(pk.kind==='gheart'){
         p.maxHp = Math.min(heartCap(), p.maxHp+1);
         p.hp = Math.min(p.maxHp, p.hp+1);    /* the new heart arrives full, no refill */
         addDmg(p.x, p.y-56, 'MAX HEART!', '#ffd166', 19);
+        logEvent('max heart — '+p.maxHp+' hearts', '#ffd166');
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
         SFX.heart(); SFX.levelup();
       } else if(pk.kind==='magnet'){
         p.magnetT = 30;
         addDmg(p.x, p.y-52, 'MAGNET!', '#9b45d6', 20);
+        logEvent('magnet for 30s', '#9b45d6');
         addRing(pk.x, pk.y, 8, 300, 90, '#9b45d6', 6, 0.5);
         SFX.magnet();
       } else if(pk.kind==='fortune'){
         p.fortuneMul = Math.min(FORTUNE_CAP, p.fortuneMul*2);
         p.fortuneT = 30;
         addDmg(p.x, p.y-52, 'FORTUNE ×'+p.fortuneMul+'!', '#fe8a18', 20);
+        logEvent('fortune ×'+p.fortuneMul+' for 30s', '#fe8a18');
         addRing(pk.x, pk.y, 8, 300, 90, '#fe8a18', 6, 0.5);
         SFX.fortune();
       } else {
@@ -6695,11 +6736,27 @@ function drawFigure(c, o){
     c.lineWidth = 2;
   }
   if(o.style==='imp'){
-    c.fillStyle = T('#8f161d'); c.strokeStyle = OL;
-    c.beginPath(); c.moveTo(-6*s,hy2-6*s); c.lineTo(-9*s,hy2-12*s); c.lineTo(-3.5*s,hy2-8.4*s);
-    c.closePath(); c.fill(); c.stroke();
-    c.beginPath(); c.moveTo(6*s,hy2-6*s); c.lineTo(9*s,hy2-12*s); c.lineTo(3.5*s,hy2-8.4*s);
-    c.closePath(); c.fill(); c.stroke();
+    /* the big one wears the same horns, grown: longer, swept back, and a ridge
+       of spines between them. Same silhouette, read at twice the size. */
+    const k = o.bigImp ? 1.9 : 1;
+    c.fillStyle = T(o.bigImp ? '#6e0f14' : '#8f161d'); c.strokeStyle = OL;
+    for(const side of [-1, 1]){
+      c.beginPath();
+      c.moveTo(side*6*s, hy2-6*s);
+      c.quadraticCurveTo(side*(9+2*k)*s, hy2-(9+2*k)*s, side*(9*k)*s, hy2-12*k*s);
+      c.lineTo(side*3.5*s, hy2-8.4*s);
+      c.closePath(); c.fill(); c.stroke();
+    }
+    if(o.bigImp){
+      c.fillStyle = T('#8f161d');
+      for(const dx of [-3.2, 0, 3.2]){
+        c.beginPath();
+        c.moveTo((dx-1.8)*s, hy2-hr*0.9);
+        c.lineTo(dx*s, hy2-hr-4.4*s);
+        c.lineTo((dx+1.8)*s, hy2-hr*0.9);
+        c.closePath(); c.fill(); c.stroke();
+      }
+    }
   }
   if(o.style==='hero'){
     c.fillStyle = T(C.hair); c.strokeStyle = OL;
@@ -8544,6 +8601,7 @@ function drawEnemy(c, e){
     phase:e.phase, angry: e.type!=='boss' };
   if(e.type==='boneling') o.noHelm = true;
   if(e.type==='revenant') o.horns = true;
+  if(e.type==='superimp') o.bigImp = true;
   if(e.type==='necrolord') o.horns = true;
   if(e.type==='archer' && e.mode==='aim'){ o.bowPull = clamp(e.aimT/0.5,0,1); o.face = e.face; }
   if(e.type==='marksman' && e.mode==='aim'){ o.bowPull = clamp(e.aimT/0.5,0,1); o.face = e.face; }
@@ -8637,51 +8695,66 @@ function drawEnemy(c, e){
 }
 
 /* =============================== COMBAT LOG =============================== */
-/* A scrolling record of every point of damage in and out, plus the running
-   totals that actually answer balance questions: what is killing you, what is
-   doing your killing, and how much damage per second either side is putting
-   out. Press L to show it. Nothing here changes the game — it only watches. */
-const CLOG_MAX = 200;        /* lines kept */
-const CLOG_SHOW = 14;        /* lines drawn */
+/* Three ledgers, not one stream. Damage you deal, damage you take, and
+   everything else that happened — kills, ailments, curses, levels, waves —
+   each on its own tab, because a single feed of all three is exactly the
+   thing you cannot read while something is chewing on you. Press L to show
+   it, click a tab (or shift+L) to change view. Nothing here touches the
+   game: it only watches. */
+const CLOG_MAX = 200;        /* lines kept per tab */
+const CLOG_SHOW = 15;        /* lines drawn */
 const CLOG_MERGE = 0.45;     /* seconds within which repeat hits fold into one line */
 const CLOG_WINDOW = 5;       /* seconds the DPS meters average over */
+const CLOG_OUT = 0, CLOG_IN = 1, CLOG_EVT = 2;
+const CLOG_TABS = ['DEALT', 'TAKEN', 'EVENTS'];
 let clogOn = false;
-let clog = [];
+let clogView = CLOG_OUT;
+let clogLines = [[], [], []];         /* one scrollback per tab */
 let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
 let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
-let clogRun = { dealt:0, taken:0, kills:0, hits:0, crits:0 };
+let clogKills = {};                   /* run kill counts by monster */
+let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
 let clogAilAcc = 0;
+let clogTabRects = [];                /* filled in by the renderer, read by the mouse */
 function clogReset(){
-  clog = []; clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {};
-  clogRun = { dealt:0, taken:0, kills:0, hits:0, crits:0 };
+  clogLines = [[], [], []];
+  clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {};
+  clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
   clogAilAcc = 0;
 }
 function clogToggle(){
   clogOn = !clogOn;
-  if(clogOn) clogPush(null, 'combat log on — L to hide', '#9fdc7e');
+  if(clogOn) clogPush(CLOG_EVT, null, 'combat log on — click a tab, L to hide', '#9fdc7e');
+  else clogTabRects = [];
+}
+function clogCycle(){
+  if(!clogOn){ clogToggle(); return; }
+  clogView = (clogView + 1) % 3;
 }
 /* Lines merge while they repeat: twenty orbit ticks in a third of a second are
-   one line that counts up, not twenty lines that scroll the panel away. */
-function clogPush(key, txt, col){
+   one line that counts up, not twenty lines that scroll the tab away. */
+function clogPush(ch, key, txt, col){
   if(!clogOn) return;
-  const last = clog[clog.length-1];
+  const L = clogLines[ch];
+  const last = L[L.length-1];
   if(key && last && last.key===key && runTime - last.t0 < CLOG_MERGE){
     last.n++; last.t = runTime; last.txt = txt+' ×'+last.n;
     return;
   }
-  clog.push({ key, t:runTime, t0:runTime, txt, col: col||'#c9d2ce', n:1, sum:0 });
-  if(clog.length > CLOG_MAX) clog.shift();
+  L.push({ key, t:runTime, t0:runTime, txt, col: col||'#c9d2ce', n:1, sum:0 });
+  if(L.length > CLOG_MAX) L.shift();
 }
-function clogPushDmg(key, pre, d, col){
+function clogPushDmg(ch, key, pre, d, col){
   if(!clogOn) return;
-  const last = clog[clog.length-1];
+  const L = clogLines[ch];
+  const last = L[L.length-1];
   if(last && last.key===key && runTime - last.t0 < CLOG_MERGE){
     last.n++; last.sum += d; last.t = runTime;
     last.txt = pre+' '+fmtHp(last.sum)+'  ×'+last.n;
     return;
   }
-  clog.push({ key, t:runTime, t0:runTime, txt: pre+' '+fmtHp(d), col: col||'#c9d2ce', n:1, sum:d });
-  if(clog.length > CLOG_MAX) clog.shift();
+  L.push({ key, t:runTime, t0:runTime, txt: pre+' '+fmtHp(d), col: col||'#c9d2ce', n:1, sum:d });
+  if(L.length > CLOG_MAX) L.shift();
 }
 function clogTrim(arr){
   const cut = runTime - CLOG_WINDOW;
@@ -8701,7 +8774,7 @@ function logDealt(e, d, source, crit, suppressed){
   if(!clogOn) return;
   const name = e.bname || e.type;
   const tag = (crit?' CRIT':'') + (suppressed?' SUPP':'') + (e.magic?' [magic]':'');
-  clogPushDmg('o|'+source+'|'+name, '→ '+name+'  ['+source+']'+tag,
+  clogPushDmg(CLOG_OUT, 'o|'+source+'|'+name, '→ '+name+'  ['+source+']'+tag,
     d, crit ? '#ffd166' : '#bfe3ff');
 }
 function logTaken(n, src, elem, suppressed, shockCrit){
@@ -8717,33 +8790,49 @@ function logTaken(n, src, elem, suppressed, shockCrit){
     clogAilAcc += n;
     if(clogAilAcc >= 1){
       const whole = Math.floor(clogAilAcc); clogAilAcc -= whole;
-      clogPushDmg('i|ailment', 'ailments → you', whole, '#ff8a3c');
+      clogPushDmg(CLOG_IN, 'i|ailment', 'ailments → you', whole, '#ff8a3c');
     }
     return;
   }
   const tag = (elem?' '+elem:'') + (suppressed?' SUPP':'') + (shockCrit?' SHOCK-CRIT':'');
-  clogPushDmg('i|'+who+'|'+(elem||''), who+' → you'+tag, n, '#ff8a6a');
+  clogPushDmg(CLOG_IN, 'i|'+who+'|'+(elem||''), who+' → you'+tag, n, '#ff8a6a');
 }
 function logKill(e){
-  clogRun.kills++;
-  if(!clogOn) return;
   const name = e.bname || e.type;
+  clogRun.kills++;
+  clogKills[name] = (clogKills[name]||0) + 1;
+  if(e.elite) clogRun.elites++;
+  if(e.type==='boss') clogRun.bosses++;
+  if(!clogOn) return;
   /* plain words, not a skull glyph — the game's font has no dingbats and a
      missing glyph draws as a tofu box */
-  if(e.type==='boss') clogPush(null, 'KILLED '+name, '#ffd166');
-  else clogPush('k|'+name, 'killed '+name + (e.elite?' (elite)':''), '#9fdc7e');
+  if(e.type==='boss') clogPush(CLOG_EVT, null, 'KILLED '+name, '#ffd166');
+  else clogPush(CLOG_EVT, 'k|'+name, 'killed '+name + (e.elite?' (elite)':''), '#9fdc7e');
 }
-function logEvent(txt, col){ clogPush(null, txt, col); }
+function logEvent(txt, col){ clogPush(CLOG_EVT, null, txt, col); }
+function logEventK(key, txt, col){ clogPush(CLOG_EVT, key, txt, col); }
 function clogTop(obj, n){
   return Object.keys(obj).sort((a,b)=> obj[b]-obj[a]).slice(0, n);
 }
+function clogTabAt(x, y){
+  for(const r of clogTabRects)
+    if(x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h) return r.i;
+  return -1;
+}
+/* The panel eats clicks that land on it, so poking a tab does not also swing
+   the sword at whatever is standing behind it. */
+function clogHit(x, y){
+  if(!clogOn || !clogTabRects.length) return false;
+  const p0 = clogTabRects[0].panel;
+  return x>=p0.x && x<=p0.x+p0.w && y>=p0.y && y<=p0.y+p0.h;
+}
 function renderCombatLog(){
-  if(!clogOn) return;
+  if(!clogOn){ clogTabRects = []; return; }
   const w = 322, x = cw - w - 14, top = 108;
   const bottom = ch - 96;
-  const h = Math.min(bottom - top, 118 + CLOG_SHOW*14);
+  const h = Math.min(bottom - top, 132 + CLOG_SHOW*14);
   ctx.save();
-  ctx.fillStyle = 'rgba(10,14,19,0.76)';
+  ctx.fillStyle = 'rgba(10,14,19,0.80)';
   roundRect(ctx, x, top, w, h, 10); ctx.fill();
   ctx.strokeStyle = 'rgba(150,170,190,0.28)'; ctx.lineWidth = 1.5; ctx.stroke();
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -8753,40 +8842,76 @@ function renderCombatLog(){
   ctx.font = '600 10px Fredoka'; ctx.fillStyle = '#8e9aa4';
   ctx.textAlign = 'right'; ctx.fillText('L to hide', x+w-12, y);
   ctx.textAlign = 'left';
-  y += 17;
-  /* the meters: what you are doing right now, and what the run adds up to */
+  y += 16;
+  /* ---- the tabs ---- */
+  clogTabRects = [];
+  const panel = { x, y:top, w, h };
+  const tw = (w - 24)/3;
+  for(let i=0;i<3;i++){
+    const tx = x+12 + i*tw, th = 19;
+    const on = clogView===i;
+    ctx.fillStyle = on ? 'rgba(255,215,110,0.22)' : 'rgba(255,255,255,0.06)';
+    roundRect(ctx, tx+1, y-9, tw-2, th, 6); ctx.fill();
+    if(on){ ctx.strokeStyle = 'rgba(255,215,110,0.75)'; ctx.lineWidth = 1.4; ctx.stroke(); }
+    ctx.font = on ? '700 10px "Titan One"' : '600 10px Fredoka';
+    ctx.fillStyle = on ? '#ffd76e' : '#93a0ab';
+    ctx.textAlign = 'center';
+    ctx.fillText(CLOG_TABS[i], tx + tw/2, y+0.5);
+    clogTabRects.push({ i, x:tx, y:y-9, w:tw, h:th, panel });
+  }
+  ctx.textAlign = 'left';
+  y += 20;
+  /* ---- the header for whichever tab is showing ---- */
   const out = clogRate(clogOutW), inc = clogRate(clogInW);
   ctx.font = '700 11px Fredoka';
-  ctx.fillStyle = '#bfe3ff'; ctx.fillText('DPS out '+out.toFixed(1), x+12, y);
-  ctx.fillStyle = '#ff8a6a'; ctx.fillText('in '+inc.toFixed(1)+'/s', x+126, y);
-  ctx.fillStyle = '#c9d2ce';
-  ctx.fillText('kills '+clogRun.kills, x+208, y);
-  y += 15;
-  ctx.fillStyle = '#8e9aa4'; ctx.font = '600 10px Fredoka';
-  const critPct = clogRun.hits ? Math.round(clogRun.crits/clogRun.hits*100) : 0;
-  ctx.fillText('dealt '+Math.round(clogRun.dealt)+'  ·  taken '+clogRun.taken.toFixed(1)+
-    '  ·  crit '+critPct+'%  ·  hits '+clogRun.hits, x+12, y);
-  y += 15;
-  /* who is doing the work, and who is hurting you — the two lists that decide
-     what to buy next and what to run away from */
-  const srcs = clogTop(clogSrc, 3), froms = clogTop(clogFrom, 3);
-  ctx.font = '700 10px Fredoka';
-  ctx.fillStyle = '#bfe3ff';
-  ctx.fillText('TOP DAMAGE: ' + (srcs.length
-    ? srcs.map(k=> k+' '+Math.round(clogSrc[k]/Math.max(1,clogRun.dealt)*100)+'%').join('  ')
-    : '—'), x+12, y);
-  y += 14;
-  ctx.fillStyle = '#ff8a6a';
-  ctx.fillText('HURT BY: ' + (froms.length
-    ? froms.map(k=> k+' '+Math.round(clogFrom[k]/Math.max(0.01,clogRun.taken)*100)+'%').join('  ')
-    : '—'), x+12, y);
+  if(clogView===CLOG_OUT){
+    ctx.fillStyle = '#bfe3ff'; ctx.fillText('DPS '+out.toFixed(1), x+12, y);
+    ctx.fillStyle = '#c9d2ce';
+    const critPct = clogRun.hits ? Math.round(clogRun.crits/clogRun.hits*100) : 0;
+    ctx.fillText('total '+Math.round(clogRun.dealt), x+104, y);
+    ctx.fillText('crit '+critPct+'%', x+196, y);
+    ctx.fillText('hits '+clogRun.hits, x+262, y);
+    y += 16;
+    const srcs = clogTop(clogSrc, 3);
+    ctx.font = '700 10px Fredoka'; ctx.fillStyle = '#bfe3ff';
+    ctx.fillText('TOP SOURCES: ' + (srcs.length
+      ? srcs.map(k=> k+' '+Math.round(clogSrc[k]/Math.max(1,clogRun.dealt)*100)+'%').join('  ')
+      : '—'), x+12, y);
+  } else if(clogView===CLOG_IN){
+    ctx.fillStyle = '#ff8a6a'; ctx.fillText('DPS IN '+inc.toFixed(1), x+12, y);
+    ctx.fillStyle = '#c9d2ce';
+    ctx.fillText('total '+clogRun.taken.toFixed(1), x+116, y);
+    ctx.fillText('evaded '+clogRun.evaded, x+212, y);
+    y += 16;
+    const froms = clogTop(clogFrom, 3);
+    ctx.font = '700 10px Fredoka'; ctx.fillStyle = '#ff8a6a';
+    ctx.fillText('HURT BY: ' + (froms.length
+      ? froms.map(k=> k+' '+Math.round(clogFrom[k]/Math.max(0.01,clogRun.taken)*100)+'%').join('  ')
+      : '—'), x+12, y);
+  } else {
+    ctx.fillStyle = '#9fdc7e'; ctx.fillText('kills '+clogRun.kills, x+12, y);
+    ctx.fillStyle = '#c9d2ce';
+    ctx.fillText('elites '+clogRun.elites, x+94, y);
+    ctx.fillText('bosses '+clogRun.bosses, x+170, y);
+    ctx.fillText('wave '+wave.n, x+254, y);
+    y += 16;
+    const ks = clogTop(clogKills, 3);
+    ctx.font = '700 10px Fredoka'; ctx.fillStyle = '#9fdc7e';
+    ctx.fillText('MOST KILLED: ' + (ks.length ? ks.map(k=> k+' ×'+clogKills[k]).join('  ') : '—'), x+12, y);
+  }
   y += 12;
   ctx.strokeStyle = 'rgba(150,170,190,0.2)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(x+10, y); ctx.lineTo(x+w-10, y); ctx.stroke();
   y += 12;
   const rows = Math.max(0, Math.floor((top + h - 8 - y)/14));
-  const lines = clog.slice(-Math.min(rows, CLOG_SHOW));
+  const feed = clogLines[clogView];
+  const lines = feed.slice(-Math.min(rows, CLOG_SHOW));
   ctx.font = '600 11px Fredoka';
+  if(!lines.length){
+    ctx.fillStyle = '#5f6b75';
+    ctx.fillText(clogView===CLOG_OUT ? 'nothing hit yet'
+      : clogView===CLOG_IN ? 'nothing has hurt you yet' : 'nothing has happened yet', x+12, y);
+  }
   for(const L of lines){
     /* old lines fade, so your eye goes to what just happened */
     const age = runTime - L.t;
@@ -8800,6 +8925,7 @@ function renderCombatLog(){
   ctx.globalAlpha = 1;
   ctx.restore();
 }
+
 /* =============================== HUD =============================== */
 function heartPath(c,x,y,s){
   c.beginPath();
@@ -9257,6 +9383,7 @@ function backToTitle(){
   resetRun(true);
   state = 'title'; titleClock = 0; cv.style.cursor='default';
   showBest();
+  fitTitle();
 }
 function showBest(){
   let best = 0;
@@ -9342,6 +9469,7 @@ resetRun(true);
 buildFavRow();
 buildDiffRow();
 showBest();
+fitTitle();
 requestAnimationFrame(frame);
 })();
 </script>
