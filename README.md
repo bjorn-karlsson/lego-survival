@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`59 bricks` · `40 monsters` · `8 bosses` · `10 builds` · `50 waves` · `1 file`
+`66 bricks` · `40 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -38,7 +38,7 @@ runs exactly the same in fallback type.
 You are a minifig in a field of studs. Waves of brick monsters walk at you and come apart
 when hit. Each run introduces the roster in a different order — banded by era, so the
 opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
-every level and every chest hands you a **brick** — one of 59 upgrades — and the bricks
+every level and every chest hands you a **brick** — one of 66 upgrades — and the bricks
 compound into a build. Waves open with a breather so you can heal and read what you took,
 and <kbd>F</kbd> skips it. Survive long enough and the ground is a carpet of studs, the
 screen is a storm of lightning, and a three-storey skeleton is throwing its own ribcage
@@ -53,18 +53,18 @@ at you.
 <table>
 <tr><td width="33%" valign="top">
 
-### ⚔️ Ten ways to build
+### ⚔️ Four spells, your pick
 
-Pick a **favourite** at the menu and its bricks turn up more often, plus a starting kit to
-match:
+**A run may cast four spells and no more.** Once you have four, the bricks that would hand
+you a fifth stop being offered and everything that deepens the four you have keeps coming.
 
-`Sword & Steel` · `Guardian Brick`
-`Brick Blaster` · `Storm Brick`
-`Bladestorm` · `Blade Vortex`
-`Block Freeze` · `Bomb Volley`
-`Tough Bricks` · `No Favourite`
+`Guardian Brick` · `Brick Blaster`
+`Storm Brick` · `Bladestorm`
+`Blade Vortex` · `Block Freeze`
+`Bomb Volley` · **`Brickbane`**
 
-No Favourite gives you a little of everything and the widest reward pool.
+Pick a **favourite** at the menu — including `Sword & Steel` or `Tough Bricks`, which spend
+no slot at all — and its bricks turn up more often, plus a starting kit to match.
 
 </td><td width="33%" valign="top">
 
@@ -76,6 +76,9 @@ against you critting.
 
 Imp masters lay **curses** on top — SUNDERED, LEADEN, BRITTLE, WITHERED — that strip
 resistance, slow your swing, thin your armour and choke your regeneration.
+
+**Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
+whatever it touched, long after you have walked away.
 
 </td><td width="33%" valign="top">
 
