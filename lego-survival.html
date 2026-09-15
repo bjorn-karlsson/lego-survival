@@ -2229,6 +2229,17 @@ function poisonEnemy(e, dps, dur, hit){
   po.t   = Math.max(po.t, dur);
   if(hit !== undefined) po.hit = Math.max(po.hit, hit);
 }
+/* ONE CONTACT, ONE STACK -- and the order matters. The dose goes on BEFORE the
+   blow lands, because a body the gas kills outright has to die with poison
+   already in it. Land the hit first and a lethal opening hit leaves a corpse
+   with e.poison still null, so the one kill most obviously owed a Spore Burst
+   is the only kill that could never set one off. Every hit Brickbane deals goes
+   through here so a third source cannot get the order wrong later. */
+function baneStrike(e, dmg, dir, kb, dps, dur, seed){
+  if(e.dead || e.state!=='active') return;
+  poisonEnemy(e, dps, dur, seed === undefined ? dmg : seed);
+  hitEnemy(e, dmg, dir, kb, 'bane', {spin:true});
+}
 /* what one tick of poison takes off a body */
 function poisonTick(e, dt){
   const po = e.poison;
@@ -2282,8 +2293,7 @@ function killEnemy(e, source){
     for(const e2 of caught){
       if(e2.dead || e2.state!=='active') continue;
       /* the cloud off a corpse is thinner than the one you cast */
-      poisonEnemy(e2, po.dps*0.7, Math.max(2, po.t*0.8), po.hit);
-      hitEnemy(e2, dmg, angTo(e, e2), 90, 'bane', {spin:true});
+      baneStrike(e2, dmg, angTo(e, e2), 90, po.dps*0.7, Math.max(2, po.t*0.8), po.hit);
     }
     baneBurstDepth--;
   }
@@ -7808,8 +7818,7 @@ function updateProjectiles(dt){
         if(d > pr.r + hitR(e)) continue;
         if(!full && Math.abs(angDiff(Math.atan2(e.y-pr.y, e.x-pr.x), pr.a0)) > pr.arc/2) continue;
         pr.hit.add(e);
-        hitEnemy(e, pr.dmg, Math.atan2(e.y-pr.y, e.x-pr.x), 60, 'bane', {spin:true});
-        poisonEnemy(e, pr.dot, pr.dotT, pr.dmg);
+        baneStrike(e, pr.dmg, Math.atan2(e.y-pr.y, e.x-pr.x), 60, pr.dot, pr.dotT);
       }
       if(Math.random() < 0.9){
         const a = full ? rnd(TAU) : pr.a0 + rnd(-pr.arc/2, pr.arc/2);
