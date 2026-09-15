@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`59 bricks` · `37 monsters` · `8 bosses` · `10 builds` · `40 waves` · `1 file`
+`59 bricks` · `40 monsters` · `8 bosses` · `10 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -87,7 +87,7 @@ Every **tenth** wave is an ULTRA: `OMEGA BRICKTHANE`, `MEGA BONE BARON`, `ULTRA 
 — each with its own signature (nova, bone spiral, meteor), a health bar across the top of
 the screen, and a guaranteed chest.
 
-**Wave 40 is the grand raid**, and every boss in the game wakes up at once.
+**Wave 50 is the grand raid**, and every boss in the game wakes up at once.
 
 In a hurry? **Hold F mid-fight** to call the next wave down early and fight both at once.
 
@@ -150,7 +150,7 @@ as a stud multiplier — up to +25% toward the good tiers.
 
 ## The boss ladder
 
-A boss every fifth wave, an ULTRA every tenth, and the grand raid at forty. Spawned for
+A boss every fifth wave, an ULTRA every tenth, and the grand raid at fifty. Spawned for
 real and read off the live build:
 
 | Wave | | Boss | Health | Armour | Hit | Spell suppression |
@@ -162,10 +162,13 @@ real and read off the live build:
 | 25 | boss | THE DREAD ROOST | 3,766 | 429 | 60 | 15% |
 | 30 | **ULTRA** | ULTRA LAVABRICK | 8,544 | 685 | 77 | 30% |
 | 35 | boss | THE BONE BARON | 4,147 | 787 | 96 | **45%** |
-| 40 | **RAID** | every boss at once | — | — | — | — |
+| 40 | **ULTRA** | OMEGA BRICKTHANE | 12,367 | 1,070 | 112 | 30% |
+| 50 | **RAID** | every boss at once | — | — | — | — |
 
 Spell suppression is the boss's own — a chance to halve any spell that lands on it. The
-skeletons have the most of it, which is what the bones were always for.
+skeletons have the most of it, which is what the bones were always for. The **MEGA BONE
+BARON** does not only throw bones: it hexes you with a fan of curse bolts, and it blesses
+its whole court — and itself — with armour, damage and swing rate.
 
 ---
 
@@ -230,6 +233,11 @@ A magnet pulls **studs only**. Every prize in that table is something you walk t
 nothing in it can land where you cannot reach it: studs, prizes and chests are all shoved
 back onto walkable floor the moment they touch down, so a lake or a boulder never eats one.
 
+**The floor has a ceiling.** A wave of 130 bodies rolls 130 times, so late waves used to
+carpet the ground whatever the odds said. A prize that would be the fourth of its kind
+already lying around simply does not appear: **3 of each buff, 10 hearts, 5 chests**. Pick
+them up and the tap opens again.
+
 ---
 
 ## Every cap
@@ -244,8 +252,8 @@ offered at all.
 | Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | | |
-| | | Storm bricks | 5 | | |
-| | | Storm forks | 2 (40 nodes) | | |
+| Flat armour | 520 | Storm bricks | 5 | | |
+| Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
 | | | Bombs | 8 | | |
 | | | Blast radius | 110 px | | |
 | | | Cluster ranks | 2 | | |
@@ -254,11 +262,17 @@ A **favourite** lifts the cap of its own spell by one, so a Storm Brick run reac
 hovering bricks and a Bomb Volley run nine bombs. The spell its kit hands you counts as
 already taken, so it is never offered back to you as a first pick.
 
-\* Regeneration is a **share of the bar, not a number of hearts**: the rate is measured
-against the six hearts you start with and scales with your maximum, so a given rate always
-means the same number of *seconds* back to full however big your health bar has grown.
-Three Repair Bricks heal you in 18 seconds at 6 max hearts and in 18 seconds at 300.
-Between waves it runs at **×3**.
+\* Regeneration is a **share of the bar, not a number of hearts** — but not one for one.
+It scales with your maximum at a fractional power, so a bigger bar does regenerate faster
+without healing in the same time regardless of size. Three Repair Bricks: 18 seconds to
+full at 6 max hearts, 49 at 60, 102 at 300. Between waves it runs at **×2**.
+
+**Armour** is `Armour / (Armour + 5 × hit)`, capped at 85% — strong against a hail of
+small hits, thin against one big one. Fully capped at 1,560 armour value, a 5-damage hit
+lands for 0.8 and a 120-damage hit still lands for 33.
+
+**You are not invulnerable between hits.** The window after taking damage is **0.10s**,
+not a second — everything landing on you counts, and a crowd is a crowd.
 
 Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth two and a
 half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
