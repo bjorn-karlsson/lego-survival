@@ -125,6 +125,10 @@ a rare wearing a different colour:
 |---|--:|--:|--:|--:|--:|
 | Sharpened Blade, Heavy Orbit, Blaster Power,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
 
+**Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
+DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
+reads it — Brickbane's poison is simply the first thing that qualifies.
+
 No card writes a derived number. Cards add to pools; a single `syncStats()` rebuilds
 everything from base. That is why the character sheet can show you the arithmetic:
 

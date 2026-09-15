@@ -534,6 +534,16 @@ function pool(base, flat, inc, more){
 function paceOf(base, inc, floor){ return Math.max(floor, base / (1 + (inc||0))); }
 /* Rebuild every derived number from its pools. Cheap, and called after anything
    that can move one — a brick, a starting perk, a rebuild. */
+/* Every damage-over-time in the game runs through here: its own base and flat
+   additions, then the ONE increased-damage-over-time pool, PoE order as ever.
+   A new ailment only has to call this to inherit Rotbrick for free. */
+function dotRate(base, flat){
+  const p = player;
+  return pool(base, flat || 0, (p && p.inc.dot) || 0, 1);
+}
+/* whether an increased-damage-over-time brick is worth anything to this hero —
+   the single place to extend when a second source of it arrives */
+function hasAnyDot(){ return !!(player && player.bane && player.bane.n > 0); }
 function syncStats(){
   const p = player;
   if(!p) return;
@@ -557,7 +567,7 @@ function syncStats(){
   p.bomb.r = Math.min(BOMB_MAX_R, pool(BOMB_R_BASE, 0, i.bombR, 1));
   p.bane.rate = paceOf(BANE_RATE_BASE, i.baneRate, BANE_MIN_RATE);
   p.bane.r    = Math.min(BANE_R_MAX, pool(BANE_R_BASE, 0, i.baneR, 1));
-  p.bane.dot  = pool(BANE_DOT_BASE, p.baneDotFlat||0, i.baneDot, 1);
+  p.bane.dot  = dotRate(BANE_DOT_BASE, p.baneDotFlat||0);
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -1134,7 +1144,11 @@ function newPlayer(){
     hpFlat:0, hpMore:1, baneDotFlat:0,
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
-          vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0, baneDot:0 },
+          vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
+          /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
+             whatever inflicted it. Brickbane's poison is the first; it will not
+             be the last. */
+          dot:0 },
     atkRate:ATK_BASE, atkCd:0,
     combo:0, comboTimer:0, swing:null, reach:0, xpMul:1, blademaster:0, whirl:false, whirlAng:0,
     dash:{t:0, cd:0, cdMax:DASH_BASE, dir:{x:1,y:0}},
@@ -3523,11 +3537,14 @@ const UPGRADES = [
     apply:c=>{ player.baneDotFlat = Math.round((player.baneDotFlat + c.v)*100)/100;
       player.bane.dotT = Math.min(BANE_DOT_MAX_T, player.bane.dotT + c.t);
       syncStats(); } },
-  { id:'banedotinc', name:'Rotbrick', icon:'arcane', cls:'SPELL', minRar:'rare',
-    req:()=>player.bane.n>0,
+  /* not a Brickbane brick — a DAMAGE brick that happens to have one customer
+     so far. Everything the hero inflicts that eats away over time reads it. */
+  { id:'banedotinc', name:'Rotbrick', icon:'arcane', cls:'OFFENSE', minRar:'rare',
+    req:()=>hasAnyDot(),
     calc:m=>({v:0.10+0.07*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased poison damage over time`,
-    apply:c=>{ player.inc.baneDot += c.v; syncStats(); } },
+    desc:c=>`${Math.round(c.v*100)}% increased DAMAGE OVER TIME — every lingering `+
+      `damage you inflict, whatever put it there`,
+    apply:c=>{ player.inc.dot += c.v; syncStats(); } },
   { id:'baneburst', name:'Spore Burst', icon:'bomblets', cls:'SPELL', minRar:'legendary',
     req:()=>player.bane.n>0 && player.bane.burst < BANE_BURST.length-1,
     calc:m=>({n:1}),
@@ -3780,7 +3797,7 @@ function buildDiffRow(){
    under EVERYTHING ELSE, so a new brick is never invisible. */
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
-  { name:'DAMAGE',          ids:['orbm','moredmg'] },
+  { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
   { name:'CRITICALS',       ids:['crit','critpow'] },
   { name:'SURVIVAL',        ids:['hp','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
@@ -3792,7 +3809,7 @@ const BENCH_SECTIONS = [
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] },
-  { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','banedotinc','baneburst'] }
+  { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','baneburst'] }
 ];
 /* The bench shows one brick at one tier at a time, and SHIFT+SCROLL walks that
    tier up and down — between the brick's own minimum and the highest it can
@@ -4191,6 +4208,7 @@ const STAT_PROBES = [
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased all',  get:()=> player.incAll*100,        fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'Damage over time', get:()=> player.inc.dot, fmt:v=>Math.round(v*100)+'%' },
   { g:'DAMAGE', k:'More damage',    get:()=> player.moreAll,           fmt:v=>'×'+v.toFixed(2) },
   { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
@@ -4585,6 +4603,8 @@ function renderCharSheet(){
       `The spell half of the same pool. Bladestorm and vortex are melee, not spells.\n\n`+
       `A 5-base spell hit: 5 × (1 + ${Math.round((p.incAll+p.incSpell)*100)}%) × ${p.moreAll.toFixed(2)} = `+
       `${calcDamage(5,'spell').toFixed(2)}`),
+    sRow('Increased damage over time', Math.round(p.inc.dot*100)+'%',
+      hasAnyDot() ? 'every lingering damage you inflict' : 'nothing you own deals damage over time yet'),
     sRow('More multipliers', '×'+p.moreAll.toFixed(2),
       'each MORE modifier multiplies on its own',
       `MORE modifiers are NOT added together — each one is its own multiplier,\n`+
