@@ -518,11 +518,13 @@ const BANE_BURST     = [0, 0.40, 0.80];   /* chance a poisoned corpse bursts */
    spend a whole minute dissolving. */
 const POISON_MAX      = 9;
 const POISON_MAX_BOSS = 12;
-/* and what a corpse full of it is worth when it goes off: the opening hit again,
-   a quarter more for every stack it was carrying, or half more once upgraded */
-const BANE_BURST_PER_STACK = [0, 0.25, 0.50];
-const BANE_BURST_DEPTH = 4;      /* how far one burst may chain into the next */
-const BANE_BURST_R   = 130;
+/* A BURST IS CONTAGION, NOT A BOMB. It deals no damage of its own. The corpse
+   comes apart and hands every dose it was carrying to whatever is standing
+   close enough, and the rot does the killing at its own pace -- so a packed
+   field goes down in a slow green wave instead of a chain of firecrackers.
+   The upgrade widens the cloud; it does not sharpen it. */
+const BANE_BURST_R    = [0, 130, 210];
+const BANE_BURST_KEEP = 0.7;   /* a cloud off a corpse bites softer than the one you cast */
 const BANE_WAVE_T    = 0.42;   /* how long the front takes to reach full reach */
 const BOMB_R_BASE = 62;
 function pool(base, flat, inc, more){
@@ -2218,16 +2220,15 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
    of the two rates, so re-gassing a monster is never a downgrade. */
 function poisonCap(e){ return e.type==='boss' ? POISON_MAX_BOSS : POISON_MAX; }
-function poisonEnemy(e, dps, dur, hit){
+function poisonEnemy(e, dps, dur){
   if(e.dead || e.state!=='active') return;
-  if(!e.poison) e.poison = { n:0, dps:0, t:0, hit:0, tick:rnd(0.05, BANE_TICK) };
+  if(!e.poison) e.poison = { n:0, dps:0, t:0, tick:rnd(0.05, BANE_TICK) };
   const po = e.poison;
   const cap = poisonCap(e);
   if(po.n < cap) po.n++;
   /* the strongest dose sets the rate for every stack, and refreshes the clock */
   po.dps = Math.max(po.dps, dps);
   po.t   = Math.max(po.t, dur);
-  if(hit !== undefined) po.hit = Math.max(po.hit, hit);
 }
 /* ONE CONTACT, ONE STACK -- and the order matters. The dose goes on BEFORE the
    blow lands, because a body the gas kills outright has to die with poison
@@ -2235,9 +2236,9 @@ function poisonEnemy(e, dps, dur, hit){
    with e.poison still null, so the one kill most obviously owed a Spore Burst
    is the only kill that could never set one off. Every hit Brickbane deals goes
    through here so a third source cannot get the order wrong later. */
-function baneStrike(e, dmg, dir, kb, dps, dur, seed){
+function baneStrike(e, dmg, dir, kb, dps, dur){
   if(e.dead || e.state!=='active') return;
-  poisonEnemy(e, dps, dur, seed === undefined ? dmg : seed);
+  poisonEnemy(e, dps, dur);
   hitEnemy(e, dmg, dir, kb, 'bane', {spin:true});
 }
 /* what one tick of poison takes off a body */
@@ -2256,9 +2257,6 @@ function poisonTick(e, dt){
       vx:rnd(-12,12), vy:rnd(-34,-8), life:rnd(0.3,0.6), max:0.6, color:'#8ede4a'});
   if(po.t <= 0) e.poison = null;
 }
-/* how deep we are in a chain of bursting corpses, so a field of nine-stack
-   bodies cannot recurse the call stack into the ground */
-let baneBurstDepth = 0;
 function killEnemy(e, source){
   e.dead = true; player.kills++;
   logKill(e);
@@ -2266,36 +2264,31 @@ function killEnemy(e, source){
      cloud, and everything standing close enough breathes it in. */
   const po = e.poison;
   if(po && player.bane && player.bane.burst > 0 &&
-     (baneBurstDepth||0) < BANE_BURST_DEPTH &&
      Math.random() < (BANE_BURST[player.bane.burst] || 0)){
-    /* THE PAYOFF. A corpse that was nine doses deep does not pop — it detonates.
-       The burst carries the opening hit again, plus a quarter of it for every
-       stack the body was carrying (half, once Spore Burst is upgraded), and it
-       seeds everything standing close enough. Which can kill them. Which can
-       set THEM off. That chain is the whole point of the brick. */
-    const rank = player.bane.burst;
-    const mult = 1 + (BANE_BURST_PER_STACK[rank] || 0) * po.n;
-    const dmg = (po.hit || calcDamage(player.bane.dmg,'spell')) * mult;
-    addRing(e.x, e.y, 8, 340, BANE_BURST_R, '#8ede4a', 8, 0.55);
-    addRing(e.x, e.y, 4, 240, BANE_BURST_R*0.6, '#d6ffa0', 5, 0.4);
+    /* THE PAYOFF, and it is not an explosion. A corpse nine doses deep hands
+       all nine of them to everything standing close enough. Nothing dies the
+       moment the cloud touches it -- what spreads is the rot, and the rot takes
+       its time. A body that dies of it bursts in turn, so a packed pull comes
+       apart in a slow green wave you can watch travel.
+
+       No depth guard needed any more: a burst deals no damage, so it cannot
+       kill, so it cannot set off another burst inside its own call. */
+    const rad = BANE_BURST_R[player.bane.burst] || 0;
+    addRing(e.x, e.y, 8, 340, rad, '#8ede4a', 8, 0.55);
+    addRing(e.x, e.y, 4, 240, rad*0.6, '#d6ffa0', 5, 0.4);
     addSparks(e.x, e.y-16, 10 + po.n*2, '#8ede4a');
     SFX.freeze();
-    addDmg(e.x, e.y-52, 'BURST ×'+po.n+' ('+Math.round(mult*100)+'%)', '#8ede4a', 17);
+    addDmg(e.x, e.y-52, 'SPORES ×'+po.n, '#8ede4a', 17);
     /* a straight scan rather than the bucket grid: a death can be triggered from
        anywhere in the frame, and the grid is only current during the update pass */
-    const caught = [];
+    const dps = po.dps*BANE_BURST_KEEP, dur = Math.max(2, po.t*0.8);
     for(const e2 of enemies){
       if(e2===e || e2.dead || e2.state!=='active') continue;
-      if(dist(e2, e) > BANE_BURST_R + (e2.r||12)) continue;
-      caught.push(e2);
+      if(dist(e2, e) > rad + (e2.r||12)) continue;
+      /* every dose the corpse was carrying, handed over one at a time so the
+         per-body cap is still the thing that decides how deep it can go */
+      for(let i=0;i<po.n;i++) poisonEnemy(e2, dps, dur);
     }
-    baneBurstDepth = (baneBurstDepth||0) + 1;
-    for(const e2 of caught){
-      if(e2.dead || e2.state!=='active') continue;
-      /* the cloud off a corpse is thinner than the one you cast */
-      baneStrike(e2, dmg, angTo(e, e2), 90, po.dps*0.7, Math.max(2, po.t*0.8), po.hit);
-    }
-    baneBurstDepth--;
   }
   if(e.type==='direbat'){
     /* it doesn't die quietly — it splits into the small ones */
@@ -3561,10 +3554,10 @@ const UPGRADES = [
     desc:c=>{
       const lv = player.bane.burst + 1;
       return `A poisoned body that dies BURSTS — ${Math.round(BANE_BURST[lv]*100)}% of the time — `+
-        `dealing the opening hit again +${Math.round(BANE_BURST_PER_STACK[lv]*100)}% for every `+
-        `poison stack it was carrying, and seeding everything within ${BANE_BURST_R}`+
-        (lv===1 ? '' : ' (was '+Math.round(BANE_BURST[lv-1]*100)+'% and +'+
-          Math.round(BANE_BURST_PER_STACK[lv-1]*100)+'% a stack)');
+        `handing EVERY stack it was carrying to everything within ${BANE_BURST_R[lv]}. `+
+        `No blast: what spreads is the rot`+
+        (lv===1 ? '' : ' (was '+Math.round(BANE_BURST[lv-1]*100)+'% and '+
+          BANE_BURST_R[lv-1]+' reach)');
     },
     apply:c=>{ player.bane.burst = Math.min(BANE_BURST.length-1, player.bane.burst + 1); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
@@ -4134,9 +4127,9 @@ function spellSummaries(){
       `Stacks to ${POISON_MAX} on a monster and ${POISON_MAX_BOSS} on a boss: `+
       `${(p.bane.dot*POISON_MAX).toFixed(2)}/s at full depth\n`+
       (p.bane.burst
-        ? `Spore Burst: a poisoned body bursts ${Math.round(BANE_BURST[p.bane.burst]*100)}% of the time for `+
-          `${per(d)} +${Math.round(BANE_BURST_PER_STACK[p.bane.burst]*100)}% a stack — `+
-          `${per(d*(1+BANE_BURST_PER_STACK[p.bane.burst]*POISON_MAX))} off a full body — and seeds the rest`
+        ? `Spore Burst: a poisoned body bursts ${Math.round(BANE_BURST[p.bane.burst]*100)}% of the time, `+
+          `handing all ${POISON_MAX} stacks to everything within ${BANE_BURST_R[p.bane.burst]} `+
+          `at ${Math.round(BANE_BURST_KEEP*100)}% rate — no blast, only the rot`
         : `Every body the cloud touches takes both, and the poison keeps going once you have moved on`) });
   }
   if(p.storm.n>0){
@@ -4287,9 +4280,8 @@ const STAT_PROBES = [
   { g:'BRICKBANE', k:'Poison duration',  get:()=> player.bane.n ? player.bane.dotT : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BRICKBANE', k:'Damage per dose',  get:()=> player.bane.n ? player.bane.dot*player.bane.dotT : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICKBANE', k:'At 9 stacks',      get:()=> player.bane.n ? player.bane.dot*POISON_MAX : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
-  { g:'BRICKBANE', k:'Burst off 9 stacks',get:()=> (player.bane.n && player.bane.burst)
-      ? calcDamage(player.bane.dmg,'spell')*(1+BANE_BURST_PER_STACK[player.bane.burst]*POISON_MAX) : 0,
-    fmt:v=>v.toFixed(1), zero:true },
+  { g:'BRICKBANE', k:'Burst reach',      get:()=> (player.bane.n && player.bane.burst)
+      ? BANE_BURST_R[player.bane.burst] : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BRICKBANE', k:'Spread',           get:()=> player.bane.n ? Math.min(BANE_ARC_MAX,player.bane.arc)*180/Math.PI : 0, fmt:v=>Math.round(v)+'°', zero:true },
   { g:'BRICKBANE', k:'Reach',            get:()=> player.bane.n ? player.bane.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BRICKBANE', k:'Interval',         get:()=> player.bane.n ? player.bane.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true }
