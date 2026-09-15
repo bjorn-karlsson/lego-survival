@@ -277,6 +277,96 @@ them up and the tap opens again.
 
 ---
 
+## Every buff and debuff
+
+Four separate systems, and they never touch each other's pools: prizes you pick up,
+ailments that stack on you, curses that are hexed onto you, and the marks you put on a
+monster. Everything below is read off the code, not off memory.
+
+### 🎁 What you pick up
+
+All four ground prizes run the same **30 seconds**, and picking another one up refreshes
+the clock rather than queueing behind it.
+
+| | Effect | Stacks to |
+|---|---|---|
+| ❤️ **Heart** | Regeneration ×1.5 / 1.85 / 2.10 / 2.30 / **2.45** | 5 — and never ×7.5 |
+| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase | ×2 |
+| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it | ×2 |
+| 🍀 **Fortune** | ×2 studs and XP, plus up to **+25% rarity find** on reward rolls | ×2 |
+| 🧲 **Magnet** | Hoovers up every **stud** on the field. Studs only — it will not drag a chest to you | — |
+| 💛 **Golden heart** | **+3 maximum hearts, permanently.** The only prize that outlives its timer | — |
+
+### 🔥 Ailments on you
+
+Elemental stacks have **no ceiling**, and every **fifth** one is spent *breaking* something.
+The break leaves a **brand** behind, and brands stack without limit — so resistance can be
+driven below zero, and at **-100% you take double**.
+
+| | What a stack does | What the 5th stack breaks | The brand it leaves |
+|---|---|---|---|
+| 🔥 **Burning** | 3 damage over 12s, per fire, scaled by fire resistance. Ignores i-frames | becomes a pool of damage over time | **BURNT** — -11% fire resistance, 22s |
+| ❄️ **Chill** | -9% move speed and swing rate, floor 30% | **frozen solid for 3s** | **FROSTBITTEN** — -11% frost resistance, 22s |
+| ⚡ **Shock** | +10% chance a hit on you crits for **×1.8**, cap 95% | every hit against you crits | **CONDUCTIVE** — -11% lightning resistance, 22s |
+
+Resistance is capped at **80%** — nothing is ever fully immune — and it scales down both the
+elemental damage of a hit *and* the strength of the ailment that hit applies. Each element
+has its own **0.7s** application cooldown, so standing in a fire does not spam stacks onto
+you sixty times a second.
+
+### 🟣 Curses on you
+
+Imp masters and the **MEGA BONE BARON** hex you. All four stack **9 deep**, the magnitude is
+read straight off the stack count, and they expire together.
+
+| | Effect | Per stack | Ceiling |
+|---|---|--:|--:|
+| **SUNDERED** | elemental resistance cut | -12% | -90% |
+| **LEADEN** | swings come slower | -11% | -150% |
+| **BRITTLE** | armour weakened | -13% | -92% |
+| **WITHERED** | regeneration choked | -16% | -95% |
+
+### 🗡️ What you put on a monster
+
+| | How you inflict it | What it does |
+|---|---|---|
+| ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
+| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. Ignores armour, one wound at a time, and **40% less while the body stands still** |
+| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed** |
+| 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
+
+Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
+feeds, and each drips its numbers in its own colour — green for the rot, red for a wound.
+
+### 👹 What monsters get
+
+| | Source | Effect |
+|---|---|---|
+| ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
+| 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
+| ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
+| 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself |
+| 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
+
+### 👑 Boss traits
+
+Rolled fresh when the boss wakes — **one** normally, **two** from wave ten, **three** for an
+ULTRA — never the same one twice, and printed on its health bar.
+
+| | Effect |
+|---|---|
+| **SWIFT** | ×1.20 move speed, swings 15% quicker |
+| **IRONCLAD** | ×1.7 armour, and 10% slower for it |
+| **BRUTAL** | ×1.35 damage |
+| **VITAL** | ×1.30 maximum health |
+| **WARDED** | +25% spell suppression, to a ceiling of 85% |
+| **VENOMOUS** | every touch sets a **burning** stack on you — the trait predates poison and still applies fire |
+| **RESTLESS** | attacks come round 30% quicker |
+| **LEGION** | brings ×1.6 + 1 of its court |
+| **THORNED** | standing next to it costs you 25% of its hit |
+
+---
+
 ## Every cap
 
 Nothing in the game is unbounded. A brick that would push past its ceiling stops being
