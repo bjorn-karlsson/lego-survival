@@ -1887,7 +1887,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     /* the first ultra used to fold to any build; it now starts from a real base */
       const mult = 1 + (st-1)*2.3;
       const bhp = Math.round((B.hp*mult*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp);
-      e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig,
+      e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig, btier:tier+2,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armour: (70 + st*70 + st*st*45) * (B.armourMul||1),
         suppress: B.style==='skel' ? 0.62 : 0.30,
@@ -1912,7 +1912,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         B = BOSSES[bkey];
       }
       const bhp = Math.round((B.hp*(1 + (tier-1)*2.2) + tier*420) * difficulty.hp);
-      e = { type:'boss', x, y, bkey, bname:B.name,
+      e = { type:'boss', x, y, bkey, bname:B.name, btier:tier,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armour: 24 + wave.n*2.2 + tier*tier*14,
@@ -6344,7 +6344,14 @@ function maceSpin(b, dt, tier, enr, toP){
 }
 /* The sweep is the whole point of the attack — at the old radius you could
    stand a step back and watch it. It now reaches roughly twice as far. */
-function maceReach(b){ return 126*(b.scale||1) + 40; }
+/* The whirl grows with the boss. The first one you meet at wave 5 was sweeping
+   the same circle as the last one at wave 35, which on a hero with three bricks
+   to their name is not a fight, it is weather. Half the size at tier one, full
+   size by tier four. */
+function maceReach(b){
+  const t = Math.max(1, b.btier || 1);
+  return (126*(b.scale||1) + 40) * Math.min(1, 0.5 + (t-1)*0.17);
+}
 function bossSummon(b, count, kinds, elites){
   const room = Math.max(0, MAX_ALIVE - enemies.length - 4);
   const n = Math.min(count, room);
