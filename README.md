@@ -89,6 +89,11 @@ at 70% of the rate. It deals no blast damage at all — nothing dies the instant
 touches it. What spreads is the rot, and a body that dies of it bursts in turn, so a
 packed pull comes apart in a slow green wave you can watch travel.
 
+It fires **80%** of the time at the first rank and **every single time** at the second, and
+each rank also **doubles how much rot a body can hold** — 9 → 18 → 36 on a monster, 12 → 24
+→ 48 on a boss. Any kill sets it off, not just one the gas made: shoot a poisoned monster
+and the corpse still bursts.
+
 </td><td width="33%" valign="top">
 
 ### 👑 Bosses every five waves
@@ -285,6 +290,7 @@ offered at all.
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
+| Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Curse stacks on you | 9 | Poison on a boss | 12 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -305,6 +311,20 @@ full at 6 max hearts, 49 at 60, 102 at 300. Between waves it runs at **×2**.
 **Armour** is `Armour / (Armour + 5 × hit)`, capped at 85% — strong against a hail of
 small hits, thin against one big one. Fully capped at 1,560 armour value, a 5-damage hit
 lands for 0.8 and a 120-damage hit still lands for 33.
+
+**BLEED** is the melee half of damage over time, and it is Path of Exile's rule set. An
+ordinary swing never opens a wound on its own — that chance starts at **0%** and is a brick
+you buy — but every **critical** swing opens one **half the time** for free, which ties the
+mechanic to the crit tree instead of making it a third parallel build.
+
+A wound ticks for **40% of the hit that opened it, every second, for 8 seconds** — 320% of
+that hit in total — rising to **70%/s** with Deep Cuts. It reads the same increased
+damage-over-time pool Rotbrick feeds, and it ignores armour, because the opening hit
+already paid it. One wound at a time: a worse one replaces it rather than stacking beside
+it, so bleed rewards hitting *hard*, not often.
+
+And a body that has stopped moving bleeds **40% less**. Freezing a bleeding monster is not
+a free win.
 
 **You are not invulnerable between hits.** The window after taking damage is **0.10s**,
 not a second — everything landing on you counts, and a crowd is a crowd.
