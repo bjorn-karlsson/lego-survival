@@ -36,8 +36,11 @@ runs exactly the same in fallback type.
 ## The loop
 
 You are a minifig in a field of studs. Waves of brick monsters walk at you and come apart
-when hit. Every wave, every level and every chest hands you a **brick** — one of 59
-upgrades — and the bricks compound into a build. Survive long enough and the ground is a
+when hit. Each run introduces the roster in a different order — banded by era, so the
+opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
+every level and every chest hands you a **brick** — one of 59 upgrades — and the bricks
+compound into a build. Waves open with a breather so you can heal and read what you took;
+ENTER skips it. Survive long enough and the ground is a
 carpet of studs, the screen is a storm of lightning, and a three-storey skeleton is
 throwing its own ribcage at you.
 
@@ -83,6 +86,8 @@ Five named bosses rotate through waves 5, 15, 25…
 Every **tenth** wave is an ULTRA: `OMEGA BRICKTHANE`, `MEGA BONE BARON`, `ULTRA LAVABRICK`
 — each with its own signature (nova, bone spiral, meteor), a health bar across the top of
 the screen, and a guaranteed chest.
+
+**Wave 40 is the grand raid**, and every boss in the game wakes up at once.
 
 </td></tr>
 </table>
@@ -154,6 +159,7 @@ legendary rate of Hard for the privilege.
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows | move |
 | **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
+| <kbd>Enter</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>C</kbd> | character sheet |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles taken / dealt / events |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
