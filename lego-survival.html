@@ -526,13 +526,18 @@ const BANE_TICK      = 0.5;    /* how often the poison bites */
    lands. Three is the ceiling -- at nine stacks a body, that is three casts to
    a full load instead of nine. */
 const BANE_STACK_MAX = 3;
-const BANE_BURST     = [0, 0.40, 0.80];   /* chance a poisoned corpse bursts */
+const BANE_BURST     = [0, 0.80, 1.00];   /* chance a poisoned corpse bursts */
 /* Poison PILES UP. Every cloud that washes over a body adds a dose on top of
    the last, and each dose eats at it at the same rate — nine deep on anything
    ordinary, twelve on a boss, because a boss is supposed to be the thing you
    spend a whole minute dissolving. */
 const POISON_MAX      = 9;
 const POISON_MAX_BOSS = 12;
+/* SPORE BURST DEEPENS THE WELL. Each rank doubles how much rot a body can hold,
+   which is what makes the brick worth its slot twice over: the corpse bursts
+   more often AND it has more to hand on when it does. 9 -> 18 -> 36 on anything
+   ordinary, 12 -> 24 -> 48 on a boss. */
+const POISON_CAP_MUL  = [1, 2, 4];
 /* A BURST IS CONTAGION, NOT A BOMB. It deals no damage of its own. The corpse
    comes apart and hands every dose it was carrying to whatever is standing
    close enough, and the rot does the killing at its own pace -- so a packed
@@ -585,6 +590,9 @@ function syncStats(){
   p.bane.rate = paceOf(BANE_RATE_BASE, i.baneRate, BANE_MIN_RATE);
   p.bane.r    = Math.min(BANE_R_MAX, pool(BANE_R_BASE, 0, i.baneR, 1));
   p.bane.dot  = dotRate(BANE_DOT_BASE, p.baneDotFlat||0);
+  /* bleed: a flat chance pool and a share of the hit, both hard-capped */
+  p.bleedChance = clamp(p.bleedChanceFlat||0, 0, 1);
+  p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -751,6 +759,24 @@ const ARMOUR_INC_MAX  = 2.0;   /* and the increases on top of it */
    for half. At 100% chance every applicable spell hit is suppressed. */
 const SUPPRESS_TAKEN  = 0.5;
 const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
+/* what counts as a SWING. The sword, its whirl, the vortex and the lingering
+   totem all report as 'sword'; bladestorm blades report as 'storm'. Only these
+   can open a wound. */
+const MELEE_SOURCES = new Set(['sword','storm']);
+/* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
+   An ordinary swing never opens one on its own: the chance starts at nothing and
+   is a brick you buy. A CRITICAL swing opens one half the time for free, which
+   is what ties the mechanic to the crit tree instead of making it a third
+   parallel build. The wound ticks for a share of the hit that made it, it reads
+   the one increased-damage-over-time pool like every other lingering damage, and
+   it tears worse on a body that keeps running -- stand still and it half closes. */
+const BLEED_T          = 8;      /* how long one wound runs */
+const BLEED_SHARE_BASE = 0.40;   /* of the opening hit, per second */
+const BLEED_SHARE_MAX  = 0.70;
+const BLEED_CRIT_BASE  = 0.50;   /* a crit's own chance to open one */
+const BLEED_STILL_LESS = 0.40;   /* less damage while the body is standing still */
+const BLEED_STILL_SPD  = 18;     /* px/s under which it counts as standing still */
+const BLEED_TICK       = 0.4;
 /* A run used to end up casting all seven at once, which meant every build was
    the same build with different pacing. Four is a CHOICE: the bricks that would
    hand you a fifth stop being offered, and everything that deepens the four you
@@ -1212,6 +1238,10 @@ function newPlayer(){
     freeze:{ n:0, r:190, dur:2.5, rate:FREEZE_RATE_BASE, cd:4, stun:0 },
     bane:{ n:0, dmg:2, rate:BANE_RATE_BASE, cd:1.5, r:BANE_R_BASE, arc:BANE_ARC_BASE,
            dot:BANE_DOT_BASE, dotT:BANE_DOT_T, stacks:1, burst:0 },
+    /* BLEED. chanceFlat is added to every melee hit and stacks on top of the
+       crit's own 50%; shareFlat deepens the wound itself. Both are rebuilt by
+       syncStats like everything else -- no card writes the derived number. */
+    bleedChanceFlat:0, bleedShareFlat:0, bleedChance:0, bleedShare:BLEED_SHARE_BASE,
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
     chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0 },
@@ -1953,6 +1983,15 @@ const COIL_LIFE = 12;        /* how long one stands */
 const COIL_R    = 88;        /* the circle it electrifies */
 const COIL_TICK = 0.55;      /* how often it bites whatever is standing in it */
 const COIL_MAX  = 14;        /* the arena is never more than this full of them */
+/* A coil lands DORMANT and hums for a couple of seconds before it bites. It used
+   to arrive live and directly underfoot, which read as unavoidable rather than
+   dangerous -- you were already inside it. The delay is the whole fight: you get
+   a window to read the ring and pick your gap. */
+const COIL_ARM_MIN = 2.0;
+const COIL_ARM_MAX = 3.0;
+/* and it lands AROUND you, at arm's length, not on your head */
+const COIL_SPREAD_MIN = 150;
+const COIL_SPREAD_MAX = 330;
 /* What one shot carries. A monster's `dmg` is the weight of its melee swing;
    a projectile is a share of it, and something that throws a hundred skulls in
    one barrage gets a thinner share than an archer with a single arrow. This is
@@ -2206,13 +2245,21 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   if(crit) d *= critMult();
   if(e.magic) d *= 0.7;                       /* magic-touched: 30% less damage taken */
   let suppressed = false;
-  if(SPELL_SOURCES.has(source)){
+  if(opts.noMit){
+    /* a wound already paid armour when it was opened — charging it again on
+       every tick for eight seconds would make bleed worthless on exactly the
+       armoured things it is supposed to grind down */
+  } else if(SPELL_SOURCES.has(source)){
     /* spells meet suppression, never armour */
     if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
   } else {
     /* attacks meet armour, scaled against the size of this very hit */
     d *= (1 - armourDR(e.armour||0, d));
   }
+  /* BLEED rolls off the damage that ACTUALLY landed, after armour, so a swing
+     that barely got through barely bleeds. Ticks never re-roll it. */
+  if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit))
+    bleedEnemy(e, d);
   /* fractions survive all the way to the health bar. Rounding every hit to a
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
@@ -2238,7 +2285,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
 }
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
    of the two rates, so re-gassing a monster is never a downgrade. */
-function poisonCap(e){ return e.type==='boss' ? POISON_MAX_BOSS : POISON_MAX; }
+function poisonCap(e){
+  const base = e.type==='boss' ? POISON_MAX_BOSS : POISON_MAX;
+  const rank = (player && player.bane && player.bane.burst) || 0;
+  return base * (POISON_CAP_MUL[rank] || 1);
+}
 function poisonEnemy(e, dps, dur){
   if(e.dead || e.state!=='active') return;
   if(!e.poison) e.poison = { n:0, dps:0, t:0, tick:rnd(0.05, BANE_TICK) };
@@ -2262,6 +2313,43 @@ function baneStrike(e, dmg, dir, kb, dps, dur, stacks){
   const n = Math.max(1, stacks|0);
   for(let i=0;i<n;i++) poisonEnemy(e, dps, dur);
   hitEnemy(e, dmg, dir, kb, 'bane', {spin:true});
+}
+/* The odds this swing opens a wound. A crit carries its own fifty per cent; an
+   ordinary hit carries only what you bought. Both read the same pool, so one
+   brick makes your crits nastier AND your ordinary swings bleed at all. */
+function bleedChance(crit){
+  const p = player;
+  return clamp((crit ? BLEED_CRIT_BASE : 0) + ((p && p.bleedChance) || 0), 0, 1);
+}
+/* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
+   rather than stacking beside it — so bleed rewards hitting hard, not often. */
+function bleedEnemy(e, hit){
+  if(e.dead || e.state!=='active' || !(hit > 0)) return;
+  const dps = dotRate(hit * ((player && player.bleedShare) || BLEED_SHARE_BASE), 0);
+  if(!e.bleed) e.bleed = { dps:0, t:0, tick:rnd(0.05, BLEED_TICK) };
+  const bl = e.bleed;
+  bl.dps = Math.max(bl.dps, dps);
+  bl.t   = BLEED_T;
+  addSparks(e.x, e.y-22*(e.scale||1), 3, '#d2313c');
+}
+/* what one tick of a wound takes off a body */
+function bleedTick(e, dt){
+  const bl = e.bleed;
+  if(!bl) return;
+  bl.t -= dt;
+  bl.tick -= dt;
+  if(bl.tick <= 0 && !e.dead && e.state==='active'){
+    bl.tick = BLEED_TICK;
+    /* a body that has stopped moving is not tearing its own wound open */
+    const still = (e.spdNow||0) < BLEED_STILL_SPD;
+    const mul = still ? (1 - BLEED_STILL_LESS) : 1;
+    hitEnemy(e, bl.dps*mul*BLEED_TICK, rnd(TAU), 0, 'bleed',
+             {quiet:true, noCrit:true, noMit:true});
+  }
+  if(Math.random() < 0.35)
+    particles.push({kind:'spark', x:e.x+rnd(-9,9), y:e.y-rnd(8,32),
+      vx:rnd(-10,10), vy:rnd(14,46), life:rnd(0.25,0.5), max:0.5, color:'#c8202a'});
+  if(bl.t <= 0) e.bleed = null;
 }
 /* what one tick of poison takes off a body */
 function poisonTick(e, dt){
@@ -3586,6 +3674,25 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased DAMAGE OVER TIME — every lingering `+
       `damage you inflict, whatever put it there`,
     apply:c=>{ player.inc.dot += c.v; syncStats(); } },
+  /* BLEED lives in the crit tree, not in a tree of its own: a swing bleeds
+     because it crit, and these two decide how often and how deep. */
+  { id:'bleedchance', name:'Serrated Edge', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>player.bleedChance < 1,
+    calc:m=>({v: byRar(m, [0.05, 0.08, 0.12, 0.18, 0.25])}),
+    desc:c=>`+${Math.round(c.v*100)}% chance for a melee hit to open a BLEED — `+
+      `on top of the ${Math.round(BLEED_CRIT_BASE*100)}% every critical already carries `+
+      `(now ${Math.round(bleedChance(false)*100)}% on a swing, ${Math.round(bleedChance(true)*100)}% on a crit)`,
+    apply:c=>{ player.bleedChanceFlat += c.v; syncStats(); } },
+  { id:'bleedpow', name:'Deep Cuts', icon:'sword', cls:'OFFENSE', minRar:'rare',
+    req:()=>player.bleedShare < BLEED_SHARE_MAX,
+    calc:m=>({v: byRar(m, [0.03, 0.05, 0.08, 0.12, 0.18])}),
+    desc:c=>{
+      const next = Math.min(BLEED_SHARE_MAX, player.bleedShare + c.v);
+      return `A wound bleeds for ${Math.round(next*100)}% of the hit each second `+
+        `instead of ${Math.round(player.bleedShare*100)}% (cap ${Math.round(BLEED_SHARE_MAX*100)}%), `+
+        `for ${BLEED_T}s`;
+    },
+    apply:c=>{ player.bleedShareFlat += c.v; syncStats(); } },
   { id:'baneburst', name:'Spore Burst', icon:'bomblets', cls:'SPELL', minRar:'legendary',
     req:()=>player.bane.n>0 && player.bane.burst < BANE_BURST.length-1,
     calc:m=>({n:1}),
@@ -3593,9 +3700,11 @@ const UPGRADES = [
       const lv = player.bane.burst + 1;
       return `A poisoned body that dies BURSTS — ${Math.round(BANE_BURST[lv]*100)}% of the time — `+
         `handing EVERY stack it was carrying to everything within ${BANE_BURST_R[lv]}. `+
-        `No blast: what spreads is the rot`+
-        (lv===1 ? '' : ' (was '+Math.round(BANE_BURST[lv-1]*100)+'% and '+
-          BANE_BURST_R[lv-1]+' reach)');
+        `No blast: what spreads is the rot. `+
+        `Poison also piles ${POISON_CAP_MUL[lv]}× deeper — ${POISON_MAX*POISON_CAP_MUL[lv]} `+
+        `on a monster, ${POISON_MAX_BOSS*POISON_CAP_MUL[lv]} on a boss`+
+        (lv===1 ? '' : ' (was '+Math.round(BANE_BURST[lv-1]*100)+'%, '+
+          BANE_BURST_R[lv-1]+' reach and '+POISON_MAX*POISON_CAP_MUL[lv-1]+' deep)');
     },
     apply:c=>{ player.bane.burst = Math.min(BANE_BURST.length-1, player.bane.burst + 1); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
@@ -3841,7 +3950,7 @@ function buildDiffRow(){
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
-  { name:'CRITICALS',       ids:['crit','critpow'] },
+  { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
@@ -4166,12 +4275,13 @@ function spellSummaries(){
       `${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
       `POISON: ${p.bane.dot.toFixed(2)}/s a stack for ${p.bane.dotT.toFixed(1)}s — ${total.toFixed(1)} a stack\n`+
       `Every touch lays ${p.bane.stacks} dose${p.bane.stacks>1?'s':''} at once\n`+
-      `Stacks to ${POISON_MAX} on a monster and ${POISON_MAX_BOSS} on a boss: `+
-      `${(p.bane.dot*POISON_MAX).toFixed(2)}/s at full depth\n`+
+      `Stacks to ${POISON_MAX*POISON_CAP_MUL[p.bane.burst]} on a monster and `+
+      `${POISON_MAX_BOSS*POISON_CAP_MUL[p.bane.burst]} on a boss: `+
+      `${(p.bane.dot*POISON_MAX*POISON_CAP_MUL[p.bane.burst]).toFixed(2)}/s at full depth\n`+
       (p.bane.burst
         ? `Spore Burst: a poisoned body bursts ${Math.round(BANE_BURST[p.bane.burst]*100)}% of the time, `+
-          `handing all ${POISON_MAX} stacks to everything within ${BANE_BURST_R[p.bane.burst]} `+
-          `at ${Math.round(BANE_BURST_KEEP*100)}% rate — no blast, only the rot`
+          `handing all ${POISON_MAX*POISON_CAP_MUL[p.bane.burst]} stacks to everything within `+
+          `${BANE_BURST_R[p.bane.burst]} at ${Math.round(BANE_BURST_KEEP*100)}% rate — no blast, only the rot`
         : `Every body the cloud touches takes both, and the poison keeps going once you have moved on`) });
   }
   if(p.storm.n>0){
@@ -4249,6 +4359,10 @@ const STAT_PROBES = [
   { g:'SWORD', k:'Swing rate',      get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
   { g:'SWORD', k:'Reach',           get:()=> 56+player.reach,          fmt:v=>Math.round(v)+' px' },
   { g:'SWORD', k:'Crit chance',     get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
+  { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%' },
+  { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true },
+  { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s' },
+  { g:'BLEED', k:'Total per wound', get:()=> player.bleedShare*BLEED_T*100, fmt:v=>v.toFixed(0)+'%' },
   { g:'SWORD', k:'Crit damage',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
@@ -4322,7 +4436,8 @@ const STAT_PROBES = [
   { g:'BRICKBANE', k:'Poison per second',get:()=> player.bane.n ? player.bane.dot : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
   { g:'BRICKBANE', k:'Poison duration',  get:()=> player.bane.n ? player.bane.dotT : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BRICKBANE', k:'Damage per dose',  get:()=> player.bane.n ? player.bane.dot*player.bane.dotT : 0, fmt:v=>v.toFixed(1), zero:true },
-  { g:'BRICKBANE', k:'At 9 stacks',      get:()=> player.bane.n ? player.bane.dot*POISON_MAX : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
+  { g:'BRICKBANE', k:'Stack ceiling',    get:()=> player.bane.n ? POISON_MAX*POISON_CAP_MUL[player.bane.burst] : 0, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'BRICKBANE', k:'At full depth',    get:()=> player.bane.n ? player.bane.dot*POISON_MAX*POISON_CAP_MUL[player.bane.burst] : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
   { g:'BRICKBANE', k:'Burst reach',      get:()=> (player.bane.n && player.bane.burst)
       ? BANE_BURST_R[player.bane.burst] : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BRICKBANE', k:'Spread',           get:()=> player.bane.n ? Math.min(BANE_ARC_MAX,player.bane.arc)*180/Math.PI : 0, fmt:v=>Math.round(v)+'°', zero:true },
@@ -4650,6 +4765,24 @@ function renderCharSheet(){
       `${calcDamage(5,'spell').toFixed(2)}`),
     sRow('Increased damage over time', Math.round(p.inc.dot*100)+'%',
       hasAnyDot() ? 'every lingering damage you inflict' : 'nothing you own deals damage over time yet'),
+    sRow('Bleed chance', Math.round(bleedChance(true)*100)+'% / '+Math.round(bleedChance(false)*100)+'%',
+      'on a critical / on any swing',
+      `A melee hit that rolls it opens a BLEED: physical damage over time for `+
+      `${BLEED_T}s.\n\n`+
+      `Every critical carries ${Math.round(BLEED_CRIT_BASE*100)}% on its own. `+
+      `Serrated Edge adds to both.\n`+
+      `Only the sword, its whirl, the vortex and bladestorm blades can open one — `+
+      `spells never do.`),
+    sRow('Bleed damage', Math.round(p.bleedShare*100)+'%/s',
+      Math.round(p.bleedShare*BLEED_T*100)+'% of the hit over '+BLEED_T+'s',
+      `A wound ticks for ${Math.round(p.bleedShare*100)}% of the damage that opened it, `+
+      `every second, for ${BLEED_T}s — `+
+      `${Math.round(p.bleedShare*BLEED_T*100)}% of that hit in total.\n\n`+
+      `It reads your increased damage over time (${Math.round(p.inc.dot*100)}%) like every `+
+      `other lingering damage, and it ignores armour: the opening hit already paid it.\n`+
+      `A body standing STILL bleeds ${Math.round(BLEED_STILL_LESS*100)}% less. Freezing a `+
+      `bleeding monster is not a free win.\n`+
+      `One wound at a time — a worse one replaces it rather than stacking.`),
     sRow('More multipliers', '×'+p.moreAll.toFixed(2),
       'each MORE modifier multiplies on its own',
       `MORE modifiers are NOT added together — each one is its own multiplier,\n`+
@@ -5862,12 +5995,19 @@ function updateEnemy(e, dt){
     if(e.buildT>=1){ e.state='active'; addDust(e.x,e.y,4); SFX.build(); }
     return;
   }
+  /* How far this body actually travelled last frame. Bleed reads it, and it has
+     to be MEASURED rather than taken off the AI's intent: a monster shoving
+     against a rock, frozen solid, or winding up an attack is standing still no
+     matter what it meant to do. */
+  e.spdNow = dt > 0 ? Math.hypot(e.x - (e.lx ?? e.x), e.y - (e.ly ?? e.y)) / dt : 0;
+  e.lx = e.x; e.ly = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
   e.orbCd -= dt;
   e.vortCd -= dt; e.whirlCd = Math.max(0, (e.whirlCd||0) - dt);
   e.totCd = Math.max(0, (e.totCd||0) - dt);
   e.slowT = Math.max(0, e.slowT - dt);
   if(e.poison) poisonTick(e, dt);
+  if(e.bleed)  bleedTick(e, dt);
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
@@ -6678,21 +6818,27 @@ function plantCoil(e, x, y){
   let live = 0;
   for(const h of hazards) if(h.kind==='coil') live++;
   if(live >= COIL_MAX) return;
+  /* the twelve seconds it is DANGEROUS start when it wakes, not when it lands */
+  const arm = rnd(COIL_ARM_MIN, COIL_ARM_MAX);
   hazards.push({ kind:'coil', x:clamp(x, W.wall+40, W.w-W.wall-40),
     y:clamp(y, W.wall+40, W.h-W.wall-40),
-    r:COIL_R, life:COIL_LIFE, max:COIL_LIFE, tick:rnd(0.25,0.85),
+    r:COIL_R, life:COIL_LIFE+arm, max:COIL_LIFE+arm, tick:rnd(0.25,0.85),
+    arm, armMax:arm,
     dmg:Math.max(1, Math.round((e && e.dmg || 2) * 0.55)),
     drift:rnd(TAU), spin:rnd(TAU), seed:rnd(TAU), born:0 });
   addRing(x, y, 10, 300, COIL_R, '#ffe95a', 6, 0.5);
 }
 function golemCoils(e, G){
-  /* three of them: one where you are, two spread around you, so walking out of
-     the first puts you next to the second */
+  /* an even ring AROUND you rather than a pile on top of you: the angles are
+     spread so two never land in the same place, and none of them lands where
+     you are standing. Walking out of one is a direction you can choose. */
   const n = e.elite ? 4 : 3;
   const lead = leadPlayer(e.x, e.y, 0.7, 0.8);
+  const a0 = rnd(TAU);
   for(let i=0;i<n;i++){
-    const a = rnd(TAU), rr = i===0 ? rnd(0,30) : rnd(90, 190);
-    schedule(i*0.18, ()=> plantCoil(e, lead.x+Math.cos(a)*rr, lead.y+Math.sin(a)*rr));
+    const a  = a0 + i*TAU/n + rnd(-0.32, 0.32);
+    const rr = rnd(COIL_SPREAD_MIN, COIL_SPREAD_MAX);
+    schedule(i*0.18, ()=> plantCoil(e, lead.x+Math.cos(a)*rr, lead.y+Math.sin(a)*rr*0.85));
   }
   addSparks(e.x, e.y-24, 14, '#ffe95a');
   SFX.thunder();
@@ -8067,6 +8213,16 @@ function updateFx(dt){
       h.x = clamp(h.x + Math.cos(h.drift)*16*dt, W.wall+40, W.w-W.wall-40);
       h.y = clamp(h.y + Math.sin(h.drift*0.8)*16*dt, W.wall+40, W.h-W.wall-40);
       h.spin += dt*2.4;
+      if((h.arm||0) > 0){
+        /* still winding up: it shows you exactly where it will be, and does
+           nothing at all to anything standing in it */
+        h.arm -= dt;
+        if(h.arm <= 0){ addRing(h.x, h.y, 8, 280, h.r, '#ffe95a', 5, 0.4); SFX.zap(); }
+        if(Math.random()<0.18)
+          particles.push({kind:'spark', x:h.x+rnd(-14,14), y:h.y-rnd(4,26),
+            vx:rnd(-8,8), vy:rnd(-26,-6), life:rnd(0.2,0.4), max:0.4, color:'#8d7f3a'});
+        continue;
+      }
       h.tick -= dt;
       if(Math.random()<0.5)
         particles.push({kind:'spark', x:h.x+rnd(-h.r*0.8,h.r*0.8), y:h.y+rnd(-h.r*0.5,h.r*0.5),
@@ -8200,16 +8356,54 @@ const GOLEM_RGB = {
 /* One green bead for every dose of poison in a body, orbiting it. You can count
    a monster's stacks across the field, which is the whole point of a mechanic
    that pays out on how deep it is when the thing dies. */
+/* A bleeding body wears its wound: two red gashes on the torso and a drip that
+   dims when it stops moving, because whether it is moving is worth 40% of the
+   damage and the player has to be able to see it. */
+function drawBleedMark(c, e){
+  const bl = e.bleed;
+  if(!bl) return;
+  const s = e.scale || 1;
+  const still = (e.spdNow||0) < BLEED_STILL_SPD;
+  const a = still ? 0.45 : 0.9;
+  c.lineCap = 'round';
+  /* HALF THE ROSTER IS RED, so a red gash on its own vanishes. Each one is cut
+     twice: a near-black liner, then the bright wound on top of it. */
+  for(const pass of [0,1]){
+    c.strokeStyle = pass ? `rgba(255,74,84,${a})` : `rgba(58,4,8,${a*0.9})`;
+    c.lineWidth = pass ? 2.2*s : 4.4*s;
+    for(let i=0;i<2;i++){
+      const ox = (i? 5: -5)*s, oy = (i? -26: -19)*s;
+      c.beginPath();
+      c.moveTo(e.x+ox-3.5*s, e.y+oy-3.5*s);
+      c.lineTo(e.x+ox+3.5*s, e.y+oy+3.5*s);
+      c.stroke();
+    }
+  }
+  c.lineCap = 'butt';
+  /* a bead running down, slower when the body has stopped */
+  const drip = ((vtime*(still?0.5:1.3) + (e.phase||0)) % 1);
+  c.fillStyle = `rgba(40,2,6,${(1-drip)*a*0.8})`;
+  c.beginPath(); c.arc(e.x+2*s, e.y + (-18 + drip*16)*s, 2.8*s, 0, TAU); c.fill();
+  c.fillStyle = `rgba(230,40,50,${(1-drip)*a})`;
+  c.beginPath(); c.arc(e.x+2*s, e.y + (-18 + drip*16)*s, 2*s, 0, TAU); c.fill();
+  /* a small pool at its feet, so a bleeding body reads even from across the field */
+  c.fillStyle = `rgba(150,16,24,${0.28*a})`;
+  c.beginPath(); c.ellipse(e.x, e.y+2, 9*s, 3.4*s, 0, 0, TAU); c.fill();
+}
+const PIP_MAX = 12;          /* beads drawn before the count takes over */
 function drawPoisonPips(c, e){
   const po = e.poison;
   if(!po || !po.n) return;
   const s = e.scale || 1;
   const ry = -34*s, rx = 15*s;
-  /* a sickly haze over the body first */
-  c.fillStyle = `rgba(126,214,58,${0.10 + 0.020*po.n})`;
+  /* a sickly haze over the body first — CAPPED, because Spore Burst can put
+     thirty-six doses in a body and a haze that deep would swallow the monster */
+  c.fillStyle = `rgba(126,214,58,${Math.min(0.26, 0.10 + 0.020*po.n)})`;
   c.beginPath(); c.ellipse(e.x, e.y - 20*s, 15*s, 22*s, 0, 0, TAU); c.fill();
-  for(let i=0;i<po.n;i++){
-    const a = vtime*1.6 + i*TAU/po.n + (e.phase||0);
+  /* you can count beads up to a point; past it the number is the readable thing */
+  const beads = Math.min(po.n, PIP_MAX);
+  for(let i=0;i<beads;i++){
+    const a = vtime*1.6 + i*TAU/beads + (e.phase||0);
     const px = e.x + Math.cos(a)*rx;
     const py = e.y + ry + Math.sin(a)*rx*0.42 + Math.sin(vtime*3+i)*1.5;
     const rr = 2.6*s;
@@ -8220,6 +8414,22 @@ function drawPoisonPips(c, e){
     c.fillStyle = 'rgba(220,255,170,0.9)';
     c.beginPath(); c.arc(px-rr*0.3, py-rr*0.3, rr*0.4, 0, TAU); c.fill();
   }
+}
+/* Past a dozen doses nobody can count beads, so the number takes over. It sits
+   clear of the health bar at -56, which is the only thing up there. */
+function drawPoisonCount(c, e){
+  const po = e.poison;
+  if(!po || po.n <= PIP_MAX) return;
+  const s = e.scale || 1;
+  const y = e.y - 64*s;
+  c.font = `700 ${Math.round(12*s)}px Fredoka, sans-serif`;
+  c.textAlign = 'center';
+  c.lineWidth = 3.5;
+  c.strokeStyle = 'rgba(16,38,8,0.92)';
+  c.strokeText('\u00d7'+po.n, e.x, y);
+  c.fillStyle = '#b6f272';
+  c.fillText('\u00d7'+po.n, e.x, y);
+  c.textAlign = 'left';
 }
 function drawGolemAura(c, e){
   const gg = GOLEM_RGB[e.golem], s = e.scale;
@@ -9666,17 +9876,31 @@ function render(){
     if(h.kind==='coil'){
       const grow = Math.min(1, (h.born||0)/0.35);
       const rr = h.r*grow;
-      const bright = 0.55 + 0.45*Math.sin(vtime*9 + h.seed);
+      const arming = (h.arm||0) > 0;
+      /* DORMANT: dim, no arcs, and a clock sweeping round the rim so you can
+         see exactly how long you have to be somewhere else. */
+      const bright = arming ? 0.25 : 0.55 + 0.45*Math.sin(vtime*9 + h.seed);
       /* the floor it owns */
-      ctx.fillStyle = `rgba(255,233,90,${(0.10+0.06*bright)*k})`;
+      ctx.fillStyle = arming
+        ? `rgba(180,160,70,${0.07*k})`
+        : `rgba(255,233,90,${(0.10+0.06*bright)*k})`;
       ctx.beginPath(); ctx.arc(h.x, h.y, rr, 0, TAU); ctx.fill();
       ctx.setLineDash([10,8]);
-      ctx.strokeStyle = `rgba(255,233,90,${(0.55+0.35*bright)*k})`; ctx.lineWidth = 3;
+      ctx.strokeStyle = arming
+        ? `rgba(200,180,90,${0.40*k})`
+        : `rgba(255,233,90,${(0.55+0.35*bright)*k})`;
+      ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(h.x, h.y, rr, 0, TAU); ctx.stroke();
       ctx.setLineDash([]);
-      /* arcs crawling out to the rim */
+      if(arming){
+        /* the winding-up sweep: a solid arc closing the circle as it charges */
+        const done = 1 - h.arm/Math.max(0.001, h.armMax||1);
+        ctx.strokeStyle = `rgba(255,233,90,${0.85*k})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(h.x, h.y, rr, -Math.PI/2, -Math.PI/2 + TAU*done); ctx.stroke();
+      }
+      /* arcs crawling out to the rim — only once it is live */
       ctx.strokeStyle = `rgba(255,243,160,${0.75*k})`; ctx.lineWidth = 2;
-      for(let i=0;i<4;i++){
+      for(let i=0;i<(arming?0:4);i++){
         const a = h.spin + i*TAU/4;
         ctx.beginPath(); ctx.moveTo(h.x, h.y-18);
         for(let q=1;q<=4;q++){
@@ -10397,14 +10621,16 @@ function render(){
         if(full) ctx.arc(pr.x, pr.y, Math.max(1,pr.r), 0, TAU);
         else { ctx.moveTo(pr.x, pr.y); ctx.arc(pr.x, pr.y, Math.max(1,pr.r), a0, a1); ctx.closePath(); }
       };
-      ctx.fillStyle = `rgba(28,58,14,${0.30*fade})`;    /* the shadow it casts */
+      ctx.fillStyle = `rgba(28,58,14,${0.15*fade})`;    /* the shadow it casts */
       wedge(); ctx.fill();
-      ctx.fillStyle = `rgba(126,214,58,${0.34*fade})`;
+      ctx.fillStyle = `rgba(126,214,58,${0.17*fade})`;
       wedge(); ctx.fill();
-      /* a thick bright front where the gas is still moving, over a dark liner */
-      ctx.strokeStyle = `rgba(24,54,12,${0.55*fade})`; ctx.lineWidth = 13;
+      /* a thick bright front where the gas is still moving, over a dark liner.
+         The FRONT stays readable; it is the body of the cloud that thins out, so
+         the spell stops painting over the fight it is winning. */
+      ctx.strokeStyle = `rgba(24,54,12,${0.32*fade})`; ctx.lineWidth = 13;
       ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(1,pr.r), full?0:a0, full?TAU:a1); ctx.stroke();
-      ctx.strokeStyle = `rgba(190,255,120,${0.9*fade})`; ctx.lineWidth = 7;
+      ctx.strokeStyle = `rgba(190,255,120,${0.62*fade})`; ctx.lineWidth = 7;
       ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(1,pr.r), full?0:a0, full?TAU:a1); ctx.stroke();
       /* and lumps of it rolling along, so it reads as gas and not a pie slice */
       for(let i=0;i<11;i++){
@@ -10413,11 +10639,11 @@ function render(){
         const rq = pr.r * (0.70 + 0.30*Math.sin(pr.seed + i*2.1 + vtime*5));
         const rad = 13 + 10*Math.sin(pr.seed*2 + i*1.7 + vtime*4);
         const px = pr.x+Math.cos(a)*rq, py = pr.y+Math.sin(a)*rq*0.82;
-        ctx.fillStyle = `rgba(36,72,18,${0.34*fade})`;
+        ctx.fillStyle = `rgba(36,72,18,${0.17*fade})`;
         ctx.beginPath(); ctx.ellipse(px, py, rad+2, rad*0.8+2, 0, 0, TAU); ctx.fill();
-        ctx.fillStyle = `rgba(158,238,92,${0.50*fade})`;
+        ctx.fillStyle = `rgba(158,238,92,${0.26*fade})`;
         ctx.beginPath(); ctx.ellipse(px, py, rad, rad*0.8, 0, 0, TAU); ctx.fill();
-        ctx.fillStyle = `rgba(214,255,160,${0.30*fade})`;
+        ctx.fillStyle = `rgba(214,255,160,${0.17*fade})`;
         ctx.beginPath(); ctx.ellipse(px-rad*0.2, py-rad*0.2, rad*0.45, rad*0.36, 0, 0, TAU); ctx.fill();
       }
       ctx.restore();
@@ -11023,6 +11249,11 @@ function drawEnemy(c, e){
     if(e.bkey==='ashtyrant'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
+  /* ON TOP of the body, never under it: a gash is a mark ON the thing, and the
+     dose count has to clear its head and its health bar. Anything drawn before
+     drawFigure is simply painted over by the minifig. */
+  drawBleedMark(c, e);
+  drawPoisonCount(c, e);
   /* frostbite tint */
   if(e.slowT>0){
     c.save(); c.globalAlpha = 0.45;
