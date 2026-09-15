@@ -79,9 +79,13 @@ resistance, slow your swing, thin your armour and choke your regeneration.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
-the green beads orbiting a body — and the legendary makes a poisoned corpse detonate for
-the opening hit **+25% per stack** (+50% upgraded), which seeds the neighbours, which can
-kill them, which sets *them* off.
+the green beads orbiting a body.
+
+The legendary, **Spore Burst**, is contagion rather than a bomb: a poisoned corpse comes
+apart and hands **every stack it was carrying** to everything within 130 (210 upgraded),
+at 70% of the rate. It deals no blast damage at all — nothing dies the instant the cloud
+touches it. What spreads is the rot, and a body that dies of it bursts in turn, so a
+packed pull comes apart in a slow green wave you can watch travel.
 
 </td><td width="33%" valign="top">
 
