@@ -246,6 +246,7 @@
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
       <span><kbd>LMB</kbd> <b>swing sword</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
+      <span><kbd>F</kbd> <b>start wave early</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
@@ -940,7 +941,7 @@ window.addEventListener('keydown', e=>{
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
-  if(e.code==='Enter' && state==='play' && wave.state==='ready') waveSkip();
+  if(e.code==='KeyF' && state==='play' && wave.state==='ready') waveSkip();
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
@@ -1357,13 +1358,17 @@ function breakProp(p){
   if(p.indestructible) return;
   if(p.type==='chest'){
     p.dead = true;
+    /* the mystery chest rolls what is inside at the moment it comes apart */
+    if(p.wild) p.rar = rollRarity('wild');
     const CC = (RARITY[p.rar] || RARITY.common).col;
     spawnBricks(p.x, p.y, ['#9c6a45', CC, sh(CC,0.35)], 10, 200);
     addRing(p.x, p.y, 8, 300, 90, CC, 6, 0.5);
     addSparks(p.x, p.y-10, 12, sh(CC,0.4));
     SFX.fortune();
     const CR = RARITY[p.rar] || RARITY.common;
-    showBanner('TREASURE!', CR.name+' BRICK INSIDE', CR.col, 1.6, 40);
+    showBanner(p.wild ? 'MYSTERY CHEST!' : 'TREASURE!',
+      CR.name+' BRICK INSIDE', CR.col, 1.6, 40);
+    if(p.wild){ addRing(p.x, p.y, 10, 420, 150, CR.col, 8, 0.6); SFX.levelup(); }
     queuePick('chest', p.rar);
     return;
   }
@@ -2101,7 +2106,13 @@ const DROP = {
   chest:   0.0034,
   /* The exception. The golden heart is the only body drop that makes you
      permanently stronger, so it stays rare — about one every five waves. */
-  gheart:  0.0011
+  gheart:  0.0011,
+  /* THE MYSTERY CHEST. Rarer than an epic reward roll, commoner than a
+     legendary one — about three and a half in a forty-wave run. It does not
+     paint its tier on the lid like an ordinary chest: what is inside is rolled
+     when you break it open, and it can come out anywhere from uncommon to
+     legendary. */
+  wild:    0.0006
 };
 const DROP_ELITE = 8;        /* an elite rolls every one of them eight times over */
 /* A boss always leaves the two things that keep a run going — a heart and a
@@ -2124,6 +2135,9 @@ function mobSpoils(e){
   if(Math.random() < DROP.chest * m)
     props.push({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16,
       rar: rollRarity('chest') });
+  if(Math.random() < DROP.wild * m)
+    props.push({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
+      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' });
 }
 function bossSpoils(e){
   pickups.push(makePickup('heart',  e.x-22, e.y));
@@ -2141,6 +2155,10 @@ function bossSpoils(e){
   /* a boss always leaves a chest, painted at least rare */
   props.push({ type:'chest', x:e.x+rnd(-60,60), y:e.y+rnd(30,60), flash:0, seed:rnd(1000),
     dead:false, hp:3, r:16, rar: rollRarity('boss') });
+  /* ...and one in six leave the mystery one too */
+  if(Math.random() < 0.17)
+    props.push({ type:'chest', wild:true, x:e.x+rnd(-70,70), y:e.y+rnd(30,70),
+      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' });
 }
 /* Levelling used to outrun the roster: by wave 20 the hero was several levels
    past what the wave was built for, because a kill paid its base value times a
@@ -2552,6 +2570,14 @@ const MAX_WAVE_BODIES = 320;
    boss — and ENTER takes it early for anyone who does not want it. */
 const WAVE_BREAK = 6;
 const WAVE_BREAK_BOSS = 30;
+/* CALLING THE NEXT WAVE DOWN ON YOURSELF. Hold F in the middle of a fight and
+   after a moment's commitment a three-second clock starts; when it runs out the
+   wave after this one arrives ON TOP of the one you are already in. You clear
+   two waves' worth of bodies at once, you are paid both waves' rewards, and the
+   run advances twice as fast. It is entirely your idea, which is the point. */
+const CALL_HOLD = 0.7;         /* how long F must be held before it commits */
+const CALL_DELAY = 3;          /* and the clock you get to regret it in */
+const CALL_MAX = 3;            /* waves that can be stacked onto one fight */
 /* Where the run turns into the grand raid. It used to be fifty, which is a
    long evening; forty is the same shape half an hour sooner. */
 const RAID_WAVE = 40;
@@ -2713,9 +2739,50 @@ function waveSkip(){
 }
 function beginFight(){
   wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4;
+  wave.callT = 0; wave.callIn = 0; wave.merged = 0; wave.owed = 0;
+  /* if F is still down from skipping the break, it must be RELEASED before it
+     starts charging a call — otherwise skipping the wait would roll straight on
+     into summoning the next wave, which nobody asked for */
+  wave.callLatch = !!keys.KeyF;
+}
+/* Fold the next wave into this one. */
+function callWave(){
+  const n = wave.n + 1;
+  const extra = composeWave(n);
+  wave.n = n;
+  wave.queue = wave.queue.concat(extra);
+  shuffleArr(wave.queue);
+  wave.merged = (wave.merged||0) + 1;
+  wave.owed = (wave.owed||0) + 1;           /* a reward is owed for it either way */
+  wave.spawnT = 0;                          /* they come straight through the door */
+  queueTrackForWave(n);
+  logEvent('── WAVE '+n+' CALLED IN EARLY · +'+extra.length+' bodies ──', '#ff8a4a');
+  showBanner('WAVE '+n+' JOINS IN!', extra.length+' more bodies — double or nothing',
+    '#ff8a4a', 2.0, 46);
+  SFX.roar(); addShake(0.45);
+}
+function updateCall(dt){
+  if(wave.state!=='fight'){ wave.callT = 0; return; }
+  if(wave.callIn > 0){
+    wave.callIn -= dt;
+    if(wave.callIn <= 0){ wave.callIn = 0; callWave(); }
+    return;
+  }
+  if((wave.merged||0) >= CALL_MAX) return;
+  if(!keys.KeyF) wave.callLatch = false;
+  if(keys.KeyF && !wave.callLatch && !player.dead){
+    wave.callT = (wave.callT||0) + dt;
+    if(wave.callT >= CALL_HOLD){
+      wave.callT = 0;
+      wave.callIn = CALL_DELAY;
+      SFX.grunt();
+      showBanner('CALLING THE NEXT WAVE', 'brace — '+CALL_DELAY+' seconds', '#ff8a4a', 1.2, 38);
+    }
+  } else wave.callT = Math.max(0, (wave.callT||0) - dt*2.2);
 }
 function updateWave(dt){
   wave.t += dt;
+  updateCall(dt);
   if(wave.state==='ready'){
     wave.readyT -= dt;
     if(wave.readyT <= 0) beginFight();
@@ -2770,13 +2837,19 @@ function updateWave(dt){
         wave.spawnT = 0.6;
       }
     }
-    if(!wave.queue.length && enemies.length===0 && wave.t>2){
+    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn){
       wave.state = 'cleared'; wave.t = 0;
-      const bonus = 4 + wave.n*2;
-      showBanner('WAVE CLEARED!', '+'+bonus+' stud bonus', '#a5e06e', 1.4, 44);
+      const folded = wave.merged||0;
+      const bonus = (4 + wave.n*2) * (1 + folded);
+      showBanner(folded ? 'DOUBLE WAVE CLEARED!' : 'WAVE CLEARED!',
+        '+'+bonus+' stud bonus'+(folded?' · '+(folded+1)+' rewards':''), '#a5e06e', 1.6, 44);
       spawnStuds(player.x, player.y-20, bonus);
       SFX.levelup();
+      /* every wave folded in is paid for — the extras first, then the one that
+         closes the screen and starts the next fight */
+      for(let i=0;i<folded;i++) queuePick('bonus');
       queuePick('wave');
+      wave.merged = 0; wave.owed = 0;
     }
   }
 }
@@ -2799,7 +2872,10 @@ const MODE_W = {
   wave:  { common:58, uncommon:26, rare:12, epic:4,  legendary:4 *LEG_PER_EPIC },
   level: { common:50, uncommon:30, rare:15, epic:5,  legendary:5 *LEG_PER_EPIC },
   boss:  { common:0,  uncommon:22, rare:50, epic:28, legendary:28*LEG_PER_EPIC },
-  chest: { common:30, uncommon:34, rare:26, epic:10, legendary:10*LEG_PER_EPIC }
+  chest: { common:30, uncommon:34, rare:26, epic:10, legendary:10*LEG_PER_EPIC },
+  /* the mystery chest's own table — no commons at all, and a legendary three
+     times likelier than an epic would normally carry */
+  wild:  { common:0,  uncommon:20, rare:32, epic:34, legendary:34*0.30 }
 };
 const RAR_ORDER = ['common','uncommon','rare','epic','legendary'];
 const rarRank = r=> Math.max(0, RAR_ORDER.indexOf(r));
@@ -2824,7 +2900,7 @@ function fortuneRarity(){
   return 1 + Math.min(FORTUNE_RAR_MAX, FORTUNE_RAR_MAX * steps/3);
 }
 function rollRarity(mode){
-  const base = MODE_W[mode]||MODE_W.wave;
+  const base = MODE_W[mode==='bonus' ? 'wave' : mode] || MODE_W.wave;
   /* difficulty tilts the roll: the harder the run, the better the bricks */
   const q = difficulty.rar;
   const f = fortuneRarity();
@@ -4309,10 +4385,12 @@ function openUpgrades(mode='wave', forceRar){
     '<div class="chipgroup"><div class="chip">Fresh build — first upgrade!</div></div>';
   document.getElementById('upTitle').textContent =
     mode==='chest' ? 'TREASURE CHEST!' :
+    mode==='bonus' ? 'CALLED-IN WAVE!' :
     mode==='wave' ? 'WAVE '+wave.n+' CLEARED!' : mode==='boss' ? 'BOSS REWARD!' : 'LEVEL UP!';
   document.getElementById('upSub').textContent =
         mode==='chest' ? 'One brick inside — take it' :
-    mode==='boss' ? 'Four crown bricks to choose from — R rerolls twice for studs'
+    mode==='bonus' ? 'You called it down on yourself — this one is the fee'
+    : mode==='boss' ? 'Four crown bricks to choose from — R rerolls twice for studs'
     : mode==='wave' ? 'Grab a new brick — 1, 2 or 3 · R rerolls (max 2) for studs'
     : 'Level up! Pick a brick — 1, 2 or 3 · R rerolls (max 2) for studs';
   document.getElementById('upgradeScreen').classList.remove('hidden');
@@ -7485,182 +7563,367 @@ function drawGolemAura(c, e){
   c.beginPath(); c.ellipse(e.x, e.y+2, 23*s, 9*s, 0, 0, TAU); c.fill();
   c.strokeStyle = `rgba(${gg[1]},0.45)`; c.lineWidth = 2.2;
   c.beginPath(); c.ellipse(e.x, e.y+2, 23*s, 9*s, 0, 0, TAU); c.stroke();
-  for(let i=0;i<6;i++){
-    const ga = vtime*spin + i*TAU/6 + (e.phase||0);
-    const gr = (24 + (wind?5:0))*s + Math.sin(vtime*2+i)*3*s;
+  for(let i=0;i<5;i++){
+    const ga = vtime*spin + i*TAU/5 + (e.phase||0);
+    const gr = (30 + (wind?5:0))*s + Math.sin(vtime*2+i)*3*s;
     const gx = e.x + Math.cos(ga)*gr;
-    const gy = e.y - 48*s + Math.sin(ga)*gr*0.42;
+    const gy = e.y - 54*s + Math.sin(ga)*gr*0.42;
     c.save(); c.translate(gx, gy); c.rotate(ga*1.6);
     if(e.golem==='fire'){
       const fl = 0.6+0.4*Math.sin(vtime*10+i);
       c.fillStyle = `rgba(${gg[0]},${0.45*fl})`;
-      c.beginPath(); c.arc(0,0,5.2*s,0,TAU); c.fill();
+      c.beginPath(); c.arc(0,0,4.2*s,0,TAU); c.fill();
       c.fillStyle = `rgba(${gg[1]},${0.75+0.25*fl})`;
-      c.beginPath(); c.arc(0,0,2.8*s,0,TAU); c.fill();
+      c.beginPath(); c.arc(0,0,2.2*s,0,TAU); c.fill();
     } else {
       c.fillStyle = `rgba(${gg[1]},0.95)`;
       c.strokeStyle = 'rgba(25,40,55,0.65)'; c.lineWidth = 1.6;
       if(e.golem==='ice'){
-        c.beginPath(); c.moveTo(0,-5*s); c.lineTo(3.2*s,0); c.lineTo(0,5*s); c.lineTo(-3.2*s,0);
+        c.beginPath(); c.moveTo(0,-4*s); c.lineTo(2.5*s,0); c.lineTo(0,4*s); c.lineTo(-2.5*s,0);
         c.closePath(); c.fill(); c.stroke();
       } else {
-        roundRect(c,-3.6*s,-2.6*s,7.2*s,5.2*s,1.2); c.fill(); c.stroke();
-        drawStudG(c, 0, 0, 1.5*s, '#8b9194');
+        c.beginPath();
+        c.moveTo(-4*s,-1.6*s); c.lineTo(-1.4*s,-4*s); c.lineTo(3.4*s,-2.4*s);
+        c.lineTo(4*s,1.8*s); c.lineTo(0.6*s,3.8*s); c.lineTo(-3.4*s,2.2*s);
+        c.closePath(); c.fill(); c.stroke();
       }
     }
     c.restore();
   }
 }
 
-/* Rock Raiders rock monster: a hulking pile of slabs with stubby legs, boulder
-   fists and glowing eyes. Nothing about it is a minifigure. */
+/* A GOLEM IS A MOUNTAIN THAT STOOD UP. Not a torso on legs with a head on top —
+   that reads as a robot however you shade it. The silhouette is a PEAK: widest
+   at the ground, climbing through a shoulder ridge to a summit that leans, with
+   a jagged skyline and no straight edge anywhere on it. There is no neck and no
+   face; the eyes are two coals burning out of a crack in the rock. The legs are
+   boulders it rolls forward under its own weight, mostly buried in the mass. */
 const GOLEM_SKIN = {
-  stone:{ slab:['#8f9593','#7b8184','#6b7174','#9aa0a0'], dark:'#565b5e', edge:'rgba(25,32,36,0.75)',
-          eye:'#ffd166', eyeGlow:'255,209,102', vein:null, stud:'#7b8184' },
-  ice:  { slab:['#a7d6f2','#7fb9e0','#5f9dc8','#cfeaff'], dark:'#3f7ba3', edge:'rgba(20,55,80,0.7)',
-          eye:'#eaf8ff', eyeGlow:'191,227,255', vein:'rgba(223,242,255,0.85)', stud:'#7fb9e0' },
-  fire: { slab:['#5f2e1c','#482113','#7a3a20','#3d1c10'], dark:'#2a1109', edge:'rgba(20,10,6,0.8)',
-          eye:'#ffb14a', eyeGlow:'255,140,50', vein:'rgba(255,120,40,0.95)', stud:'#5f2e1c' }
+  stone:{ rock:['#8f9593','#7b8184','#6a7073','#9ea4a3','#5b6164'], dark:'#4a5053',
+          edge:'rgba(22,28,32,0.8)', cap:'rgba(214,222,222,0.55)',
+          eye:'#ffd166', eyeGlow:'255,209,102', vein:null, moss:'rgba(84,122,64,0.55)' },
+  ice:  { rock:['#a7d6f2','#7fb9e0','#5f9dc8','#cfeaff','#4a86b4'], dark:'#35688c',
+          edge:'rgba(18,50,74,0.75)', cap:'rgba(240,252,255,0.8)',
+          eye:'#eaf8ff', eyeGlow:'191,227,255', vein:'rgba(223,242,255,0.9)', moss:null },
+  fire: { rock:['#5f2e1c','#482113','#7a3a20','#6b3419','#33170d'], dark:'#24100a',
+          edge:'rgba(18,9,5,0.85)', cap:'rgba(90,70,62,0.5)',
+          eye:'#ffb14a', eyeGlow:'255,140,50', vein:'rgba(255,120,40,0.95)', moss:null }
 };
+/* The skyline of one golem, built once from its own seed and then reused every
+   frame, so a mountain keeps the shape it was born with instead of shimmering. */
+/* How wide the peak is at a given height. The profile is two chains of points
+   running from the ground up to the summit, so one walk gives the exact edge —
+   which means every layer, boulder and crack can be BUILT inside the silhouette
+   instead of being drawn over it and clipped back. Canvas clipping costs about
+   a millisecond a body, which is fine for one golem and ruinous for forty. */
+function profEdge(chain, y){
+  for(let k=0;k<chain.length-1;k++){
+    const y0 = chain[k][1], y1 = chain[k+1][1];
+    if(y <= y0 && y >= y1){
+      const t = (y0===y1) ? 0 : (y-y0)/(y1-y0);
+      return chain[k][0] + (chain[k+1][0]-chain[k][0])*t;
+    }
+  }
+  return chain[chain.length-1][0];
+}
+function golemProfile(e){
+  if(e._prof) return e._prof;
+  const h = (n)=> hash2((e.phase*997|0)+n*13, n*61);
+  /* right-hand half of the peak, from the ground up to the summit, as
+     [x, y] pairs. The left half is the mirror with its own wobble. */
+  const summit = -66 - h(1)*10;
+  const lean = (h(2)-0.5)*9;                 /* which way the peak tips */
+  const right = [
+    [40 + h(3)*8,  0],
+    [36 + h(4)*6, -10 - h(5)*4],
+    [30 + h(6)*7, -22 - h(7)*5],
+    [32 + h(8)*8, -31 - h(9)*4],             /* a shoulder ledge juts back out */
+    [21 + h(10)*7, -42 - h(11)*5],
+    [11 + h(12)*6, -55 - h(13)*4],
+    [lean + 3,     summit]
+  ];
+  const left = [
+    [-42 - h(14)*8, 0],
+    [-35 - h(15)*7, -9  - h(16)*5],
+    [-36 - h(17)*8, -19 - h(18)*5],          /* and a matching one on this side */
+    [-26 - h(19)*6, -29 - h(20)*5],
+    [-28 - h(21)*7, -40 - h(22)*4],
+    [-13 - h(23)*6, -53 - h(24)*5],
+    [lean - 4,      summit + 2 + h(25)*4]
+  ];
+  const prof = { right, left, summit, lean,
+    /* loose boulders sitting on the slope */
+    rubble: [],
+    /* where the eyes burn out of the rock */
+    eyeY: -33 - h(26)*7 };
+  prof.bands = [[-2,-14,0],[-14,-27,2],[-27,-40,3],[-40,-54,0],[-54,summit-6,3]];
+  /* Every boulder is pinned inside the slope at its own height and its lumpy
+     outline is worked out once, here, rather than seven trig calls a frame. */
+  for(let k=0;k<8;k++){
+    const by = -6 - h(40+k)*46;
+    const lx = profEdge(prof.left, by), rx = profEdge(prof.right, by);
+    const br = 3 + h(50+k)*6;
+    const room = Math.max(0, (rx-lx)/2 - br - 2);
+    const bx = (lx+rx)/2 + (h(30+k)-0.5)*2*room;
+    const pts = [];
+    for(let q=0;q<7;q++){
+      const a2 = q/7*TAU;
+      const rr = br * (0.74 + hash2((bx*7|0)+q, (by*11|0)+q*3)*0.5);
+      pts.push([bx + Math.cos(a2)*rr, by + Math.sin(a2)*rr*0.9]);
+    }
+    prof.rubble.push({ pts });
+  }
+  const path = new Path2D();
+  path.moveTo(prof.left[0][0], 2);
+  for(let k=1;k<prof.left.length;k++) path.lineTo(prof.left[k][0], prof.left[k][1]);
+  for(let k=prof.right.length-1;k>=0;k--) path.lineTo(prof.right[k][0], prof.right[k][1]);
+  path.lineTo(prof.right[0][0], 2);
+  path.closePath();
+  prof.path = path;
+  e._prof = prof;
+  return prof;
+}
+/* One limb. It is a buttress of the same rock, not an arm — no elbow, no joint,
+   no fist with fingers, just a slab that narrows to a knuckle. At rest it is
+   drawn BEHIND the peak so only its outer crag clears the slope and it reads as
+   part of the mountain; raised, it comes over the top where you can see it. */
+function golemArm(c, K, R, side, a){
+  c.save(); c.translate(side*24, -30); c.rotate(a);
+  c.strokeStyle = K.edge; c.lineWidth = 2;
+  const path = ()=>{
+    c.beginPath();
+    c.moveTo(-10,-11); c.lineTo(5,-10); c.lineTo(14,-7);
+    c.lineTo(20,-2); c.lineTo(18,6); c.lineTo(10,9); c.lineTo(-2,11); c.lineTo(-11,8);
+    c.closePath();
+  };
+  c.fillStyle = R(2); path(); c.fill(); c.stroke();
+  /* the underside in shadow, drawn as the lower half of the same outline */
+  c.fillStyle = 'rgba(15,22,26,0.24)';
+  c.beginPath();
+  c.moveTo(-11,1); c.lineTo(19,1); c.lineTo(18,6); c.lineTo(10,9); c.lineTo(-2,11); c.lineTo(-11,8);
+  c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(20,26,30,0.4)'; c.lineWidth = 1.6;
+  c.beginPath(); c.moveTo(-5,-8); c.lineTo(2,-1); c.lineTo(-1,7); c.stroke();
+  c.restore();
+}
+/* Bake the unchanging rock of one golem into its own canvas. Redone only if the
+   thing is drawn at a size it has not been baked at. */
+function golemBake(e, K, P){
+  const s = e.scale * 1.05;
+  if(e._bake && e._bake.s === s) return;
+  const R = i=> K.rock[i];
+  const pad = 8;
+  const w = Math.ceil((96 + pad*2) * s), h = Math.ceil((Math.abs(P.summit) + 24 + pad*2) * s);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  const ox = Math.round(48*s + pad*s), oy = Math.round((Math.abs(P.summit) + 14 + pad)*s);
+  g.translate(ox, oy); g.scale(s, s);
+  g.lineJoin = 'round'; g.lineWidth = 2; g.strokeStyle = K.edge;
+
+  g.fillStyle = R(1);
+  g.fill(P.path); g.stroke(P.path);
+  for(let bi=0; bi<P.bands.length; bi++){
+    const [y0, y1, idx] = P.bands[bi];
+    g.fillStyle = R(idx);
+    g.beginPath();
+    g.moveTo(profEdge(P.left, y0), y0);
+    g.lineTo(profEdge(P.right, y0), y0);
+    g.lineTo(profEdge(P.right, y1), y1);
+    g.lineTo(profEdge(P.left, y1), y1);
+    g.closePath(); g.fill();
+  }
+  g.fillStyle = 'rgba(15,22,26,0.22)';
+  g.beginPath();
+  g.moveTo(P.lean, P.summit);
+  for(let k=P.right.length-1;k>=0;k--) g.lineTo(P.right[k][0], P.right[k][1]);
+  g.lineTo(P.lean+2, 0);
+  g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(20,26,30,0.45)'; g.lineWidth = 1.8;
+  g.beginPath();
+  g.moveTo(P.lean-1, P.summit+4); g.lineTo(-7, -46); g.lineTo(-3, -30); g.lineTo(-11, -12);
+  g.moveTo(P.lean+2, P.summit+8); g.lineTo(11, -44); g.lineTo(6, -24);
+  g.stroke();
+  for(let bi=0; bi<P.rubble.length; bi++){
+    const R2 = P.rubble[bi];
+    g.fillStyle = R(bi%2 ? 4 : 0); g.strokeStyle = K.edge; g.lineWidth = 1.5;
+    g.beginPath();
+    for(let k=0;k<R2.pts.length;k++){
+      if(k) g.lineTo(R2.pts[k][0], R2.pts[k][1]); else g.moveTo(R2.pts[k][0], R2.pts[k][1]);
+    }
+    g.closePath(); g.fill(); g.stroke();
+  }
+  g.fillStyle = K.cap;
+  g.beginPath();
+  g.moveTo(P.lean-6, P.summit+11); g.lineTo(P.lean-1, P.summit+1);
+  g.lineTo(P.lean+4, P.summit+7); g.lineTo(P.lean+8, P.summit+2);
+  g.lineTo(P.lean+11, P.summit+14); g.closePath(); g.fill();
+  if(K.moss){
+    g.fillStyle = K.moss;
+    g.beginPath(); g.ellipse(-17, -20, 8, 4.5, -0.3, 0, TAU); g.fill();
+    g.beginPath(); g.ellipse(14, -33, 6, 3.5, 0.25, 0, TAU); g.fill();
+  }
+  if(e.golem==='ice'){
+    g.fillStyle = 'rgba(223,242,255,0.92)'; g.strokeStyle = 'rgba(70,130,175,0.85)'; g.lineWidth=1.4;
+    for(const [sx2, sy2, h2, tilt] of [[-27,-24,12,-0.7],[-17,-43,9,-0.3],[24,-21,10,0.6],[15,-46,7,0.35]]){
+      g.save(); g.translate(sx2, sy2); g.rotate(tilt);
+      g.beginPath(); g.moveTo(-3.5,0); g.lineTo(0,-h2); g.lineTo(3.5,0); g.closePath();
+      g.fill(); g.stroke(); g.restore();
+    }
+  }
+  e._bake = { cv, s, ox, oy };
+}
 function drawGolem(c, e){
   const K = GOLEM_SKIN[e.golem] || GOLEM_SKIN.stone;
+  const P = golemProfile(e);
   const s = e.scale * 1.05;
   const mv = e.moving ? 1 : 0;
   const w = e.walk;
-  const bob = Math.abs(Math.sin(w)) * 2.4 * mv + Math.sin(vtime*1.6 + e.phase)*0.6;
-  const lean = Math.sin(w) * 0.07 * mv;
+  /* a mountain does not bounce — it heaves, slowly, side to side */
+  const heave = Math.sin(w)*1.6*mv;
+  const roll  = Math.sin(w)*0.045*mv;
   const armsUp = (e.mode==='stompWind' || e.mode==='throwWind');
   const braced = (e.mode==='chargeWind' || e.mode==='charge');
   const fl = e.flash > 0 ? Math.min(1, e.flash*0.85) : 0;
-  const P = i=> fl ? mixc(K.slab[i], '#ffffff', fl) : K.slab[i];
+  const R = i=> fl ? mixc(K.rock[i], '#ffffff', fl) : K.rock[i];
   const D = ()=> fl ? mixc(K.dark, '#ffffff', fl) : K.dark;
   const dir = (e.face && e.face.x < 0) ? -1 : 1;
-  /* deterministic jitter so each golem has its own silhouette but never shimmers */
-  const j = (n)=> (hash2((e.phase*90|0)+n, n*37) - 0.5) * 2;
 
   c.save();
   c.fillStyle = 'rgba(15,30,20,0.34)';
-  c.beginPath(); c.ellipse(e.x, e.y+2, 20*s, 7.5*s, 0, 0, TAU); c.fill();
-  c.translate(e.x, e.y - bob*s);
+  c.beginPath(); c.ellipse(e.x, e.y+2, 26*s, 8.5*s, 0, 0, TAU); c.fill();
+  c.translate(e.x, e.y - Math.abs(heave)*s);
   c.scale(dir*s, s);
-  c.rotate(lean);
-  c.strokeStyle = K.edge; c.lineWidth = 2; c.lineJoin='round';
+  c.rotate(roll);
+  c.lineWidth = 2; c.lineJoin='round'; c.strokeStyle = K.edge;
 
-  /* --- squat legs, set close and half buried under the mass --- */
-  const step = Math.sin(w)*3*mv;
-  for(const [lx, off] of [[-7, step], [7, -step]]){
+  /* --- two boulders it rolls along on, mostly swallowed by the mass --- */
+  const step = Math.sin(w)*3.5*mv;
+  for(const [lx, off] of [[-13, step], [13, -step]]){
     c.fillStyle = D();
-    roundRect(c, lx-8, -14 - Math.max(0,off), 16, 14 + Math.max(0,off), 4);
+    c.beginPath(); c.ellipse(lx, -5 - Math.max(0,off)*0.5, 10, 7.5, 0, 0, TAU);
     c.fill(); c.stroke();
-    c.fillStyle = P(2);
-    roundRect(c, lx-9.5, -5 - Math.max(0,off), 19, 6, 2.5); c.fill(); c.stroke();
   }
 
-  /* --- the boulder itself. Widest across the SHOULDERS and tapering down into
-         the hips, so the silhouette reads as a rock that got up and walked. The
-         old stack flared out at the bottom over short legs, which is what made
-         it look like it was wearing a skirt. --- */
-  const slabs = [
-    { y:-15, w:23, h:11, i:2 },   /* hips — the narrow end */
-    { y:-25, w:33, h:12, i:1 },
-    { y:-36, w:43, h:13, i:0 },
-    { y:-47, w:47, h:13, i:1 }    /* shoulders — the mass sits high and heavy */
-  ];
-  for(let k=0;k<slabs.length;k++){
-    const sl = slabs[k];
-    const jw = sl.w + j(k)*4, jx = j(k+9)*2.5;
-    c.fillStyle = P(sl.i);
-    c.beginPath();
-    c.moveTo(jx-jw/2 + j(k+3)*3, sl.y);
-    c.lineTo(jx+jw/2 + j(k+4)*3, sl.y - j(k+5)*2);
-    c.lineTo(jx+jw/2 - 3 + j(k+6)*3, sl.y - sl.h);
-    c.lineTo(jx-jw/2 + 3 + j(k+7)*3, sl.y - sl.h + j(k+8)*2);
-    c.closePath(); c.fill(); c.stroke();
-    /* a couple of studs per slab keeps it LEGO */
-    if(k<3){
-      drawStudG(c, jx-8, sl.y-sl.h+1.5, 3.1, K.stud);
-      drawStudG(c, jx+8, sl.y-sl.h+1.5, 3.1, K.stud);
-    }
+  /* --- the limbs, tucked behind the slope until they are raised --- */
+  const swing = Math.sin(w + Math.PI)*0.16*mv;
+  const armA = side=> armsUp ? (side>0 ? -1.15 : Math.PI + 1.15)
+    : braced ? (side>0 ? 0.65 : Math.PI - 0.65)
+    : (side>0 ? (1.62 + swing) : (Math.PI - 1.62 - swing));
+  if(!armsUp) for(const side of [-1,1]) golemArm(c, K, R, side, armA(side));
+
+  /* --- THE PEAK, off its own baked canvas --- */
+  golemBake(e, K, P);
+  const B = e._bake;
+  /* Step out of the scale and the lean for the blit so the image lands one baked
+     pixel on one screen pixel. A resampled drawImage costs more than the paths
+     it replaced; an unscaled one is nearly free. The body loses its lean, which
+     at four hundredths of a radian nobody has ever seen. */
+  c.save();
+  c.rotate(-roll); c.scale(dir/s, 1/s);
+  c.drawImage(B.cv, -B.ox, -B.oy);
+  c.restore();
+  /* a hit flashes the whole silhouette white over the top of the bake */
+  if(fl > 0){
+    c.save(); c.globalAlpha = fl*0.85; c.fillStyle = '#ffffff';
+    c.fill(P.path); c.restore();
   }
-  /* a hunched slab of a back, and a boulder capping each shoulder — this is the
-     Rock Raiders read: no neck, no waist, just mass carried forward */
-  c.fillStyle = P(0);
-  c.beginPath();
-  c.moveTo(-20,-44); c.lineTo(-26,-54); c.lineTo(-14,-62); c.lineTo(-2,-58);
-  c.lineTo(-8,-46); c.closePath(); c.fill(); c.stroke();
-  for(const side of [-1, 1]){
-    c.fillStyle = P(side>0 ? 1 : 2);
-    c.beginPath(); c.arc(side*21, -52, 10.5 + j(side+21)*1.5, 0, TAU); c.fill(); c.stroke();
-    drawStudG(c, side*21, -54, 3.2, K.stud);
-  }
-  /* elemental veins glowing through the cracks */
+
+  /* --- the two things on a mountain that MOVE, drawn live over the bake ---
+         the element bleeding up through its seams, and the coals in its face */
   if(K.vein){
     const pulse = 0.55 + 0.45*Math.sin(vtime*(e.golem==='fire'?6:2.5) + e.phase);
-    c.strokeStyle = K.vein; c.lineWidth = 2.2; c.globalAlpha = pulse;
+    c.strokeStyle = K.vein; c.lineWidth = 2.4; c.globalAlpha = pulse;
     c.beginPath();
-    c.moveTo(-13,-16); c.lineTo(-5,-26); c.lineTo(-11,-34); c.lineTo(-3,-44);
-    c.moveTo(12,-19); c.lineTo(5,-29); c.lineTo(12,-40);
+    c.moveTo(-16,-8); c.lineTo(-8,-22); c.lineTo(-14,-34); c.lineTo(-5,-48);
+    c.moveTo(15,-12); c.lineTo(7,-28); c.lineTo(14,-42);
     c.stroke();
     c.globalAlpha = 1;
   }
-  /* ice golems grow shards out of their backs */
-  if(e.golem==='ice'){
-    c.fillStyle = 'rgba(223,242,255,0.92)'; c.strokeStyle = 'rgba(70,130,175,0.85)'; c.lineWidth=1.4;
-    for(const [sx2, sy2, h2, tilt] of [[-22,-50,17,-0.55],[-13,-58,12,-0.2],[19,-49,15,0.5]]){
-      c.save(); c.translate(sx2, sy2); c.rotate(tilt);
-      c.beginPath(); c.moveTo(-3.5,0); c.lineTo(0,-h2); c.lineTo(3.5,0); c.closePath();
-      c.fill(); c.stroke(); c.restore();
-    }
-  }
-
-  /* --- heavy arms with boulder fists --- */
-  /* --- long heavy arms that hang to the floor, knuckles first --- */
-  const swing = Math.sin(w + Math.PI)*0.26*mv;
-  for(const side of [-1, 1]){
-    const shx = side*20, shy = -50;
-    /* they hang down past the hips at rest, swing overhead for the stomp, and
-       cock back behind the shoulder to brace a charge or wind a throw */
-    let a = side>0 ? (1.42 + swing) : (Math.PI - 1.42 - swing);
-    if(armsUp) a = side>0 ? -1.3 : Math.PI + 1.3;
-    else if(braced) a = side>0 ? 0.45 : Math.PI - 0.45;
-    c.save(); c.translate(shx, shy); c.rotate(a);
-    /* upper */
-    c.fillStyle = P(1);
-    roundRect(c, -7, -7.5, 22, 15, 6); c.fill(); c.stroke();
-    /* forearm, angled out so the fist lands near the ground */
-    c.save(); c.translate(14, 0); c.rotate(side>0 ? 0.30 : -0.30);
-    c.fillStyle = P(2);
-    roundRect(c, -5, -7, 20, 14, 6); c.fill(); c.stroke();
-    c.fillStyle = P(0);
-    c.beginPath(); c.arc(20, 1, 10.5, 0, TAU); c.fill(); c.stroke();
-    drawStudG(c, 20, -1, 3.2, K.stud);
-    c.restore();
-    c.restore();
-  }
-
-  /* --- a small head sunk right down between the shoulder boulders --- */
-  c.fillStyle = P(0);
-  c.beginPath();
-  c.moveTo(-10,-52); c.lineTo(10,-52); c.lineTo(12,-62); c.lineTo(3,-67);
-  c.lineTo(-5,-66); c.lineTo(-11,-60); c.closePath();
-  c.fill(); c.stroke();
-  drawStudG(c, -4, -65, 3.1, K.stud); drawStudG(c, 5, -64, 3.1, K.stud);
-  /* brow ridge and burning eyes */
-  c.fillStyle = D();
-  roundRect(c, -10, -60, 20, 4, 2); c.fill();
   const eg = 0.6 + 0.4*Math.sin(vtime*5 + e.phase);
-  c.fillStyle = `rgba(${K.eyeGlow},${0.35*eg})`;
-  c.beginPath(); c.arc(-4.5,-56,5.5,0,TAU); c.arc(4.5,-56,5.5,0,TAU); c.fill();
-  c.fillStyle = K.eye;
-  c.beginPath(); c.arc(-4.5,-56,2.4,0,TAU); c.arc(4.5,-56,2.4,0,TAU); c.fill();
-  /* jaw */
-  c.fillStyle = D();
-  roundRect(c, -7, -53.5, 14, 3, 1.5); c.fill();
+  /* two separate fissures, not one slot — a slot is a visor and a visor is a robot */
+  for(const side of [-1, 1]){
+    const ex2 = side*7 + P.lean*0.3;
+    c.fillStyle = 'rgba(10,14,16,0.8)';
+    c.beginPath();
+    c.moveTo(ex2-5.5, P.eyeY+2.5); c.lineTo(ex2-3, P.eyeY-3);
+    c.lineTo(ex2+5, P.eyeY-2); c.lineTo(ex2+4, P.eyeY+3.5);
+    c.closePath(); c.fill();
+    c.fillStyle = `rgba(${K.eyeGlow},${0.30*eg})`;
+    c.beginPath(); c.arc(ex2, P.eyeY, 6, 0, TAU); c.fill();
+    c.fillStyle = K.eye;
+    c.beginPath(); c.ellipse(ex2, P.eyeY, 2.4, 1.7, side*0.25, 0, TAU); c.fill();
+  }
+
+  if(armsUp) for(const side of [-1,1]) golemArm(c, K, R, side, armA(side));
 
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.5;
-    c.beginPath(); c.ellipse(0,1,24,9,0,0,TAU); c.stroke(); }
+    c.beginPath(); c.ellipse(0,1,30,10,0,0,TAU); c.stroke(); }
   if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
-    c.beginPath(); c.ellipse(0,1,25,9.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
+    c.beginPath(); c.ellipse(0,1,31,10.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
+  c.restore();
+}
+
+/* The chip that breaks off a golem when it dies: the same mountain, knee high,
+   still walking. Three crags, two coals, and a dusting on top. */
+function drawMiniGolem(c, e){
+  const K = GOLEM_SKIN[e.mini] || GOLEM_SKIN.stone;
+  const s = e.scale * 1.5;
+  const mv = e.moving ? 1 : 0;
+  const w = e.walk;
+  const fl = e.flash > 0 ? Math.min(1, e.flash*0.85) : 0;
+  const R = i=> fl ? mixc(K.rock[i], '#ffffff', fl) : K.rock[i];
+  const dir = (e.face && e.face.x < 0) ? -1 : 1;
+  const h = (n)=> hash2((e.phase*613|0)+n*7, n*29);
+  const peak = -21 - h(1)*5;
+
+  c.save();
+  c.fillStyle = 'rgba(15,30,20,0.3)';
+  c.beginPath(); c.ellipse(e.x, e.y+2, 12*s, 4.5*s, 0, 0, TAU); c.fill();
+  c.translate(e.x, e.y - Math.abs(Math.sin(w))*1.4*mv*s);
+  c.scale(dir*s, s);
+  c.rotate(Math.sin(w)*0.07*mv);
+  c.lineWidth = 1.6; c.lineJoin='round'; c.strokeStyle = K.edge;
+
+  /* two pebble feet */
+  const step = Math.sin(w)*1.8*mv;
+  for(const [lx, off] of [[-5, step],[5, -step]]){
+    c.fillStyle = K.dark;
+    c.beginPath(); c.ellipse(lx, -2 - Math.max(0,off)*0.4, 4.2, 3.2, 0, 0, TAU);
+    c.fill(); c.stroke();
+  }
+  /* the crag itself */
+  c.fillStyle = R(1);
+  c.beginPath();
+  c.moveTo(-11 - h(2)*2, 1);
+  c.lineTo(-9, -8 - h(3)*3);
+  c.lineTo(-4 - h(4)*2, -15 - h(5)*3);
+  c.lineTo(0, peak);
+  c.lineTo(5 + h(6)*2, -14 - h(7)*3);
+  c.lineTo(10, -6 - h(8)*3);
+  c.lineTo(11 + h(9)*2, 1);
+  c.closePath(); c.fill(); c.stroke();
+  /* one strata seam and a shaded flank, both cut from the crag's own outline */
+  c.fillStyle = R(3);
+  c.beginPath();
+  c.moveTo(-4,-15); c.lineTo(0,peak); c.lineTo(5,-14); c.lineTo(3,-11); c.lineTo(-2,-11);
+  c.closePath(); c.fill();
+  c.fillStyle = 'rgba(15,22,26,0.2)';
+  c.beginPath(); c.moveTo(0,peak); c.lineTo(5,-14); c.lineTo(10,-6); c.lineTo(11,1);
+  c.lineTo(0,1); c.closePath(); c.fill();
+  /* a dusting of snow, moss or ash on the summit */
+  c.fillStyle = K.cap;
+  c.beginPath(); c.moveTo(-3.5, peak+5); c.lineTo(0, peak+0.5); c.lineTo(3.5, peak+5);
+  c.closePath(); c.fill();
+  /* the two coals */
+  const eg = 0.6 + 0.4*Math.sin(vtime*6 + e.phase);
+  c.fillStyle = `rgba(${K.eyeGlow},${0.30*eg})`;
+  c.beginPath(); c.arc(-3,-8,3.4,0,TAU); c.arc(3,-8,3.4,0,TAU); c.fill();
+  c.fillStyle = K.eye;
+  c.beginPath(); c.arc(-3,-8,1.3,0,TAU); c.arc(3,-8,1.3,0,TAU); c.fill();
+
+  if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2;
+    c.beginPath(); c.ellipse(0,1,14,5,0,0,TAU); c.stroke(); }
   c.restore();
 }
 
@@ -8309,9 +8572,14 @@ function drawProp(c, p){
     c.beginPath(); c.moveTo(-r*0.4, -r*0.1); c.lineTo(-r*0.1, r*0.15); c.stroke();
   }
   else if(p.type==='chest'){
-    const R2 = RARITY[p.rar] || RARITY.common;
+    /* A MYSTERY CHEST wears no tier. It cycles every colour on the ladder, so
+       what is inside is genuinely unknown until the lid comes off — and it is
+       unmistakable across a field of ordinary brown ones. */
+    const R2 = p.wild
+      ? RARITY[RAR_ORDER[1 + (Math.floor(vtime*3 + p.seed) % 4)]]
+      : (RARITY[p.rar] || RARITY.common);
     const rc = R2.col, rgb = prs(rc);
-    const tier = ['common','uncommon','rare','epic'].indexOf(p.rar||'common');
+    const tier = p.wild ? 4 : ['common','uncommon','rare','epic'].indexOf(p.rar||'common');
     const glow = 0.5+0.5*Math.sin(vtime*3+p.seed);
     const bob2 = Math.sin(vtime*2+p.seed)*1.5;
     c.translate(0,bob2);
@@ -8328,10 +8596,22 @@ function drawProp(c, p){
     roundRect(c,-3,-16,6,18,2); c.fill(); c.stroke();
     c.fillRect(-16,-13,32,3); c.strokeRect(-16,-13,32,3);
     drawStudG(c,-9,-26,3,sh(rc,0.2)); drawStudG(c,9,-26,3,sh(rc,0.2));
-    /* rarity pips on the lid */
-    c.fillStyle = '#fff';
-    for(let i=0;i<=tier;i++){
-      c.beginPath(); c.arc(-6+i*4, -30, 1.5, 0, TAU); c.fill();
+    if(p.wild){
+      /* a question mark where the pips would be, and a slow halo turning round it */
+      c.fillStyle = '#ffffff';
+      c.font = '700 15px "Titan One"'; c.textAlign = 'center';
+      c.fillText('?', 0, -25);
+      c.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${0.5+0.4*glow})`;
+      c.lineWidth = 2.5; c.setLineDash([5,7]);
+      c.save(); c.translate(0,-14); c.rotate(vtime*1.2);
+      c.beginPath(); c.arc(0,0,26,0,TAU); c.stroke();
+      c.restore(); c.setLineDash([]);
+    } else {
+      /* rarity pips on the lid */
+      c.fillStyle = '#fff';
+      for(let i=0;i<=tier;i++){
+        c.beginPath(); c.arc(-6+i*4, -30, 1.5, 0, TAU); c.fill();
+      }
     }
   }
   else if(p.type==='torch'){
@@ -9890,10 +10170,19 @@ function drawEnemy(c, e){
     return;
   }
   if(e.mini){
-    /* a scrap of the golem it fell off, still glowing with its element */
+    /* a scrap of the mountain it fell off, still glowing with its element */
     const gg = GOLEM_RGB[e.mini];
     c.fillStyle = `rgba(${gg[0]},${0.16+0.07*Math.sin(vtime*5+(e.phase||0))})`;
     c.beginPath(); c.ellipse(e.x, e.y+2, 13*e.scale, 5.5*e.scale, 0, 0, TAU); c.fill();
+    drawMiniGolem(c, e);
+    if(e.hp < e.maxHp){
+      const w5 = 22*e.scale;
+      c.fillStyle='rgba(15,20,25,0.6)';
+      c.fillRect(e.x-w5/2, e.y-46*e.scale, w5, 4);
+      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillRect(e.x-w5/2, e.y-46*e.scale, w5*clamp(e.hp/e.maxHp,0,1), 4);
+    }
+    return;
   }
   if(e.shade){
     drawShade(c, e);
@@ -10437,7 +10726,7 @@ function renderHUD(){
       const t = Math.max(0, wave.readyT);
       const rest = wave.readyMax >= WAVE_BREAK_BOSS;
       ctx.fillStyle = rest ? '#a5e06e' : '#ffd76e';
-      ctx.fillText((rest?'catch your breath — ':'incoming in ')+t.toFixed(1)+'s  ·  ENTER to start now', cw/2, 52);
+      ctx.fillText((rest?'catch your breath — ':'incoming in ')+t.toFixed(1)+'s  ·  F to start now', cw/2, 52);
       /* a thinning bar under it, so the wait is something you can see run out */
       const bw = 210, bx = cw/2-bw/2, k = wave.readyMax>0 ? clamp(t/wave.readyMax,0,1) : 0;
       ctx.fillStyle = 'rgba(15,20,25,0.45)'; roundRect(ctx, bx, 60, bw, 6, 3); ctx.fill();
@@ -10445,6 +10734,26 @@ function renderHUD(){
       roundRect(ctx, bx, 60, Math.max(2, bw*k), 6, 3); ctx.fill();
     } else {
       ctx.fillText(left>0? left+' bricks left' : '', cw/2, 52);
+      const folded = wave.merged||0;
+      if(wave.callIn > 0){
+        /* the clock you asked for */
+        ctx.font='700 17px "Titan One"'; ctx.textAlign='center';
+        ctx.fillStyle = '#ff8a4a';
+        ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
+        const txt = 'WAVE '+(wave.n+1)+' IN '+wave.callIn.toFixed(1)+'s';
+        ctx.strokeText(txt, cw/2, 76); ctx.fillText(txt, cw/2, 76);
+      } else if((wave.callT||0) > 0){
+        /* holding F — a bar filling toward the commitment */
+        const k = clamp(wave.callT/CALL_HOLD, 0, 1);
+        const bw = 180, bx = cw/2-bw/2;
+        ctx.fillStyle = 'rgba(15,20,25,0.45)'; roundRect(ctx, bx, 66, bw, 7, 3.5); ctx.fill();
+        ctx.fillStyle = '#ff8a4a'; roundRect(ctx, bx, 66, Math.max(2,bw*k), 7, 3.5); ctx.fill();
+        ctx.font='600 12px Fredoka'; ctx.textAlign='center'; ctx.fillStyle='#ffb98a';
+        ctx.fillText('hold F — call wave '+(wave.n+1)+' in early', cw/2, 88);
+      } else if(folded && left>0){
+        ctx.font='600 12px Fredoka'; ctx.textAlign='center'; ctx.fillStyle='#ff8a4a';
+        ctx.fillText((folded+1)+' WAVES AT ONCE', cw/2, 68);
+      }
     }
   }
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');

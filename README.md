@@ -39,10 +39,10 @@ You are a minifig in a field of studs. Waves of brick monsters walk at you and c
 when hit. Each run introduces the roster in a different order — banded by era, so the
 opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
 every level and every chest hands you a **brick** — one of 59 upgrades — and the bricks
-compound into a build. Waves open with a breather so you can heal and read what you took;
-ENTER skips it. Survive long enough and the ground is a
-carpet of studs, the screen is a storm of lightning, and a three-storey skeleton is
-throwing its own ribcage at you.
+compound into a build. Waves open with a breather so you can heal and read what you took,
+and <kbd>F</kbd> skips it. Survive long enough and the ground is a carpet of studs, the
+screen is a storm of lightning, and a three-storey skeleton is throwing its own ribcage
+at you.
 
 ![A wave-22 fight](docs/fight.jpg)
 
@@ -88,6 +88,8 @@ Every **tenth** wave is an ULTRA: `OMEGA BRICKTHANE`, `MEGA BONE BARON`, `ULTRA 
 the screen, and a guaranteed chest.
 
 **Wave 40 is the grand raid**, and every boss in the game wakes up at once.
+
+In a hurry? **Hold F mid-fight** to call the next wave down early and fight both at once.
 
 </td></tr>
 </table>
@@ -181,6 +183,7 @@ An **elite rolls every line eight times over**.
 | 💢 Rage | 0.08% | 0.64% | ×2 damage, a MORE multiplier, for 30s |
 | 🛡️ Ward | 0.08% | 0.64% | +40 armour and +12% all resistance per stack, to ×2 |
 | 💛 Golden heart | 0.11% | 0.88% | **+3 maximum hearts, permanently** |
+| ❓ Mystery chest | 0.06% | 0.48% | contents rolled when it breaks — see below |
 
 **A boss always leaves a heart, a magnet and a chest.** On top of that it rolls 28% for a
 fortune and for a golden heart (at 0.6× that), and 12% each for rage and ward — the two
@@ -188,6 +191,19 @@ that take you straight to a cap stay scarce even here.
 
 **Generous Smith** *increases* the heart chance rather than adding to it — it caps at
 **+200% increased**, which is ×3 the base, or 3.00% a monster.
+
+### The mystery chest
+
+Rarer than an epic reward roll and commoner than a legendary one — about **3 a run**,
+against 20 ordinary chests. It wears no tier: it cycles every colour on the ladder with a
+`?` on the lid, and what is inside is rolled at the moment it comes apart. Measured over
+200,000 rolls:
+
+| ⬜ common | 🟩 uncommon | 🟦 rare | 🟪 epic | 🟧 legendary |
+|--:|--:|--:|--:|--:|
+| — | 20.9% | 33.3% | 35.2% | **10.7%** |
+
+One in six bosses leaves one as well.
 
 ### What that actually comes to
 
@@ -197,6 +213,7 @@ rolled, boss spoils included:
 | Prizes per wave | waves 1–10 | 11–20 | 21–30 | 31–40 | whole run |
 |---|--:|--:|--:|--:|--:|
 | Bodies in the wave | 53 | 92 | 102 | 125 | 93 |
+| ❓ Mystery chest | 0.04 | 0.08 | 0.09 | 0.11 | **0.08** |
 | ❤️ Heart | 0.69 | 1.13 | 1.25 | 1.39 | **1.13** |
 | 📦 Chest | 0.34 | 0.50 | 0.60 | 0.65 | **0.52** |
 | 🧲 Magnet | 0.39 | 0.52 | 0.53 | 0.64 | **0.51** |
@@ -261,7 +278,8 @@ legendary rate of Hard for the privilege.
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows | move |
 | **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
-| <kbd>Enter</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
+| <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
+| <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles taken / dealt / events |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
