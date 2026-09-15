@@ -331,7 +331,7 @@ read straight off the stack count, and they expire together.
 | | How you inflict it | What it does |
 |---|---|---|
 | ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
-| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. Ignores armour, one wound at a time, and **40% less while the body stands still** |
+| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
 | ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed** |
 | 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
 
@@ -381,6 +381,7 @@ offered at all.
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
+| Bleed wounds | 8 | Fully opened | 560%/s | | |
 | Curse stacks on you | 9 | Poison on a boss | 12 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -410,8 +411,14 @@ mechanic to the crit tree instead of making it a third parallel build.
 A wound ticks for **40% of the hit that opened it, every second, for 8 seconds** — 320% of
 that hit in total — rising to **70%/s** with Deep Cuts. It reads the same increased
 damage-over-time pool Rotbrick feeds, and it ignores armour, because the opening hit
-already paid it. One wound at a time: a worse one replaces it rather than stacking beside
-it, so bleed rewards hitting *hard*, not often.
+already paid it.
+
+**Wounds stack eight deep** and all of them bite at once — 320%/s of a hit on a fully
+opened body, 560%/s with Deep Cuts maxed. Past eight, a new cut has to *earn* its place:
+it displaces the **shallowest** wound already open, and if it cannot beat even that one it
+is thrown away. So the way to hurt a boss is to park on it and keep swinging, trading your
+worst wound up for a better one on every hit. Melee's reward for standing in the dangerous
+place.
 
 And a body that has stopped moving bleeds **40% less**. Freezing a bleeding monster is not
 a free win.

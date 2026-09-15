@@ -777,6 +777,13 @@ const BLEED_CRIT_BASE  = 0.50;   /* a crit's own chance to open one */
 const BLEED_STILL_LESS = 0.40;   /* less damage while the body is standing still */
 const BLEED_STILL_SPD  = 18;     /* px/s under which it counts as standing still */
 const BLEED_TICK       = 0.4;
+/* WOUNDS PILE UP, and the body only has room for so many. Eight at once, each
+   with its own damage and its own clock, all biting together. Past eight a new
+   cut has to EARN its place: it displaces the shallowest wound already there,
+   and if it cannot beat even that one it is thrown away. So a melee hero parked
+   on a boss, landing hit after hit, keeps trading its weakest wounds up for
+   better ones — which is exactly where melee is supposed to want to be. */
+const BLEED_STACK_MAX  = 8;
 /* what colour each lingering damage drips its numbers in — green for the rot,
    red for a wound. One entry per ailment, so a third one cannot forget. */
 const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54' };
@@ -2327,33 +2334,56 @@ function bleedChance(crit){
 }
 /* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
    rather than stacking beside it — so bleed rewards hitting hard, not often. */
+/* everything about the wounds currently open on a body, read off the list */
+function bleedList(e){ return (e.bleed && e.bleed.list) || []; }
+function bleedStacks(e){ return bleedList(e).length; }
+function bleedDps(e){ let d = 0; for(const w of bleedList(e)) d += w.dps; return d; }
+/* Cut one. Every wound is its own, with its own damage and its own clock, and
+   they all bite at once — so hitting a boss more often is strictly better than
+   hitting it harder once. */
 function bleedEnemy(e, hit){
   if(e.dead || e.state!=='active' || !(hit > 0)) return;
   const dps = dotRate(hit * ((player && player.bleedShare) || BLEED_SHARE_BASE), 0);
-  if(!e.bleed) e.bleed = { dps:0, t:0, tick:rnd(0.05, BLEED_TICK) };
-  const bl = e.bleed;
-  bl.dps = Math.max(bl.dps, dps);
-  bl.t   = BLEED_T;
+  if(!e.bleed) e.bleed = { list:[], tick:rnd(0.05, BLEED_TICK) };
+  const list = e.bleed.list;
+  if(list.length < BLEED_STACK_MAX){
+    list.push({ dps, t:BLEED_T });
+  } else {
+    /* full. The new cut takes the SHALLOWEST wound's place, and only if it is
+       deeper than that one — a weaker cut on a fully opened body does nothing. */
+    let w = 0;
+    for(let i=1;i<list.length;i++) if(list[i].dps < list[w].dps) w = i;
+    if(dps <= list[w].dps){
+      addSparks(e.x, e.y-22*(e.scale||1), 1, '#6b2a2f');   /* it glanced off */
+      return;
+    }
+    list[w] = { dps, t:BLEED_T };
+  }
   addSparks(e.x, e.y-22*(e.scale||1), 3, '#d2313c');
 }
-/* what one tick of a wound takes off a body */
+/* what one tick of every open wound takes off a body */
 function bleedTick(e, dt){
   const bl = e.bleed;
   if(!bl) return;
-  bl.t -= dt;
+  let dps = 0, closed = false;
+  for(const w of bl.list){
+    w.t -= dt;
+    if(w.t > 0) dps += w.dps; else closed = true;
+  }
+  if(closed) bl.list = bl.list.filter(w => w.t > 0);
   bl.tick -= dt;
-  if(bl.tick <= 0 && !e.dead && e.state==='active'){
+  if(bl.tick <= 0 && dps > 0 && !e.dead && e.state==='active'){
     bl.tick = BLEED_TICK;
-    /* a body that has stopped moving is not tearing its own wound open */
+    /* a body that has stopped moving is not tearing its own wounds open */
     const still = (e.spdNow||0) < BLEED_STILL_SPD;
     const mul = still ? (1 - BLEED_STILL_LESS) : 1;
-    hitEnemy(e, bl.dps*mul*BLEED_TICK, rnd(TAU), 0, 'bleed',
+    hitEnemy(e, dps*mul*BLEED_TICK, rnd(TAU), 0, 'bleed',
              {quiet:true, noCrit:true, noMit:true});
   }
-  if(Math.random() < 0.35)
+  if(Math.random() < Math.min(0.8, 0.2 + 0.08*bl.list.length))
     particles.push({kind:'spark', x:e.x+rnd(-9,9), y:e.y-rnd(8,32),
       vx:rnd(-10,10), vy:rnd(14,46), life:rnd(0.25,0.5), max:0.5, color:'#c8202a'});
-  if(bl.t <= 0) e.bleed = null;
+  if(!bl.list.length) e.bleed = null;
 }
 /* what one tick of poison takes off a body */
 function poisonTick(e, dt){
@@ -3692,9 +3722,10 @@ const UPGRADES = [
     calc:m=>({v: byRar(m, [0.03, 0.05, 0.08, 0.12, 0.18])}),
     desc:c=>{
       const next = Math.min(BLEED_SHARE_MAX, player.bleedShare + c.v);
-      return `A wound bleeds for ${Math.round(next*100)}% of the hit each second `+
+      return `Every wound bleeds for ${Math.round(next*100)}% of the hit each second `+
         `instead of ${Math.round(player.bleedShare*100)}% (cap ${Math.round(BLEED_SHARE_MAX*100)}%), `+
-        `for ${BLEED_T}s`;
+        `for ${BLEED_T}s — ${Math.round(next*BLEED_STACK_MAX*100)}%/s with all `+
+        `${BLEED_STACK_MAX} open`;
     },
     apply:c=>{ player.bleedShareFlat += c.v; syncStats(); } },
   { id:'baneburst', name:'Spore Burst', icon:'bomblets', cls:'SPELL', minRar:'legendary',
@@ -4367,6 +4398,8 @@ const STAT_PROBES = [
   { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true },
   { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s' },
   { g:'BLEED', k:'Total per wound', get:()=> player.bleedShare*BLEED_T*100, fmt:v=>v.toFixed(0)+'%' },
+  { g:'BLEED', k:'Wounds at once',  get:()=> BLEED_STACK_MAX, fmt:v=>Math.round(v)+'' },
+  { g:'BLEED', k:'Fully opened',    get:()=> player.bleedShare*BLEED_STACK_MAX*100, fmt:v=>v.toFixed(0)+'%/s' },
   { g:'SWORD', k:'Crit damage',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
@@ -4769,6 +4802,14 @@ function renderCharSheet(){
       `${calcDamage(5,'spell').toFixed(2)}`),
     sRow('Increased damage over time', Math.round(p.inc.dot*100)+'%',
       hasAnyDot() ? 'every lingering damage you inflict' : 'nothing you own deals damage over time yet'),
+    sRow('Bleed stacks', BLEED_STACK_MAX+' deep',
+      Math.round(p.bleedShare*BLEED_STACK_MAX*100)+'%/s of a hit, fully opened',
+      `A body holds ${BLEED_STACK_MAX} wounds at once, each with its own damage and its own\n`+
+      `${BLEED_T}s clock, all biting together.\n\n`+
+      `Past ${BLEED_STACK_MAX} a new cut takes the SHALLOWEST wound's place — and only if it is\n`+
+      `deeper. A weaker cut on a fully opened body is thrown away.\n\n`+
+      `Which means hitting OFTEN beats hitting hard once: parked on a boss, every\n`+
+      `swing trades your worst wound up for a better one.`),
     sRow('Bleed chance', Math.round(bleedChance(true)*100)+'% / '+Math.round(bleedChance(false)*100)+'%',
       'on a critical / on any swing',
       `A melee hit that rolls it opens a BLEED: physical damage over time for `+
@@ -4785,8 +4826,12 @@ function renderCharSheet(){
       `It reads your increased damage over time (${Math.round(p.inc.dot*100)}%) like every `+
       `other lingering damage, and it ignores armour: the opening hit already paid it.\n`+
       `A body standing STILL bleeds ${Math.round(BLEED_STILL_LESS*100)}% less. Freezing a `+
-      `bleeding monster is not a free win.\n`+
-      `One wound at a time — a worse one replaces it rather than stacking.`),
+      `bleeding monster is not a free win.\n\n`+
+      `WOUNDS STACK ${BLEED_STACK_MAX} DEEP and all of them bite at once — `+
+      `${Math.round(p.bleedShare*BLEED_STACK_MAX*100)}%/s of a hit on a fully opened body.\n`+
+      `Past ${BLEED_STACK_MAX} a new cut displaces the SHALLOWEST wound, and only if it is `+
+      `deeper than that one. Stay on a boss and keep swinging: every hit trades your `+
+      `worst wound up for a better one.`),
     sRow('More multipliers', '×'+p.moreAll.toFixed(2),
       'each MORE modifier multiplies on its own',
       `MORE modifiers are NOT added together — each one is its own multiplier,\n`+
@@ -8363,9 +8408,12 @@ const GOLEM_RGB = {
 /* A bleeding body wears its wound: two red gashes on the torso and a drip that
    dims when it stops moving, because whether it is moving is worth 40% of the
    damage and the player has to be able to see it. */
+/* where each of the eight wounds is cut, so a body carrying six looks like it
+   is carrying six rather than like it is carrying one */
+const BLEED_CUTS = [[-5,-19],[5,-26],[6,-15],[-6,-29],[0,-22],[-2,-33],[8,-21],[-9,-24]];
 function drawBleedMark(c, e){
-  const bl = e.bleed;
-  if(!bl) return;
+  const n = bleedStacks(e);
+  if(!n) return;
   const s = e.scale || 1;
   const still = (e.spdNow||0) < BLEED_STILL_SPD;
   const a = still ? 0.45 : 0.9;
@@ -8375,11 +8423,12 @@ function drawBleedMark(c, e){
   for(const pass of [0,1]){
     c.strokeStyle = pass ? `rgba(255,74,84,${a})` : `rgba(58,4,8,${a*0.9})`;
     c.lineWidth = pass ? 2.2*s : 4.4*s;
-    for(let i=0;i<2;i++){
-      const ox = (i? 5: -5)*s, oy = (i? -26: -19)*s;
+    for(let i=0;i<n && i<BLEED_CUTS.length;i++){
+      const ox = BLEED_CUTS[i][0]*s, oy = BLEED_CUTS[i][1]*s;
+      const flip = i & 1 ? -1 : 1;
       c.beginPath();
-      c.moveTo(e.x+ox-3.5*s, e.y+oy-3.5*s);
-      c.lineTo(e.x+ox+3.5*s, e.y+oy+3.5*s);
+      c.moveTo(e.x+ox-3.5*s*flip, e.y+oy-3.5*s);
+      c.lineTo(e.x+ox+3.5*s*flip, e.y+oy+3.5*s);
       c.stroke();
     }
   }
@@ -8390,9 +8439,10 @@ function drawBleedMark(c, e){
   c.beginPath(); c.arc(e.x+2*s, e.y + (-18 + drip*16)*s, 2.8*s, 0, TAU); c.fill();
   c.fillStyle = `rgba(230,40,50,${(1-drip)*a})`;
   c.beginPath(); c.arc(e.x+2*s, e.y + (-18 + drip*16)*s, 2*s, 0, TAU); c.fill();
-  /* a small pool at its feet, so a bleeding body reads even from across the field */
-  c.fillStyle = `rgba(150,16,24,${0.28*a})`;
-  c.beginPath(); c.ellipse(e.x, e.y+2, 9*s, 3.4*s, 0, 0, TAU); c.fill();
+  /* a pool at its feet that widens with the wounds, so a body eight deep reads
+     as eight deep from across the field */
+  c.fillStyle = `rgba(150,16,24,${(0.20 + 0.035*n)*a})`;
+  c.beginPath(); c.ellipse(e.x, e.y+2, (7+1.6*n)*s, (2.8+0.5*n)*s, 0, 0, TAU); c.fill();
 }
 const PIP_MAX = 12;          /* beads drawn before the count takes over */
 function drawPoisonPips(c, e){
@@ -8422,17 +8472,21 @@ function drawPoisonPips(c, e){
 /* Past a dozen doses nobody can count beads, so the number takes over. It sits
    clear of the health bar at -56, which is the only thing up there. */
 function drawPoisonCount(c, e){
-  const po = e.poison;
-  if(!po || po.n <= PIP_MAX) return;
   const s = e.scale || 1;
-  const y = e.y - 64*s;
+  const po = e.poison;
+  if(po && po.n > PIP_MAX) tagCount(c, '\u00d7'+po.n, e.x, e.y - 64*s, s, '#b6f272', 'rgba(16,38,8,0.92)');
+  /* wounds sit one line higher, so a body carrying both never overlaps itself */
+  const bn = bleedStacks(e);
+  if(bn > 1) tagCount(c, '\u00d7'+bn, e.x, e.y - 78*s, s, '#ff7a82', 'rgba(50,4,8,0.92)');
+}
+function tagCount(c, txt, x, y, s, fill, line){
   c.font = `700 ${Math.round(12*s)}px Fredoka, sans-serif`;
   c.textAlign = 'center';
   c.lineWidth = 3.5;
-  c.strokeStyle = 'rgba(16,38,8,0.92)';
-  c.strokeText('\u00d7'+po.n, e.x, y);
-  c.fillStyle = '#b6f272';
-  c.fillText('\u00d7'+po.n, e.x, y);
+  c.strokeStyle = line;
+  c.strokeText(txt, x, y);
+  c.fillStyle = fill;
+  c.fillText(txt, x, y);
   c.textAlign = 'left';
 }
 function drawGolemAura(c, e){
