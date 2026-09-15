@@ -777,6 +777,9 @@ const BLEED_CRIT_BASE  = 0.50;   /* a crit's own chance to open one */
 const BLEED_STILL_LESS = 0.40;   /* less damage while the body is standing still */
 const BLEED_STILL_SPD  = 18;     /* px/s under which it counts as standing still */
 const BLEED_TICK       = 0.4;
+/* what colour each lingering damage drips its numbers in — green for the rot,
+   red for a wound. One entry per ailment, so a third one cannot forget. */
+const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54' };
 /* A run used to end up casting all seven at once, which meant every build was
    the same build with different pacing. Four is a CHOICE: the bricks that would
    hand you a fifth stop being offered, and everything that deepens the four you
@@ -2269,10 +2272,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   e.kx += Math.cos(kdir)*kb*kbm;
   e.ky += Math.sin(kdir)*kb*kbm;
   if(opts.quiet){
-    /* a poison tick is a drip, not a blow — it does not shake the screen or
-       shout a number over the fight it is quietly winning */
+    /* a tick is a drip, not a blow — it does not shake the screen or shout a
+       number over the fight it is quietly winning, and it drips in the colour
+       of whatever is doing the killing */
     if(Math.random() < 0.4)
-      addDmg(e.x, e.y-30*e.scale, fmtHp(d), '#8ede4a', 13);
+      addDmg(e.x, e.y-30*e.scale, fmtHp(d), DOT_COL[source] || DOT_COL.bane, 13);
   } else {
     addSparks(e.x, e.y-18*e.scale, 5, crit?'#ffd166':'#fff2b0');
     addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
