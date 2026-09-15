@@ -226,7 +226,9 @@ Across the whole forty waves that is roughly **45 hearts, 21 chests, 20 magnets,
 fortunes, 6 golden hearts, and four each of rage and ward.** The two doubling bricks are
 things that happen to a run, not things it runs on.
 
-A magnet pulls **studs only**. Every prize in that table is something you walk to.
+A magnet pulls **studs only**. Every prize in that table is something you walk to — and
+nothing in it can land where you cannot reach it: studs, prizes and chests are all shoved
+back onto walkable floor the moment they touch down, so a lake or a boulder never eats one.
 
 ---
 
@@ -241,7 +243,7 @@ offered at all.
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
 | Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
-| Regeneration | 0.70/s | Storm leaps | 15 | | |
+| Regeneration | 0.70/s* | Storm leaps | 15 | | |
 | | | Storm bricks | 5 | | |
 | | | Storm forks | 2 (40 nodes) | | |
 | | | Bombs | 8 | | |
@@ -249,7 +251,14 @@ offered at all.
 | | | Cluster ranks | 2 | | |
 
 A **favourite** lifts the cap of its own spell by one, so a Storm Brick run reaches six
-hovering bricks and a Bomb Volley run nine bombs.
+hovering bricks and a Bomb Volley run nine bombs. The spell its kit hands you counts as
+already taken, so it is never offered back to you as a first pick.
+
+\* Regeneration is a **share of the bar, not a number of hearts**: the rate is measured
+against the six hearts you start with and scales with your maximum, so a given rate always
+means the same number of *seconds* back to full however big your health bar has grown.
+Three Repair Bricks heal you in 18 seconds at 6 max hearts and in 18 seconds at 300.
+Between waves it runs at **×3**.
 
 Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth two and a
 half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
