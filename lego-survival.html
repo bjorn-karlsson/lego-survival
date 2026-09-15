@@ -554,7 +554,12 @@ const FORTUNE_CAP = 2;
 const RAGE_CAP = 2;
 const BUFF_T = 30;             /* every ground buff runs the same thirty seconds */
 const HEART_REGEN_T = 30;      /* how long a heart lifts your regeneration for */
-const HEART_REGEN_MUL = 1.5;   /* and by how much */
+const HEART_REGEN_MUL = 1.5;   /* what the first one is worth */
+const HEART_STACK_MAX = 5;     /* and how many can be live at once */
+/* Each heart on top of the last is worth less than the one before it — five of
+   them are two and a half times your regeneration, not five. Index by stacks,
+   so [0] is no heart at all. */
+const HEART_STACK_MUL = [1, 1.5, 1.85, 2.10, 2.30, 2.45];
 const CHAIN_MAX_ZAPPERS = 5;
 /* Every hard cap can be nudged by a FAVOURITE's starting perk — one extra brick
    in the ring, one more zapper, one more bomb in the compass. `capUp` is only
@@ -935,6 +940,7 @@ window.addEventListener('keydown', e=>{
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
+  if(e.code==='Enter' && state==='play' && wave.state==='ready') waveSkip();
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
@@ -1082,7 +1088,7 @@ function newPlayer(){
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
     curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
-    regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0,
+    regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0, heartStacks:0,
     crit:0.1, studMul:1, heartChance:0,
     orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], pulse:0 },
     /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
@@ -1387,6 +1393,11 @@ const STUD_TIERS = {
   stud250: { val:250, xp:60, r:12.5, col:'#fe8a18', next:null,      label:'ORANGE' }
 };
 const STUD_ORDER = ['stud1','stud5','stud20','stud50','stud100','stud250'];
+/* A magnet pulls MONEY. Hearts, wards, rage, fortune and the golden heart are
+   prizes you have to go and stand on — hoovering them up from across the field
+   turned every buff into something that happened TO you rather than something
+   you chose to break off and fetch. */
+function isStud(pk){ return !!STUD_TIERS[pk.kind]; }
 function makePickup(kind, x, y){
   const T = STUD_TIERS[kind];
   return { kind, x, y, z:14, vx:rnd(-90,90), vy:rnd(-90,90), vz:rnd(140,300),
@@ -1836,13 +1847,13 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
     /* the first ultra used to fold to any build; it now starts from a real base */
       const mult = 1 + (st-1)*2.3;
-      const bhp = Math.round((B.hp*mult + st*1100 + 900) * (B.hpMul||1) * difficulty.hp);
+      const bhp = Math.round((B.hp*mult*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp);
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
-        hp:bhp, maxHp:bhp, armour: (40 + st*45 + st*st*40) * (B.armourMul||1),
+        hp:bhp, maxHp:bhp, armour: (70 + st*70 + st*st*45) * (B.armourMul||1),
         suppress: B.style==='skel' ? 0.62 : 0.30,
         speed:B.speed*(1+tier*0.03),
-        dmg:Math.round((B.dmg*(1 + st*1.2) + Math.pow(st,1.55)*7) * (B.dmgMul||1)),
+        dmg:Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1)),
         xp:Math.round(B.xp*(1+(st-1)*0.8)), studs:{a:B.studs[0], b:B.studs[1]},
         atkS:Math.max(0.42, (1-(wave.n-1)*0.02)*difficulty.atk*(B.atkMul||1)), touchCd:0.8,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
@@ -1861,16 +1872,16 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         bkey = keys2[(tier-1) % keys2.length];
         B = BOSSES[bkey];
       }
-      const bhp = Math.round((B.hp*(1 + (tier-1)*1.9) + tier*320) * difficulty.hp);
+      const bhp = Math.round((B.hp*(1 + (tier-1)*2.2) + tier*420) * difficulty.hp);
       e = { type:'boss', x, y, bkey, bname:B.name,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
-        hp:bhp, maxHp:bhp, armour: 18 + wave.n*1.4 + tier*tier*9,
+        hp:bhp, maxHp:bhp, armour: 24 + wave.n*2.2 + tier*tier*14,
         /* the skeletons were built to shrug off magic and never did — a bone
            boss suppresses half of every spell that lands on it */
         suppress: B.style==='skel' ? 0.45 : 0.15,
         speed:B.speed*(1+tier*0.05),
-        dmg:Math.round(B.dmg*(1 + tier*0.9) + tier*tier*1.1),
+        dmg:Math.round(B.dmg*(1 + tier*1.1) + tier*tier*1.6),
         xp:B.xp, studs:{a:B.studs[0], b:B.studs[1]},
         atkS:Math.max(0.6, 1-(wave.n-1)*0.02), touchCd:0.9,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
@@ -2077,25 +2088,25 @@ const DROP = {
   /* A heart is only a regeneration burst now, so it is allowed to be the common
      one — a couple a wave in the early going, something you pick up as you run
      past rather than something you plan around. */
-  heart:   0.0225,
+  heart:   0.0100,
   /* The rest sit where a chest sits: a bit under one a wave each, so a wave
      usually turns up one or two of them and never a carpet. */
-  magnet:  0.0060,
-  fortune: 0.0060,
+  magnet:  0.0034,
+  fortune: 0.0034,
   /* The two that double a number outright. A single brick takes you straight to
      the cap — x2 damage, x2 worth of ward — so finding one has to be an event.
      At a fifth of a chest they turn up about once every three waves each. */
-  rage:    0.0013,
-  ward:    0.0013,
-  chest:   0.0060,
+  rage:    0.0008,
+  ward:    0.0008,
+  chest:   0.0034,
   /* The exception. The golden heart is the only body drop that makes you
      permanently stronger, so it stays rare — about one every five waves. */
-  gheart:  0.0016
+  gheart:  0.0011
 };
 const DROP_ELITE = 8;        /* an elite rolls every one of them eight times over */
 /* A boss always leaves the two things that keep a run going — a heart and a
    magnet — and then rolls for the rest, so the good ones stay a surprise. */
-const BOSS_EXTRA = 0.35;
+const BOSS_EXTRA = 0.28;
 /* ...but the two doubling bricks stay scarce even here */
 const BOSS_EXTRA_BUFF = 0.12;
 function mobSpoils(e){
@@ -2140,12 +2151,18 @@ const MOB_XP_SCALE = 0.5;
 const MOB_XP_WAVE_DIV = 10;
 const STUD_XP_SCALE = 0.45;      /* studs were the other half of the problem */
 const STUD_XP_WAVE_DIV = 10;
+/* The cost of a level compounded at a flat 1.3 for ever, which is fine to level
+   fifteen and impossible by thirty — 1.3^40 is a number no wave in the game can
+   pay, so past wave 40 the bar simply stopped moving. The step now eases from
+   1.30 down towards 1.12, so a late level still costs more than an early one
+   without running away from the whole roster. */
+function xpStep(lvl){ return 1.12 + 0.18*Math.pow(0.94, Math.max(0, lvl-1)); }
 function gainXp(n, fromMob){
   const p = player;
   const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : STUD_XP_WAVE_DIV);
   p.xp += n * waveBonus * p.xpMul;
   while(p.xp >= p.xpNext){
-    p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*1.3+5);
+    p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*xpStep(p.level)+5);
     p.incAll += 0.05;      /* additive with every other increase, PoE style */
     if(p.hp < p.maxHp) p.hp++;
     addRing(p.x,p.y,10,300,110,'#ffb900',6,0.5);
@@ -2246,7 +2263,9 @@ function updateCurses(dt){
 const HEART_BOOST_MIN = 0.08;      /* hearts/s while a heart is live */
 function cursedRegen(){
   const base = player.regenRate * (1 - player.curse.regen);
-  return player.regenBoostT > 0 ? Math.max(base*HEART_REGEN_MUL, HEART_BOOST_MIN) : base;
+  const st = player.regenBoostT > 0 ? Math.min(HEART_STACK_MAX, player.heartStacks||0) : 0;
+  if(!st) return base;
+  return Math.max(base*HEART_STACK_MUL[st], HEART_BOOST_MIN*HEART_STACK_MUL[st]/HEART_REGEN_MUL);
 }
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
@@ -2492,14 +2511,50 @@ const ROSTER = [
   { k:'stormlord',   at:38, cost:42, flavour:0.7 },
   { k:'necrolord',   at:39, cost:45, flavour:0.7 },
   { k:'impmaster',   at:33, cost:50, flavour:0.7 },
-  { k:'overseer',    at:41, cost:55, flavour:0.6 }
+  { k:'overseer',    at:39, cost:55, flavour:0.6 }
 ];
 const MONSTER_COST = {};
 for(const r of ROSTER) MONSTER_COST[r.k] = r.cost;
+/* A run always opened on imps, then bonelings, then archers, in that order,
+   every single time. The roster is now banded by ERA — everything inside a band
+   is the same rough threat at the same rough point in the run — and each run
+   permutes who arrives when WITHIN its band. So no two runs introduce the
+   roster in the same order, and a shadestorm still cannot turn up on wave 5. */
+const ROSTER_BANDS = [
+  ['imp','boneling','archer','spitter'],
+  ['shade','cryptbat','brute','knight'],
+  ['stalker','lancer','superimp','hexer','bomber'],
+  ['revenant','lobber','pyromancer','frostmage'],
+  ['necromancer','stormcaller','jugg','marksman'],
+  ['bastion','direbat','pumpkinlord','impmaster'],
+  ['shadestorm','pyrolord','frostlord','stormlord','necrolord','overseer']
+];
+for(const r of ROSTER) r.baseAt = r.at;
+/* The unlock waves a band owns are fixed; only WHO fills each one is rolled, so
+   the pacing of a run — how many new faces, and when — never changes. */
+function rollRoster(){
+  for(const band of ROSTER_BANDS){
+    const members = [];
+    for(const k of band){ const r = ROSTER.find(x=>x.k===k); if(r) members.push(r); }
+    if(members.length < 2) continue;
+    const slots = members.map(r=>r.baseAt).sort((a,b)=>a-b);
+    shuffleArr(members);
+    for(let i=0;i<members.length;i++) members[i].at = slots[i];
+  }
+}
 /* Rank order for the pivot, which is the ROSTER order — bomber and impmaster are
    priced above their unlock wave on purpose, so sort by cost for the walk-up. */
 const RANKS = [...ROSTER].sort((a,b)=> a.cost - b.cost || a.at - b.at);
 const MAX_WAVE_BODIES = 320;
+/* A wave used to land on you the instant you closed the reward screen, which
+   left no room to heal and no moment to read what you had just picked. Every
+   wave now opens with a breath — a short one normally, a proper rest after a
+   boss — and ENTER takes it early for anyone who does not want it. */
+const WAVE_BREAK = 6;
+const WAVE_BREAK_BOSS = 30;
+/* Where the run turns into the grand raid. It used to be fifty, which is a
+   long evening; forty is the same shape half an hour sooner. */
+const RAID_WAVE = 40;
 const PIVOT_HOLD = 13;        /* the cheap ranks are safe until this wave */
 const PIVOT_EVERY = 3;        /* then one more rank drops out every N waves */
 const PIVOT_KEEP = 5;         /* never strip the roster below this many ranks */
@@ -2544,6 +2599,9 @@ function pickFrom(p){
 /* Golems are siege units, not rank and file — the random pool made them show up
    in packs the moment they unlocked. They now get an explicit budget per wave:
    one at 10-11, a couple at 12-13, a handful at 14, and properly crowded by 18. */
+/* A throw is a quick brace, not a ceremony — the stomp keeps its long windup
+   because the stomp is the thing you have to walk out of. */
+const GOLEM_THROW_WIND = 0.42;
 const GOLEM_MAX = 36;     /* they are slow and tanky; past this a wave is a slog */
 /* Siege units keep pace with the stretched roster: one at 16, a pair by 20, a
    handful by 26, properly crowded past 34. */
@@ -2601,10 +2659,10 @@ function composeWave(n){
   if(n%5===0){
     /* a boss wave spends a slice of the budget on an escort rather than a
        hand-counted handful, so the escort keeps pace with the roster */
-    const escort = Math.round(waveBudget(n) * (n%50===0 ? 0.55 : 0.40));
+    const escort = Math.round(waveBudget(n) * (n%RAID_WAVE===0 ? 0.55 : 0.40));
     q = spendBudget(pool, escort);
     shuffleArr(q);
-    if(n%50===0) q.unshift('boss','boss','boss','boss','boss','boss');  /* the raid */
+    if(n%RAID_WAVE===0) q.unshift('boss','boss','boss','boss','boss','boss');  /* the raid */
     else q.unshift('boss');
     seedGolems(q, n);
     return q;
@@ -2623,9 +2681,12 @@ function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   queueTrackForWave(n);
-  wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4; wave.raidIdx = 0;
+  /* the wave is BUILT now and spawns when the break runs out */
+  const afterBoss = n>1 && (n-1)%5===0;
+  wave.state = 'ready'; wave.t = 0; wave.spawnT = 1.4; wave.raidIdx = 0;
+  wave.readyT = wave.readyMax = afterBoss ? WAVE_BREAK_BOSS : WAVE_BREAK;
   const boss = n%5===0;
-  if(n%50===0){
+  if(n%RAID_WAVE===0){
     showBanner('WAVE '+n, 'THE GRAND RAID — ALL BOSSES AWAKEN', '#c95bd0', 3.0, 58);
     SFX.roar();
     return;
@@ -2644,8 +2705,22 @@ function startWave(n){
     boss && n%10===0 ? 60 : 54);
   if(boss) SFX.roar();
 }
+/* Take the break early. */
+function waveSkip(){
+  if(wave.state!=='ready') return;
+  wave.readyT = 0;
+  SFX.click();
+}
+function beginFight(){
+  wave.state = 'fight'; wave.t = 0; wave.spawnT = 1.4;
+}
 function updateWave(dt){
   wave.t += dt;
+  if(wave.state==='ready'){
+    wave.readyT -= dt;
+    if(wave.readyT <= 0) beginFight();
+    return;
+  }
   if(wave.state==='fight'){
     const alive = enemies.filter(e=>!e.dead && e.state==='active').length;
     const cap = Math.min(MAX_ALIVE, 30 + wave.n*16);
@@ -2658,7 +2733,7 @@ function updateWave(dt){
           const pos = randomSpawnPos();
           if(type==='boss'){
             /* wave-50 raid: first six boss entries get forced distinct keys */
-            if(wave.n%50===0){
+            if(wave.n%RAID_WAVE===0){
               const raidKeys = [...Object.keys(BOSSES), ...Object.keys(SUPERBOSSES)];
               const idx = wave.raidIdx = (wave.raidIdx||0);
               spawnEnemy('boss', pos.x, pos.y, false, false, raidKeys[idx % raidKeys.length]);
@@ -2913,8 +2988,8 @@ const UPGRADES = [
     apply:c=>{ player.inc.studs += c.v; syncStats(); } },
   { id:'wisdom', name:'Stud Wisdom', icon:'xp', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
-    desc:c=>`+${Math.round(c.v*100)}% XP gained`,
-    apply:c=>{ player.xpMul += c.v; } },
+    desc:c=>`${Math.round(c.v*100)}% MORE XP — its own multiplier, so they compound`,
+    apply:c=>{ player.xpMul *= (1+c.v); } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.res.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
@@ -2999,9 +3074,11 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.n = Math.min(chainMaxTargets(), player.chain.n + c.n);
       if(player.chain.zappers<1) player.chain.zappers = 1; } },
-  { id:'chainbrick', name:'Chain Lightning Brick', icon:'zapper', cls:'SPELL', minRar:'uncommon',
+  /* A second hovering brick is a second whole bolt — the strongest single step
+     any spell can take — so it starts at rare and gives one at a time. */
+  { id:'chainbrick', name:'Chain Lightning Brick', icon:'zapper', cls:'SPELL', minRar:'rare',
     req:()=>player.chain.n>0 && player.chain.zappers<chainMaxZappers(),
-    calc:m=>({n:spellCount(m)}),
+    calc:m=>({n: byRar(m, [1, 1, 1, 2, 3])}),
     desc:c=>{
       return `+${c.n} storm brick${c.n>1?'s':''} hovering by you, each firing its own bolt (max ${chainMaxZappers()})`;
     },
@@ -3977,7 +4054,8 @@ function renderCharSheet(){
       `Yours: ${Math.round(suppressChance()*100)}% chance.\n`+
       `A 10-damage spell hit averages ${(10*(1 - suppressChance()*(1-SUPPRESS_TAKEN))).toFixed(1)} against you.`),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
-      p.regenBoostT>0 ? `a heart has it at ×${HEART_REGEN_MUL} (floor ${HEART_BOOST_MIN}/s) — ${Math.ceil(p.regenBoostT)}s left`
+      p.regenBoostT>0 ? `${p.heartStacks} heart${p.heartStacks>1?'s':''} have it at ×${HEART_STACK_MUL[p.heartStacks]} `+
+        `(max ${HEART_STACK_MAX} for ×${HEART_STACK_MUL[HEART_STACK_MAX]}) — ${Math.ceil(p.regenBoostT)}s left`
         : p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
         : p.regenRate>0 ? `one heart every ${(1/cursedRegen()).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
     sRow('Hit invulnerability', '1.10s', 'after taking a hit'),
@@ -4304,6 +4382,7 @@ function updatePlayer(dt){
   }
   if(p.regenBoostT > 0){
     p.regenBoostT -= dt;
+    if(p.regenBoostT <= 0) p.heartStacks = 0;
     if(p.regenBoostT > 0 && p.regenRate > 0 && Math.random()<0.12)
       particles.push({kind:'spark', x:p.x+rnd(-16,16), y:p.y-10+rnd(-20,6), vx:0, vy:-45,
         life:0.45, max:0.45, color:'#ff8a8a'});
@@ -4427,9 +4506,8 @@ function updatePlayer(dt){
       p.stepT -= dt; if(p.stepT<=0){ addDust(p.x,p.y,1); p.stepT=0.22; } }
   }
   p.leadX = p.x; p.leadY = p.y; p.leadDt = dt;   /* sampled for lead-targeting */
-  p.x += (vx + p.kx)*dt; p.y += (vy + p.ky)*dt;
+  moveCollide(p, (vx + p.kx)*dt, (vy + p.ky)*dt);
   p.kx *= Math.max(0,1-8*dt); p.ky *= Math.max(0,1-8*dt);
-  collideWorld(p);
   if(keys.Space && p.dash.cd<=0 && !p.swing && p.stunT<=0 && !p.whirl){
     p.dash.t = 0.18; p.dash.cd = p.dash.cdMax;
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
@@ -4745,9 +4823,9 @@ function updatePlayer(dt){
   for(const pk of pickups){
     pk.t += dt;
     const d = dist(pk,p);
-    if(p.magnetT > 0){
+    if(p.magnetT > 0 && isStud(pk)){
       pk.seeking = false;      /* the drag itself happens in the physics pass */
-    } else if(d < mr && pk.z<20){
+    } else if(isStud(pk) && d < mr && pk.z<20){
       const closeness = clamp(1 - d/mr, 0, 1);
       const pull = (500 + 2400*Math.pow(closeness,1.5)) * pm;
       const a = angTo(pk,p);
@@ -4760,10 +4838,12 @@ function updatePlayer(dt){
            minute. No free maximum hearts — handing those out on every drop was
            what let a hero walk into wave 40 with a health bar the length of the
            screen. Picking another one up refreshes the clock. */
+        p.heartStacks = Math.min(HEART_STACK_MAX, (p.heartStacks||0) + 1);
         p.regenBoostT = HEART_REGEN_T;
-        addDmg(p.x, p.y-46, '×'+HEART_REGEN_MUL+' REGEN', '#ff8a8a', 17);
+        const hm = HEART_STACK_MUL[p.heartStacks];
+        addDmg(p.x, p.y-46, '×'+hm+' REGEN'+(p.heartStacks>1?' ('+p.heartStacks+')':''), '#ff8a8a', 17);
         addRing(pk.x, pk.y, 8, 300, 90, '#ff8a8a', 6, 0.5);
-        logEvent('heart — regeneration ×'+HEART_REGEN_MUL+' for '+HEART_REGEN_T+'s', '#ff8a8a');
+        logEvent('heart ×'+p.heartStacks+' — regeneration ×'+hm+' for '+HEART_REGEN_T+'s', '#ff8a8a');
         SFX.heart();
       } else if(pk.kind==='gheart'){
         addMaxHp(3);                         /* the new hearts arrive full, no refill */
@@ -4815,7 +4895,7 @@ function updatePlayer(dt){
   }
   /* pickup physics + seeking drift (this is the ONLY place pickups move) */
   for(const pk of pickups){
-    if(p.magnetT > 0){
+    if(p.magnetT > 0 && isStud(pk)){
       /* A MAGNET IS A BLACK HOLE. The stud is dragged along the straight line to
          the hero and it accelerates as it closes — hop, bounce and drag all
          cancelled. Handing it a velocity was not enough: gravity and the ground
@@ -5191,6 +5271,15 @@ function navEscape(x, y){
   if(Math.hypot(ex-x, ey-y) < 1) return null;
   return { x: ex, y: ey };
 }
+/* Walk a move in steps no longer than half a body, resolving collisions at each
+   one, so nothing can cross a barrier between two frames however fast it is
+   travelling. Only the hero needs it — nothing else in the game dashes. */
+function moveCollide(e, dx, dy){
+  const d = Math.hypot(dx, dy);
+  const step = Math.max(4, e.r*0.5);
+  const n = d > step ? Math.min(16, Math.ceil(d/step)) : 1;
+  for(let i=0;i<n;i++){ e.x += dx/n; e.y += dy/n; collideWorld(e); }
+}
 function collideWorld(e){
   e.x = clamp(e.x, W.wall+e.r+6, W.w-W.wall-e.r-6);
   e.y = clamp(e.y, W.wall+e.r+6, W.h-W.wall-e.r-6);
@@ -5202,7 +5291,15 @@ function collideWorld(e){
     const cx = clamp(e.x, w.x, w.x+w.w), cy = clamp(e.y, w.y, w.y+w.h);
     let dx = e.x-cx, dy = e.y-cy; const d2 = dx*dx+dy*dy;
     if(d2 < e.r*e.r){
-      if(d2<0.0001){ e.y = w.y - e.r; }
+      if(d2<0.0001){
+        /* dead inside it — leave by the NEAREST wall, not always the top */
+        const l = e.x-w.x, r2 = (w.x+w.w)-e.x, t = e.y-w.y, b2 = (w.y+w.h)-e.y;
+        const m = Math.min(l, r2, t, b2);
+        if(m===l)       e.x = w.x - e.r;
+        else if(m===r2) e.x = w.x + w.w + e.r;
+        else if(m===t)  e.y = w.y - e.r;
+        else            e.y = w.y + w.h + e.r;
+      }
       else { const d = Math.sqrt(d2); e.x = cx + dx/d*e.r; e.y = cy + dy/d*e.r; }
     }
   }
@@ -5435,12 +5532,12 @@ function updateEnemy(e, dt){
        goes. Re-aimed right up to the release so you cannot just walk sideways. */
     else if(e.mode==='throwWind'){
       e.modeT += dt; vx=0; vy=0;
-      if(e.modeT < G.wind*0.6) e.lockA = toP;
+      if(e.modeT < GOLEM_THROW_WIND*0.6) e.lockA = toP;
       e.face = {x:Math.cos(e.lockA), y:Math.sin(e.lockA)};
       if(Math.random()<0.6)
         particles.push({kind:'spark', x:e.x+rnd(-22,22), y:e.y-rnd(20,58),
           vx:rnd(-20,20), vy:-50, life:0.4, max:0.4, color:G.dust});
-      if(e.modeT>=G.wind*0.8){
+      if(e.modeT>=GOLEM_THROW_WIND){
         e.mode='chase'; e.modeT=0; e.atkCd = (e.golem==='ice' ? 5.0 : 4.6)*e.atkS;
         golemThrow(e, G);
       }
@@ -5893,9 +5990,7 @@ function bossPull(b, dt){
   const stop = b.r + p.r + 26;
   if(d <= stop) return;
   const drag = Math.min((d-stop)/dt, 430);  /* never overshoot into the boss */
-  p.x += Math.cos(a)*drag*dt;
-  p.y += Math.sin(a)*drag*dt;
-  collideWorld(p);
+  moveCollide(p, Math.cos(a)*drag*dt, Math.sin(a)*drag*dt);
   if(Math.random()<0.7)
     particles.push({kind:'spark', x:p.x+rnd(-20,20), y:p.y-rnd(0,40),
       vx:Math.cos(a)*160, vy:Math.sin(a)*160, life:0.25, max:0.25, color:'#ffb066'});
@@ -6109,7 +6204,7 @@ function maceSpin(b, dt, tier, enr, toP){
     playerDamage(b.dmg+1, b);
   }
   if(Math.random()<0.7){
-    const hx = b.x + Math.cos(b.whirlA)*reach, hy = b.y-30*(b.scale||1)*0.5 + Math.sin(b.whirlA)*reach*0.62;
+    const hx = b.x + Math.cos(b.whirlA)*reach, hy = b.y + Math.sin(b.whirlA)*reach;
     particles.push({kind:'spark', x:hx, y:hy, vx:rnd(-40,40), vy:rnd(-40,10),
       life:0.22, max:0.22, color:'#ffd166'});
   }
@@ -6122,7 +6217,7 @@ function maceSpin(b, dt, tier, enr, toP){
 }
 /* The sweep is the whole point of the attack — at the old radius you could
    stand a step back and watch it. It now reaches roughly twice as far. */
-function maceReach(b){ return 108*(b.scale||1) + 34; }
+function maceReach(b){ return 150*(b.scale||1) + 48; }
 function bossSummon(b, count, kinds, elites){
   const room = Math.max(0, MAX_ALIVE - enemies.length - 4);
   const n = Math.min(count, room);
@@ -7357,6 +7452,16 @@ function groundRing(c, x, y, r, lw, style){
   c.strokeStyle = style; c.lineWidth = lw / GROUND_SQUASH;
   c.beginPath(); c.arc(0, 0, Math.max(1, r), 0, TAU); c.stroke();
   c.restore();
+}
+/* The flat pair. Anything whose HIT TEST is `dist(a,b) < r` has to be drawn as
+   a true circle, or its north and south edges reach further than the picture. */
+function flatDisc(c, x, y, r, style){
+  c.fillStyle = style;
+  c.beginPath(); c.arc(x, y, Math.max(1, r), 0, TAU); c.fill();
+}
+function flatRing(c, x, y, r, lw, style){
+  c.strokeStyle = style; c.lineWidth = lw;
+  c.beginPath(); c.arc(x, y, Math.max(1, r), 0, TAU); c.stroke();
 }
 function groundDisc(c, x, y, r, style){
   c.save(); c.translate(x, y); c.scale(1, GROUND_SQUASH);
@@ -8774,22 +8879,13 @@ function render(){
         ctx.restore();
       }
       if(e.mode==='throwWind'){
-        const k = clamp(e.modeT/(G.wind*0.8),0,1);
+        /* a short stub of a lane at the golem's own feet — enough to read which
+           way it is facing, without fourteen of them tiling the whole floor */
+        const k = clamp(e.modeT/GOLEM_THROW_WIND,0,1);
         const rgb = GOLEM_RGB[e.golem][0];
         ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.lockA);
-        if(e.golem==='ice'){
-          /* the lane the boulder will freeze */
-          ctx.fillStyle = `rgba(${rgb},${0.10+0.12*k})`;
-          roundRect(ctx, 0, -26, 900, 52, 24); ctx.fill();
-          ctx.strokeStyle = `rgba(${rgb},${0.5+0.35*Math.sin(vtime*16)})`; ctx.lineWidth = 3;
-          ctx.setLineDash([18,12]);
-          roundRect(ctx, 0, -26, 900, 52, 24); ctx.stroke();
-          ctx.setLineDash([]);
-        } else {
-          /* where the cluster is going to land */
-          ctx.fillStyle = `rgba(${rgb},${0.12+0.14*k})`;
-          roundRect(ctx, 0, -20, 420, 40, 18); ctx.fill();
-        }
+        ctx.fillStyle = `rgba(${rgb},${0.10+0.18*k})`;
+        roundRect(ctx, 0, -14, 70+40*k, 28, 13); ctx.fill();
         ctx.restore();
       }
       if(e.mode==='stompWind'){
@@ -8937,16 +9033,16 @@ function render(){
       }
       if(e.mode==='slamWind'){
         const pulling = e.modeT < BOSS_PULL_T;
-        groundDisc(ctx, e.x, e.y, RING_MAX, `rgba(255,90,50,${pulling?0.10:0.16})`);
+        flatDisc(ctx, e.x, e.y, RING_MAX, `rgba(255,90,50,${pulling?0.10:0.16})`);
         ctx.setLineDash([16,12]);
-        groundRing(ctx, e.x, e.y, RING_MAX, 6, `rgba(255,110,70,${0.6+0.3*Math.sin(vtime*14)})`);
+        flatRing(ctx, e.x, e.y, RING_MAX, 6, `rgba(255,110,70,${0.6+0.3*Math.sin(vtime*14)})`);
         ctx.setLineDash([]);
         if(pulling){
           /* suction: arcs sweeping inward, so the drag is something you see coming */
           const w = clamp(e.modeT/BOSS_PULL_T, 0, 1);
           for(let i=0;i<5;i++){
             const rr = RING_MAX * (1 - ((w*1.6 + i/5) % 1));
-            groundRing(ctx, e.x, e.y, rr, 5, `rgba(255,200,120,${0.65*(1-rr/RING_MAX)+0.15})`);
+            flatRing(ctx, e.x, e.y, rr, 5, `rgba(255,200,120,${0.65*(1-rr/RING_MAX)+0.15})`);
           }
           ctx.fillStyle = `rgba(255,190,110,${0.5+0.4*Math.sin(vtime*20)})`;
           ctx.font = '700 15px Fredoka'; ctx.textAlign = 'center';
@@ -8954,8 +9050,8 @@ function render(){
         } else {
           /* the strike: one ring closing onto the boss, landing with the slam */
           const k = clamp((e.modeT-BOSS_PULL_T)/0.5, 0, 1);
-          groundRing(ctx, e.x, e.y, 30 + (RING_MAX-30)*(1-k), 6, 'rgba(255,235,180,0.95)');
-          groundDisc(ctx, e.x, e.y, RING_MAX*k*0.28, `rgba(255,150,70,${0.25*k})`);
+          flatRing(ctx, e.x, e.y, 30 + (RING_MAX-30)*(1-k), 6, 'rgba(255,235,180,0.95)');
+          flatDisc(ctx, e.x, e.y, RING_MAX*k*0.28, `rgba(255,150,70,${0.25*k})`);
         }
       }
       if(e.mode==='dashWind'){
@@ -10337,7 +10433,19 @@ function renderHUD(){
     const left = enemies.filter(e=>!e.dead&&e.state==='active').length + wave.queue.length;
     ctx.strokeText('WAVE '+wave.n, cw/2, 32); ctx.fillStyle='#f2f3f2'; ctx.fillText('WAVE '+wave.n, cw/2, 32);
     ctx.font='600 13px Fredoka'; ctx.fillStyle='#c9d2ce';
-    ctx.fillText(left>0? left+' bricks left' : '', cw/2, 52);
+    if(wave.state==='ready'){
+      const t = Math.max(0, wave.readyT);
+      const rest = wave.readyMax >= WAVE_BREAK_BOSS;
+      ctx.fillStyle = rest ? '#a5e06e' : '#ffd76e';
+      ctx.fillText((rest?'catch your breath — ':'incoming in ')+t.toFixed(1)+'s  ·  ENTER to start now', cw/2, 52);
+      /* a thinning bar under it, so the wait is something you can see run out */
+      const bw = 210, bx = cw/2-bw/2, k = wave.readyMax>0 ? clamp(t/wave.readyMax,0,1) : 0;
+      ctx.fillStyle = 'rgba(15,20,25,0.45)'; roundRect(ctx, bx, 60, bw, 6, 3); ctx.fill();
+      ctx.fillStyle = rest ? '#a5e06e' : '#ffd76e';
+      roundRect(ctx, bx, 60, Math.max(2, bw*k), 6, 3); ctx.fill();
+    } else {
+      ctx.fillText(left>0? left+' bricks left' : '', cw/2, 52);
+    }
   }
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
@@ -10481,6 +10589,7 @@ function renderHUD(){
        '+'+wardArmour()+' arm · '+Math.ceil(p.wardT)+'s');
   if(p.regenBoostT>0)
     ab(cw-510, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
+       '×'+HEART_STACK_MUL[Math.min(HEART_STACK_MAX,p.heartStacks||1)]+' · '+
        cursedRegen().toFixed(2)+'/s · '+Math.ceil(p.regenBoostT)+'s');
   if(musicToast){
     musicToast.life -= frameRaw;
@@ -10611,7 +10720,8 @@ function resetRun(demo){
   player = newPlayer();
   syncStats();
   if(!demo) applyFavPerks();
-  wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
+  wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0 };
+  rollRoster();
   if(demo){
     for(let i=0;i<4;i++){ const sp = randomSpawnPos();
       spawnEnemy('imp', sp.x, sp.y); enemies[enemies.length-1].docile = true; }
