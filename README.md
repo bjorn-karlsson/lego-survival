@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`66 bricks` · `40 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
+`66 bricks` · `41 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -78,7 +78,10 @@ Imp masters lay **curses** on top — SUNDERED, LEADEN, BRITTLE, WITHERED — th
 resistance, slow your swing, thin your armour and choke your regeneration.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
-whatever it touched, long after you have walked away.
+whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
+the green beads orbiting a body — and the legendary makes a poisoned corpse detonate for
+the opening hit **+25% per stack** (+50% upgraded), which seeds the neighbours, which can
+kill them, which sets *them* off.
 
 </td><td width="33%" valign="top">
 
@@ -173,6 +176,11 @@ skeletons have the most of it, which is what the bones were always for. The **ME
 BARON** does not only throw bones: it hexes you with a fan of curse bolts, and it blesses
 its whole court — and itself — with armour, damage and swing rate.
 
+**No two fights are the same.** Every boss rolls traits when it wakes — one normally, two
+from wave ten, three for an ULTRA — drawn from `SWIFT`, `IRONCLAD`, `BRUTAL`, `VITAL`,
+`WARDED`, `VENOMOUS`, `RESTLESS`, `LEGION` and `THORNED`. They are printed on its health
+bar, so the LORD LAVABRICK you meet this run is not the one you learned last run.
+
 ---
 
 ## Drops
@@ -254,9 +262,11 @@ offered at all.
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
 | Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
-| Regeneration | 0.70/s* | Storm leaps | 15 | | |
+| Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
+| Curse stacks on you | 9 | Poison on a boss | 12 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
+| | | Gas reach | 430 px | | |
 | | | Bombs | 8 | | |
 | | | Blast radius | 110 px | | |
 | | | Cluster ranks | 2 | | |
