@@ -538,7 +538,17 @@ const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
-const REGEN_MAX   = 0.70;  /* hearts per second */
+const REGEN_MAX   = 0.70;  /* hearts per second, AT THE STARTING HEALTH BAR */
+/* Regeneration used to be an absolute number of hearts a second, which meant a
+   hero who had quadrupled their health bar healed it four times slower. What a
+   Repair Brick buys is now a share of the bar you actually have: the rate is
+   measured against the six hearts you start with and scales with your maximum,
+   so 0.25/s always means the same number of SECONDS back to full. */
+const REGEN_REF_HP = 6;
+function regenScale(){ return Math.max(1, (player ? player.maxHp : REGEN_REF_HP) / REGEN_REF_HP); }
+/* And the breather between waves is for healing — it is worth three ordinary
+   seconds of it, which is what makes a thirty-second rest after a boss a rest. */
+const REGEN_BREAK_MUL = 3;
 const HEART_CHANCE_MAX = 2.0;    /* +200% of a very small base, not +200 points */
 const BLAST_MIN_RATE = 2.00;   /* a volley of piercing bricks is not a machine gun */
 const STORM_MIN_RATE = 2.00;
@@ -1403,12 +1413,36 @@ const STUD_ORDER = ['stud1','stud5','stud20','stud50','stud100','stud250'];
    turned every buff into something that happened TO you rather than something
    you chose to break off and fetch. */
 function isStud(pk){ return !!STUD_TIERS[pk.kind]; }
+/* A stud that bounces into a lake, or a heart that settles on top of a boulder,
+   is a prize you can watch and never reach. Everything that lands on the floor
+   gets shoved back onto floor you can actually walk on. */
+function shoveToFloor(o, pad){
+  const r = (pad===undefined ? 10 : pad);
+  o.x = clamp(o.x, W.wall+r+4, W.w-W.wall-r-4);
+  o.y = clamp(o.y, W.wall+r+4, W.h-W.wall-r-4);
+  for(const sd of solids){
+    const d = dist(o, sd), rr = sd.r + r;
+    if(d < rr && d > 0.001){ o.x += (o.x-sd.x)/d*(rr-d); o.y += (o.y-sd.y)/d*(rr-d); }
+    else if(d <= 0.001){ o.x = sd.x + rr; }
+  }
+  for(const w of waters){
+    if(o.x < w.x-r || o.x > w.x+w.w+r || o.y < w.y-r || o.y > w.y+w.h+r) continue;
+    /* out by the nearest shore */
+    const l = o.x-(w.x-r), rt = (w.x+w.w+r)-o.x, t = o.y-(w.y-r), bt = (w.y+w.h+r)-o.y;
+    const m = Math.min(l, rt, t, bt);
+    if(m===l)       o.x = w.x - r;
+    else if(m===rt) o.x = w.x + w.w + r;
+    else if(m===t)  o.y = w.y - r;
+    else            o.y = w.y + w.h + r;
+  }
+  return o;
+}
 function makePickup(kind, x, y){
   const T = STUD_TIERS[kind];
-  return { kind, x, y, z:14, vx:rnd(-90,90), vy:rnd(-90,90), vz:rnd(140,300),
+  return shoveToFloor({ kind, x, y, z:14, vx:rnd(-90,90), vy:rnd(-90,90), vz:rnd(140,300),
     spin:rnd(TAU), t:0,
     val: T ? T.val : 1,
-    xp:  T ? T.xp  : 0 };
+    xp:  T ? T.xp  : 0 });
 }
 function spawnStuds(x,y,amount){
   let left = Math.max(0, Math.round(amount));
@@ -2133,11 +2167,11 @@ function mobSpoils(e){
   if(Math.random() < DROP.rage * m)    pickups.push(makePickup('rage', at(22,22).x, at(22,22).y));
   if(Math.random() < DROP.ward * m)    pickups.push(makePickup('ward', at(26,26).x, at(26,26).y));
   if(Math.random() < DROP.chest * m)
-    props.push({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16,
-      rar: rollRarity('chest') });
+    props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000),
+      dead:false, hp:3, r:16, rar: rollRarity('chest') }, 20));
   if(Math.random() < DROP.wild * m)
-    props.push({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
-      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' });
+    props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
+      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
 }
 function bossSpoils(e){
   pickups.push(makePickup('heart',  e.x-22, e.y));
@@ -2153,12 +2187,12 @@ function bossSpoils(e){
   rare('rage', 40, 18); rare('ward', 0, 34);
   if(Math.random() < BOSS_EXTRA*0.6) pickups.push(makePickup('gheart', e.x, e.y-26));
   /* a boss always leaves a chest, painted at least rare */
-  props.push({ type:'chest', x:e.x+rnd(-60,60), y:e.y+rnd(30,60), flash:0, seed:rnd(1000),
-    dead:false, hp:3, r:16, rar: rollRarity('boss') });
+  props.push(shoveToFloor({ type:'chest', x:e.x+rnd(-60,60), y:e.y+rnd(30,60), flash:0,
+    seed:rnd(1000), dead:false, hp:3, r:16, rar: rollRarity('boss') }, 20));
   /* ...and one in six leave the mystery one too */
   if(Math.random() < 0.17)
-    props.push({ type:'chest', wild:true, x:e.x+rnd(-70,70), y:e.y+rnd(30,70),
-      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' });
+    props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-70,70), y:e.y+rnd(30,70),
+      flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
 }
 /* Levelling used to outrun the roster: by wave 20 the hero was several levels
    past what the wave was built for, because a kill paid its base value times a
@@ -2280,10 +2314,13 @@ function updateCurses(dt){
    at all still gets something out of one instead of picking up a blank. */
 const HEART_BOOST_MIN = 0.08;      /* hearts/s while a heart is live */
 function cursedRegen(){
-  const base = player.regenRate * (1 - player.curse.regen);
+  const sc = regenScale();
+  const base = player.regenRate * (1 - player.curse.regen) * sc;
   const st = player.regenBoostT > 0 ? Math.min(HEART_STACK_MAX, player.heartStacks||0) : 0;
-  if(!st) return base;
-  return Math.max(base*HEART_STACK_MUL[st], HEART_BOOST_MIN*HEART_STACK_MUL[st]/HEART_REGEN_MUL);
+  let r = st ? Math.max(base*HEART_STACK_MUL[st], HEART_BOOST_MIN*sc*HEART_STACK_MUL[st]/HEART_REGEN_MUL)
+             : base;
+  if(wave && wave.state==='ready') r *= REGEN_BREAK_MUL;
+  return r;
 }
 function curseSwingMul(){ return 1 + player.curse.haste; }
 /* Monsters an overseer has blessed hit harder with their element. */
@@ -2922,6 +2959,9 @@ function rollRarity(mode){
    rounded three tiers into the same +1, so a common Storm Surge and a rare one
    were the same card wearing different colours. */
 const FLAT_SPELL = [0.5, 1, 3, 5, 8];
+/* A bomb lands once, on a timer, in a crowd — half a point of flat damage was
+   not worth the card, so its ladder starts at a whole one. */
+const FLAT_BOMB  = [1, 1.5, 3, 5, 8];
 const RAR_MULTS = RAR_ORDER.map(r=> RARITY[r].mult);
 function byRar(m, table){
   let best = 0, bd = Infinity;
@@ -3036,7 +3076,8 @@ const UPGRADES = [
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
     req:()=>player.regenRate < REGEN_MAX,
     calc:m=>({v:0.035+0.022*m}),
-    desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second (cap ${REGEN_MAX.toFixed(2)}/s)`,
+    desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second per ${REGEN_REF_HP} max hearts `+
+      `— it scales with your bar (cap ${REGEN_MAX.toFixed(2)})`,
     apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
   { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
@@ -3228,7 +3269,7 @@ const UPGRADES = [
       : `Spell: launch ${Math.min(bombMaxN(),c.n)} bomb${c.n>1?'s':''} in a compass spread`,
     apply:c=>{ player.bomb.n = Math.min(bombMaxN(), player.bomb.n + c.n); } },
   { id:'bombpow', name:'Big Kaboom', icon:'bomb', cls:'SPELL', req:()=>player.bomb.n>0,
-    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    calc:m=>({v: byRar(m, FLAT_BOMB)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bomb — before any increase`,
     apply:c=>{ player.bomb.dmg = Math.round((player.bomb.dmg + c.v)*100)/100; } },
   { id:'bombarea', name:'Wide Blast', icon:'bomb', cls:'SPELL',
@@ -3349,26 +3390,26 @@ const FAV_PERKS = {
   sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
     apply(p){ p.flatSword += 1; p.inc.atk += 0.09;
       p.reach = Math.min(REACH_MAX, p.reach + 8); } },
-  orbit: { lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
+  orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
-  blaster: { lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
+  blaster: { grants:'blaster', lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
                     '+1 pierce — bricks carry through one foe instead of shattering'],
     apply(p){ p.capUp.blaster += 1; p.blaster.n = 1; p.blaster.pierce += 1; } },
-  chain: { lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
+  chain: { grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
                   'Its bolt already leaps to a second foe'],
     apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
-  storm: { lines:['Start with 1 bladestorm', '+2 blades per burst',
+  storm: { grants:'storm', lines:['Start with 1 bladestorm', '+2 blades per burst',
                   '-10% bladestorm cooldown'],
     apply(p){ p.storm.n = 1; p.storm.count += 2; p.inc.stormRate += 0.11; } },
-  vortex: { lines:['Start with 1 blade vortex', '+20% vortex radius',
+  vortex: { grants:'vortex', lines:['Start with 1 blade vortex', '+20% vortex radius',
                    '-10% vortex cooldown'],
     apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
       p.inc.vortexRate += 0.11; } },
-  freeze: { lines:['Start with 1 block freeze', '+20% freeze radius',
+  freeze: { grants:'freeze', lines:['Start with 1 block freeze', '+20% freeze radius',
                    '+0.5s freeze duration'],
     apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
-  bomb: { lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
+  bomb: { grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
     apply(p){ p.capUp.bomb += 1; p.bomb.n = 1; p.inc.bombR += 0.15; } },
   tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
@@ -3379,6 +3420,9 @@ const FAV_PERKS = {
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];
   if(f) try { f.apply(player); } catch(e){}
+  /* the spell the kit handed you counts as taken, so the reward screen offers
+     it as the UPGRADE it would be and never again as a first pick */
+  if(f && f.grants) taken[f.grants] = (taken[f.grants]||0) + 1;
   syncStats();
 }
 const FAVOURITES = [
@@ -4130,7 +4174,8 @@ function renderCharSheet(){
       `Yours: ${Math.round(suppressChance()*100)}% chance.\n`+
       `A 10-damage spell hit averages ${(10*(1 - suppressChance()*(1-SUPPRESS_TAKEN))).toFixed(1)} against you.`),
     sRow('Regeneration', cursedRegen()>0 ? cursedRegen().toFixed(2)+' hearts/s' : '—',
-      p.regenBoostT>0 ? `${p.heartStacks} heart${p.heartStacks>1?'s':''} have it at ×${HEART_STACK_MUL[p.heartStacks]} `+
+      wave && wave.state==='ready' ? `×${REGEN_BREAK_MUL} between waves — this is the time to heal`
+        : p.regenBoostT>0 ? `${p.heartStacks} heart${p.heartStacks>1?'s':''} have it at ×${HEART_STACK_MUL[p.heartStacks]} `+
         `(max ${HEART_STACK_MAX} for ×${HEART_STACK_MUL[HEART_STACK_MAX]}) — ${Math.ceil(p.regenBoostT)}s left`
         : p.curse.regen>0 ? `WITHERED — choked from ${p.regenRate.toFixed(2)}/s`
         : p.regenRate>0 ? `one heart every ${(1/cursedRegen()).toFixed(1)}s` : 'take Repair Bricks to regenerate'),
@@ -4990,7 +5035,11 @@ function updatePlayer(dt){
       continue;
     }
     pk.vz -= 800*dt; pk.z += pk.vz*dt;
-    if(pk.z<0){ pk.z=0; pk.vz*=-0.45; pk.vx*=0.6; pk.vy*=0.6; }
+    if(pk.z<0){
+      pk.z=0; pk.vz*=-0.45; pk.vx*=0.6; pk.vy*=0.6;
+      /* the moment it touches down, put it somewhere reachable */
+      if(!pk.landed){ pk.landed = true; shoveToFloor(pk); }
+    }
     pk.x += pk.vx*dt; pk.y += pk.vy*dt;
     pk.vx *= Math.max(0,1-2*dt); pk.vy *= Math.max(0,1-2*dt);
     if(pk.seeking && pk.z<=1){
@@ -6295,7 +6344,7 @@ function maceSpin(b, dt, tier, enr, toP){
 }
 /* The sweep is the whole point of the attack — at the old radius you could
    stand a step back and watch it. It now reaches roughly twice as far. */
-function maceReach(b){ return 150*(b.scale||1) + 48; }
+function maceReach(b){ return 126*(b.scale||1) + 40; }
 function bossSummon(b, count, kinds, elites){
   const room = Math.max(0, MAX_ALIVE - enemies.length - 4);
   const n = Math.min(count, room);
@@ -7592,185 +7641,151 @@ function drawGolemAura(c, e){
   }
 }
 
-/* A GOLEM IS A MOUNTAIN THAT STOOD UP. Not a torso on legs with a head on top —
-   that reads as a robot however you shade it. The silhouette is a PEAK: widest
-   at the ground, climbing through a shoulder ridge to a summit that leans, with
-   a jagged skyline and no straight edge anywhere on it. There is no neck and no
-   face; the eyes are two coals burning out of a crack in the rock. The legs are
-   boulders it rolls forward under its own weight, mostly buried in the mass. */
+/* THE ROCK MONSTER. Not a mountain and not a robot — an APE made of rubble.
+   The read is the pose: hunched so far forward the head sits lower than the
+   shoulders, enormous arms that reach past the knees and take the weight on
+   their knuckles, a heavy slab of a back, stubby bent legs, and two red coals
+   for eyes set in a blunt slab of a face. Every piece is a chunk of rock with
+   flat faces and hard corners; nothing on it is smooth and nothing is a panel. */
 const GOLEM_SKIN = {
-  stone:{ rock:['#8f9593','#7b8184','#6a7073','#9ea4a3','#5b6164'], dark:'#4a5053',
-          edge:'rgba(22,28,32,0.8)', cap:'rgba(214,222,222,0.55)',
-          eye:'#ffd166', eyeGlow:'255,209,102', vein:null, moss:'rgba(84,122,64,0.55)' },
-  ice:  { rock:['#a7d6f2','#7fb9e0','#5f9dc8','#cfeaff','#4a86b4'], dark:'#35688c',
-          edge:'rgba(18,50,74,0.75)', cap:'rgba(240,252,255,0.8)',
-          eye:'#eaf8ff', eyeGlow:'191,227,255', vein:'rgba(223,242,255,0.9)', moss:null },
-  fire: { rock:['#5f2e1c','#482113','#7a3a20','#6b3419','#33170d'], dark:'#24100a',
-          edge:'rgba(18,9,5,0.85)', cap:'rgba(90,70,62,0.5)',
-          eye:'#ffb14a', eyeGlow:'255,140,50', vein:'rgba(255,120,40,0.95)', moss:null }
+  stone:{ rock:['#9a9083','#8a8073','#756b60','#a9a093','#5f574d'], dark:'#4c453d',
+          edge:'rgba(30,26,20,0.8)', eye:'#ff2a1a', eyeGlow:'255,60,40',
+          vein:null, grit:'rgba(60,54,44,0.5)' },
+  ice:  { rock:['#bfe2f7','#8fc4e8','#68a6cf','#e4f4ff','#4d87b5'], dark:'#376f97',
+          edge:'rgba(14,42,66,0.9)', eye:'#eaf9ff', eyeGlow:'150,215,255',
+          vein:'rgba(230,246,255,0.9)', grit:'rgba(255,255,255,0.35)' },
+  fire: { rock:['#4a2015','#33150d','#61301b','#20100a','#7a3a1d'], dark:'#180b06',
+          edge:'rgba(16,8,4,0.85)', eye:'#ffc247', eyeGlow:'255,150,40',
+          vein:'rgba(255,110,25,0.95)', grit:'rgba(255,140,40,0.35)' }
 };
-/* The skyline of one golem, built once from its own seed and then reused every
-   frame, so a mountain keeps the shape it was born with instead of shimmering. */
-/* How wide the peak is at a given height. The profile is two chains of points
-   running from the ground up to the summit, so one walk gives the exact edge —
-   which means every layer, boulder and crack can be BUILT inside the silhouette
-   instead of being drawn over it and clipped back. Canvas clipping costs about
-   a millisecond a body, which is fine for one golem and ruinous for forty. */
-function profEdge(chain, y){
-  for(let k=0;k<chain.length-1;k++){
-    const y0 = chain[k][1], y1 = chain[k+1][1];
-    if(y <= y0 && y >= y1){
-      const t = (y0===y1) ? 0 : (y-y0)/(y1-y0);
-      return chain[k][0] + (chain[k+1][0]-chain[k][0])*t;
-    }
-  }
-  return chain[chain.length-1][0];
-}
+/* Every chunk of one monster, rolled once from its seed and kept for life, so a
+   rock monster has its own lumps instead of shimmering new ones every frame. */
 function golemProfile(e){
   if(e._prof) return e._prof;
   const h = (n)=> hash2((e.phase*997|0)+n*13, n*61);
-  /* right-hand half of the peak, from the ground up to the summit, as
-     [x, y] pairs. The left half is the mirror with its own wobble. */
-  const summit = -66 - h(1)*10;
-  const lean = (h(2)-0.5)*9;                 /* which way the peak tips */
-  const right = [
-    [40 + h(3)*8,  0],
-    [36 + h(4)*6, -10 - h(5)*4],
-    [30 + h(6)*7, -22 - h(7)*5],
-    [32 + h(8)*8, -31 - h(9)*4],             /* a shoulder ledge juts back out */
-    [21 + h(10)*7, -42 - h(11)*5],
-    [11 + h(12)*6, -55 - h(13)*4],
-    [lean + 3,     summit]
-  ];
-  const left = [
-    [-42 - h(14)*8, 0],
-    [-35 - h(15)*7, -9  - h(16)*5],
-    [-36 - h(17)*8, -19 - h(18)*5],          /* and a matching one on this side */
-    [-26 - h(19)*6, -29 - h(20)*5],
-    [-28 - h(21)*7, -40 - h(22)*4],
-    [-13 - h(23)*6, -53 - h(24)*5],
-    [lean - 4,      summit + 2 + h(25)*4]
-  ];
-  const prof = { right, left, summit, lean,
-    /* loose boulders sitting on the slope */
-    rubble: [],
-    /* where the eyes burn out of the rock */
-    eyeY: -33 - h(26)*7 };
-  prof.bands = [[-2,-14,0],[-14,-27,2],[-27,-40,3],[-40,-54,0],[-54,summit-6,3]];
-  /* Every boulder is pinned inside the slope at its own height and its lumpy
-     outline is worked out once, here, rather than seven trig calls a frame. */
-  for(let k=0;k<8;k++){
-    const by = -6 - h(40+k)*46;
-    const lx = profEdge(prof.left, by), rx = profEdge(prof.right, by);
-    const br = 3 + h(50+k)*6;
-    const room = Math.max(0, (rx-lx)/2 - br - 2);
-    const bx = (lx+rx)/2 + (h(30+k)-0.5)*2*room;
-    const pts = [];
-    for(let q=0;q<7;q++){
-      const a2 = q/7*TAU;
-      const rr = br * (0.74 + hash2((bx*7|0)+q, (by*11|0)+q*3)*0.5);
-      pts.push([bx + Math.cos(a2)*rr, by + Math.sin(a2)*rr*0.9]);
-    }
-    prof.rubble.push({ pts });
-  }
-  const path = new Path2D();
-  path.moveTo(prof.left[0][0], 2);
-  for(let k=1;k<prof.left.length;k++) path.lineTo(prof.left[k][0], prof.left[k][1]);
-  for(let k=prof.right.length-1;k>=0;k--) path.lineTo(prof.right[k][0], prof.right[k][1]);
-  path.lineTo(prof.right[0][0], 2);
-  path.closePath();
-  prof.path = path;
+  /* an irregular block: [x, y, w, h] jittered into a six-point slab */
+  const slab = (x, y, w, hh, n)=>{
+    const p = [];
+    const pts = [[-0.5,-0.5],[0.12,-0.56],[0.5,-0.4],[0.52,0.42],[0.06,0.54],[-0.5,0.44]];
+    for(let k=0;k<pts.length;k++)
+      p.push([ x + pts[k][0]*w + (h(n+k)-0.5)*w*0.22,
+               y + pts[k][1]*hh + (h(n+k+7)-0.5)*hh*0.22 ]);
+    return p;
+  };
+  const prof = {
+    /* the hunched back: one big mass, highest at the shoulders, falling away */
+    back:  slab(0, -52, 46 + h(1)*7, 32 + h(2)*6, 1),
+    chest: slab(1, -32, 38 + h(3)*6, 26, 20),
+    hip:   slab(0, -15, 31 + h(4)*5, 20, 40),
+    /* boulders capping each shoulder — carried high, above the head */
+    shL:   slab(-24 - h(5)*3, -62, 25, 21, 60),
+    shR:   slab( 24 + h(6)*3, -62, 25, 21, 80),
+    /* the head, slung FORWARD and DOWN, sitting LOWER than the shoulders —
+       the single thing that separates a rock monster from a rock man */
+    head:  slab(6, -42, 30 + h(7)*4, 23, 100),
+    /* loose rubble welded onto the back */
+    lumps: [0,1,2,3,4].map(k=>[ (h(120+k)-0.5)*40, -66 + h(130+k)*28, 3 + h(140+k)*4 ]),
+    browY: -47 - h(8)*2
+  };
   e._prof = prof;
   return prof;
 }
-/* One limb. It is a buttress of the same rock, not an arm — no elbow, no joint,
-   no fist with fingers, just a slab that narrows to a knuckle. At rest it is
-   drawn BEHIND the peak so only its outer crag clears the slope and it reads as
-   part of the mountain; raised, it comes over the top where you can see it. */
-function golemArm(c, K, R, side, a){
-  c.save(); c.translate(side*24, -30); c.rotate(a);
-  c.strokeStyle = K.edge; c.lineWidth = 2;
-  const path = ()=>{
-    c.beginPath();
-    c.moveTo(-10,-11); c.lineTo(5,-10); c.lineTo(14,-7);
-    c.lineTo(20,-2); c.lineTo(18,6); c.lineTo(10,9); c.lineTo(-2,11); c.lineTo(-11,8);
-    c.closePath();
-  };
-  c.fillStyle = R(2); path(); c.fill(); c.stroke();
-  /* the underside in shadow, drawn as the lower half of the same outline */
-  c.fillStyle = 'rgba(15,22,26,0.24)';
+function polyPath(c, pts){
   c.beginPath();
-  c.moveTo(-11,1); c.lineTo(19,1); c.lineTo(18,6); c.lineTo(10,9); c.lineTo(-2,11); c.lineTo(-11,8);
+  c.moveTo(pts[0][0], pts[0][1]);
+  for(let k=1;k<pts.length;k++) c.lineTo(pts[k][0], pts[k][1]);
+  c.closePath();
+}
+function rockChunk(c, pts, fill, edge, shade){
+  c.fillStyle = fill; c.strokeStyle = edge;
+  polyPath(c, pts); c.fill(); c.stroke();
+  if(shade){
+    /* one flat face catching the light, so every chunk reads as faceted stone */
+    c.fillStyle = shade;
+    c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    c.lineTo(pts[1][0], pts[1][1]);
+    c.lineTo(pts[2][0], pts[2][1]);
+    c.lineTo((pts[2][0]+pts[5][0])/2, (pts[2][1]+pts[5][1])/2);
+    c.closePath(); c.fill();
+  }
+}
+/* ONE ARM. It hangs from the shoulder boulder, is longer than the whole body,
+   and ends in a fist the size of the head that it walks on. */
+function golemArm(c, K, R, side, a, reach){
+  c.save(); c.rotate(a);
+  c.strokeStyle = K.edge; c.lineWidth = 2; c.lineJoin = 'round';
+  /* upper */
+  c.fillStyle = R(2);
+  c.beginPath();
+  c.moveTo(-11,-12); c.lineTo(17,-10); c.lineTo(20,9); c.lineTo(-10,11);
+  c.closePath(); c.fill(); c.stroke();
+  /* forearm — longer than the upper, which is what makes it an ape */
+  c.save(); c.translate(18, 0); c.rotate(side>0 ? 0.34 : -0.34);
+  c.fillStyle = R(0);
+  c.beginPath();
+  c.moveTo(-5,-11); c.lineTo(reach-6,-13); c.lineTo(reach-2,10); c.lineTo(-4,10);
+  c.closePath(); c.fill(); c.stroke();
+  /* the knuckle it takes its weight on */
+  c.fillStyle = R(3);
+  c.beginPath();
+  c.moveTo(reach-9,-14); c.lineTo(reach+8,-11); c.lineTo(reach+12,3);
+  c.lineTo(reach+5,14); c.lineTo(reach-8,12);
+  c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = 'rgba(15,12,8,0.26)';
+  c.beginPath();
+  c.moveTo(reach-9,4); c.lineTo(reach+11,4); c.lineTo(reach+5,14); c.lineTo(reach-8,12);
   c.closePath(); c.fill();
-  c.strokeStyle = 'rgba(20,26,30,0.4)'; c.lineWidth = 1.6;
-  c.beginPath(); c.moveTo(-5,-8); c.lineTo(2,-1); c.lineTo(-1,7); c.stroke();
+  c.restore();
   c.restore();
 }
-/* Bake the unchanging rock of one golem into its own canvas. Redone only if the
-   thing is drawn at a size it has not been baked at. */
+/* The body of a rock monster never changes shape: hips, chest, the hunched
+   back, the rubble welded to it, both shoulder boulders, the head, the brow and
+   the mouth are the same picture every frame of its life. Forty of them redrawing
+   that stack sixty times a second is thousands of paths for a still image, so it
+   is baked ONCE into a canvas of its own and blitted after that — one baked pixel
+   to one screen pixel, because a RESAMPLED blit costs more than the paths it
+   replaces. Only the arms, the legs, the coals and the veins are drawn live,
+   because only they move. */
 function golemBake(e, K, P){
   const s = e.scale * 1.05;
   if(e._bake && e._bake.s === s) return;
   const R = i=> K.rock[i];
-  const pad = 8;
-  const w = Math.ceil((96 + pad*2) * s), h = Math.ceil((Math.abs(P.summit) + 24 + pad*2) * s);
+  const SH = 'rgba(255,255,255,0.10)';
+  const w = Math.ceil(120*s), h = Math.ceil(110*s);
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
   const g = cv.getContext('2d');
-  const ox = Math.round(48*s + pad*s), oy = Math.round((Math.abs(P.summit) + 14 + pad)*s);
+  const ox = Math.round(56*s), oy = Math.round(92*s);
   g.translate(ox, oy); g.scale(s, s);
-  g.lineJoin = 'round'; g.lineWidth = 2; g.strokeStyle = K.edge;
+  g.lineJoin = 'round'; g.lineWidth = 2;
 
-  g.fillStyle = R(1);
-  g.fill(P.path); g.stroke(P.path);
-  for(let bi=0; bi<P.bands.length; bi++){
-    const [y0, y1, idx] = P.bands[bi];
-    g.fillStyle = R(idx);
+  rockChunk(g, P.hip,   R(2), K.edge, SH);
+  rockChunk(g, P.chest, R(1), K.edge, SH);
+  rockChunk(g, P.back,  R(0), K.edge, SH);
+  for(let k=0;k<P.lumps.length;k++){
+    const [lx, ly, lr] = P.lumps[k];
+    g.fillStyle = R(k%2 ? 3 : 4); g.strokeStyle = K.edge; g.lineWidth = 1.4;
     g.beginPath();
-    g.moveTo(profEdge(P.left, y0), y0);
-    g.lineTo(profEdge(P.right, y0), y0);
-    g.lineTo(profEdge(P.right, y1), y1);
-    g.lineTo(profEdge(P.left, y1), y1);
-    g.closePath(); g.fill();
-  }
-  g.fillStyle = 'rgba(15,22,26,0.22)';
-  g.beginPath();
-  g.moveTo(P.lean, P.summit);
-  for(let k=P.right.length-1;k>=0;k--) g.lineTo(P.right[k][0], P.right[k][1]);
-  g.lineTo(P.lean+2, 0);
-  g.closePath(); g.fill();
-  g.strokeStyle = 'rgba(20,26,30,0.45)'; g.lineWidth = 1.8;
-  g.beginPath();
-  g.moveTo(P.lean-1, P.summit+4); g.lineTo(-7, -46); g.lineTo(-3, -30); g.lineTo(-11, -12);
-  g.moveTo(P.lean+2, P.summit+8); g.lineTo(11, -44); g.lineTo(6, -24);
-  g.stroke();
-  for(let bi=0; bi<P.rubble.length; bi++){
-    const R2 = P.rubble[bi];
-    g.fillStyle = R(bi%2 ? 4 : 0); g.strokeStyle = K.edge; g.lineWidth = 1.5;
-    g.beginPath();
-    for(let k=0;k<R2.pts.length;k++){
-      if(k) g.lineTo(R2.pts[k][0], R2.pts[k][1]); else g.moveTo(R2.pts[k][0], R2.pts[k][1]);
+    for(let q=0;q<6;q++){
+      const a2 = q/6*TAU, rr = lr*(0.75 + hash2((lx*9|0)+q, (ly*5|0)+q*3)*0.5);
+      const px = lx + Math.cos(a2)*rr, py = ly + Math.sin(a2)*rr*0.85;
+      if(q) g.lineTo(px, py); else g.moveTo(px, py);
     }
     g.closePath(); g.fill(); g.stroke();
   }
-  g.fillStyle = K.cap;
+  g.lineWidth = 2;
+  rockChunk(g, P.shL, R(3), K.edge, SH);
+  rockChunk(g, P.shR, R(1), K.edge, SH);
+  rockChunk(g, P.head, R(0), K.edge, SH);
+  g.fillStyle = K.dark;
   g.beginPath();
-  g.moveTo(P.lean-6, P.summit+11); g.lineTo(P.lean-1, P.summit+1);
-  g.lineTo(P.lean+4, P.summit+7); g.lineTo(P.lean+8, P.summit+2);
-  g.lineTo(P.lean+11, P.summit+14); g.closePath(); g.fill();
-  if(K.moss){
-    g.fillStyle = K.moss;
-    g.beginPath(); g.ellipse(-17, -20, 8, 4.5, -0.3, 0, TAU); g.fill();
-    g.beginPath(); g.ellipse(14, -33, 6, 3.5, 0.25, 0, TAU); g.fill();
-  }
-  if(e.golem==='ice'){
-    g.fillStyle = 'rgba(223,242,255,0.92)'; g.strokeStyle = 'rgba(70,130,175,0.85)'; g.lineWidth=1.4;
-    for(const [sx2, sy2, h2, tilt] of [[-27,-24,12,-0.7],[-17,-43,9,-0.3],[24,-21,10,0.6],[15,-46,7,0.35]]){
-      g.save(); g.translate(sx2, sy2); g.rotate(tilt);
-      g.beginPath(); g.moveTo(-3.5,0); g.lineTo(0,-h2); g.lineTo(3.5,0); g.closePath();
-      g.fill(); g.stroke(); g.restore();
-    }
-  }
+  g.moveTo(-9, P.browY); g.lineTo(21, P.browY-1); g.lineTo(20, P.browY+5); g.lineTo(-8, P.browY+6);
+  g.closePath(); g.fill();
+  g.fillStyle = 'rgba(12,9,6,0.72)';
+  g.beginPath();
+  g.moveTo(-5, -34); g.lineTo(18, -35); g.lineTo(16, -30); g.lineTo(-4, -29);
+  g.closePath(); g.fill();
   e._bake = { cv, s, ox, oy };
 }
 function drawGolem(c, e){
@@ -7779,93 +7794,102 @@ function drawGolem(c, e){
   const s = e.scale * 1.05;
   const mv = e.moving ? 1 : 0;
   const w = e.walk;
-  /* a mountain does not bounce — it heaves, slowly, side to side */
-  const heave = Math.sin(w)*1.6*mv;
-  const roll  = Math.sin(w)*0.045*mv;
+  /* a knuckle-walker lurches: the body swings up onto the arms and drops back */
+  const lurch = Math.abs(Math.sin(w)) * 3.2 * mv + Math.sin(vtime*1.5 + e.phase)*0.5;
+  const roll  = Math.sin(w) * 0.05 * mv;
   const armsUp = (e.mode==='stompWind' || e.mode==='throwWind');
   const braced = (e.mode==='chargeWind' || e.mode==='charge');
   const fl = e.flash > 0 ? Math.min(1, e.flash*0.85) : 0;
   const R = i=> fl ? mixc(K.rock[i], '#ffffff', fl) : K.rock[i];
   const D = ()=> fl ? mixc(K.dark, '#ffffff', fl) : K.dark;
+  const SH = 'rgba(255,255,255,0.10)';
   const dir = (e.face && e.face.x < 0) ? -1 : 1;
 
   c.save();
   c.fillStyle = 'rgba(15,30,20,0.34)';
-  c.beginPath(); c.ellipse(e.x, e.y+2, 26*s, 8.5*s, 0, 0, TAU); c.fill();
-  c.translate(e.x, e.y - Math.abs(heave)*s);
+  c.beginPath(); c.ellipse(e.x, e.y+2, 30*s, 9*s, 0, 0, TAU); c.fill();
+  c.translate(e.x, e.y - lurch*s);
   c.scale(dir*s, s);
   c.rotate(roll);
-  c.lineWidth = 2; c.lineJoin='round'; c.strokeStyle = K.edge;
+  c.lineWidth = 2; c.lineJoin = 'round';
 
-  /* --- two boulders it rolls along on, mostly swallowed by the mass --- */
-  const step = Math.sin(w)*3.5*mv;
+  /* --- the far arm, behind everything --- */
+  const swing = Math.sin(w)*0.30*mv;
+  const armAngle = side=> armsUp ? (side>0 ? -1.45 : Math.PI + 1.45)
+    : braced ? (side>0 ? 0.20 : Math.PI - 0.20)
+    /* at rest they plant forward and down, knuckles on the floor */
+    : (side>0 ? (1.16 + swing) : (Math.PI - 1.16 + swing));
+  c.save(); c.translate(-23, -60);
+  golemArm(c, K, i=> mixc(R(i), '#000000', 0.20), -1, armAngle(-1), 34);
+  c.restore();
+
+  /* --- stubby bent legs, set wide and half hidden under the body --- */
+  const step = Math.sin(w + Math.PI)*4*mv;
   for(const [lx, off] of [[-13, step], [13, -step]]){
-    c.fillStyle = D();
-    c.beginPath(); c.ellipse(lx, -5 - Math.max(0,off)*0.5, 10, 7.5, 0, 0, TAU);
-    c.fill(); c.stroke();
+    c.fillStyle = D(); c.strokeStyle = K.edge;
+    c.beginPath();
+    c.moveTo(lx-10, -16); c.lineTo(lx+10, -16); c.lineTo(lx+11, -5 + Math.max(0,off)*0.3);
+    c.lineTo(lx+13, 1); c.lineTo(lx-12, 1); c.lineTo(lx-11, -6);
+    c.closePath(); c.fill(); c.stroke();
+    /* a blocky foot */
+    c.fillStyle = R(4);
+    c.beginPath();
+    c.moveTo(lx-13, -4); c.lineTo(lx+14, -4); c.lineTo(lx+16, 2); c.lineTo(lx-14, 2);
+    c.closePath(); c.fill(); c.stroke();
   }
 
-  /* --- the limbs, tucked behind the slope until they are raised --- */
-  const swing = Math.sin(w + Math.PI)*0.16*mv;
-  const armA = side=> armsUp ? (side>0 ? -1.15 : Math.PI + 1.15)
-    : braced ? (side>0 ? 0.65 : Math.PI - 0.65)
-    : (side>0 ? (1.62 + swing) : (Math.PI - 1.62 - swing));
-  if(!armsUp) for(const side of [-1,1]) golemArm(c, K, R, side, armA(side));
-
-  /* --- THE PEAK, off its own baked canvas --- */
+  /* --- the body, off its own baked canvas --- */
   golemBake(e, K, P);
   const B = e._bake;
-  /* Step out of the scale and the lean for the blit so the image lands one baked
-     pixel on one screen pixel. A resampled drawImage costs more than the paths
-     it replaced; an unscaled one is nearly free. The body loses its lean, which
-     at four hundredths of a radian nobody has ever seen. */
   c.save();
   c.rotate(-roll); c.scale(dir/s, 1/s);
   c.drawImage(B.cv, -B.ox, -B.oy);
   c.restore();
-  /* a hit flashes the whole silhouette white over the top of the bake */
   if(fl > 0){
-    c.save(); c.globalAlpha = fl*0.85; c.fillStyle = '#ffffff';
-    c.fill(P.path); c.restore();
+    /* a hit whitens the whole stack over the top of the bake */
+    c.save(); c.globalAlpha = fl*0.8; c.fillStyle = '#ffffff';
+    for(const pts of [P.hip, P.chest, P.back, P.shL, P.shR, P.head]){ polyPath(c, pts); c.fill(); }
+    c.restore();
   }
 
-  /* --- the two things on a mountain that MOVE, drawn live over the bake ---
-         the element bleeding up through its seams, and the coals in its face */
+  /* --- THE EYES. Two red coals under the brow, and the only light on it. --- */
+  const eg = 0.62 + 0.38*Math.sin(vtime*4.5 + e.phase);
+  for(const side of [0, 1]){
+    const ex2 = 2 + side*11;
+    c.fillStyle = `rgba(${K.eyeGlow},${0.34*eg})`;
+    c.beginPath(); c.arc(ex2, P.browY+8, 8, 0, TAU); c.fill();
+    c.fillStyle = `rgba(${K.eyeGlow},${0.78*eg})`;
+    c.beginPath(); c.ellipse(ex2, P.browY+8, 4.2, 3.2, 0, 0, TAU); c.fill();
+    c.fillStyle = K.eye;
+    c.beginPath(); c.ellipse(ex2, P.browY+8, 2.4, 2, 0, 0, TAU); c.fill();
+  }
+
+  /* molten or frozen light bleeding out of the seams between the chunks */
   if(K.vein){
-    const pulse = 0.55 + 0.45*Math.sin(vtime*(e.golem==='fire'?6:2.5) + e.phase);
-    c.strokeStyle = K.vein; c.lineWidth = 2.4; c.globalAlpha = pulse;
+    const pulse = 0.5 + 0.5*Math.sin(vtime*(e.golem==='fire'?6:2.5) + e.phase);
+    c.strokeStyle = K.vein; c.lineWidth = 2.2; c.globalAlpha = pulse;
     c.beginPath();
-    c.moveTo(-16,-8); c.lineTo(-8,-22); c.lineTo(-14,-34); c.lineTo(-5,-48);
-    c.moveTo(15,-12); c.lineTo(7,-28); c.lineTo(14,-42);
+    c.moveTo(-20,-30); c.lineTo(-9,-36); c.lineTo(-14,-46);
+    c.moveTo(18,-28); c.lineTo(8,-33); c.lineTo(15,-44);
+    c.moveTo(-6,-18); c.lineTo(4,-22);
     c.stroke();
     c.globalAlpha = 1;
   }
-  const eg = 0.6 + 0.4*Math.sin(vtime*5 + e.phase);
-  /* two separate fissures, not one slot — a slot is a visor and a visor is a robot */
-  for(const side of [-1, 1]){
-    const ex2 = side*7 + P.lean*0.3;
-    c.fillStyle = 'rgba(10,14,16,0.8)';
-    c.beginPath();
-    c.moveTo(ex2-5.5, P.eyeY+2.5); c.lineTo(ex2-3, P.eyeY-3);
-    c.lineTo(ex2+5, P.eyeY-2); c.lineTo(ex2+4, P.eyeY+3.5);
-    c.closePath(); c.fill();
-    c.fillStyle = `rgba(${K.eyeGlow},${0.30*eg})`;
-    c.beginPath(); c.arc(ex2, P.eyeY, 6, 0, TAU); c.fill();
-    c.fillStyle = K.eye;
-    c.beginPath(); c.ellipse(ex2, P.eyeY, 2.4, 1.7, side*0.25, 0, TAU); c.fill();
-  }
 
-  if(armsUp) for(const side of [-1,1]) golemArm(c, K, R, side, armA(side));
+  /* --- the near arm, in front of the body --- */
+  c.save(); c.translate(23, -60);
+  golemArm(c, K, R, 1, armAngle(1), 36);
+  c.restore();
 
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.5;
-    c.beginPath(); c.ellipse(0,1,30,10,0,0,TAU); c.stroke(); }
+    c.beginPath(); c.ellipse(0,1,33,10,0,0,TAU); c.stroke(); }
   if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
-    c.beginPath(); c.ellipse(0,1,31,10.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
+    c.beginPath(); c.ellipse(0,1,34,10.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
 
-/* The chip that breaks off a golem when it dies: the same mountain, knee high,
-   still walking. Three crags, two coals, and a dusting on top. */
+/* The chip that breaks off one when it dies: the same hunched ape, knee high.
+   Two arms it walks on, a blunt head, two coals. */
 function drawMiniGolem(c, e){
   const K = GOLEM_SKIN[e.mini] || GOLEM_SKIN.stone;
   const s = e.scale * 1.5;
@@ -7875,52 +7899,50 @@ function drawMiniGolem(c, e){
   const R = i=> fl ? mixc(K.rock[i], '#ffffff', fl) : K.rock[i];
   const dir = (e.face && e.face.x < 0) ? -1 : 1;
   const h = (n)=> hash2((e.phase*613|0)+n*7, n*29);
-  const peak = -21 - h(1)*5;
 
   c.save();
   c.fillStyle = 'rgba(15,30,20,0.3)';
-  c.beginPath(); c.ellipse(e.x, e.y+2, 12*s, 4.5*s, 0, 0, TAU); c.fill();
-  c.translate(e.x, e.y - Math.abs(Math.sin(w))*1.4*mv*s);
+  c.beginPath(); c.ellipse(e.x, e.y+2, 13*s, 4.5*s, 0, 0, TAU); c.fill();
+  c.translate(e.x, e.y - Math.abs(Math.sin(w))*1.6*mv*s);
   c.scale(dir*s, s);
   c.rotate(Math.sin(w)*0.07*mv);
   c.lineWidth = 1.6; c.lineJoin='round'; c.strokeStyle = K.edge;
 
-  /* two pebble feet */
-  const step = Math.sin(w)*1.8*mv;
-  for(const [lx, off] of [[-5, step],[5, -step]]){
+  const sw = Math.sin(w)*2.4*mv;
+  /* far arm */
+  c.fillStyle = mixc(R(2), '#000000', 0.18);
+  c.beginPath(); c.moveTo(-10,-14); c.lineTo(-3,-15); c.lineTo(-1,-2+sw*0.3);
+  c.lineTo(-8,-1+sw*0.3); c.closePath(); c.fill(); c.stroke();
+  /* squat legs */
+  for(const [lx,off] of [[-5,sw],[5,-sw]]){
     c.fillStyle = K.dark;
-    c.beginPath(); c.ellipse(lx, -2 - Math.max(0,off)*0.4, 4.2, 3.2, 0, 0, TAU);
-    c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(lx-4,-7); c.lineTo(lx+4,-7);
+    c.lineTo(lx+5,1); c.lineTo(lx-5,1); c.closePath(); c.fill(); c.stroke();
   }
-  /* the crag itself */
-  c.fillStyle = R(1);
+  /* hunched body */
+  c.fillStyle = R(0);
   c.beginPath();
-  c.moveTo(-11 - h(2)*2, 1);
-  c.lineTo(-9, -8 - h(3)*3);
-  c.lineTo(-4 - h(4)*2, -15 - h(5)*3);
-  c.lineTo(0, peak);
-  c.lineTo(5 + h(6)*2, -14 - h(7)*3);
-  c.lineTo(10, -6 - h(8)*3);
-  c.lineTo(11 + h(9)*2, 1);
+  c.moveTo(-11,-8-h(1)*2); c.lineTo(-8,-19-h(2)*2); c.lineTo(3,-21);
+  c.lineTo(11,-15); c.lineTo(10,-5); c.lineTo(-9,-4);
   c.closePath(); c.fill(); c.stroke();
-  /* one strata seam and a shaded flank, both cut from the crag's own outline */
+  c.fillStyle = 'rgba(255,255,255,0.10)';
+  c.beginPath(); c.moveTo(-8,-19); c.lineTo(3,-21); c.lineTo(11,-15); c.lineTo(0,-14);
+  c.closePath(); c.fill();
+  /* head slung forward, lower than the back */
   c.fillStyle = R(3);
   c.beginPath();
-  c.moveTo(-4,-15); c.lineTo(0,peak); c.lineTo(5,-14); c.lineTo(3,-11); c.lineTo(-2,-11);
-  c.closePath(); c.fill();
-  c.fillStyle = 'rgba(15,22,26,0.2)';
-  c.beginPath(); c.moveTo(0,peak); c.lineTo(5,-14); c.lineTo(10,-6); c.lineTo(11,1);
-  c.lineTo(0,1); c.closePath(); c.fill();
-  /* a dusting of snow, moss or ash on the summit */
-  c.fillStyle = K.cap;
-  c.beginPath(); c.moveTo(-3.5, peak+5); c.lineTo(0, peak+0.5); c.lineTo(3.5, peak+5);
-  c.closePath(); c.fill();
-  /* the two coals */
+  c.moveTo(2,-16); c.lineTo(12,-17); c.lineTo(14,-8); c.lineTo(3,-7);
+  c.closePath(); c.fill(); c.stroke();
+  /* coals */
   const eg = 0.6 + 0.4*Math.sin(vtime*6 + e.phase);
-  c.fillStyle = `rgba(${K.eyeGlow},${0.30*eg})`;
-  c.beginPath(); c.arc(-3,-8,3.4,0,TAU); c.arc(3,-8,3.4,0,TAU); c.fill();
+  c.fillStyle = `rgba(${K.eyeGlow},${0.34*eg})`;
+  c.beginPath(); c.arc(7,-13,3.6,0,TAU); c.arc(12,-13,3.6,0,TAU); c.fill();
   c.fillStyle = K.eye;
-  c.beginPath(); c.arc(-3,-8,1.3,0,TAU); c.arc(3,-8,1.3,0,TAU); c.fill();
+  c.beginPath(); c.arc(7,-13,1.4,0,TAU); c.arc(12,-13,1.4,0,TAU); c.fill();
+  /* near arm, planted forward */
+  c.fillStyle = R(2);
+  c.beginPath(); c.moveTo(6,-14); c.lineTo(13,-15); c.lineTo(16,-1-sw*0.3);
+  c.lineTo(9,0-sw*0.3); c.closePath(); c.fill(); c.stroke();
 
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,1,14,5,0,0,TAU); c.stroke(); }
