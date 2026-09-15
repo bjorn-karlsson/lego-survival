@@ -246,6 +246,7 @@
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
       <span><kbd>LMB</kbd> <b>swing sword</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
+      <span><kbd>F</kbd> <b>start wave early</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>pause</b></span>
@@ -940,7 +941,7 @@ window.addEventListener('keydown', e=>{
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
-  if(e.code==='Enter' && state==='play' && wave.state==='ready') waveSkip();
+  if(e.code==='KeyF' && state==='play' && wave.state==='ready') waveSkip();
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
   if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
@@ -10437,7 +10438,7 @@ function renderHUD(){
       const t = Math.max(0, wave.readyT);
       const rest = wave.readyMax >= WAVE_BREAK_BOSS;
       ctx.fillStyle = rest ? '#a5e06e' : '#ffd76e';
-      ctx.fillText((rest?'catch your breath — ':'incoming in ')+t.toFixed(1)+'s  ·  ENTER to start now', cw/2, 52);
+      ctx.fillText((rest?'catch your breath — ':'incoming in ')+t.toFixed(1)+'s  ·  F to start now', cw/2, 52);
       /* a thinning bar under it, so the wait is something you can see run out */
       const bw = 210, bx = cw/2-bw/2, k = wave.readyMax>0 ? clamp(t/wave.readyMax,0,1) : 0;
       ctx.fillStyle = 'rgba(15,20,25,0.45)'; roundRect(ctx, bx, 60, bw, 6, 3); ctx.fill();

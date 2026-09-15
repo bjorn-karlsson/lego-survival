@@ -39,10 +39,10 @@ You are a minifig in a field of studs. Waves of brick monsters walk at you and c
 when hit. Each run introduces the roster in a different order — banded by era, so the
 opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
 every level and every chest hands you a **brick** — one of 59 upgrades — and the bricks
-compound into a build. Waves open with a breather so you can heal and read what you took;
-ENTER skips it. Survive long enough and the ground is a
-carpet of studs, the screen is a storm of lightning, and a three-storey skeleton is
-throwing its own ribcage at you.
+compound into a build. Waves open with a breather so you can heal and read what you took,
+and <kbd>F</kbd> skips it. Survive long enough and the ground is a carpet of studs, the
+screen is a storm of lightning, and a three-storey skeleton is throwing its own ribcage
+at you.
 
 ![A wave-22 fight](docs/fight.jpg)
 
@@ -261,7 +261,7 @@ legendary rate of Hard for the privilege.
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows | move |
 | **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
-| <kbd>Enter</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
+| <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>C</kbd> | character sheet |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles taken / dealt / events |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
