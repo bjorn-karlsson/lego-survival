@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`66 bricks` · `40 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
+`66 bricks` · `41 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -78,7 +78,21 @@ Imp masters lay **curses** on top — SUNDERED, LEADEN, BRITTLE, WITHERED — th
 resistance, slow your swing, thin your armour and choke your regeneration.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
-whatever it touched, long after you have walked away.
+whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
+the green beads orbiting a body. Its own brick is **rare+** and buys *doses*, not damage:
+one touch of the gas lays up to **3 stacks at once**, so a full load is three casts instead
+of nine.
+
+The legendary, **Spore Burst**, is contagion rather than a bomb: a poisoned corpse comes
+apart and hands **every stack it was carrying** to everything within 130 (210 upgraded),
+at 70% of the rate. It deals no blast damage at all — nothing dies the instant the cloud
+touches it. What spreads is the rot, and a body that dies of it bursts in turn, so a
+packed pull comes apart in a slow green wave you can watch travel.
+
+It fires **80%** of the time at the first rank and **every single time** at the second, and
+each rank also **doubles how much rot a body can hold** — 9 → 18 → 36 on a monster, 12 → 24
+→ 48 on a boss. Any kill sets it off, not just one the gas made: shoot a poisoned monster
+and the corpse still bursts.
 
 </td><td width="33%" valign="top">
 
@@ -121,6 +135,21 @@ a rare wearing a different colour:
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
 | Sharpened Blade, Heavy Orbit, Blaster Power,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
+
+Every **spell brick that grants stacks** reads off a second shared ladder, for the same
+reason — rare and epic used to land in the same bucket, so an epic roll of a spell was a
+disappointment every time:
+
+| | common | uncommon | rare | epic | legendary |
+|---|--:|--:|--:|--:|--:|
+| Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
+
+Bladestorm counts in **swords**, so an epic roll is +40 of them, and the ceiling is on
+swords in the air — **150** — rather than on ranks.
+
+**Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
+DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
+reads it — Brickbane's poison is simply the first thing that qualifies.
 
 No card writes a derived number. Cards add to pools; a single `syncStats()` rebuilds
 everything from base. That is why the character sheet can show you the arithmetic:
@@ -172,6 +201,11 @@ Spell suppression is the boss's own — a chance to halve any spell that lands o
 skeletons have the most of it, which is what the bones were always for. The **MEGA BONE
 BARON** does not only throw bones: it hexes you with a fan of curse bolts, and it blesses
 its whole court — and itself — with armour, damage and swing rate.
+
+**No two fights are the same.** Every boss rolls traits when it wakes — one normally, two
+from wave ten, three for an ULTRA — drawn from `SWIFT`, `IRONCLAD`, `BRUTAL`, `VITAL`,
+`WARDED`, `VENOMOUS`, `RESTLESS`, `LEGION` and `THORNED`. They are printed on its health
+bar, so the LORD LAVABRICK you meet this run is not the one you learned last run.
 
 ---
 
@@ -243,6 +277,96 @@ them up and the tap opens again.
 
 ---
 
+## Every buff and debuff
+
+Four separate systems, and they never touch each other's pools: prizes you pick up,
+ailments that stack on you, curses that are hexed onto you, and the marks you put on a
+monster. Everything below is read off the code, not off memory.
+
+### 🎁 What you pick up
+
+All four ground prizes run the same **30 seconds**, and picking another one up refreshes
+the clock rather than queueing behind it.
+
+| | Effect | Stacks to |
+|---|---|---|
+| ❤️ **Heart** | Regeneration ×1.5 / 1.85 / 2.10 / 2.30 / **2.45** | 5 — and never ×7.5 |
+| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase | ×2 |
+| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it | ×2 |
+| 🍀 **Fortune** | ×2 studs and XP, plus up to **+25% rarity find** on reward rolls | ×2 |
+| 🧲 **Magnet** | Hoovers up every **stud** on the field. Studs only — it will not drag a chest to you | — |
+| 💛 **Golden heart** | **+3 maximum hearts, permanently.** The only prize that outlives its timer | — |
+
+### 🔥 Ailments on you
+
+Elemental stacks have **no ceiling**, and every **fifth** one is spent *breaking* something.
+The break leaves a **brand** behind, and brands stack without limit — so resistance can be
+driven below zero, and at **-100% you take double**.
+
+| | What a stack does | What the 5th stack breaks | The brand it leaves |
+|---|---|---|---|
+| 🔥 **Burning** | 3 damage over 12s, per fire, scaled by fire resistance. Ignores i-frames | becomes a pool of damage over time | **BURNT** — -11% fire resistance, 22s |
+| ❄️ **Chill** | -9% move speed and swing rate, floor 30% | **frozen solid for 3s** | **FROSTBITTEN** — -11% frost resistance, 22s |
+| ⚡ **Shock** | +10% chance a hit on you crits for **×1.8**, cap 95% | every hit against you crits | **CONDUCTIVE** — -11% lightning resistance, 22s |
+
+Resistance is capped at **80%** — nothing is ever fully immune — and it scales down both the
+elemental damage of a hit *and* the strength of the ailment that hit applies. Each element
+has its own **0.7s** application cooldown, so standing in a fire does not spam stacks onto
+you sixty times a second.
+
+### 🟣 Curses on you
+
+Imp masters and the **MEGA BONE BARON** hex you. All four stack **9 deep**, the magnitude is
+read straight off the stack count, and they expire together.
+
+| | Effect | Per stack | Ceiling |
+|---|---|--:|--:|
+| **SUNDERED** | elemental resistance cut | -12% | -90% |
+| **LEADEN** | swings come slower | -11% | -150% |
+| **BRITTLE** | armour weakened | -13% | -92% |
+| **WITHERED** | regeneration choked | -16% | -95% |
+
+### 🗡️ What you put on a monster
+
+| | How you inflict it | What it does |
+|---|---|---|
+| ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
+| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. Ignores armour, one wound at a time, and **40% less while the body stands still** |
+| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed** |
+| 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
+
+Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
+feeds, and each drips its numbers in its own colour — green for the rot, red for a wound.
+
+### 👹 What monsters get
+
+| | Source | Effect |
+|---|---|---|
+| ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
+| 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
+| ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
+| 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself |
+| 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
+
+### 👑 Boss traits
+
+Rolled fresh when the boss wakes — **one** normally, **two** from wave ten, **three** for an
+ULTRA — never the same one twice, and printed on its health bar.
+
+| | Effect |
+|---|---|
+| **SWIFT** | ×1.20 move speed, swings 15% quicker |
+| **IRONCLAD** | ×1.7 armour, and 10% slower for it |
+| **BRUTAL** | ×1.35 damage |
+| **VITAL** | ×1.30 maximum health |
+| **WARDED** | +25% spell suppression, to a ceiling of 85% |
+| **VENOMOUS** | every touch sets a **burning** stack on you — the trait predates poison and still applies fire |
+| **RESTLESS** | attacks come round 30% quicker |
+| **LEGION** | brings ×1.6 + 1 of its court |
+| **THORNED** | standing next to it costs you 25% of its hit |
+
+---
+
 ## Every cap
 
 Nothing in the game is unbounded. A brick that would push past its ceiling stops being
@@ -254,9 +378,13 @@ offered at all.
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
 | Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
-| Regeneration | 0.70/s* | Storm leaps | 15 | | |
+| Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
+| Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
+| Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
+| Curse stacks on you | 9 | Poison on a boss | 12 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
+| | | Gas reach | 430 px | | |
 | | | Bombs | 8 | | |
 | | | Blast radius | 110 px | | |
 | | | Cluster ranks | 2 | | |
@@ -274,6 +402,20 @@ full at 6 max hearts, 49 at 60, 102 at 300. Between waves it runs at **×2**.
 small hits, thin against one big one. Fully capped at 1,560 armour value, a 5-damage hit
 lands for 0.8 and a 120-damage hit still lands for 33.
 
+**BLEED** is the melee half of damage over time, and it is Path of Exile's rule set. An
+ordinary swing never opens a wound on its own — that chance starts at **0%** and is a brick
+you buy — but every **critical** swing opens one **half the time** for free, which ties the
+mechanic to the crit tree instead of making it a third parallel build.
+
+A wound ticks for **40% of the hit that opened it, every second, for 8 seconds** — 320% of
+that hit in total — rising to **70%/s** with Deep Cuts. It reads the same increased
+damage-over-time pool Rotbrick feeds, and it ignores armour, because the opening hit
+already paid it. One wound at a time: a worse one replaces it rather than stacking beside
+it, so bleed rewards hitting *hard*, not often.
+
+And a body that has stopped moving bleeds **40% less**. Freezing a bleeding monster is not
+a free win.
+
 **You are not invulnerable between hits.** The window after taking damage is **0.10s**,
 not a second — everything landing on you counts, and a crowd is a crowd.
 
@@ -281,6 +423,11 @@ Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth
 half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
 rank, easing to 10% once all eight are bought; a fully pierced brick deals 6.13× one hit
 down a full line.
+
+**Scattershot** no longer divides the damage it spreads. Each shard keeps a share of the
+whole brick — **50%** at the first rank, **25%** at the second — so three shards are worth
+**1.5×** one brick and nine are worth **2.25×**. Coverage *and* power, which is what a
+legendary ought to buy.
 
 ---
 
