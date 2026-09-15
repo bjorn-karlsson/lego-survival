@@ -79,7 +79,9 @@ resistance, slow your swing, thin your armour and choke your regeneration.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
-the green beads orbiting a body.
+the green beads orbiting a body. Its own brick is **rare+** and buys *doses*, not damage:
+one touch of the gas lays up to **3 stacks at once**, so a full load is three casts instead
+of nine.
 
 The legendary, **Spore Burst**, is contagion rather than a bomb: a poisoned corpse comes
 apart and hands **every stack it was carrying** to everything within 130 (210 upgraded),
@@ -128,6 +130,17 @@ a rare wearing a different colour:
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
 | Sharpened Blade, Heavy Orbit, Blaster Power,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
+
+Every **spell brick that grants stacks** reads off a second shared ladder, for the same
+reason — rare and epic used to land in the same bucket, so an epic roll of a spell was a
+disappointment every time:
+
+| | common | uncommon | rare | epic | legendary |
+|---|--:|--:|--:|--:|--:|
+| Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
+
+Bladestorm counts in **swords**, so an epic roll is +40 of them, and the ceiling is on
+swords in the air — **150** — rather than on ranks.
 
 **Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
 DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
@@ -271,6 +284,7 @@ offered at all.
 | Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
 | Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
+| Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Curse stacks on you | 9 | Poison on a boss | 12 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -299,6 +313,11 @@ Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth
 half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
 rank, easing to 10% once all eight are bought; a fully pierced brick deals 6.13× one hit
 down a full line.
+
+**Scattershot** no longer divides the damage it spreads. Each shard keeps a share of the
+whole brick — **50%** at the first rank, **25%** at the second — so three shards are worth
+**1.5×** one brick and nine are worth **2.25×**. Coverage *and* power, which is what a
+legendary ought to buy.
 
 ---
 

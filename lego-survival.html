@@ -406,6 +406,9 @@ const REACH_MAX   = 62;    /* +reach on top of the 56/64 base arc */
 const ORBIT_MAX_R = 190;   /* how far the guardian bricks can circle out */
 const ORBIT_MAX_SIZE = 20;
 const STORM_MAX_SIZE = 2.2; /* storm blades stop growing here */
+/* the ceiling is on SWORDS IN THE AIR, not on ranks, so widening the burst with
+   a favourite's +2 blades a rank costs you ranks rather than handing out more */
+const STORM_MAX_BLADES = 150;
 const VORTEX_MAX_R = 210;
 const FREEZE_MAX_R = 420;
 const BLAST_MAX_PIERCE = 8;
@@ -464,6 +467,12 @@ const TOTEM_MUL   = [0, 1/3, 0.55];       /* share of vortex damage it deals */
 const TOTEM_TICK = 0.3;
 const FREEZE_STUN_T = 3.0;                /* Absolute Zero: frozen solid this long */
 const BLAST_SPLIT_MAX = 2;                /* Scattershot: 3 shards, then 9 */
+/* Scattershot used to DIVIDE the damage among the shards, so three shards of a
+   third were exactly the brick you started with: coverage for free and power
+   for nothing. Each shard keeps a SHARE of the whole now -- half at the first
+   rank, a quarter at the second -- so three halves beat one whole and nine
+   quarters beat three halves. It finally earns its legendary slot. */
+const BLAST_SPLIT_KEEP = [1, 0.50, 0.25];
 const ORBIT_PULSE_RATE = 1.5;             /* rad/s of the tidal sweep — slow on purpose */
 /* The tide breathes OUTWARD. Collapsing the ring onto the hero looked like the
    bricks had fallen off; pushing it out past its own cap is the point. */
@@ -511,6 +520,12 @@ const BANE_DOT_BASE  = 1.2;    /* poison damage a second, before spell damage */
 const BANE_DOT_T     = 5;      /* and how long one dose lasts */
 const BANE_DOT_MAX_T = 12;
 const BANE_TICK      = 0.5;    /* how often the poison bites */
+/* how many doses ONE touch of the gas lays at once. The unlock brick buys these
+   instead of flat damage: Brickbane is a damage-over-time spell, so the thing
+   that ought to scale is how deep it puts you, not how hard the opening slap
+   lands. Three is the ceiling -- at nine stacks a body, that is three casts to
+   a full load instead of nine. */
+const BANE_STACK_MAX = 3;
 const BANE_BURST     = [0, 0.40, 0.80];   /* chance a poisoned corpse bursts */
 /* Poison PILES UP. Every cloud that washes over a body adds a dose on top of
    the last, and each dose eats at it at the same rate — nine deep on anything
@@ -634,6 +649,10 @@ const CHAIN_MAX_ZAPPERS = 5;
 function capUp(k){ return (player && player.capUp && player.capUp[k]) || 0; }
 function orbitMaxN(){ return ORBIT_MAX_N + capUp('orbit'); }
 function blastMaxN(){ return BLAST_MAX_N + capUp('blaster'); }
+/* ranks of bladestorm that still fit under the sword ceiling */
+function stormMaxN(){
+  return Math.max(1, Math.floor(STORM_MAX_BLADES / Math.max(1, player.storm.count)));
+}
 function chainMaxZappers(){ return CHAIN_MAX_ZAPPERS + capUp('chain'); }
 function bombMaxN(){ return BOMB_MAX + capUp('bomb'); }
 const CHAIN_MIN_RATE = 1.0;    /* a storm brick never fires faster than once a second */
@@ -1192,7 +1211,7 @@ function newPlayer(){
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
     freeze:{ n:0, r:190, dur:2.5, rate:FREEZE_RATE_BASE, cd:4, stun:0 },
     bane:{ n:0, dmg:2, rate:BANE_RATE_BASE, cd:1.5, r:BANE_R_BASE, arc:BANE_ARC_BASE,
-           dot:BANE_DOT_BASE, dotT:BANE_DOT_T, burst:0 },
+           dot:BANE_DOT_BASE, dotT:BANE_DOT_T, stacks:1, burst:0 },
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
     chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0 },
@@ -2236,9 +2255,12 @@ function poisonEnemy(e, dps, dur){
    with e.poison still null, so the one kill most obviously owed a Spore Burst
    is the only kill that could never set one off. Every hit Brickbane deals goes
    through here so a third source cannot get the order wrong later. */
-function baneStrike(e, dmg, dir, kb, dps, dur){
+function baneStrike(e, dmg, dir, kb, dps, dur, stacks){
   if(e.dead || e.state!=='active') return;
-  poisonEnemy(e, dps, dur);
+  /* one touch, as many doses as the spell is worth -- the per-body cap in
+     poisonEnemy is still the only thing that decides how deep it can go */
+  const n = Math.max(1, stacks|0);
+  for(let i=0;i<n;i++) poisonEnemy(e, dps, dur);
   hitEnemy(e, dmg, dir, kb, 'bane', {spin:true});
 }
 /* what one tick of poison takes off a body */
@@ -3223,9 +3245,13 @@ function byRar(m, table){
   }
   return table[Math.min(best, table.length-1)];
 }
-function spellCount(m){
-  return m>=2.2 ? 3 : m>=1.4 ? 2 : 1;
-}
+/* How much of a SPELL a spell card hands over, by the rarity it rolled. The old
+   thresholds put rare and epic in the same bucket, so an epic roll of a spell
+   brick was a disappointment every single time it landed. It reads off one
+   ladder now, the same shape the flat-damage bricks use, and the tiers actually
+   separate. Every spell brick that grants stacks shares it. */
+const SPELL_COUNT = [1, 2, 3, 5, 8];
+function spellCount(m){ return byRar(m, SPELL_COUNT); }
 const CLS_COL = { OFFENSE:'#d3242b', DEFENSE:'#1668b3', UTILITY:'#c78c00', SPELL:'#9b45d6' };
 const ICONS = {
   sword:'<path d="M20 4 L8 16 M18 2 L22 6 M6.5 13.5 L10.5 17.5 M8 16 L4 20 M3 21 L4.5 19.5"/>',
@@ -3465,11 +3491,16 @@ const UPGRADES = [
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.inc.chainRate += c.v; syncStats(); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('storm'),
+    req:()=>canTakeSpell('storm') && player.storm.n < stormMaxN(),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} bladestorm — wider sweeping spirals`
-      : `Spell: a whirl of ${c.n*8} swords bursts out of you`,
-    apply:c=>{ player.storm.n += c.n; } },
+    desc:(c,owned)=>{
+      const cnt = player.storm.count;
+      const next = Math.min(stormMaxN(), player.storm.n + c.n);
+      return owned>0
+        ? `+${next-player.storm.n} bladestorm — ${next*cnt} swords a burst (cap ${STORM_MAX_BLADES})`
+        : `Spell: a whirl of ${c.n*cnt} swords bursts out of you (cap ${STORM_MAX_BLADES})`;
+    },
+    apply:c=>{ player.storm.n = Math.min(stormMaxN(), player.storm.n + c.n); } },
   { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bladestorm blade — before any increase`,
@@ -3505,15 +3536,22 @@ const UPGRADES = [
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
     apply:c=>{ player.inc.vortexRate += c.v; syncStats(); } },
-  { id:'bane', name:'Brickbane', icon:'bane', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('bane'),
-    calc:m=>({v: byRar(m, FLAT_SPELL)}),
-    desc:(c,owned)=> owned>0
-      ? `+${fmtHp(c.v)} FLAT base damage to the opening hit — before any increase`
-      : `Spell: cough a ${Math.round(BANE_ARC_BASE*180/Math.PI)}° wedge of poison gas — `+
-        `it hits once for ${fmtHp(2+c.v)}, then POISONS everything it touched`,
+  { id:'bane', name:'Brickbane', icon:'bane', cls:'SPELL', minRar:'rare',
+    req:()=>canTakeSpell('bane') && (player.bane.n === 0 || player.bane.stacks < BANE_STACK_MAX),
+    calc:m=>({n: byRar(m, [0, 0, 1, 2, 3])}),
+    desc:(c,owned)=>{
+      const now  = player.bane.stacks;
+      const next = Math.min(BANE_STACK_MAX, now + c.n);
+      return owned>0
+        ? (next > now
+            ? `The gas lays ${next} dose${next>1?'s':''} per touch instead of ${now} `+
+              `(cap ${BANE_STACK_MAX}) — every body it washes over starts that much deeper in`
+            : `Already laying the full ${BANE_STACK_MAX} doses per touch`)
+        : `Spell: cough a ${Math.round(BANE_ARC_BASE*180/Math.PI)}° wedge of poison gas — `+
+          `it hits once, then POISONS everything it touched ${next} dose${next>1?'s':''} deep`;
+    },
     apply:c=>{ if(player.bane.n === 0) player.bane.n = 1;
-      player.bane.dmg = Math.round((player.bane.dmg + c.v)*100)/100; } },
+      player.bane.stacks = Math.min(BANE_STACK_MAX, player.bane.stacks + c.n); } },
   { id:'banearc', name:'Choking Spread', icon:'bane', cls:'SPELL',
     req:()=>player.bane.n>0 && player.bane.arc < BANE_ARC_MAX-0.01,
     calc:m=>({v: (26+18*m)*Math.PI/180}),
@@ -3647,10 +3685,12 @@ const UPGRADES = [
     desc:c=>{
       const lv = (player.blaster.split||0) + 1;
       return lv===1
-        ? `Every blaster brick shatters into 3 smaller ones — the damage is SPLIT between them, `+
-          `so it trades single-target punch for a spray`
-        : `The smaller bricks shatter again: 9 shards per brick, each for a ninth — `+
-          `a shotgun instead of a pistol`;
+        ? `Every blaster brick shatters into 3 smaller ones, each keeping `+
+          `${Math.round(BLAST_SPLIT_KEEP[1]*100)}% of the brick's damage — `+
+          `${(3*BLAST_SPLIT_KEEP[1]).toFixed(1)}× the punch, spread wide`
+        : `The smaller bricks shatter again: 9 shards per brick at `+
+          `${Math.round(BLAST_SPLIT_KEEP[2]*100)}% each — `+
+          `${(9*BLAST_SPLIT_KEEP[2]).toFixed(2)}× the punch, a shotgun instead of a pistol`;
     },
     apply:c=>{ player.blaster.split = Math.min(BLAST_SPLIT_MAX, (player.blaster.split||0) + 1); } },
   { id:'chainfork', name:'Crackling Storm', icon:'fork', cls:'SPELL', minRar:'legendary',
@@ -4073,13 +4113,14 @@ function spellSummaries(){
   if(p.blaster.n>0){
     const d = calcDamage(p.blaster.dmg,'spell');
     const shards = Math.pow(3, p.blaster.split||0);
-    const each = d/shards;
+    const each = d * (BLAST_SPLIT_KEEP[p.blaster.split||0] || 1);
     out.push({ id:'blaster', icon:'blaster', name:'Brick Blaster',
       head:per(each)+(shards>1?' per shard':' per brick'), tip:
       `${p.blaster.n} brick${p.blaster.n>1?'s':''} per volley, every ${p.blaster.rate.toFixed(2)}s\n`+
       (shards>1
         ? `Scattershot ×${p.blaster.split}: each brick becomes ${shards} shards of ${per(each)} — `+
-          `the ${per(d)} is SPLIT, not multiplied\n`
+          `${Math.round(BLAST_SPLIT_KEEP[p.blaster.split]*100)}% of the ${per(d)} apiece, `+
+          `${per(d*shards*BLAST_SPLIT_KEEP[p.blaster.split])} a brick\n`
         : `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`)+
       (p.blaster.pierce>0
         ? `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'} — `+
@@ -4124,6 +4165,7 @@ function spellSummaries(){
       `Opening hit ${per(d)} — ${p.bane.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)`+
       `${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
       `POISON: ${p.bane.dot.toFixed(2)}/s a stack for ${p.bane.dotT.toFixed(1)}s — ${total.toFixed(1)} a stack\n`+
+      `Every touch lays ${p.bane.stacks} dose${p.bane.stacks>1?'s':''} at once\n`+
       `Stacks to ${POISON_MAX} on a monster and ${POISON_MAX_BOSS} on a boss: `+
       `${(p.bane.dot*POISON_MAX).toFixed(2)}/s at full depth\n`+
       (p.bane.burst
@@ -4276,6 +4318,7 @@ const STAT_PROBES = [
   { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur + (player.freeze.n-1)*1.2 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
   { g:'BRICKBANE', k:'Opening hit',      get:()=> player.bane.n ? calcDamage(player.bane.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'BRICKBANE', k:'Doses per touch',  get:()=> player.bane.n ? player.bane.stacks : 0, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICKBANE', k:'Poison per second',get:()=> player.bane.n ? player.bane.dot : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
   { g:'BRICKBANE', k:'Poison duration',  get:()=> player.bane.n ? player.bane.dotT : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BRICKBANE', k:'Damage per dose',  get:()=> player.bane.n ? player.bane.dot*player.bane.dotT : 0, fmt:v=>v.toFixed(1), zero:true },
@@ -5072,10 +5115,11 @@ function updatePlayer(dt){
     bl.cd -= dt;
     if(bl.cd<=0){
       bl.cd = bl.rate;
-      /* Scattershot: every brick shatters into 3, then those into 3 again. The
-         damage is DIVIDED among the shards — it buys coverage, not power. */
+      /* Scattershot: every brick shatters into 3, then those into 3 again, and
+         each shard keeps a share of the brick's full damage rather than a slice
+         of it — coverage AND power, which is what a legendary should buy. */
       const shards = Math.pow(3, bl.split||0);
-      const each = calcDamage(bl.dmg,'spell') / shards;
+      const each = calcDamage(bl.dmg,'spell') * (BLAST_SPLIT_KEEP[bl.split||0] || 1);
       const sz = Math.pow(0.62, bl.split||0);
       /* the ceiling is on PROJECTILES, so Scattershot trades brick count for
          shard count rather than multiplying its way to three hundred of them */
@@ -5176,7 +5220,7 @@ function updatePlayer(dt){
         a0: arc >= BANE_ARC_MAX-0.01 ? 0 : aimA, arc, r:0, rMax:rr,
         t:0, dur:BANE_WAVE_T, life:BANE_WAVE_T+0.55, hit:new Set(),
         dmg: calcDamage(bn.dmg,'spell'), dot: bn.dot, dotT: bn.dotT,
-        seed: rnd(TAU) });
+        stacks: bn.stacks, seed: rnd(TAU) });
       SFX.whoosh();
       addRing(p.x, p.y, 10, 260, rr*0.4, '#8ede4a', 5, 0.35);
     }
@@ -7810,7 +7854,7 @@ function updateProjectiles(dt){
         if(d > pr.r + hitR(e)) continue;
         if(!full && Math.abs(angDiff(Math.atan2(e.y-pr.y, e.x-pr.x), pr.a0)) > pr.arc/2) continue;
         pr.hit.add(e);
-        baneStrike(e, pr.dmg, Math.atan2(e.y-pr.y, e.x-pr.x), 60, pr.dot, pr.dotT);
+        baneStrike(e, pr.dmg, Math.atan2(e.y-pr.y, e.x-pr.x), 60, pr.dot, pr.dotT, pr.stacks);
       }
       if(Math.random() < 0.9){
         const a = full ? rnd(TAU) : pr.a0 + rnd(-pr.arc/2, pr.arc/2);
