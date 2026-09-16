@@ -594,7 +594,7 @@ function syncStats(){
   p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
   p.studMul = pool(1, 0, i.studs, 1);
   /* the weapon sets the BASE; the bricks scale it, exactly as before */
-  p.atkRate = paceOf(weapon.rate, i.atk, ATK_RATE_MIN);
+  p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), ATK_RATE_MIN);
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
   p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, i.orbitSpd, 1));
@@ -802,10 +802,18 @@ const WEAPONS = {
     blurb:'Hits hardest and opens the worst wounds. Slow, and it rarely crits.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
     bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace' },
+  /* THE STAFF DOES NOT SWING. Its basic attack is a FIREBALL, so it trades the
+     whole melee kit — reach, the spin combo, bleed — for elemental damage and
+     the ailment that comes with it. It is the first caster weapon; frost and
+     lightning are the same row with a different `elem`. */
   staff: { id:'staff', name:'STAFF', col:'#9b45d6',
-    blurb:'Not finished yet — for now it swings exactly like a sword.',
-    dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
-    bleed:1.0, spin:1.40, kb:1.00, hold:'pstaff', throw:'blade' }
+    blurb:'Casts fireballs instead of swinging. Burns what it hits.',
+    cast:true, elem:'fire',
+    dmg:1.7,  rate:0.68, reach:0, spinReach:0, crit:0.06, critMult:160,
+    bleed:0, spin:1.00, kb:1.00, hold:'pstaff', throw:'blade',
+    /* what carrying it is worth, as increases into the ordinary pools */
+    incSpell:0.25, incElem:0.30, incAtk:0.20,
+    boltSpd:520, boltR:46 }
 };
 const WEAPON_KEYS = Object.keys(WEAPONS);
 let weapon = WEAPONS.sword;
@@ -870,9 +878,21 @@ const BLEED_TICK       = 0.4;
    on a boss, landing hit after hit, keeps trading its weakest wounds up for
    better ones — which is exactly where melee is supposed to want to be. */
 const BLEED_STACK_MAX  = 8;
+/* ENEMY BURNING — the same shape the fire monsters use on you, pointed the other
+   way. A fire hit lays a stack; every stack burns at once; the FIFTH breaks and
+   leaves the body BURNT, which is the monster's version of a brand: it takes
+   more fire from then on, and the marks pile up. Burning is a damage over time,
+   so it reads the one increased-damage-over-time pool like poison and bleed. */
+const EBURN_MAX    = 5;      /* the fifth stack breaks and brands */
+const EBURN_DUR    = 6;      /* how long one stack burns */
+const EBURN_SHARE  = 0.30;   /* of the hit that lit it, per second, per stack */
+const EBURN_TICK   = 0.4;
+const BURNT_STEP   = 0.25;   /* MORE fire damage taken, per mark */
+const BURNT_T      = 10;
+const BURNT_MAX    = 4;
 /* what colour each lingering damage drips its numbers in — green for the rot,
    red for a wound. One entry per ailment, so a third one cannot forget. */
-const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54' };
+const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54', burn:'#ff9a3c' };
 /* A run used to end up casting all seven at once, which meant every build was
    the same build with different pacing. Four is a CHOICE: the bricks that would
    hand you a fifth stop being offered, and everything that deepens the four you
@@ -1317,11 +1337,16 @@ function newPlayer(){
        their say, or an increase quietly stops being worth anything the moment
        the flat pool fills up. syncStats() does the capping. */
     armourFlat:0, regenFlat:0, critMultFlat:0, suppressFlat:0, reachFlat:0,
+    /* ELEMENTAL. flatElem is added to an elemental attack's base the way
+       flatPhys is added to a physical one; inc.elem is the increased pool every
+       element reads, and inc.fire/frost/shock are the per-element ones. */
+    flatElem:0,
     resFlat:{ fire:0, frost:0, shock:0 },
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0, regen:0, heart:0,
+          elem:0, fire:0, frost:0, shock:0, boltR:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
           /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
@@ -2384,6 +2409,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     /* a wound already paid armour when it was opened — charging it again on
        every tick for eight seconds would make bleed worthless on exactly the
        armoured things it is supposed to grind down */
+  } else if(source==='fire' || source==='burn'){
+    /* elemental spell damage meets suppression like any other spell, and a BURNT
+       body takes every fire harder — one MORE multiplier per mark */
+    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
+    d *= burntMul(e);
   } else if(SPELL_SOURCES.has(source)){
     /* spells meet suppression, never armour */
     if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
@@ -2462,6 +2492,51 @@ function bleedChance(crit){
 }
 /* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
    rather than stacking beside it — so bleed rewards hitting hard, not often. */
+/* how much more fire a branded body takes — each BURNT mark is its own MORE */
+function burntMul(e){
+  const n = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
+  return Math.pow(1 + BURNT_STEP, n);
+}
+function burnStacksOn(e){ return (e.eburn && e.eburn.list.length) || 0; }
+function burnDpsOn(e){ let d=0; for(const f of ((e.eburn && e.eburn.list) || [])) d += f.dps; return d; }
+/* Light one. Every fire is its own stack with its own clock, so five fires hurt
+   five times as fast — not one pool stretched thinner. */
+function burnEnemy(e, hit){
+  if(e.dead || e.state!=='active' || !(hit > 0)) return;
+  if(!e.eburn) e.eburn = { list:[], tick:rnd(0.05, EBURN_TICK) };
+  const dps = dotRate(hit * EBURN_SHARE, 0);
+  const list = e.eburn.list;
+  if(list.length >= EBURN_MAX){
+    /* THE FIFTH BREAKS. The body is BURNT: every fire that lands on it from now
+       on lands harder, and the marks stack. The fires themselves reset. */
+    list.length = 0;
+    if(!e.burnt) e.burnt = { n:0, t:0 };
+    e.burnt.n = Math.min(BURNT_MAX, e.burnt.n + 1);
+    e.burnt.t = BURNT_T;
+    addDmg(e.x, e.y-46*(e.scale||1), 'BURNT \u00d7'+e.burnt.n, '#ff6a2a', 15);
+    addRing(e.x, e.y, 6, 200, 46, '#ff8a3c', 4, 0.35);
+    addSparks(e.x, e.y-18, 7, '#ff9a3c');
+  }
+  list.push({ dps, t:EBURN_DUR });
+}
+function burnTickEnemy(e, dt){
+  if(e.burnt){ e.burnt.t -= dt; if(e.burnt.t <= 0) e.burnt = null; }
+  const bu = e.eburn;
+  if(!bu) return;
+  let dps = 0, out = false;
+  for(const f of bu.list){ f.t -= dt; if(f.t > 0) dps += f.dps; else out = true; }
+  if(out) bu.list = bu.list.filter(f => f.t > 0);
+  bu.tick -= dt;
+  if(bu.tick <= 0 && dps > 0 && !e.dead && e.state==='active'){
+    bu.tick = EBURN_TICK;
+    hitEnemy(e, dps*EBURN_TICK, rnd(TAU), 0, 'burn', {quiet:true, noCrit:true, noMit:true});
+  }
+  if(Math.random() < Math.min(0.75, 0.18 + 0.12*bu.list.length))
+    particles.push({kind:'spark', x:e.x+rnd(-9,9), y:e.y-rnd(6,30),
+      vx:rnd(-12,12), vy:rnd(-60,-20), life:rnd(0.25,0.55), max:0.55,
+      color: Math.random()<0.5 ? '#ff9a3c' : '#ffd166'});
+  if(!bu.list.length) e.eburn = null;
+}
 /* everything about the wounds currently open on a body, read off the list */
 function bleedList(e){ return (e.bleed && e.bleed.list) || []; }
 function bleedStacks(e){ return bleedList(e).length; }
@@ -2745,7 +2820,7 @@ function gainXp(n, fromMob){
 function rageMul(){ return player.rageT > 0 ? player.rageMul : 1; }
 function calcDamage(base, kind, more){
   const p = player;
-  const inc = p.incAll + (kind==='melee' ? p.incMelee : kind==='spell' ? p.incSpell : 0);
+  const inc = p.incAll + (kind==='melee' ? incMeleeAll() : kind==='spell' ? incSpellAll() : 0);
   let d = base * (1 + inc) * p.moreAll * rageMul();
   if(more) for(const m of more) d *= m;
   return Math.max(0, d);
@@ -2754,6 +2829,32 @@ function calcDamage(base, kind, more){
    cares which weapon it is — that is the whole point. */
 function physBase(){ return weapon.dmg + player.flatPhys; }
 function physDamage(more){ return calcDamage(physBase(), 'melee', more); }
+/* A WEAPON GRANTS INCREASES, and an increase sums into the pool it belongs to —
+   it never gets its own multiplier. These are the three pools a weapon can pay
+   into, read everywhere the pool itself is read. */
+function incSpellAll(){ return player.incSpell + (weapon.incSpell || 0); }
+function incMeleeAll(){ return player.incMelee + (weapon.incMelee || 0); }
+function incElemAll(el){
+  return (player.inc.elem||0) + (player.inc[el]||0) + (weapon.incElem || 0);
+}
+/* an elemental attack's base: the weapon, plus the flat ELEMENTAL pool */
+function boltBase(){ return weapon.dmg + player.flatElem; }
+/* ...and what it actually lands for. Spell damage AND elemental damage both
+   apply, because a fireball is both. */
+function boltDamage(more){
+  const p = player, el = weapon.elem || 'fire';
+  const inc = p.incAll + incSpellAll() + incElemAll(el);
+  let d = boltBase() * (1 + inc) * p.moreAll * rageMul();
+  if(more) for(const m of more) d *= m;
+  return Math.max(0, d);
+}
+function isCaster(){ return !!(weapon && weapon.cast); }
+const BOLT_R_MAX_INC = 1.2;    /* increased burst radius the bricks can buy */
+const BOLT_R_CAP = 120;
+function boltRadius(){
+  return Math.min(BOLT_R_CAP,
+    pool(weapon.boltR || 46, 0, Math.min(BOLT_R_MAX_INC, player ? player.inc.boltR : 0), 1));
+}
 /* kept under their old names so nothing that reads "the sword's damage" breaks */
 const swordBase = physBase, swordDamage = physDamage;
 function critChance(){ return clamp(player.critBase * (1 + player.incCrit), 0, CRIT_CHANCE_CAP); }
@@ -3564,10 +3665,35 @@ const ICONS = {
 };
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
+    req:()=>!isCaster(),
     /* common barely sharpens it; rare and epic are a real weapon upgrade */
     calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8])}),
     desc:c=>`+${fmtHp(c.v)} FLAT PHYSICAL damage — before any increase, whatever you are holding`,
     apply:c=>{ player.flatPhys = Math.round((player.flatPhys + c.v)*100)/100; } },
+  /* THE ELEMENTAL TREE. Only offered to a hero actually carrying an elemental
+     weapon, so a swordsman is never handed a dead card — and the moment a
+     second caster weapon exists these all work for it untouched. */
+  { id:'elemflat', name:'Ember Core', icon:'fire', cls:'OFFENSE',
+    req:()=>isCaster(),
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to your ${weapon.elem||'elemental'} bolt — before any increase`,
+    apply:c=>{ player.flatElem = Math.round((player.flatElem + c.v)*100)/100; } },
+  { id:'eleminc', name:'Elemental Focus', icon:'prism', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>isCaster(),
+    calc:m=>({v:0.08+0.05*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike`,
+    apply:c=>{ player.inc.elem += c.v; } },
+  { id:'firinc', name:'Pyromancy', icon:'fire', cls:'OFFENSE', minRar:'rare',
+    req:()=>isCaster(),
+    calc:m=>({v:0.14+0.08*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased FIRE damage — the bolt and the burning both`,
+    apply:c=>{ player.inc.fire += c.v; } },
+  { id:'boltarea', name:'Wildfire', icon:'bomb', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>isCaster() && player.inc.boltR < BOLT_R_MAX_INC,
+    calc:m=>({v:0.12+0.09*m}),
+    desc:c=>`${Math.round(c.v*100)}% wider burst (now ${Math.round(boltRadius())} → `+
+      `${Math.round(Math.min(BOLT_R_CAP, (weapon.boltR||46)*(1+Math.min(BOLT_R_MAX_INC, player.inc.boltR+c.v))))})`,
+    apply:c=>{ player.inc.boltR += c.v; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex`,
@@ -3592,7 +3718,8 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
     apply:c=>{ player.suppressFlat += c.v; syncStats(); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
-    req:()=>player.reach < REACH_MAX,
+    /* a staff has no reach to lengthen — it throws */
+    req:()=>!isCaster() && player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} melee reach (cap ${weapon.reach+REACH_MAX})`,
     apply:c=>{ player.reachFlat += c.v; syncStats(); } },
@@ -4148,19 +4275,50 @@ function weaponTip(w){
   L.push(w.blurb);
   L.push('');
   L.push(row('Base damage',     w.dmg.toFixed(2),                  d(w.dmg, b.dmg)));
-  L.push(row('Swing time',      w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
-  L.push(row('Reach',           String(w.reach),                   d(w.reach, b.reach)));
-  L.push(row('Crit chance',     Math.round(w.crit*100)+'%',        d(w.crit, b.crit)));
-  L.push(row('Crit multiplier', '\u00d7'+(w.critMult/100).toFixed(2), d(w.critMult, b.critMult)));
-  L.push(row('Bleed chance',    '\u00d7'+w.bleed.toFixed(2),        d(w.bleed, b.bleed)));
-  L.push(row('Spin swing',      '\u00d7'+w.spin.toFixed(2),         d(w.spin, b.spin)));
-  L.push(row('Knockback',       '\u00d7'+w.kb.toFixed(2),           d(w.kb, b.kb)));
+  if(w.cast){
+    /* A CASTER HAS NO REACH, NO BLEED AND NO SPIN, so printing them as -100%
+       against a sword would be technically true and completely useless. It
+       gets the lines that mean something to it instead. */
+    L.push(row('Cast time',     w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
+    L.push(row('Burst radius',  String(w.boltR||46),               ''));
+    L.push(row('Crit chance',   Math.round(w.crit*100)+'%',        d(w.crit, b.crit)));
+    L.push(row('Crit multiplier','\u00d7'+(w.critMult/100).toFixed(2), d(w.critMult, b.critMult)));
+    L.push('');
+    L.push(row('Spell damage',  '+'+Math.round((w.incSpell||0)*100)+'%', '<b class="up">increased \u25b2</b>'));
+    L.push(row('Elemental dmg', '+'+Math.round((w.incElem||0)*100)+'%',  '<b class="up">increased \u25b2</b>'));
+    L.push(row('Cast speed',    '+'+Math.round((w.incAtk||0)*100)+'%',   '<b class="up">increased \u25b2</b>'));
+  } else {
+    L.push(row('Swing time',      w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
+    L.push(row('Reach',           String(w.reach),                   d(w.reach, b.reach)));
+    L.push(row('Crit chance',     Math.round(w.crit*100)+'%',        d(w.crit, b.crit)));
+    L.push(row('Crit multiplier', '\u00d7'+(w.critMult/100).toFixed(2), d(w.critMult, b.critMult)));
+    L.push(row('Bleed chance',    '\u00d7'+w.bleed.toFixed(2),        d(w.bleed, b.bleed)));
+    L.push(row('Spin swing',      '\u00d7'+w.spin.toFixed(2),         d(w.spin, b.spin)));
+    L.push(row('Knockback',       '\u00d7'+w.kb.toFixed(2),           d(w.kb, b.kb)));
+  }
   L.push('');
-  /* one swing a second, crits folded in — the honest single-number comparison */
-  const dps = x => (x.dmg * (1 + x.crit*(x.critMult/100 - 1))) / x.rate;
+  /* one attack a second, crits folded in — the honest single-number comparison.
+     A caster's own increases are part of what carrying it is worth, so they
+     count here; a sword's zero of them is why this is fair. */
+  const dps = x => {
+    const hit = x.dmg * (1 + (x.incSpell||0) + (x.incElem||0))
+                      * (1 + x.crit*(x.critMult/100 - 1));
+    /* MELEE GETS ITS COMBO COUNTED. Every third swing is the spin, and leaving
+       that out made a caster look twice the weapon it is. */
+    const combo = x.cast ? 1 : (2 + x.spin)/3;
+    return hit * combo / (x.rate / (1 + (x.incAtk||0)));
+  };
   L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
   L.push('');
-  L.push('Every brick works with every weapon.');
+  if(w.cast){
+    L.push('It REPLACES the swing: no reach, no bleed,');
+    L.push('no spin combo. Physical bricks are not offered');
+    L.push('to you; the elemental ones are.');
+    L.push('Every bolt sets a fire, and five fires BURN OUT');
+    L.push('into a BURNT mark that makes the next one worse.');
+  } else {
+    L.push('Every brick works with every weapon.');
+  }
   L.push('Ability names never change: ' + anA(w.name.toLowerCase()));
   L.push('still swings Bladestorm.');
   return L.join('\n');
@@ -4195,6 +4353,7 @@ function buildDiffRow(){
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
+  { name:'ELEMENTAL',       ids:['elemflat','eleminc','firinc','boltarea'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
@@ -4648,14 +4807,19 @@ function swordDps(){
 }
 /* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
 const STAT_PROBES = [
-  { g:'PHYSICAL', k:'Weapon hit',     get:()=> physDamage(),             fmt:v=>fmtHp(v) },
-  { g:'PHYSICAL', k:'Spin swing',     get:()=> physDamage()*weapon.spin, fmt:v=>fmtHp(v) },
-  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> swordDps(),               fmt:v=>v.toFixed(1) },
-  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> player.blademaster>0 ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
+  { g:'ELEMENTAL', k:'Bolt damage',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true },
+  { g:'ELEMENTAL', k:'Bolt base + flat',   get:()=> isCaster() ? boltBase() : 0,   fmt:v=>v.toFixed(2), zero:true },
+  { g:'ELEMENTAL', k:'Burst radius',       get:()=> isCaster() ? boltRadius() : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'ELEMENTAL', k:'Increased elemental',get:()=> incElemAll(weapon.elem||'fire')*100, fmt:v=>Math.round(v)+'%', zero:true },
+  { g:'ELEMENTAL', k:'Increased spell',    get:()=> incSpellAll()*100,        fmt:v=>Math.round(v)+'%', zero:true },
+  { g:'PHYSICAL', k:'Weapon hit',     get:()=> isCaster() ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Spin swing',     get:()=> isCaster() ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true },
+  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
-  { g:'PHYSICAL', k:'Base + flat',    get:()=> physBase(),               fmt:v=>v.toFixed(2) },
+  { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : physBase(),               fmt:v=>v.toFixed(2), zero:true },
   { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
-  { g:'PHYSICAL', k:'Reach',          get:()=> weapon.reach+player.reach, fmt:v=>Math.round(v)+' px' },
+  { g:'PHYSICAL', k:'Reach',          get:()=> isCaster() ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
   { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%' },
   { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true },
@@ -5015,8 +5179,29 @@ function renderCharSheet(){
       `Every brick you own works with every weapon — the weapon sets the base,\n`+
       `your bricks scale it. Ability names never change: a mace still swings\n`+
       `Bladestorm, it just swings it like a mace.`),
-    sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(weapon.reach+p.reach)} reach · arc swing`),
-    sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(weapon.spinReach+p.reach)} reach · every 3rd swing, ×${weapon.spin.toFixed(2)} MORE`),
+    ...(isCaster() ? [
+      sRow('Bolt damage', boltDamage().toFixed(1)+' dmg',
+        `${weapon.elem} · bursts for ${Math.round(boltRadius())}`,
+        `A staff does not swing. Its basic attack is a bolt of its element, and it\n`+
+        `is BOTH a spell and elemental damage, so both pools apply.\n\n`+
+        `(${weapon.dmg} base + ${fmtHp(p.flatElem)} flat)\n`+
+        ` × (1 + ${Math.round(p.incAll*100)}% all + ${Math.round(incSpellAll()*100)}% spell`+
+        ` + ${Math.round(incElemAll(weapon.elem)*100)}% ${weapon.elem})`+
+        ` × ${p.moreAll.toFixed(2)} more = ${boltDamage().toFixed(2)}`),
+      sRow('Burst radius', Math.round(boltRadius())+' px',
+        `everything caught takes the hit and catches fire (cap ${BOLT_R_CAP})`),
+      sRow('Burning', EBURN_MAX+' stacks', 'then BURNT',
+        `Every bolt lights a fire on what it hits. Each stack burns on its own for\n`+
+        `${Math.round(EBURN_SHARE*100)}% of the hit a second over ${EBURN_DUR}s, and they all burn at once.\n\n`+
+        `THE FIFTH BREAKS: the fires go out and the body is BURNT, taking\n`+
+        `${Math.round(BURNT_STEP*100)}% MORE fire from then on. Marks stack to ${BURNT_MAX} and each is its own\n`+
+        `multiplier — four marks is ×${Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)} fire taken.\n\n`+
+        `Burning is damage over time, so it reads your increased damage over\n`+
+        `time (${Math.round(p.inc.dot*100)}%) exactly like poison and bleed.`)
+    ] : [
+      sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(weapon.reach+p.reach)} reach · arc swing`),
+      sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(weapon.spinReach+p.reach)} reach · every 3rd swing, ×${weapon.spin.toFixed(2)} MORE`)
+    ]),
     ...(p.blademaster>0 ? [sRow('Blademaster', '×'+p.blademaster,
       `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed · `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% deflect · no roll`,
@@ -5026,7 +5211,7 @@ function renderCharSheet(){
       `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
       `it is up and cannot roll out of anything. The blade turns aside `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% of the missiles that reach it.`)] : []),
-    sRow('Swing rate', swings.toFixed(2)+'/s',
+    sRow(isCaster() ? 'Cast rate' : 'Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
         : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
@@ -5492,7 +5677,9 @@ function updatePlayer(dt){
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
     SFX.dash(); addDust(p.x,p.y,5);
   }
-  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0 && !p.whirl) startSwing(aimA);
+  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
+    if(isCaster()) castBolt(aimA); else startSwing(aimA);
+  }
   if(p.swing){
     const s = p.swing;
     s.t += dt;
@@ -5944,6 +6131,24 @@ function inSweep(a, from, to, prog, margin){
   const d = angDiff(a, from);
   return total>0 ? (d>=-margin && d<=swept+margin) : (d<=margin && d>=swept-margin);
 }
+/* THE CASTER'S BASIC ATTACK. Where a sword opens an arc, a staff throws one bolt
+   of its element at the cursor. It runs off the same cooldown the swing does, so
+   cast speed and swing rate are one stat under two names. */
+function castBolt(aim){
+  const p = player;
+  p.combo = 0; p.comboTimer = 0;
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  p.castT = 0.2;
+  retPulse = 1;
+  const spd = weapon.boltSpd || 520;
+  projectiles.push({ kind:'pbolt', el: weapon.elem || 'fire',
+    x:p.x + Math.cos(aim)*16, y:p.y - 14 + Math.sin(aim)*10,
+    px:p.x, py:p.y-14,
+    vx:Math.cos(aim)*spd, vy:Math.sin(aim)*spd,
+    dmg: boltDamage(), r: boltRadius(),
+    life:1.35, spin:rnd(TAU), seed:rnd(TAU) });
+  SFX.zap();
+}
 function startSwing(aim){
   const p = player;
   p.combo = p.comboTimer>0 ? (p.combo+1)%3 : 0;
@@ -6334,6 +6539,7 @@ function updateEnemy(e, dt){
   e.slowT = Math.max(0, e.slowT - dt);
   if(e.poison) poisonTick(e, dt);
   if(e.bleed)  bleedTick(e, dt);
+  if(e.eburn || e.burnt) burnTickEnemy(e, dt);
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
@@ -8363,6 +8569,38 @@ function updateProjectiles(dt){
           vx:rnd(-16,16), vy:rnd(-26,-4), life:rnd(0.35,0.7), max:0.7, color:'#8ede4a'});
       }
     }
+    else if(pr.kind==='pbolt'){
+      pr.px = pr.x; pr.py = pr.y;
+      pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*11;
+      if(pr.life<=0) pr.dead = true;
+      for(const so of solids) if(dist(pr,so) < so.r){ pr.dead = true; break; }
+      if(Math.random() < 0.9)
+        particles.push({kind:'spark', x:pr.x+rnd(-5,5), y:pr.y+rnd(-5,5),
+          vx:rnd(-24,24), vy:rnd(-40,-6), life:rnd(0.18,0.38), max:0.38,
+          color: Math.random()<0.5 ? '#ff9a3c' : '#ffd166'});
+      if(!pr.dead){
+        for(const e of enemiesNear(pr.x, pr.y, 70)){
+          if(e.dead || e.state!=='active') continue;
+          if(!sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 9)) continue;
+          pr.dead = true; break;
+        }
+      }
+      if(pr.dead){
+        /* it BURSTS. Everything caught takes the hit and catches fire, and the
+           fire goes on FIRST so a body the bolt kills outright still dies
+           burning — the same rule the poison gas follows. */
+        addRing(pr.x, pr.y, 8, 300, pr.r, '#ff8a3c', 6, 0.42);
+        addRing(pr.x, pr.y, 4, 220, pr.r*0.6, '#ffd166', 4, 0.3);
+        addSparks(pr.x, pr.y, 10, '#ff9a3c');
+        addShake(0.1); SFX.boomSmall();
+        for(const e of enemies){
+          if(e.dead || e.state!=='active') continue;
+          if(dist(e, pr) > pr.r + (e.r||12)) continue;
+          burnEnemy(e, pr.dmg);
+          hitEnemy(e, pr.dmg, angTo(pr, e), 140, 'fire', {});
+        }
+      }
+    }
     else if(pr.kind==='pbrick'){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*12;
       if(pr.life<=0) pr.dead=true;
@@ -9657,35 +9895,36 @@ function drawAxe(c, s, bright){
   c.lineJoin = 'round';
   const dark = 'rgba(20,30,40,0.55)';
   const steel = bright ? '#ffffff' : '#cfd6dd';
-  /* the haft, running the whole length so the head sits ON it */
+  /* THE HEAD IS MOUNTED ACROSS THE HAFT, not along it. An axe bit sits at right
+     angles to the shaft with its edge running parallel to it — a head pointing
+     the same way the handle does is a mace on a stick, which is exactly what
+     this looked like. Haft along +x, head standing off to one side. */
   c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = PAL.brown;
-  c.fillRect(-9*s, -2.4*s, 40*s, 4.8*s);
-  c.strokeRect(-9*s, -2.4*s, 40*s, 4.8*s);
-  /* THE HEAD. A real axe is a wedge that flares from the eye out to a long
-     curved bit, with a beard hooking back underneath — not a lollipop. */
+  c.fillRect(-9*s, -2.4*s, 43*s, 4.8*s);
+  c.strokeRect(-9*s, -2.4*s, 43*s, 4.8*s);
+  /* the bit: rooted on the haft, flaring up and out, edge running along x */
   c.fillStyle = steel;
   c.beginPath();
-  c.moveTo(17*s, -4*s);            /* the eye, top */
-  c.lineTo(26*s, -15*s);           /* shoulder flaring out and up */
-  c.quadraticCurveTo(35*s, -13*s, 36*s, -3*s);   /* the toe */
-  c.quadraticCurveTo(37*s,  6*s,  30*s, 14*s);   /* the bit, bulging forward */
-  c.lineTo(21*s, 15*s);            /* the beard, hooking back under the haft */
-  c.quadraticCurveTo(19*s, 8*s, 17*s, 4*s);
+  c.moveTo(20*s, -2*s);                                 /* root, toe side */
+  c.lineTo(15*s, -12*s);                                /* the beard, hooking back */
+  c.quadraticCurveTo(24*s, -22*s, 36*s, -19*s);         /* THE EDGE, along the haft */
+  c.quadraticCurveTo(34*s, -9*s, 31*s, -2*s);           /* heel back down to the haft */
   c.closePath(); c.fill(); c.stroke();
-  /* the cutting edge, a bright line inset from the bit */
+  /* the bevel, traced just inside the edge */
   c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
   c.beginPath();
-  c.moveTo(32*s, -6*s);
-  c.quadraticCurveTo(33*s, 4*s, 27*s, 11*s);
+  c.moveTo(17*s, -13*s);
+  c.quadraticCurveTo(25*s, -19.5*s, 34*s, -17*s);
   c.stroke();
-  /* the eye: a darker band where the haft passes through the head */
+  /* the eye — the dark collar where the haft passes through the head */
   c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = bright ? '#c8ced4' : '#9ba19d';
   c.beginPath();
-  c.moveTo(15*s, -5*s); c.lineTo(21*s, -5*s); c.lineTo(21*s, 5*s); c.lineTo(15*s, 5*s);
+  c.moveTo(21*s, -5.5*s); c.lineTo(30*s, -5.5*s);
+  c.lineTo(30*s, 3.4*s);  c.lineTo(21*s, 3.4*s);
   c.closePath(); c.fill(); c.stroke();
-  /* a butt cap, so the grip end reads as a grip */
+  /* butt cap, so the grip end reads as a grip */
   c.fillStyle = PAL.gold;
   c.fillRect(-11*s, -3.2*s, 3.4*s, 6.4*s); c.strokeRect(-11*s, -3.2*s, 3.4*s, 6.4*s);
 }
@@ -11102,6 +11341,28 @@ function render(){
         ctx.fillStyle = `rgba(214,255,160,${0.17*fade})`;
         ctx.beginPath(); ctx.ellipse(px-rad*0.2, py-rad*0.2, rad*0.45, rad*0.36, 0, 0, TAU); ctx.fill();
       }
+      ctx.restore();
+    }
+    else if(pr.kind==='pbolt'){
+      const puls = 1 + 0.12*Math.sin(vtime*22 + pr.seed);
+      const R = 9*puls;
+      ctx.save(); ctx.translate(pr.x, pr.y);
+      /* a hot core inside a soft coat, with a tail dragged back along its path */
+      const tail = Math.atan2(pr.vy, pr.vx) + Math.PI;
+      ctx.fillStyle = 'rgba(255,120,40,0.28)';
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(tail+0.5)*R, Math.sin(tail+0.5)*R);
+      ctx.lineTo(Math.cos(tail)*R*3.4, Math.sin(tail)*R*3.4);
+      ctx.lineTo(Math.cos(tail-0.5)*R, Math.sin(tail-0.5)*R);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,138,60,0.45)';
+      ctx.beginPath(); ctx.arc(0,0,R*1.6,0,TAU); ctx.fill();
+      ctx.fillStyle = '#ff8a3c';
+      ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(0,0,R*0.55,0,TAU); ctx.fill();
+      ctx.fillStyle = '#fff6d8';
+      ctx.beginPath(); ctx.arc(-R*0.18,-R*0.18,R*0.26,0,TAU); ctx.fill();
       ctx.restore();
     }
     else if(pr.kind==='pbrick'){

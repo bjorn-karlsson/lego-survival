@@ -79,11 +79,26 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
 | **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
-| **STAFF** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
+| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
-is slow and crits rarely. The staff is not finished; it swings exactly like a sword for now.
+is slow and crits rarely.
+
+**The staff does not swing at all.** It is the first *caster* weapon: its basic attack is a
+**fireball** that bursts for 46 and sets what it touches alight. It gives up the entire melee
+kit — reach, the spin combo, bleed — and gets **+25% increased spell damage, +30% increased
+elemental damage and +20% increased cast speed** for carrying it. Physical bricks are not
+offered to a staff hero at all; the elemental ones are not offered to anyone else.
+
+**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 6s, and
+they all burn at once. **The fifth stack breaks**: the fires go out and the body is **BURNT**,
+taking **25% MORE fire** from then on. Marks stack to four, each its own multiplier — a
+four-mark body takes **×2.44** fire. Burning is damage over time, so it reads the same
+`Rotbrick` pool poison and bleed do.
+
+Four new bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
+elemental), `Pyromancy` (increased fire) and `Wildfire` (a wider burst).
 
 **Ability names never change.** A mace hero still takes `Bladestorm`, `Blade Vortex` and
 `Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
