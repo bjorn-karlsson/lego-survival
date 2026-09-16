@@ -915,6 +915,23 @@ const EBURN_TICK   = 0.4;
 const BURNT_STEP   = 0.25;   /* MORE fire damage taken, per mark */
 const BURNT_T      = 10;
 const BURNT_MAX    = 4;
+/* EMBER SCATTER — the fireball's legendary. Hitting a body that is ALREADY
+   alight knocks embers off it, and each one flies to the nearest other monster
+   and sets that alight too. With nothing else standing they loop back into the
+   body that threw them, so it is never dead weight against a lone boss. And it
+   deepens the well: the fire can pile ten stacks instead of five, twenty once
+   upgraded, which means BURNT comes round rarer but the burn underneath it is
+   four times the size. */
+const EMBER_MAX    = 2;              /* ranks of the brick */
+const EMBER_SHOTS  = [0, 2, 5];      /* embers thrown per trigger, by rank */
+const BURN_CAP_MUL = [1, 2, 4];      /* 5 -> 10 -> 20 stacks */
+const EMBER_SHARE  = 0.45;           /* of the hit that threw it */
+const EMBER_SPD    = 430;
+const EMBER_DEPTH  = 3;              /* how far one chain may travel */
+const EMBER_CD     = 0.25;           /* per body, so a target is not a fountain */
+function burnCap(){
+  return EBURN_MAX * (BURN_CAP_MUL[(player && player.ember) || 0] || 1);
+}
 /* what colour each lingering damage drips its numbers in — green for the rot,
    red for a wound. One entry per ailment, so a third one cannot forget. */
 const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54', burn:'#ff9a3c' };
@@ -1365,7 +1382,7 @@ function newPlayer(){
     /* ELEMENTAL. flatElem is added to an elemental attack's base the way
        flatPhys is added to a physical one; inc.elem is the increased pool every
        element reads, and inc.fire/frost/shock are the per-element ones. */
-    flatElem:0,
+    flatElem:0, ember:0,
     resFlat:{ fire:0, frost:0, shock:0 },
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
@@ -2551,14 +2568,16 @@ function burnStacksOn(e){ return (e.eburn && e.eburn.list.length) || 0; }
 function burnDpsOn(e){ let d=0; for(const f of ((e.eburn && e.eburn.list) || [])) d += f.dps; return d; }
 /* Light one. Every fire is its own stack with its own clock, so five fires hurt
    five times as fast — not one pool stretched thinner. */
-function burnEnemy(e, hit){
+function burnEnemy(e, hit, depth){
   if(e.dead || e.state!=='active' || !(hit > 0)) return;
   if(!e.eburn) e.eburn = { list:[], tick:rnd(0.05, EBURN_TICK) };
   const dps = dotRate(hit * EBURN_SHARE, 0);
   const list = e.eburn.list;
-  if(list.length >= EBURN_MAX){
-    /* THE FIFTH BREAKS. The body is BURNT: every fire that lands on it from now
-       on lands harder, and the marks stack. The fires themselves reset. */
+  /* EMBER SCATTER triggers on a body that was ALREADY alight when this landed */
+  const wasLit = list.length > 0;
+  if(list.length >= burnCap()){
+    /* THE LAST ONE BREAKS. The body is BURNT: every fire that lands on it from
+       now on lands harder, and the marks stack. The fires themselves reset. */
     list.length = 0;
     if(!e.burnt) e.burnt = { n:0, t:0 };
     e.burnt.n = Math.min(BURNT_MAX, e.burnt.n + 1);
@@ -2568,6 +2587,34 @@ function burnEnemy(e, hit){
     addSparks(e.x, e.y-18, 7, '#ff9a3c');
   }
   list.push({ dps, t:EBURN_DUR });
+  if(wasLit) emberScatter(e, hit, depth || 0);
+}
+/* Knock the embers off a burning body. They fly to the nearest OTHER living
+   monster; with nothing else alive they loop back into the body that threw
+   them, so the brick still works on a boss standing alone. */
+function emberScatter(src, hit, depth){
+  const rank = (player && player.ember) || 0;
+  if(!rank || depth >= EMBER_DEPTH) return;
+  if((src.emberCd || 0) > 0) return;      /* one body is not a machine gun */
+  src.emberCd = EMBER_CD;
+  let tgt = null, best = 1e9;
+  for(const e2 of enemies){
+    if(e2===src || e2.dead || e2.state!=='active') continue;
+    const d = dist(e2, src);
+    if(d < best){ best = d; tgt = e2; }
+  }
+  const loop = !tgt;                      /* nothing else standing: come home */
+  const n = EMBER_SHOTS[rank] || 0;
+  for(let i=0;i<n;i++){
+    const a = (i/n)*TAU + rnd(-0.3, 0.3);
+    projectiles.push({ kind:'ember', x:src.x, y:src.y-16,
+      vx:Math.cos(a)*EMBER_SPD*0.5, vy:Math.sin(a)*EMBER_SPD*0.5,
+      tgt: loop ? src : tgt, loop, src,
+      dmg: hit*EMBER_SHARE, depth: depth+1,
+      out: loop ? rnd(0.18,0.32) : rnd(0.05,0.14),   /* flung out before it homes */
+      life:2.2, seed:rnd(TAU) });
+  }
+  addSparks(src.x, src.y-18, 4 + n, '#ffb02e');
 }
 function burnTickEnemy(e, dt){
   if(e.burnt){ e.burnt.t -= dt; if(e.burnt.t <= 0) e.burnt = null; }
@@ -3778,6 +3825,20 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% wider burst (now ${Math.round(boltRadius())} → `+
       `${Math.round(Math.min(BOLT_R_CAP, (weapon.boltR||46)*(1+Math.min(BOLT_R_MAX_INC, player.inc.boltR+c.v))))})`,
     apply:c=>{ player.inc.boltR += c.v; } },
+  { id:'boltember', name:'Ember Scatter', icon:'burst', cls:'SPELL', minRar:'legendary',
+    req:()=>isCaster() && player.ember < EMBER_MAX,
+    calc:m=>({n:1}),
+    desc:c=>{
+      const lv = Math.min(EMBER_MAX, (player.ember||0) + 1);
+      const was = player.ember||0;
+      return `Hitting a body that is ALREADY burning knocks ${EMBER_SHOTS[lv]} embers off `+
+        `it — each flies to the nearest other monster and sets it alight, and with `+
+        `nothing else standing they loop back into the body that threw them. `+
+        `Fire also piles ${EBURN_MAX*BURN_CAP_MUL[lv]} stacks deep instead of `+
+        `${EBURN_MAX*BURN_CAP_MUL[was]}`+
+        (was ? ` (was ${EMBER_SHOTS[was]} embers)` : '');
+    },
+    apply:c=>{ player.ember = Math.min(EMBER_MAX, (player.ember||0) + 1); } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     req:()=>!isCaster(),
     calc:m=>({v:0.07+0.045*m}),
@@ -4492,7 +4553,9 @@ function buildDiffRow(){
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
-  { name:'ELEMENTAL',       ids:['elemflat','eleminc','firinc','boltarea'] },
+  /* ELEMENTAL is the GLOBAL tree: pools every elemental source reads, wherever
+     it came from. The fireball's own numbers live with the fireball. */
+  { name:'ELEMENTAL',       ids:['eleminc','firinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
@@ -4503,6 +4566,7 @@ const BENCH_SECTIONS = [
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
+  { name:'FIREBALL',        ids:['elemflat','boltarea','boltember'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] },
   { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','baneburst'] }
 ];
@@ -4950,6 +5014,8 @@ const STAT_PROBES = [
   { g:'ELEMENTAL', k:'Bolt damage',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true },
   { g:'ELEMENTAL', k:'Bolt base + flat',   get:()=> isCaster() ? boltBase() : 0,   fmt:v=>v.toFixed(2), zero:true },
   { g:'ELEMENTAL', k:'Burst radius',       get:()=> isCaster() ? boltRadius() : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'ELEMENTAL', k:'Burn stack cap',     get:()=> isCaster() ? burnCap() : 0, fmt:v=>Math.round(v)+'', zero:true },
+  { g:'ELEMENTAL', k:'Embers per trigger', get:()=> EMBER_SHOTS[(player&&player.ember)||0]||0, fmt:v=>Math.round(v)+'', zero:true },
   { g:'ELEMENTAL', k:'Increased elemental',get:()=> incElemAll(weapon.elem||'fire')*100, fmt:v=>Math.round(v)+'%', zero:true },
   { g:'ELEMENTAL', k:'Increased spell',    get:()=> incSpellAll()*100,        fmt:v=>Math.round(v)+'%', zero:true },
   { g:'PHYSICAL', k:'Weapon hit',     get:()=> isCaster() ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
@@ -5331,10 +5397,19 @@ function renderCharSheet(){
         ` × ${p.moreAll.toFixed(2)} more = ${boltDamage().toFixed(2)}`),
       sRow('Burst radius', Math.round(boltRadius())+' px',
         `everything caught takes the hit and catches fire (cap ${BOLT_R_CAP})`),
-      sRow('Burning', EBURN_MAX+' stacks', 'then BURNT',
+      ...(p.ember ? [sRow('Ember Scatter', '\u00d7'+p.ember,
+        EMBER_SHOTS[p.ember]+' embers per hit on a burning body',
+        `Hitting something already alight knocks ${EMBER_SHOTS[p.ember]} embers off it.\n`+
+        `Each finds the nearest OTHER monster and sets that alight too, for\n`+
+        `${Math.round(EMBER_SHARE*100)}% of the hit that threw it.\n\n`+
+        `With nothing else standing they LOOP BACK into the body that threw\n`+
+        `them, so it is never dead weight against a boss on its own.\n\n`+
+        `A chain travels ${EMBER_DEPTH} bodies deep, and one body can only throw\n`+
+        `embers every ${EMBER_CD}s — otherwise a crowd would never stop.`)] : []),
+      sRow('Burning', burnCap()+' stacks', 'then BURNT',
         `Every bolt lights a fire on what it hits. Each stack burns on its own for\n`+
         `${Math.round(EBURN_SHARE*100)}% of the hit a second over ${EBURN_DUR}s, and they all burn at once.\n\n`+
-        `THE FIFTH BREAKS: the fires go out and the body is BURNT, taking\n`+
+        `THE LAST ONE BREAKS: the fires go out and the body is BURNT, taking\n`+
         `${Math.round(BURNT_STEP*100)}% MORE fire from then on. Marks stack to ${BURNT_MAX} and each is its own\n`+
         `multiplier — four marks is ×${Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)} fire taken.\n\n`+
         `Burning is damage over time, so it reads your increased damage over\n`+
@@ -6675,9 +6750,15 @@ function updateEnemy(e, dt){
   /* How far this body actually travelled last frame. Bleed reads it, and it has
      to be MEASURED rather than taken off the AI's intent: a monster shoving
      against a rock, frozen solid, or winding up an attack is standing still no
-     matter what it meant to do. */
-  e.spdNow = dt > 0 ? Math.hypot(e.x - (e.lx ?? e.x), e.y - (e.ly ?? e.y)) / dt : 0;
-  e.lx = e.x; e.ly = e.y;
+     matter what it meant to do.
+
+     THE FIELD NAMES MATTER HERE. `lx`/`ly` were already taken: they hold the
+     UNIT DIRECTION a charging or lunging body committed to. Storing a position
+     in them meant the next frame read `vx = e.lx * chargeSpd` as roughly two
+     thousand times four hundred and thirty, and every golem, direbat, lancer
+     and boss that charged was flung into the far corner of the map. */
+  e.spdNow = dt > 0 ? Math.hypot(e.x - (e._spx ?? e.x), e.y - (e._spy ?? e.y)) / dt : 0;
+  e._spx = e.x; e._spy = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
   e.orbCd -= dt;
   e.vortCd -= dt; e.whirlCd = Math.max(0, (e.whirlCd||0) - dt);
@@ -6687,6 +6768,7 @@ function updateEnemy(e, dt){
   if(e.bleed)  bleedTick(e, dt);
   if(e.eburn || e.burnt) burnTickEnemy(e, dt);
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
+  if(e.emberCd > 0) e.emberCd -= dt;
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
@@ -8716,6 +8798,49 @@ function updateProjectiles(dt){
         const rq = pr.r * rnd(0.55, 1);
         particles.push({kind:'spark', x:pr.x+Math.cos(a)*rq, y:pr.y+Math.sin(a)*rq*0.8,
           vx:rnd(-16,16), vy:rnd(-26,-4), life:rnd(0.35,0.7), max:0.7, color:'#8ede4a'});
+      }
+    }
+    else if(pr.kind==='ember'){
+      pr.life -= dt;
+      if(pr.life<=0){ pr.dead = true; continue; }
+      /* it is flung outward first, then it hunts. A loopback ember is thrown
+         further out before turning, so you can see it go and come back. */
+      if(pr.out > 0){ pr.out -= dt; }
+      else {
+        /* re-target every frame: the thing it was going for may already be
+           dead, and the next nearest body is a better answer than fizzling */
+        let t = pr.tgt;
+        if(!t || t.dead || t.state!=='active'){
+          t = null; let best = 1e9;
+          for(const e2 of enemies){
+            if(e2===pr.src || e2.dead || e2.state!=='active') continue;
+            const d = dist(e2, pr); if(d < best){ best = d; t = e2; }
+          }
+          /* still nothing standing — go home to the body that threw it */
+          if(!t && pr.src && !pr.src.dead && pr.src.state==='active'){ t = pr.src; pr.loop = true; }
+          pr.tgt = t;
+        }
+        if(!t){ pr.dead = true; continue; }
+        const a = Math.atan2(t.y - 16 - pr.y, t.x - pr.x);
+        /* turn toward it rather than snapping, so the flight reads as a flight */
+        const cur = Math.atan2(pr.vy, pr.vx);
+        const na = cur + clamp(angDiff(a, cur), -9*dt, 9*dt);
+        pr.vx = Math.cos(na)*EMBER_SPD; pr.vy = Math.sin(na)*EMBER_SPD;
+      }
+      pr.x += pr.vx*dt; pr.y += pr.vy*dt;
+      if(Math.random() < 0.8)
+        particles.push({kind:'spark', x:pr.x+rnd(-3,3), y:pr.y+rnd(-3,3),
+          vx:rnd(-14,14), vy:rnd(-30,-4), life:rnd(0.15,0.32), max:0.32,
+          color: Math.random()<0.5 ? '#ffb02e' : '#ff6a1a'});
+      const t2 = pr.tgt;
+      if(pr.out <= 0 && t2 && !t2.dead && t2.state==='active' &&
+         dist(pr, {x:t2.x, y:t2.y-16}) < (t2.r||12) + 10){
+        pr.dead = true;
+        addSparks(t2.x, t2.y-16, 6, '#ffb02e');
+        /* the fire goes on first, exactly as the bolt does, so a body the ember
+           finishes off still dies burning — and the chain carries its depth */
+        burnEnemy(t2, pr.dmg, pr.depth);
+        hitEnemy(t2, pr.dmg, angTo(pr, t2), 40, 'fire', {});
       }
     }
     else if(pr.kind==='pbolt'){
@@ -11553,6 +11678,22 @@ function render(){
         ctx.fillStyle = `rgba(214,255,160,${0.17*fade})`;
         ctx.beginPath(); ctx.ellipse(px-rad*0.2, py-rad*0.2, rad*0.45, rad*0.36, 0, 0, TAU); ctx.fill();
       }
+      ctx.restore();
+    }
+    else if(pr.kind==='ember'){
+      const R = 4.6 + Math.sin(vtime*26 + pr.seed)*0.8;
+      const tail = Math.atan2(pr.vy, pr.vx) + Math.PI;
+      ctx.save(); ctx.translate(pr.x, pr.y);
+      ctx.fillStyle = 'rgba(255,106,26,0.30)';
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(tail+0.7)*R, Math.sin(tail+0.7)*R);
+      ctx.lineTo(Math.cos(tail)*R*3.6, Math.sin(tail)*R*3.6);
+      ctx.lineTo(Math.cos(tail-0.7)*R, Math.sin(tail-0.7)*R);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ff6a1a';
+      ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(0,0,R*0.5,0,TAU); ctx.fill();
       ctx.restore();
     }
     else if(pr.kind==='pbolt'){
