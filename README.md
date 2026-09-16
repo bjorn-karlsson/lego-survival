@@ -97,8 +97,22 @@ taking **25% MORE fire** from then on. Marks stack to four, each its own multipl
 four-mark body takes **×2.44** fire. Burning is damage over time, so it reads the same
 `Rotbrick` pool poison and bleed do.
 
-Four new bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
-elemental), `Pyromancy` (increased fire) and `Wildfire` (a wider burst).
+Five bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
+elemental), `Pyromancy` (increased fire), `Wildfire` (a wider burst), and the legendary
+**`Ember Scatter`**.
+
+**Ember Scatter** is the fireball's payoff. Hitting a body that is **already burning**
+knocks **2 embers** off it — **5** once upgraded — and each one flies to the nearest *other*
+monster and sets that alight too, for 45% of the hit that threw it. With nothing else
+standing they **loop back** into the body that threw them, so it is never dead weight
+against a boss on its own. It also deepens the well: fire piles **10 stacks** instead of
+five, **20** upgraded, so BURNT comes round rarer but the burn underneath it is four times
+the size.
+
+A chain travels **3 bodies deep** and one body can only throw embers every 0.25s, so a
+packed crowd lights up and then settles rather than running away — measured at a peak of 92
+embers across fourteen bodies, every one of them alight, back to zero in about three
+seconds.
 
 **`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
 **chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
