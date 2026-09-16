@@ -4492,7 +4492,9 @@ function buildDiffRow(){
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
-  { name:'ELEMENTAL',       ids:['elemflat','eleminc','firinc','boltarea'] },
+  /* ELEMENTAL is the GLOBAL tree: pools every elemental source reads, wherever
+     it came from. The fireball's own numbers live with the fireball. */
+  { name:'ELEMENTAL',       ids:['eleminc','firinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
@@ -4503,6 +4505,7 @@ const BENCH_SECTIONS = [
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
+  { name:'FIREBALL',        ids:['elemflat','boltarea'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] },
   { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','baneburst'] }
 ];
