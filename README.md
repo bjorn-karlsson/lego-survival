@@ -68,6 +68,72 @@ no slot at all — and its bricks turn up more often, plus a starting kit to mat
 
 </td><td width="33%" valign="top">
 
+### 🗡️ Pick a weapon
+
+Your weapon is a **table row**, not a special case in the code. It sets the physical side
+of the hero — base damage, swing time, reach, how often and how hard it crits, and how
+readily a hit opens a wound — and every brick you own scales it from there.
+
+| | base | swing | reach | crit | crit mult | bleed | spin |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
+| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
+| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
+| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — |
+
+An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
+hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
+is slow and crits rarely.
+
+**The staff does not swing at all.** It is the first *caster* weapon: its basic attack is a
+**fireball** that bursts for 46 and sets what it touches alight. It gives up the entire melee
+kit — reach, the spin combo, bleed — and gets **+25% increased spell damage, +30% increased
+elemental damage and +20% increased cast speed** for carrying it. Physical bricks are not
+offered to a staff hero at all; the elemental ones are not offered to anyone else.
+
+**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 6s, and
+they all burn at once. **The fifth stack breaks**: the fires go out and the body is **BURNT**,
+taking **25% MORE fire** from then on. Marks stack to four, each its own multiplier — a
+four-mark body takes **×2.44** fire. Burning is damage over time, so it reads the same
+`Rotbrick` pool poison and bleed do.
+
+Four new bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
+elemental), `Pyromancy` (increased fire) and `Wildfire` (a wider burst).
+
+**`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
+**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
+clears them. It is only offered to a caster, the way the melee spells are only offered to
+a melee weapon.
+
+**Nothing is offered to a weapon that cannot use it — and the card says so.** Every brick
+whose requirement is narrower than "any weapon" prints the weapons it serves in a small row
+under its text, read straight off its own gate so the label can never drift from the rule.
+
+A staff hero is never shown `Sharpened Blade`, `Longsword`, `Blade Mastery`, the legendary
+`Blademaster`, the bleed bricks, or **either blade spell and its whole tree** — Bladestorm
+and Blade Vortex are for a hero who carries a blade. A melee hero is never shown the frost
+tree or the elemental one. The favourites gate the same way: `Sword & Steel`, `Bladestorm`
+and `Blade Vortex` do not appear for a caster, and the new **`Elemental Arts`** and
+`Block Freeze` favourites do not appear for a melee weapon.
+
+**Bladestorm and Blade Vortex stay physical** and open wounds on their own merits rather
+than on the weapon's. A caster's cast interval has its own floor, **0.34s** against melee's
+0.10s, because a stream of fireballs is a hosepipe rather than a wizard. The fireball breaks
+scenery like any swing — it opens chests and clears crates — but it is the hero's own
+projectile and carries no owner, so the deflect path, which only ever touches what monsters
+throw, can never bat one back at you.
+
+**Ability names never change.** A mace hero still takes `Bladestorm`, `Blade Vortex` and
+`Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
+**flat physical damage** and `Blade Mastery` grants **increased physical damage**, so every
+brick works with every weapon and no build is locked to one.
+
+**The art follows the weapon too.** You hold what you picked, you swing it, and your spells
+throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
+orbits the same. Each weapon names a *held* art and a *thrown* art, so the staff can carry
+its own stone-headed shaft while still throwing swords until its own spellwork exists.
+Hover a weapon on the title screen for the full comparison against the sword.
+
 ### 🩸 Elements & ailments
 
 Fire, frost and lightning each stack. **The fifth stack breaks something**: burning
