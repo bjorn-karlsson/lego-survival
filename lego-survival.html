@@ -596,6 +596,17 @@ function syncStats(){
   /* bleed: a flat chance pool and a share of the hit, both hard-capped */
   p.bleedChance = clamp(p.bleedChanceFlat||0, 0, 1);
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
+  /* --- everything that used to be capped where the card wrote it ------------
+     Same shape every time: (base + flat) x (1 + sum increased) x each more,
+     and THEN the ceiling. */
+  p.armour      = pool(0, p.armourFlat, 0, 1);      /* the flat pool; armourValue() finishes it */
+  p.reach       = Math.min(REACH_MAX,     pool(0, p.reachFlat, 0, 1));
+  p.suppress    = Math.min(1,             pool(0, p.suppressFlat, 0, 1));
+  p.critMultPct = Math.min(CRIT_MULT_CAP, pool(CRIT_MULT_BASE, p.critMultFlat, 0, 1));
+  p.regenRate   = Math.min(REGEN_MAX,     pool(0, p.regenFlat, i.regen, 1));
+  p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
+  p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
+  for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -756,8 +767,13 @@ const CRIT_MULT_CAP   = 600;
 /* Armour mitigates ATTACK hits: DR = Armour / (Armour + 5 × hit damage), so a
    big hit punches through armour that shrugs off small ones. */
 const ARMOUR_DR_CAP   = 0.85;
-const ARMOUR_FLAT_MAX = 520;   /* flat armour from bricks */
-const ARMOUR_INC_MAX  = 2.0;   /* and the increases on top of it */
+const ARMOUR_FLAT_MAX = 520;   /* what the bricks can pour into the flat pool */
+const ARMOUR_INC_MAX  = 2.0;   /* and the increases that used to be capped too */
+/* THE CEILING IS ON THE FINISHED NUMBER, not on either pool that feeds it:
+   520 flat carrying +200% increased is 1560, and that is the wall. Capping the
+   pools separately meant an increase stopped being worth anything the moment
+   the flat pool filled, which is exactly the trap this model exists to avoid. */
+const ARMOUR_VALUE_MAX = ARMOUR_FLAT_MAX * (1 + ARMOUR_INC_MAX);
 /* Spell suppression is a separate layer on SPELL hits: a suppressed hit lands
    for half. At 100% chance every applicable spell hit is suppressed. */
 const SUPPRESS_TAKEN  = 0.5;
@@ -1228,7 +1244,17 @@ function newPlayer(){
        hearts that sit under the hp pool. Nothing here is ever read directly by
        the game — syncStats() turns them into the numbers that are. */
     hpFlat:0, hpMore:1, baneDotFlat:0,
-    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0,
+    /* THE FLAT POOLS. A card adds to one of these; it never writes the stat it
+       feeds. The pools are UNCAPPED on purpose — a ceiling belongs on the
+       finished number, after the increases and the more multipliers have had
+       their say, or an increase quietly stops being worth anything the moment
+       the flat pool fills up. syncStats() does the capping. */
+    armourFlat:0, regenFlat:0, critMultFlat:0, suppressFlat:0, reachFlat:0,
+    resFlat:{ fire:0, frost:0, shock:0 },
+    /* XP used to keep an increase and a MORE in the same field, one `+=` and
+       one `*=` fighting over it. They are two pools now, as they must be. */
+    xpInc:0, xpMore:1,
+    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0, regen:0, heart:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
           /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
@@ -2672,20 +2698,21 @@ const WARD_MAX = 2;
 function wardArmour(){ return player.wardT > 0 ? WARD_ARMOUR * player.wardN : 0; }
 function wardRes(){ return player.wardT > 0 ? WARD_RES * player.wardN : 0; }
 function armourValue(){
-  /* the ward is FLAT armour, so it joins the flat pool and the increases apply
-     to it too — it used to be bolted on after, which made increased armour
-     quietly worth less while a ward was up */
-  return Math.max(0, (player.armour + wardArmour()) * (1 + player.incArmour)
-    * (1 - player.curse.armor));
+  /* (base + every flat source, the ward included) x (1 + the one increased
+     pool) x the one LESS multiplier a curse applies — then the ceiling. */
+  return Math.min(ARMOUR_VALUE_MAX, Math.max(0,
+    (player.armour + wardArmour()) * (1 + player.incArmour) * (1 - player.curse.armor)));
 }
 function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
-  /* a SUNDERED hero keeps less of their resistance; a BRANDED one has had it
-     burned, frozen or shocked out of them, one stack at a time */
-  let r = (player.res[elem] || 0) * (1 - player.curse.resist);
-  r += wardRes();                       /* the ward is not something a curse can strip */
-  r -= BRAND_STEP * (player.brand[elem] || 0);
+  /* FLAT POOL FIRST — your own resistance, the ward's, and the brands burned,
+     frozen or shocked out of you, which are a flat penalty and not a multiplier.
+     THEN the one LESS multiplier, a SUNDERED curse, over the whole pool.
+     It only bites on resistance you actually HAVE: a curse strips what you
+     carry, it cannot hand resistance to a hero already under water. */
+  const flat = (player.res[elem] || 0) + wardRes() - BRAND_STEP * (player.brand[elem] || 0);
+  const r = flat > 0 ? flat * (1 - player.curse.resist) : flat;
   return 1 - clamp(r, RES_FLOOR, RES_CAP);
 }
 /* what the brand pile is costing you, for the sheet */
@@ -3476,25 +3503,25 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside the increased pool`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
   { id:'armor', name:'Reinforced Armour', icon:'shield', cls:'DEFENSE',
-    req:()=>player.armour < ARMOUR_FLAT_MAX,
+    req:()=>player.armourFlat < ARMOUR_FLAT_MAX && armourValue() < ARMOUR_VALUE_MAX,
     calc:m=>({v:Math.round(14+10*m)}),
     desc:c=>`+${c.v} flat armour (cap ${ARMOUR_FLAT_MAX}) — less damage from attacks, never from spells`,
-    apply:c=>{ player.armour = Math.min(ARMOUR_FLAT_MAX, player.armour + c.v); } },
+    apply:c=>{ player.armourFlat += c.v; syncStats(); } },
   { id:'armorinc', name:'Plated Rig', icon:'shieldplus', cls:'DEFENSE',
-    req:()=>player.armour>0 && player.incArmour < ARMOUR_INC_MAX,
+    req:()=>player.armourFlat>0 && armourValue() < ARMOUR_VALUE_MAX,
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased armour (cap ${Math.round(ARMOUR_INC_MAX*100)}%)`,
-    apply:c=>{ player.incArmour = Math.min(ARMOUR_INC_MAX, player.incArmour + c.v); } },
+    apply:c=>{ player.incArmour += c.v; syncStats(); } },
   { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
     req:()=>player.suppress < 1,
     calc:m=>({v:0.08+0.06*m}),
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
-    apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
+    apply:c=>{ player.suppressFlat += c.v; syncStats(); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     req:()=>player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} sword attack range (cap ${56+REACH_MAX})`,
-    apply:c=>{ player.reach = Math.min(REACH_MAX, player.reach + c.v); } },
+    apply:c=>{ player.reachFlat += c.v; syncStats(); } },
   { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
     req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
@@ -3509,7 +3536,7 @@ const UPGRADES = [
     req:()=>player.critMultPct < CRIT_MULT_CAP,
     calc:m=>({v:Math.round(6+4.5*m)}),
     desc:c=>`+${c.v}% to critical strike multiplier (cap ${CRIT_MULT_CAP}%)`,
-    apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
+    apply:c=>{ player.critMultFlat += c.v; syncStats(); } },
   { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
     req:()=>player.maxHp < heartCap(),
     calc:m=>({v:Math.max(2,Math.round(2*m))}),
@@ -3535,12 +3562,12 @@ const UPGRADES = [
     calc:m=>({v:0.035+0.022*m}),
     desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second per ${REGEN_REF_HP} max hearts `+
       `— it scales with your bar (cap ${REGEN_MAX.toFixed(2)})`,
-    apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
+    apply:c=>{ player.regenFlat += c.v; syncStats(); } },
   { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
     calc:m=>({v:Math.round(14+10*m)}),
     desc:c=>`${c.v}% INCREASED heart drop chance (cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
-    apply:c=>{ player.heartChance = Math.min(HEART_CHANCE_MAX, player.heartChance + c.v/100); } },
+    apply:c=>{ player.inc.heart += c.v/100; syncStats(); } },
   { id:'spd', name:'Sprint Studs', icon:'boot', cls:'UTILITY',
     req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
@@ -3563,27 +3590,27 @@ const UPGRADES = [
   { id:'wisdom', name:'Stud Wisdom', icon:'xp', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% MORE XP — its own multiplier, so they compound`,
-    apply:c=>{ player.xpMul *= (1+c.v); } },
+    apply:c=>{ player.xpMore *= (1+c.v); syncStats(); } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.fire < RES_CAP,
+    req:()=>player.resFlat.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% fire resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
+    apply:c=>{ player.resFlat.fire += c.v; syncStats(); } },
   { id:'resfrost', name:'Thermal Lining', icon:'snow', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.frost < RES_CAP,
+    req:()=>player.resFlat.frost < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% frost resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.frost = Math.min(RES_CAP, player.res.frost + c.v); } },
+    apply:c=>{ player.resFlat.frost += c.v; syncStats(); } },
   { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.shock < RES_CAP,
+    req:()=>player.resFlat.shock < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% lightning resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
+    apply:c=>{ player.resFlat.shock += c.v; syncStats(); } },
   { id:'resall', name:'Elementalist Bricks', icon:'prism', cls:'DEFENSE', minRar:'rare',
-    req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
+    req:()=>ELEMENTS.some(el=>player.resFlat[el] < RES_CAP),
     calc:m=>({v:0.025+0.022*m}),
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
-    apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
+    apply:c=>{ for(const el of ELEMENTS) player.resFlat[el] += c.v; syncStats(); } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
     req:()=>canTakeSpell('orbit') && player.orbit.n < orbitMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -3936,11 +3963,11 @@ const FAV_WEIGHT = 3.2;
 const FAV_PERKS = {
   none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
-    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armour += 10;
-      p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpMul += 0.10; } },
+    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
+      p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
   sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
     apply(p){ p.flatSword += 1; p.inc.atk += 0.09;
-      p.reach = Math.min(REACH_MAX, p.reach + 8); } },
+      p.reachFlat += 8; } },
   orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
@@ -3968,9 +3995,9 @@ const FAV_PERKS = {
       p.baneDotFlat += 0.4; } },
   tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
-    apply(p){ p.hpFlat += 2; p.hp += 2; p.armour += 25;
-      for(const el of ELEMENTS) p.res[el] = Math.min(RES_CAP, p.res[el] + 0.08);
-      p.regenRate = Math.min(REGEN_MAX, p.regenRate + 0.02); } }
+    apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
+      for(const el of ELEMENTS) p.resFlat[el] += 0.08;
+      p.regenFlat += 0.02; } }
 };
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];

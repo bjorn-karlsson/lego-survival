@@ -144,6 +144,13 @@ disappointment every time:
 |---|--:|--:|--:|--:|--:|
 | Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
 
+It is checked rather than asserted. The audit takes twenty-seven bricks three times over,
+in forward, reverse and shuffled order, and compares all **85** stats the game exposes:
+every one must come out byte-identical. It then proves +100% and +200% increased land on
+×2 and ×3 (never ×4), that two ×2 MOREs land on ×4, and that every ceiling sits on the
+result rather than the pool. Three deliberately broken builds — a compounding increase, a
+capped flat pool, an increase smuggled into a MORE — are each caught by it.
+
 Bladestorm counts in **swords**, so an epic roll is +40 of them, and the ceiling is on
 swords in the air — **150** — rather than on ranks.
 
@@ -157,6 +164,13 @@ passes is genuinely safe.
 **Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
 DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
 reads it — Brickbane's poison is simply the first thing that qualifies.
+
+**A ceiling belongs on the finished number, never on a pool that feeds it.** Flat armour,
+resistance, regeneration, crit multiplier, reach and suppression all keep counting past
+their limit; the cap lands after the increases and the MOREs have had their say. Capping a
+pool instead makes an increase quietly worthless the moment the flat pool fills — the exact
+trap this model exists to avoid. Armour is the clearest case: 520 flat carrying +200%
+increased is **1,560**, and *that* is the wall.
 
 No card writes a derived number. Cards add to pools; a single `syncStats()` rebuilds
 everything from base. That is why the character sheet can show you the arithmetic:
