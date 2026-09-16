@@ -100,6 +100,22 @@ four-mark body takes **×2.44** fire. Burning is damage over time, so it reads t
 Four new bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
 elemental), `Pyromancy` (increased fire) and `Wildfire` (a wider burst).
 
+**`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
+**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
+clears them. It is only offered to a caster, the way the melee spells are only offered to
+a melee weapon.
+
+**Nothing is offered to a weapon that cannot use it.** A staff hero is never shown
+`Sharpened Blade`, `Longsword` or the legendary `Blademaster` — the whirl *is* the swing
+held down, and a staff has no swing. The favourites gate the same way: `Sword & Steel`,
+`Bladestorm` and `Blade Vortex` do not appear for a caster, and the new **`Elemental Arts`**
+and `Block Freeze` favourites do not appear for a melee weapon.
+
+**Bladestorm and Blade Vortex stay physical** whatever you are holding — they land physical
+damage and open wounds on their own merits, so a staff hero's blades still bleed even
+though the staff itself never can. A caster's cast interval also has its own floor, **0.34s**
+against melee's 0.10s, because a stream of fireballs is a hosepipe rather than a wizard.
+
 **Ability names never change.** A mace hero still takes `Bladestorm`, `Blade Vortex` and
 `Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
 **flat physical damage** and `Blade Mastery` grants **increased physical damage**, so every

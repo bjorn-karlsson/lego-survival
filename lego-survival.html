@@ -594,7 +594,7 @@ function syncStats(){
   p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
   p.studMul = pool(1, 0, i.studs, 1);
   /* the weapon sets the BASE; the bricks scale it, exactly as before */
-  p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), ATK_RATE_MIN);
+  p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), atkFloor());
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
   p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, i.orbitSpd, 1));
@@ -635,6 +635,11 @@ function addMaxHp(flat){
   return gained;
 }
 const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
+/* A CASTER'S FLOOR IS ITS OWN. Ten fireballs a second is a hosepipe, not a
+   wizard — a bolt that bursts and sets a fire has to land as an event you can
+   see. Three a second is the fastest a staff will ever go. */
+const CAST_RATE_MIN = 0.34;
+function atkFloor(){ return isCaster() ? CAST_RATE_MIN : ATK_RATE_MIN; }
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
@@ -821,6 +826,12 @@ function setWeapon(id){
   weapon = WEAPONS[id] || WEAPONS.sword;
   try{ localStorage.setItem('bb_weapon', weapon.id); }catch(e){}
   if(player) syncStats();
+  /* the favourite list is weapon-dependent: rebuild it, and drop a favourite
+     this weapon cannot use rather than leaving it silently selected */
+  if(typeof buildFavRow === 'function' && document.getElementById('favRow')){
+    buildFavRow();
+    if(!favAllowed(favourite)) setFavourite('none');
+  }
   const row = document.getElementById('weaponRow');
   if(row) for(const el of row.children){
     const on = el.dataset.weapon === weapon.id;
@@ -856,7 +867,11 @@ const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
 /* what counts as a SWING. The sword, its whirl, the vortex and the lingering
    totem all report as 'sword'; bladestorm blades report as 'storm'. Only these
    can open a wound. */
-const MELEE_SOURCES = new Set(['sword','storm']);
+/* Everything that lands PHYSICAL damage from the hero, and so can open a wound.
+   The vortex and the lingering totem used to report as 'sword', which muddled
+   the combat log and meant the weapon's own bleed multiplier was applied to
+   spells it has nothing to do with. */
+const MELEE_SOURCES = new Set(['sword','storm','vortex']);
 /* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
    An ordinary swing never opens one on its own: the chance starts at nothing and
    is a brick you buy. A CRITICAL swing opens one half the time for free, which
@@ -883,6 +898,12 @@ const BLEED_STACK_MAX  = 8;
    leaves the body BURNT, which is the monster's version of a brand: it takes
    more fire from then on, and the marks pile up. Burning is a damage over time,
    so it reads the one increased-damage-over-time pool like poison and bleed. */
+/* ENEMY CHILL. The same five-then-break shape burning uses: each stack drags a
+   body slower, and the FIFTH freezes it solid and clears them. */
+const ECHILL_MAX  = 5;
+const ECHILL_STEP = 0.13;    /* slower per stack */
+const ECHILL_FLOOR = 0.32;
+const ECHILL_T    = 4;
 const EBURN_MAX    = 5;      /* the fifth stack breaks and brands */
 const EBURN_DUR    = 6;      /* how long one stack burns */
 const EBURN_SHARE  = 0.30;   /* of the hit that lit it, per second, per stack */
@@ -2409,6 +2430,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     /* a wound already paid armour when it was opened — charging it again on
        every tick for eight seconds would make bleed worthless on exactly the
        armoured things it is supposed to grind down */
+  } else if(source==='frost'){
+    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
   } else if(source==='fire' || source==='burn'){
     /* elemental spell damage meets suppression like any other spell, and a BURNT
        body takes every fire harder — one MORE multiplier per mark */
@@ -2423,7 +2446,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   }
   /* BLEED rolls off the damage that ACTUALLY landed, after armour, so a swing
      that barely got through barely bleeds. Ticks never re-roll it. */
-  if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit))
+  if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit, source))
     bleedEnemy(e, d);
   /* fractions survive all the way to the health bar. Rounding every hit to a
      whole point was quietly handing out free damage on small hits and eating the
@@ -2483,12 +2506,16 @@ function baneStrike(e, dmg, dir, kb, dps, dur, stacks){
 /* The odds this swing opens a wound. A crit carries its own fifty per cent; an
    ordinary hit carries only what you bought. Both read the same pool, so one
    brick makes your crits nastier AND your ordinary swings bleed at all. */
-function bleedChance(crit){
+function bleedChance(crit, src){
   const p = player;
   /* the weapon is a MORE multiplier on the whole chance: an axe cuts clean and
      barely bleeds, a mace mangles. Its own base and your bricks are one pool. */
   const pooled = (crit ? BLEED_CRIT_BASE : 0) + ((p && p.bleedChance) || 0);
-  return clamp(pooled * weapon.bleed, 0, 1);
+  /* the weapon's own bleed multiplier applies to the WEAPON. Bladestorm and
+     Blade Vortex are physical spells in their own right — they bleed on their
+     own merits, so a staff hero's blades still cut. */
+  const mul = (src === undefined || src === 'sword') ? weapon.bleed : 1;
+  return clamp(pooled * mul, 0, 1);
 }
 /* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
    rather than stacking beside it — so bleed rewards hitting hard, not often. */
@@ -2496,6 +2523,25 @@ function bleedChance(crit){
 function burntMul(e){
   const n = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
   return Math.pow(1 + BURNT_STEP, n);
+}
+function chillStacksOn(e){ return (e.chillN && e.chillT > 0) ? e.chillN : 0; }
+function chillMulOn(e){ return Math.max(ECHILL_FLOOR, 1 - ECHILL_STEP*chillStacksOn(e)); }
+function chillEnemy(e, n){
+  if(e.dead || e.state!=='active') return;
+  for(let i=0;i<Math.max(1,n||1);i++){
+    e.chillN = (chillStacksOn(e)) + 1;
+    e.chillT = ECHILL_T;
+    if(e.chillN >= ECHILL_MAX){
+      /* THE FIFTH BREAKS: frozen solid, and the stacks go with it */
+      e.chillN = 0; e.chillT = 0;
+      if(e.type!=='boss'){
+        e.stunT = Math.max(e.stunT||0, FREEZE_STUN_T);
+        addDmg(e.x, e.y-46*(e.scale||1), 'FROZEN SOLID', '#dff2ff', 15);
+        addSparks(e.x, e.y-16, 7, '#ffffff');
+      }
+    }
+  }
+  e.slowT = Math.max(e.slowT, ECHILL_T);
 }
 function burnStacksOn(e){ return (e.eburn && e.eburn.list.length) || 0; }
 function burnDpsOn(e){ let d=0; for(const f of ((e.eburn && e.eburn.list) || [])) d += f.dps; return d; }
@@ -2849,6 +2895,14 @@ function boltDamage(more){
   return Math.max(0, d);
 }
 function isCaster(){ return !!(weapon && weapon.cast); }
+/* Block Freeze's own damage. It is elemental, so it reads the elemental pool
+   and the frost pool, exactly as the fire bolt reads fire. */
+const FREEZE_DMG_BASE = 1.6;
+function frostDamage(){
+  const p = player;
+  const inc = p.incAll + incSpellAll() + incElemAll('frost');
+  return Math.max(0, (FREEZE_DMG_BASE + p.flatElem) * (1 + inc) * p.moreAll * rageMul());
+}
 const BOLT_R_MAX_INC = 1.2;    /* increased burst radius the bricks can buy */
 const BOLT_R_CAP = 120;
 function boltRadius(){
@@ -3661,7 +3715,14 @@ const ICONS = {
   bomblets:'<circle cx="9.4" cy="14.4" r="5.4"/><path d="M12.6 9.8 l2 -2.6"/><circle cx="18.2" cy="7.2" r="2"/><circle cx="19" cy="14.6" r="1.6"/><circle cx="14.8" cy="19.6" r="1.4"/>',
   zapper:'<rect x="7.6" y="3.4" width="8.8" height="6.4" rx="1.4"/><path d="M12 9.8 l-2.6 5 h2.2 l-1.6 5.8 4.6 -7.2 h-2.4 l1.4 -3.6"/>',
   icecube:'<path d="M12 2.8 l7.4 4.2 v9 L12 20.2 4.6 16 V7 Z"/><path d="M4.6 7 L12 11.2 l7.4 -4.2 M12 11.2 V20.2"/>',
-  nofav:'<circle cx="12" cy="12" r="8.6"/><path d="M6.6 17.4 L17.4 6.6"/>'
+  nofav:'<circle cx="12" cy="12" r="8.6"/><path d="M6.6 17.4 L17.4 6.6"/>',
+  /* a core with fire coming off it — Ember Core */
+  ember:'<circle cx="12" cy="13.5" r="4.4"/><path d="M12 9 C12 5 9.5 4 9.5 1.6 C7 4 7.5 7 9 9"/>'+
+        '<path d="M14.5 9.6 C16 7.6 15.8 5.4 14.6 4 C16.8 5 18 7.4 17 9.8"/>'+
+        '<path d="M6.2 17.6 C4.6 18.6 3.6 20 3.4 21.6"/><path d="M17.8 17.6 C19.4 18.6 20.4 20 20.6 21.6"/>',
+  /* a single tongue of flame — Pyromancy */
+  pyro:'<path d="M12 22 C7.6 22 5 19 5 15.4 C5 11 9 9.4 9.6 5 C12.6 7 13.2 10 12.6 12.4 '+
+       'C13.6 11.4 14.2 9.8 14.2 8.2 C17.2 10.6 19 13 19 15.6 C19 19.2 16.4 22 12 22 Z"/>'
 };
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
@@ -3673,7 +3734,7 @@ const UPGRADES = [
   /* THE ELEMENTAL TREE. Only offered to a hero actually carrying an elemental
      weapon, so a swordsman is never handed a dead card — and the moment a
      second caster weapon exists these all work for it untouched. */
-  { id:'elemflat', name:'Ember Core', icon:'fire', cls:'OFFENSE',
+  { id:'elemflat', name:'Ember Core', icon:'ember', cls:'OFFENSE',
     req:()=>isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to your ${weapon.elem||'elemental'} bolt — before any increase`,
@@ -3683,7 +3744,7 @@ const UPGRADES = [
     calc:m=>({v:0.08+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike`,
     apply:c=>{ player.inc.elem += c.v; } },
-  { id:'firinc', name:'Pyromancy', icon:'fire', cls:'OFFENSE', minRar:'rare',
+  { id:'firinc', name:'Pyromancy', icon:'pyro', cls:'OFFENSE', minRar:'rare',
     req:()=>isCaster(),
     calc:m=>({v:0.14+0.08*m}),
     desc:c=>`${Math.round(c.v*100)}% increased FIRE damage — the bolt and the burning both`,
@@ -3723,10 +3784,11 @@ const UPGRADES = [
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} melee reach (cap ${weapon.reach+REACH_MAX})`,
     apply:c=>{ player.reachFlat += c.v; syncStats(); } },
-  { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
-    req:()=>player.atkRate > ATK_RATE_MIN,
+  { id:'aspd', name:'Quickening', icon:'clock', cls:'OFFENSE',
+    req:()=>player.atkRate > atkFloor(),
     calc:m=>({v:0.10+0.05*m}),
-    desc:c=>`Swing ${Math.round(c.v*100)}% faster (floor ${ATK_RATE_MIN.toFixed(2)}s per swing)`,
+    desc:c=>`${Math.round(c.v*100)}% increased ATTACK SPEED — swings and casts alike `+
+      `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':'swing'})`,
     apply:c=>{ player.inc.atk += c.v; syncStats(); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>critChance() < CRIT_CHANCE_CAP,
@@ -4024,10 +4086,12 @@ const UPGRADES = [
     },
     apply:c=>{ player.bane.burst = Math.min(BANE_BURST.length-1, player.bane.burst + 1); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('freeze'),
+    /* a frost spell belongs to the hero who can carry frost */
+    req:()=>isCaster() && canTakeSpell('freeze'),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer deep-freeze`
-      : 'Spell: flash-freeze all enemies around you — no damage, pure crowd control',
+    desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — wider, longer, and more chill`
+      : `Spell: a burst of frost around you for ${fmtHp(frostDamage())} FROST damage, `+
+        `laying a CHILL stack — five freezes solid`,
     apply:c=>{ player.freeze.n += c.n; } },
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
     req:()=>player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
@@ -4129,7 +4193,8 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.fork = Math.min(CHAIN_FORK_MAX, (player.chain.fork||0) + 1); } },
   { id:'blademaster', name:'Blademaster', icon:'spin', cls:'OFFENSE', minRar:'legendary',
-    req:()=>player.blademaster < WHIRL_MAX,
+    /* the whirl IS the swing held down — a staff has no swing to hold */
+    req:()=>!isCaster() && player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
     desc:c=> player.blademaster===0
       ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
@@ -4194,6 +4259,9 @@ const FAV_PERKS = {
                                 '+0.4 poison damage a second'],
     apply(p){ p.bane.n = 1; p.bane.arc = Math.max(p.bane.arc, 90*Math.PI/180);
       p.baneDotFlat += 0.4; } },
+  elem: { lines:['+1 flat elemental damage', '+12% increased elemental damage',
+                 '+8% increased cast speed'],
+    apply(p){ p.flatElem += 1; p.inc.elem += 0.12; p.inc.atk += 0.08; } },
   tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
     apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
@@ -4210,13 +4278,19 @@ function applyFavPerks(){
 }
 const FAVOURITES = [
   { id:'none',    name:'No Favourite', icon:'nofav',   ids:[] },
-  { id:'sword',   name:'Sword & Steel',icon:'sword',   ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
+  /* `melee` and `cast` gate a favourite to the weapons that can actually use it:
+     there is no point weighting the reward roll toward bricks you will never be
+     offered. A favourite with neither flag suits any weapon. */
+  { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
-  { id:'storm',   name:'Bladestorm',   icon:'storm',   ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
-  { id:'vortex',  name:'Blade Vortex', icon:'vortex',  ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
-  { id:'freeze',  name:'Block Freeze', icon:'freeze',  ids:['freeze','freezr','freezc'] },
+  { id:'storm',   name:'Bladestorm',   icon:'storm', melee:true, ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
+  { id:'vortex',  name:'Blade Vortex', icon:'vortex',melee:true, ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
+  { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','eleminc','elemflat'] },
+  /* the caster's own opening hand — the staff equivalent of Sword & Steel */
+  { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
+    ids:['elemflat','eleminc','firinc','boltarea','aspd','crit','critpow','orbm','moredmg'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
   { id:'bane',    name:'Brickbane',    icon:'bane',    ids:['bane','banearc','baner','banerate','banedot','banedotinc','orbm'] },
   { id:'tough',   name:'Tough Bricks', icon:'shield',
@@ -4225,8 +4299,15 @@ const FAVOURITES = [
 let favourite = FAVOURITES[0];
 let godMode = false;
 let favSet = new Set();
+/* which favourites this weapon can actually make use of */
+function favAllowed(f){
+  if(f.melee && isCaster()) return false;
+  if(f.cast && !isCaster())  return false;
+  return true;
+}
 function setFavourite(id){
   favourite = FAVOURITES.find(f=>f.id===id) || FAVOURITES[0];
+  if(!favAllowed(favourite)) favourite = FAVOURITES[0];
   favSet = new Set(favourite.ids);
   try{ localStorage.setItem('bb_fav', favourite.id); }catch(e){}
   const row = document.getElementById('favRow');
@@ -4589,7 +4670,7 @@ function toggleCheat(){
 function buildFavRow(){
   const row = document.getElementById('favRow');
   if(!row) return;
-  row.innerHTML = FAVOURITES.map(f=>{
+  row.innerHTML = FAVOURITES.filter(favAllowed).map(f=>{
     const perk = FAV_PERKS[f.id];
     const tip = perk ? 'YOU START WITH\n' + perk.lines.map(l=>'· '+l).join('\n') +
       (f.ids.length ? '\n\nand its bricks come up more often' : '') : '';
@@ -5823,7 +5904,7 @@ function updatePlayer(dt){
         if(en.dead || en.state!=='active' || en.vortCd>0) continue;
         if(dist(p,en) < vr + hitR(en)){
           en.vortCd = vHit;
-          hitEnemy(en, calcDamage(vx2.dmg,'melee'), angTo(p,en), 180, 'sword', {spin:true});
+          hitEnemy(en, calcDamage(vx2.dmg,'melee'), angTo(p,en), 180, 'vortex', {spin:true});
         }
       }
       if(Math.random()<0.5)
@@ -5883,11 +5964,16 @@ function updatePlayer(dt){
       addRing(p.x, p.y, 10, 300, rr*0.7, FX.friend.frost, 5, 0.4);
       SFX.freeze();
       let cnt = 0;
+      /* IT IS A FROST SPELL NOW, not pure crowd control: it lands elemental
+         damage and lays chill stacks, and the fifth stack freezes solid on its
+         own. Absolute Zero just skips straight to that. */
+      const fdmg = frostDamage();
       for(const en of enemiesNear(p.x, p.y, rr + 80)){
         if(en.dead || en.state!=='active') continue;
         if(dist(en,p) < rr + hitR(en)){
           en.slowT = Math.max(en.slowT, dur);
-          /* Absolute Zero freezes them solid instead of merely slowing them */
+          chillEnemy(en, 1);
+          hitEnemy(en, fdmg, angTo(p,en), 40, 'frost', {});
           if(fz.stun && en.type!=='boss'){
             en.stunT = Math.max(en.stunT||0, FREEZE_STUN_T);
             addSparks(en.x, en.y-16, 6, '#ffffff');
@@ -5896,7 +5982,7 @@ function updatePlayer(dt){
           addSparks(en.x, en.y-16, 3, FX.friend.frost);
         }
       }
-      if(cnt>0) addDmg(p.x, p.y-52, (fz.stun?'FROZEN SOLID ×':'FROZEN ×')+cnt, '#bfe3ff', 16);
+      if(cnt>0) addDmg(p.x, p.y-52, (fz.stun?'FROZEN SOLID ×':'CHILLED ×')+cnt, '#bfe3ff', 16);
     }
   }
   const bo = p.bomb;
@@ -6540,6 +6626,7 @@ function updateEnemy(e, dt){
   if(e.poison) poisonTick(e, dt);
   if(e.bleed)  bleedTick(e, dt);
   if(e.eburn || e.burnt) burnTickEnemy(e, dt);
+  if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
@@ -7191,7 +7278,9 @@ function updateEnemy(e, dt){
       vx = ex*e.speed*0.9; vy = ey*e.speed*0.9;
     }
   }
-  if(e.slowT>0){ vx*=0.45; vy*=0.45; }   /* frozen enemies crawl */
+  /* a chilled body crawls by how deep the chill is; a plain frost hazard with
+     no stacks still uses the old flat slow */
+  if(e.slowT>0){ const m = chillStacksOn(e) ? chillMulOn(e) : 0.45; vx*=m; vy*=m; }
   e.moving = (vx!==0||vy!==0);
   if(e.moving){ e.walk += dt*10; if(e.type!=='knight') e.face={x:vx, y:vy}; }
   else if(!e.docile && e.type!=='knight') e.face = {x:Math.cos(toP), y:Math.sin(toP)};
@@ -8476,7 +8565,7 @@ function updateProjectiles(dt){
         if(e.dead || e.state!=='active' || e.totCd>0) continue;
         if(hitsBody(e, pr.x, pr.y, pr.r)){
           e.totCd = TOTEM_TICK;
-          hitEnemy(e, pr.dmg, angTo(pr,e), 120, 'sword', {spin:true});
+          hitEnemy(e, pr.dmg, angTo(pr,e), 120, 'vortex', {spin:true});
         }
       }
       if(Math.random()<0.6){
@@ -8988,6 +9077,51 @@ function drawBleedMark(c, e){
      as eight deep from across the field */
   c.fillStyle = `rgba(150,16,24,${(0.20 + 0.035*n)*a})`;
   c.beginPath(); c.ellipse(e.x, e.y+2, (7+1.6*n)*s, (2.8+0.5*n)*s, 0, 0, TAU); c.fill();
+}
+/* A BURNING BODY WEARS ITS FIRES: one flame pip per stack across its shoulders,
+   and the BURNT marks above them, because how deep a body is burning decides
+   whether the next bolt breaks it. */
+function drawBurnPips(c, e){
+  const n = burnStacksOn(e), marks = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
+  if(!n && !marks) return;
+  const s = e.scale || 1;
+  if(n){
+    /* a hot haze over the body first */
+    c.fillStyle = `rgba(255,138,60,${Math.min(0.24, 0.05 + 0.04*n)})`;
+    c.beginPath(); c.ellipse(e.x, e.y - 20*s, 14*s, 21*s, 0, 0, TAU); c.fill();
+    /* THE FLAMES BURN AT ITS FEET, not across its chest. Orange pips on the
+       torso of a red imp are invisible; a fire at the base of the body reads
+       from across the field and cannot collide with the health bar or with the
+       poison and wound counts stacked above its head. */
+    const w = 8*s;
+    /* a scorched patch under it, widening with the fire */
+    c.fillStyle = `rgba(90,26,4,${0.14 + 0.05*n})`;
+    c.beginPath(); c.ellipse(e.x, e.y+3, (9+3.4*n)*s, (3.4+0.7*n)*s, 0, 0, TAU); c.fill();
+    for(let i=0;i<n;i++){
+      const px = e.x + (i - (n-1)/2)*w;
+      const py = e.y + 1*s;
+      const h = (8.5 + Math.sin(vtime*13 + i*2.1 + (e.phase||0))*2.2)*s;
+      /* a dark liner first, so the flame reads against a red body */
+      c.fillStyle = 'rgba(58,10,2,0.8)';
+      c.beginPath(); c.moveTo(px, py);
+      c.quadraticCurveTo(px-h*0.62, py-h*0.45, px, py-h*1.15);
+      c.quadraticCurveTo(px+h*0.62, py-h*0.45, px, py);
+      c.fill();
+      c.fillStyle = '#ff6a1a';
+      c.beginPath(); c.moveTo(px, py-h*0.05);
+      c.quadraticCurveTo(px-h*0.44, py-h*0.42, px, py-h*0.98);
+      c.quadraticCurveTo(px+h*0.44, py-h*0.42, px, py-h*0.05);
+      c.fill();
+      c.fillStyle = '#ffb02e';
+      c.beginPath(); c.moveTo(px, py-h*0.12);
+      c.quadraticCurveTo(px-h*0.26, py-h*0.38, px, py-h*0.7);
+      c.quadraticCurveTo(px+h*0.26, py-h*0.38, px, py-h*0.12);
+      c.fill();
+      c.fillStyle = '#fff0b0';
+      c.beginPath(); c.arc(px, py-h*0.3, h*0.15, 0, TAU); c.fill();
+    }
+  }
+  if(marks) tagCount(c, 'BURNT \u00d7'+marks, e.x, e.y - 90*s, s, '#ff9a3c', 'rgba(60,14,2,0.92)');
 }
 const PIP_MAX = 12;          /* beads drawn before the count takes over */
 function drawPoisonPips(c, e){
@@ -11973,6 +12107,7 @@ function drawEnemy(c, e){
      drawFigure is simply painted over by the minifig. */
   drawBleedMark(c, e);
   drawPoisonCount(c, e);
+  drawBurnPips(c, e);
   /* frostbite tint */
   if(e.slowT>0){
     c.save(); c.globalAlpha = 0.45;
