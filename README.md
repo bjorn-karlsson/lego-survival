@@ -147,6 +147,13 @@ disappointment every time:
 Bladestorm counts in **swords**, so an epic roll is +40 of them, and the ceiling is on
 swords in the air — **150** — rather than on ranks.
 
+**Every telegraph is the shape of its own hit test.** A ground circle drawn squashed
+reaches a third further north and south than the picture shows, so anything whose hit test
+is `dist(a,b) < r` — boss shockwaves, the slam, the lingering vortex, a warden's healing
+aura — is drawn as a **true circle**. The boss whirlwind goes further: only the swept arc
+of the blade itself hits, not the disc it sweeps, so standing inside the circle between
+passes is genuinely safe.
+
 **Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
 DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
 reads it — Brickbane's poison is simply the first thing that qualifies.
@@ -296,6 +303,10 @@ the clock rather than queueing behind it.
 | 🍀 **Fortune** | ×2 studs and XP, plus up to **+25% rarity find** on reward rolls | ×2 |
 | 🧲 **Magnet** | Hoovers up every **stud** on the field. Studs only — it will not drag a chest to you | — |
 | 💛 **Golden heart** | **+3 maximum hearts, permanently.** The only prize that outlives its timer | — |
+
+Maximum hearts come from three rungs: `Sturdy Plates` adds them flat, **`Reinforced Frame`**
+is an epic **+40% increased** (+60% at legendary), and `Titanium Chassis` is a legendary
+**100% MORE**, twice over.
 
 ### 🔥 Ailments on you
 
