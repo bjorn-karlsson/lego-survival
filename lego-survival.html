@@ -129,12 +129,16 @@
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
   #weaponRow .diff{position:relative}
-  #weaponRow .diff[data-tip]:hover::after{content:attr(data-tip);position:absolute;
-    left:50%;bottom:calc(100% + 12px);transform:translateX(-50%);white-space:pre;
-    background:#12181d;border:2px solid #ffb900;border-radius:12px;padding:11px 16px;
-    font-size:12px;font-weight:500;color:#f2f3f2;line-height:1.7;text-align:left;
-    z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.75);font-family:'Fredoka';
-    pointer-events:none;letter-spacing:0}
+  .wtip{display:none;position:absolute;left:50%;bottom:calc(100% + 12px);
+    transform:translateX(-50%);white-space:pre;background:#12181d;border:2px solid #ffb900;
+    border-radius:12px;padding:11px 16px;font-size:12px;font-weight:500;color:#f2f3f2;
+    line-height:1.7;text-align:left;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.75);
+    font-family:'Fredoka';pointer-events:none;letter-spacing:0}
+  #weaponRow .diff:hover .wtip{display:block}
+  .wtip b.up{color:#7ddc6a;font-weight:700}
+  .wtip b.dn{color:#ff6a5a;font-weight:700}
+  .wtip i{color:#c9d2ce;font-style:normal}
+  .wtip u{color:#ffd76e;text-decoration:none;font-weight:700}
   .diff{min-width:118px;padding:7px 13px 6px;border-radius:13px;cursor:pointer;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);
     font-family:'Titan One';font-size:13px;letter-spacing:1px;color:#f0e6e6;
@@ -4120,34 +4124,44 @@ function setDifficulty(id){
 /* What a weapon is worth, read against the sword. Every line is the raw number
    and then how it differs from the baseline, because "1.70 base" means nothing
    on its own and "+70%" means everything. */
+/* "a sword", but "an axe" */
+function anA(word){ return (/^[aeiou]/i.test(word) ? 'an ' : 'a ') + word; }
+/* What a weapon is worth, read against the sword. The number and its arrow are
+   the SAME colour — green when the difference helps you, red when it costs you —
+   because a bare "+59%" on swing time reads like good news and is not.
+   The sword prints no delta column at all: it IS the baseline. */
 function weaponTip(w){
   const b = WEAPONS.sword;
+  const isBase = w.id === 'sword';
   const d = (v, base, lowerIsBetter) => {
-    if(Math.abs(v-base) < 1e-9) return 'same as a sword';
+    if(isBase || Math.abs(v-base) < 1e-9) return '';
     const pct = Math.round((v/base - 1)*100);
     const better = lowerIsBetter ? pct < 0 : pct > 0;
-    return (pct>0?'+':'') + pct + '%  ' + (better ? '\u25b2' : '\u25bc');
+    const cls = better ? 'up' : 'dn';
+    const arrow = better ? '\u25b2' : '\u25bc';
+    return `<b class="${cls}">${pct>0?'+':''}${pct}% ${arrow}</b>`;
   };
-  const pad = (t,n) => (t+'                 ').slice(0, n||17);
+  const pad = (t,n) => (t+'                    ').slice(0, n);
+  const row = (label, val, delta) => `<i>${pad(label,17)}</i>${pad(val,8)}${delta}`;
   const L = [];
-  L.push(w.name + (w.id==='sword' ? '  \u2014 the baseline' : ''));
+  L.push(`<u>${w.name}</u>` + (isBase ? '   \u2014 the baseline' : ''));
   L.push(w.blurb);
   L.push('');
-  L.push(pad('Base damage')    + pad(w.dmg.toFixed(2),8)        + d(w.dmg, b.dmg));
-  L.push(pad('Swing time')     + pad(w.rate.toFixed(2)+'s',8)   + d(w.rate, b.rate, true));
-  L.push(pad('Reach')          + pad(String(w.reach),8)         + d(w.reach, b.reach));
-  L.push(pad('Crit chance')    + pad(Math.round(w.crit*100)+'%',8) + d(w.crit, b.crit));
-  L.push(pad('Crit multiplier')+ pad('\u00d7'+(w.critMult/100).toFixed(2),8) + d(w.critMult, b.critMult));
-  L.push(pad('Bleed chance')   + pad('\u00d7'+w.bleed.toFixed(2),8) + d(w.bleed, b.bleed));
-  L.push(pad('Spin swing')     + pad('\u00d7'+w.spin.toFixed(2),8)  + d(w.spin, b.spin));
-  L.push(pad('Knockback')      + pad('\u00d7'+w.kb.toFixed(2),8)    + d(w.kb, b.kb));
+  L.push(row('Base damage',     w.dmg.toFixed(2),                  d(w.dmg, b.dmg)));
+  L.push(row('Swing time',      w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
+  L.push(row('Reach',           String(w.reach),                   d(w.reach, b.reach)));
+  L.push(row('Crit chance',     Math.round(w.crit*100)+'%',        d(w.crit, b.crit)));
+  L.push(row('Crit multiplier', '\u00d7'+(w.critMult/100).toFixed(2), d(w.critMult, b.critMult)));
+  L.push(row('Bleed chance',    '\u00d7'+w.bleed.toFixed(2),        d(w.bleed, b.bleed)));
+  L.push(row('Spin swing',      '\u00d7'+w.spin.toFixed(2),         d(w.spin, b.spin)));
+  L.push(row('Knockback',       '\u00d7'+w.kb.toFixed(2),           d(w.kb, b.kb)));
   L.push('');
   /* one swing a second, crits folded in — the honest single-number comparison */
   const dps = x => (x.dmg * (1 + x.crit*(x.critMult/100 - 1))) / x.rate;
-  L.push(pad('Damage a second') + pad(dps(w).toFixed(2),8) + d(dps(w), dps(b)));
+  L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
   L.push('');
   L.push('Every brick works with every weapon.');
-  L.push('Ability names never change: a ' + w.name.toLowerCase());
+  L.push('Ability names never change: ' + anA(w.name.toLowerCase()));
   L.push('still swings Bladestorm.');
   return L.join('\n');
 }
@@ -4155,7 +4169,8 @@ function buildWeaponRow(){
   const row = document.getElementById('weaponRow');
   if(!row) return;
   row.innerHTML = WEAPON_KEYS.map(id=>
-    `<div class="diff" data-weapon="${id}" data-tip="${esc(weaponTip(WEAPONS[id]))}">${WEAPONS[id].name}</div>`).join('');
+    `<div class="diff" data-weapon="${id}">${WEAPONS[id].name}`+
+    `<span class="wtip">${weaponTip(WEAPONS[id])}</span></div>`).join('');
   for(const el of row.children)
     el.addEventListener('click', ()=>{ SFX.click(); setWeapon(el.dataset.weapon); });
   let saved = 'sword';
@@ -9266,10 +9281,16 @@ function drawFigure(c, o){
   /* The weapon goes down BEFORE the weapon hand, so the grip passes behind the
      fist and the fist closes over it. Drawn the other way round the pommel sat
      on top of the hand and nobody appeared to be holding anything. */
+  /* AT REST THE HERO SHOULDERS IT. A weapon trailing off at the arm's angle
+     read like it had been dropped; carried straight up it reads like it is
+     about to be used. Only the hero does this — a boss mid-swing must not. */
+  const IDLE_UP = -Math.PI/2;
+  const heldAng = (o.hero && o.whirlA === undefined) ? IDLE_UP
+                : (o.whirlA !== undefined ? o.whirlA : null);
   if(o.weapon==='sword' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
     /* dead-on the turn angle: the blade sticks out radially and stays there */
-    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.6);
+    c.rotate(heldAng !== null ? heldAng : aR+0.6);
     drawBlade(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
@@ -9277,13 +9298,13 @@ function drawFigure(c, o){
      swing arc draws the weapon during a swing instead of it appearing twice */
   if(o.weapon==='axe' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.6);
+    c.rotate(heldAng !== null ? heldAng : aR+0.6);
     drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
   if(o.weapon==='pstaff' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.6);
+    c.rotate(heldAng !== null ? heldAng : aR+0.6);
     drawStaffArt(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
@@ -9291,7 +9312,7 @@ function drawFigure(c, o){
     c.save(); c.translate(handR2.x,handR2.y);
     /* overhead at -2.0, through the arc, into the floor at +1.1 */
     c.rotate(o.slam !== undefined ? (-2.0 + clamp(o.slam,0,1)*3.1)
-      : o.whirlA !== undefined ? o.whirlA : aR+0.5);
+      : heldAng !== null ? heldAng : aR+0.5);
     drawMace(c, s*((o.whirlA !== undefined || o.slam !== undefined) ? 1.15 : 1));
     c.restore();
   }
@@ -9634,25 +9655,39 @@ function drawGreatsword(c, s){
    a throw is just a rotation. */
 function drawAxe(c, s, bright){
   c.lineJoin = 'round';
-  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 2;
+  const dark = 'rgba(20,30,40,0.55)';
+  const steel = bright ? '#ffffff' : '#cfd6dd';
+  /* the haft, running the whole length so the head sits ON it */
+  c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = PAL.brown;
-  c.fillRect(-7*s, -2.2*s, 32*s, 4.4*s);
-  c.strokeRect(-7*s, -2.2*s, 32*s, 4.4*s);
-  c.fillStyle = bright ? '#ffffff' : '#cfd6dd';
+  c.fillRect(-9*s, -2.4*s, 40*s, 4.8*s);
+  c.strokeRect(-9*s, -2.4*s, 40*s, 4.8*s);
+  /* THE HEAD. A real axe is a wedge that flares from the eye out to a long
+     curved bit, with a beard hooking back underneath — not a lollipop. */
+  c.fillStyle = steel;
   c.beginPath();
-  c.moveTo(19*s, -3*s);
-  c.quadraticCurveTo(34*s, -17*s, 33*s, 0);
-  c.quadraticCurveTo(34*s, 17*s, 19*s, 3*s);
+  c.moveTo(17*s, -4*s);            /* the eye, top */
+  c.lineTo(26*s, -15*s);           /* shoulder flaring out and up */
+  c.quadraticCurveTo(35*s, -13*s, 36*s, -3*s);   /* the toe */
+  c.quadraticCurveTo(37*s,  6*s,  30*s, 14*s);   /* the bit, bulging forward */
+  c.lineTo(21*s, 15*s);            /* the beard, hooking back under the haft */
+  c.quadraticCurveTo(19*s, 8*s, 17*s, 4*s);
   c.closePath(); c.fill(); c.stroke();
-  c.strokeStyle = bright ? '#dddddd' : '#eef2f4'; c.lineWidth = 1.4;
-  c.beginPath(); c.moveTo(22*s, -8*s); c.quadraticCurveTo(28*s, 0, 22*s, 8*s); c.stroke();
-  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 2;
-  c.fillStyle = bright ? '#f0f0f0' : '#9ba19d';
+  /* the cutting edge, a bright line inset from the bit */
+  c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
   c.beginPath();
-  c.moveTo(19*s, -2.6*s); c.lineTo(11*s, -8*s); c.lineTo(12*s, 0); c.lineTo(19*s, 2.6*s);
+  c.moveTo(32*s, -6*s);
+  c.quadraticCurveTo(33*s, 4*s, 27*s, 11*s);
+  c.stroke();
+  /* the eye: a darker band where the haft passes through the head */
+  c.strokeStyle = dark; c.lineWidth = 2;
+  c.fillStyle = bright ? '#c8ced4' : '#9ba19d';
+  c.beginPath();
+  c.moveTo(15*s, -5*s); c.lineTo(21*s, -5*s); c.lineTo(21*s, 5*s); c.lineTo(15*s, 5*s);
   c.closePath(); c.fill(); c.stroke();
+  /* a butt cap, so the grip end reads as a grip */
   c.fillStyle = PAL.gold;
-  c.fillRect(-9*s, -3*s, 3*s, 6*s); c.strokeRect(-9*s, -3*s, 3*s, 6*s);
+  c.fillRect(-11*s, -3.2*s, 3.4*s, 6.4*s); c.strokeRect(-11*s, -3.2*s, 3.4*s, 6.4*s);
 }
 /* The hero's staff: a bound shaft with a stone in the head. Its THROWN art is a
    sword, because the staff's own spellwork is not built yet. */
@@ -11267,7 +11302,7 @@ function drawHero(c){
     face: wh!==undefined ? {x:Math.cos(wh), y:Math.sin(wh)} : p.face,
     walk:p.walk, moving:p.moving,
     flash:p.flash, blink:p.blink, colors:HERO_COLORS, style:'hero',
-    weapon: heldArt(), bladeAng: (wh===undefined && sw) ? sw.cur : undefined,
+    hero:true, weapon: heldArt(), bladeAng: (wh===undefined && sw) ? sw.cur : undefined,
     whirlA: wh, elite:false, phase:0 });
   c.globalAlpha = 1;
   drawPlayerWeapon(c);
@@ -12450,7 +12485,7 @@ function renderTitle(){
   const swA = mt < 0.35 ? (-2.4 + (mt/0.35)*3.4) : undefined;
   drawFigure(c, { x:mx, y:my, s:ms, face:{x:-0.5,y:0.9}, walk:0, moving:false,
     flash:0, blink: ((vtime%3.1)<0.13)?1:0, colors:HERO_COLORS, style:'hero',
-    weapon: heldArt(), bladeAng: swA, elite:false, phase:0 });
+    hero:true, weapon: heldArt(), bladeAng: swA, elite:false, phase:0 });
 }
 let titleClock = 0;
 
