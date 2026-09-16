@@ -505,11 +505,18 @@ Everything below is written by hand in one `<script>`, against a 2D canvas.
 
 <br>
 
-<kbd>F1</kbd> during play opens a bench that grants any brick at any rarity, jumps to any
-wave, and switches difficulty live. Hovering a card shows the full now → next comparison;
-<kbd>Shift</kbd>+scroll on one changes its rarity between that card's own minimum and
-maximum. It is how the numbers in this README were balanced. It is deliberately not
-advertised on the menu.
+Type <kbd>1</kbd><kbd>3</kbd><kbd>3</kbd><kbd>7</kbd> during play — in order, unbroken —
+and a bench opens that grants any brick at any rarity, jumps to any wave, and switches
+difficulty live. Each card opens at its **own lowest rarity**, which is what you want when
+you are balancing: you see what it is worth when it actually drops. Hovering shows the full
+now → next comparison; <kbd>Shift</kbd>+scroll walks the rarity up.
+
+It also has a **sandbox**: switch it on and no wave ever arrives, then put any of the 37
+monsters or 8 bosses in front of you on demand — <kbd>Shift</kbd>-click for an elite,
+right-click for five.
+
+It is how the numbers in this README were balanced, and it is deliberately not advertised
+anywhere in the game.
 
 </details>
 

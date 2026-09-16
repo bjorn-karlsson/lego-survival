@@ -277,7 +277,7 @@
   <div class="sheet">
     <div class="sheethead">
       <h2>TEST BENCH</h2>
-      <div class="sheetsub">Give yourself anything, jump to any wave. Hover a brick to see what it would change. F1 or ESC to close.</div>
+      <div class="sheetsub">Give yourself anything, jump to any wave. Hover a brick to see what it would change. ESC to close — type 1337 to open it again.</div>
     </div>
     <div class="sheetbody">
       <div class="seclabel">WAVE</div>
@@ -292,7 +292,7 @@
       <div class="cheatrow" id="cheatSandbox"></div>
       <div class="cheatrow" id="cheatSpawn"></div>
     </div>
-    <div class="sheetfoot">F1 or ESC to close</div>
+    <div class="sheetfoot">ESC to close · type <b>1337</b> during play to open it</div>
   </div>
 </div>
 
@@ -1093,7 +1093,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
-  if(e.code==='F1' && (state==='play'||state==='cheat')){ e.preventDefault(); toggleCheat(); }
+  if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR') doReroll();
@@ -1184,6 +1184,32 @@ function schedule(delay, fn){ sched.push({t:delay, fn}); }
 function queuePick(mode, rar){ pendingPicks.push({mode, rar}); }
 function addShake(a){ cam.shake = Math.min(0.55, cam.shake + a*0.5); }
 function showBanner(text, sub, color='#ffb900', dur=1.7, size=54){ banner = {text, sub, color, dur, size, t:0}; }
+
+/* THE CODE. The bench is not on a key any more — you type 1337, in order, and it
+   opens. A sliding matcher, not a buffer: every key either advances the chain or
+   breaks it, and a key that breaks it still gets a chance to START a new one, so
+   11337 works (the tail is a clean 1337) while 13437 does not (the 4 breaks it
+   and 3 cannot open a fresh chain). Nothing is remembered between attempts. */
+const CHEAT_CODE = ['Digit1','Digit3','Digit3','Digit7'];
+let cheatIdx = 0;
+function cheatCode(code){
+  /* only the digits are part of the language — anything else is the player
+     playing, and must not break a chain they are halfway through */
+  if(!/^Digit[0-9]$/.test(code) && !/^Numpad[0-9]$/.test(code)) return;
+  const key = code.replace('Numpad', 'Digit');
+  if(key === CHEAT_CODE[cheatIdx]){
+    cheatIdx++;
+  } else {
+    /* broken — but this same key may be the first of the next attempt */
+    cheatIdx = (key === CHEAT_CODE[0]) ? 1 : 0;
+  }
+  if(cheatIdx === CHEAT_CODE.length){
+    cheatIdx = 0;
+    showBanner('1337', 'test bench unlocked', '#9b45d6', 1.4, 46);
+    SFX.fortune();
+    toggleCheat();
+  }
+}
 
 /* =============================== PLAYER =============================== */
 function newPlayer(){
@@ -4054,7 +4080,7 @@ function benchRarStep(u, dir){
 }
 /* =============================== TEST BENCH =============================== */
 /* A developer shortcut: hand yourself any brick at epic and max it out, or jump
-   straight to a wave. F1 toggles it during play. */
+   straight to a wave. Type 1337 during play to open it. */
 /* One click, one pick — the bench hands out a single brick at a time so you can
    walk a stat up and watch it change, and it stops dead at the same ceiling the
    real run does. Right-click takes every copy of that brick back out. */
