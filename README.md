@@ -90,6 +90,12 @@ is slow and crits rarely. The staff is not finished; it swings exactly like a sw
 **flat physical damage** and `Blade Mastery` grants **increased physical damage**, so every
 brick works with every weapon and no build is locked to one.
 
+**The art follows the weapon too.** You hold what you picked, you swing it, and your spells
+throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
+orbits the same. Each weapon names a *held* art and a *thrown* art, so the staff can carry
+its own stone-headed shaft while still throwing swords until its own spellwork exists.
+Hover a weapon on the title screen for the full comparison against the sword.
+
 ### 🩸 Elements & ailments
 
 Fire, frost and lightning each stack. **The fifth stack breaks something**: burning
