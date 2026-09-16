@@ -10230,40 +10230,53 @@ function drawGreatsword(c, s){
    a throw is just a rotation. */
 function drawAxe(c, s, bright){
   c.lineJoin = 'round';
+
   const dark = 'rgba(20,30,40,0.55)';
   const steel = bright ? '#ffffff' : '#cfd6dd';
-  /* THE HEAD IS MOUNTED ACROSS THE HAFT, not along it. An axe bit sits at right
-     angles to the shaft with its edge running parallel to it — a head pointing
-     the same way the handle does is a mace on a stick, which is exactly what
-     this looked like. Haft along +x, head standing off to one side. */
-  c.strokeStyle = dark; c.lineWidth = 2;
+
+  // Haft
+  c.strokeStyle = dark;
+  c.lineWidth = 2;
   c.fillStyle = PAL.brown;
   c.fillRect(-9*s, -2.4*s, 43*s, 4.8*s);
   c.strokeRect(-9*s, -2.4*s, 43*s, 4.8*s);
-  /* the bit: rooted on the haft, flaring up and out, edge running along x */
+
+  // Axe head — flipped 180 degrees
   c.fillStyle = steel;
   c.beginPath();
-  c.moveTo(20*s, -2*s);                                 /* root, toe side */
-  c.lineTo(15*s, -12*s);                                /* the beard, hooking back */
-  c.quadraticCurveTo(24*s, -22*s, 36*s, -19*s);         /* THE EDGE, along the haft */
-  c.quadraticCurveTo(34*s, -9*s, 31*s, -2*s);           /* heel back down to the haft */
-  c.closePath(); c.fill(); c.stroke();
-  /* the bevel, traced just inside the edge */
-  c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
-  c.beginPath();
-  c.moveTo(17*s, -13*s);
-  c.quadraticCurveTo(25*s, -19.5*s, 34*s, -17*s);
+  c.moveTo(20*s, 2*s);                                  // root
+  c.lineTo(15*s, 12*s);                                 // beard
+  c.quadraticCurveTo(24*s, 22*s, 36*s, 19*s);           // cutting edge
+  c.quadraticCurveTo(34*s, 9*s, 31*s, 2*s);             // heel
+  c.closePath();
+  c.fill();
   c.stroke();
-  /* the eye — the dark collar where the haft passes through the head */
-  c.strokeStyle = dark; c.lineWidth = 2;
+
+  // Bevel — also flipped 180°
+  c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa';
+  c.lineWidth = 2.2;
+  c.beginPath();
+  c.moveTo(17*s, 13*s);
+  c.quadraticCurveTo(25*s, 19.5*s, 34*s, 17*s);
+  c.stroke();
+
+  // Eye
+  c.strokeStyle = dark;
+  c.lineWidth = 2;
   c.fillStyle = bright ? '#c8ced4' : '#9ba19d';
   c.beginPath();
-  c.moveTo(21*s, -5.5*s); c.lineTo(30*s, -5.5*s);
-  c.lineTo(30*s, 3.4*s);  c.lineTo(21*s, 3.4*s);
-  c.closePath(); c.fill(); c.stroke();
-  /* butt cap, so the grip end reads as a grip */
+  c.moveTo(21*s, 5.5*s);
+  c.lineTo(30*s, 5.5*s);
+  c.lineTo(30*s, -3.4*s);
+  c.lineTo(21*s, -3.4*s);
+  c.closePath();
+  c.fill();
+  c.stroke();
+
+  // Butt cap
   c.fillStyle = PAL.gold;
-  c.fillRect(-11*s, -3.2*s, 3.4*s, 6.4*s); c.strokeRect(-11*s, -3.2*s, 3.4*s, 6.4*s);
+  c.fillRect(-11*s, -3.2*s, 3.4*s, 6.4*s);
+  c.strokeRect(-11*s, -3.2*s, 3.4*s, 6.4*s);
 }
 /* The hero's staff: a bound shaft with a stone in the head. Its THROWN art is a
    sword, because the staff's own spellwork is not built yet. */
