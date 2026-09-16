@@ -4492,7 +4492,9 @@ function buildDiffRow(){
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
-  { name:'ELEMENTAL',       ids:['elemflat','eleminc','firinc','boltarea'] },
+  /* ELEMENTAL is the GLOBAL tree: pools every elemental source reads, wherever
+     it came from. The fireball's own numbers live with the fireball. */
+  { name:'ELEMENTAL',       ids:['eleminc','firinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
@@ -4503,6 +4505,7 @@ const BENCH_SECTIONS = [
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
+  { name:'FIREBALL',        ids:['elemflat','boltarea'] },
   { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] },
   { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','baneburst'] }
 ];
@@ -6675,9 +6678,15 @@ function updateEnemy(e, dt){
   /* How far this body actually travelled last frame. Bleed reads it, and it has
      to be MEASURED rather than taken off the AI's intent: a monster shoving
      against a rock, frozen solid, or winding up an attack is standing still no
-     matter what it meant to do. */
-  e.spdNow = dt > 0 ? Math.hypot(e.x - (e.lx ?? e.x), e.y - (e.ly ?? e.y)) / dt : 0;
-  e.lx = e.x; e.ly = e.y;
+     matter what it meant to do.
+
+     THE FIELD NAMES MATTER HERE. `lx`/`ly` were already taken: they hold the
+     UNIT DIRECTION a charging or lunging body committed to. Storing a position
+     in them meant the next frame read `vx = e.lx * chargeSpd` as roughly two
+     thousand times four hundred and thirty, and every golem, direbat, lancer
+     and boss that charged was flung into the far corner of the map. */
+  e.spdNow = dt > 0 ? Math.hypot(e.x - (e._spx ?? e.x), e.y - (e._spy ?? e.y)) / dt : 0;
+  e._spx = e.x; e._spy = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
   e.orbCd -= dt;
   e.vortCd -= dt; e.whirlCd = Math.max(0, (e.whirlCd||0) - dt);
