@@ -277,7 +277,7 @@
   <div class="sheet">
     <div class="sheethead">
       <h2>TEST BENCH</h2>
-      <div class="sheetsub">Give yourself anything, jump to any wave. Hover a brick to see what it would change. F1 or ESC to close.</div>
+      <div class="sheetsub">Give yourself anything, jump to any wave. Hover a brick to see what it would change. ESC to close — type 1337 to open it again.</div>
     </div>
     <div class="sheetbody">
       <div class="seclabel">WAVE</div>
@@ -288,8 +288,11 @@
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
+      <div class="seclabel">SANDBOX — TURN IT ON AND NO WAVE EVER ARRIVES. CLICK A MONSTER TO PUT ONE IN FRONT OF YOU (SHIFT-CLICK FOR AN ELITE, RIGHT-CLICK FOR FIVE)</div>
+      <div class="cheatrow" id="cheatSandbox"></div>
+      <div class="cheatrow" id="cheatSpawn"></div>
     </div>
-    <div class="sheetfoot">F1 or ESC to close</div>
+    <div class="sheetfoot">ESC to close · type <b>1337</b> during play to open it</div>
   </div>
 </div>
 
@@ -593,6 +596,17 @@ function syncStats(){
   /* bleed: a flat chance pool and a share of the hit, both hard-capped */
   p.bleedChance = clamp(p.bleedChanceFlat||0, 0, 1);
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
+  /* --- everything that used to be capped where the card wrote it ------------
+     Same shape every time: (base + flat) x (1 + sum increased) x each more,
+     and THEN the ceiling. */
+  p.armour      = pool(0, p.armourFlat, 0, 1);      /* the flat pool; armourValue() finishes it */
+  p.reach       = Math.min(REACH_MAX,     pool(0, p.reachFlat, 0, 1));
+  p.suppress    = Math.min(1,             pool(0, p.suppressFlat, 0, 1));
+  p.critMultPct = Math.min(CRIT_MULT_CAP, pool(CRIT_MULT_BASE, p.critMultFlat, 0, 1));
+  p.regenRate   = Math.min(REGEN_MAX,     pool(0, p.regenFlat, i.regen, 1));
+  p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
+  p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
+  for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -753,8 +767,13 @@ const CRIT_MULT_CAP   = 600;
 /* Armour mitigates ATTACK hits: DR = Armour / (Armour + 5 × hit damage), so a
    big hit punches through armour that shrugs off small ones. */
 const ARMOUR_DR_CAP   = 0.85;
-const ARMOUR_FLAT_MAX = 520;   /* flat armour from bricks */
-const ARMOUR_INC_MAX  = 2.0;   /* and the increases on top of it */
+const ARMOUR_FLAT_MAX = 520;   /* what the bricks can pour into the flat pool */
+const ARMOUR_INC_MAX  = 2.0;   /* and the increases that used to be capped too */
+/* THE CEILING IS ON THE FINISHED NUMBER, not on either pool that feeds it:
+   520 flat carrying +200% increased is 1560, and that is the wall. Capping the
+   pools separately meant an increase stopped being worth anything the moment
+   the flat pool filled, which is exactly the trap this model exists to avoid. */
+const ARMOUR_VALUE_MAX = ARMOUR_FLAT_MAX * (1 + ARMOUR_INC_MAX);
 /* Spell suppression is a separate layer on SPELL hits: a suppressed hit lands
    for half. At 100% chance every applicable spell hit is suppressed. */
 const SUPPRESS_TAKEN  = 0.5;
@@ -1090,7 +1109,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
-  if(e.code==='F1' && (state==='play'||state==='cheat')){ e.preventDefault(); toggleCheat(); }
+  if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR') doReroll();
@@ -1182,6 +1201,32 @@ function queuePick(mode, rar){ pendingPicks.push({mode, rar}); }
 function addShake(a){ cam.shake = Math.min(0.55, cam.shake + a*0.5); }
 function showBanner(text, sub, color='#ffb900', dur=1.7, size=54){ banner = {text, sub, color, dur, size, t:0}; }
 
+/* THE CODE. The bench is not on a key any more — you type 1337, in order, and it
+   opens. A sliding matcher, not a buffer: every key either advances the chain or
+   breaks it, and a key that breaks it still gets a chance to START a new one, so
+   11337 works (the tail is a clean 1337) while 13437 does not (the 4 breaks it
+   and 3 cannot open a fresh chain). Nothing is remembered between attempts. */
+const CHEAT_CODE = ['Digit1','Digit3','Digit3','Digit7'];
+let cheatIdx = 0;
+function cheatCode(code){
+  /* only the digits are part of the language — anything else is the player
+     playing, and must not break a chain they are halfway through */
+  if(!/^Digit[0-9]$/.test(code) && !/^Numpad[0-9]$/.test(code)) return;
+  const key = code.replace('Numpad', 'Digit');
+  if(key === CHEAT_CODE[cheatIdx]){
+    cheatIdx++;
+  } else {
+    /* broken — but this same key may be the first of the next attempt */
+    cheatIdx = (key === CHEAT_CODE[0]) ? 1 : 0;
+  }
+  if(cheatIdx === CHEAT_CODE.length){
+    cheatIdx = 0;
+    showBanner('1337', 'test bench unlocked', '#9b45d6', 1.4, 46);
+    SFX.fortune();
+    toggleCheat();
+  }
+}
+
 /* =============================== PLAYER =============================== */
 function newPlayer(){
   return {
@@ -1199,7 +1244,17 @@ function newPlayer(){
        hearts that sit under the hp pool. Nothing here is ever read directly by
        the game — syncStats() turns them into the numbers that are. */
     hpFlat:0, hpMore:1, baneDotFlat:0,
-    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0,
+    /* THE FLAT POOLS. A card adds to one of these; it never writes the stat it
+       feeds. The pools are UNCAPPED on purpose — a ceiling belongs on the
+       finished number, after the increases and the more multipliers have had
+       their say, or an increase quietly stops being worth anything the moment
+       the flat pool fills up. syncStats() does the capping. */
+    armourFlat:0, regenFlat:0, critMultFlat:0, suppressFlat:0, reachFlat:0,
+    resFlat:{ fire:0, frost:0, shock:0 },
+    /* XP used to keep an increase and a MORE in the same field, one `+=` and
+       one `*=` fighting over it. They are two pools now, as they must be. */
+    xpInc:0, xpMore:1,
+    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0, regen:0, heart:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
           /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
@@ -2008,7 +2063,10 @@ const COIL_SPREAD_MAX = 330;
    the whole reason a wave-50 boss used to plink for a tenth of a heart: every
    bolt in the game was written `dmg:1` and never grew. */
 const SHOT_SHARE = { arrow:0.85, bolt:0.80, frostbolt:0.80, batbolt:0.50,
-                     skull:0.34, hexbolt:0.30 };
+                     skull:0.34, hexbolt:0.30,
+                     /* the thrown ones: a brick to the head should be worth more
+                        than an arrow, and these were all hardcoded at 1 */
+                     vbrick:1.10, jrock:1.30, spit:0.70 };
 function shotPow(src, kind){
   return Math.max(1, Math.round(((src && src.dmg) || 1) * (SHOT_SHARE[kind] || 0.6) * 10) / 10);
 }
@@ -2640,20 +2698,21 @@ const WARD_MAX = 2;
 function wardArmour(){ return player.wardT > 0 ? WARD_ARMOUR * player.wardN : 0; }
 function wardRes(){ return player.wardT > 0 ? WARD_RES * player.wardN : 0; }
 function armourValue(){
-  /* the ward is FLAT armour, so it joins the flat pool and the increases apply
-     to it too — it used to be bolted on after, which made increased armour
-     quietly worth less while a ward was up */
-  return Math.max(0, (player.armour + wardArmour()) * (1 + player.incArmour)
-    * (1 - player.curse.armor));
+  /* (base + every flat source, the ward included) x (1 + the one increased
+     pool) x the one LESS multiplier a curse applies — then the ceiling. */
+  return Math.min(ARMOUR_VALUE_MAX, Math.max(0,
+    (player.armour + wardArmour()) * (1 + player.incArmour) * (1 - player.curse.armor)));
 }
 function suppressChance(){ return clamp(player.suppress, 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
 function elemTake(elem){
-  /* a SUNDERED hero keeps less of their resistance; a BRANDED one has had it
-     burned, frozen or shocked out of them, one stack at a time */
-  let r = (player.res[elem] || 0) * (1 - player.curse.resist);
-  r += wardRes();                       /* the ward is not something a curse can strip */
-  r -= BRAND_STEP * (player.brand[elem] || 0);
+  /* FLAT POOL FIRST — your own resistance, the ward's, and the brands burned,
+     frozen or shocked out of you, which are a flat penalty and not a multiplier.
+     THEN the one LESS multiplier, a SUNDERED curse, over the whole pool.
+     It only bites on resistance you actually HAVE: a curse strips what you
+     carry, it cannot hand resistance to a hero already under water. */
+  const flat = (player.res[elem] || 0) + wardRes() - BRAND_STEP * (player.brand[elem] || 0);
+  const r = flat > 0 ? flat * (1 - player.curse.resist) : flat;
   return 1 - clamp(r, RES_FLOOR, RES_CAP);
 }
 /* what the brand pile is costing you, for the sheet */
@@ -2959,6 +3018,9 @@ const ROSTER = [
   { k:'impmaster',   at:33, cost:50, flavour:0.7 },
   { k:'overseer',    at:39, cost:55, flavour:0.6 }
 ];
+/* SANDBOX. Waves stop coming and nothing spawns on its own, so the arena is
+   whatever you put in it — one monster at a time, as many as you like. */
+let sandbox = false;
 const MONSTER_COST = {};
 for(const r of ROSTER) MONSTER_COST[r.k] = r.cost;
 /* siege units never travel through the roster, so they need their price set by
@@ -3214,6 +3276,9 @@ function updateCall(dt){
   } else wave.callT = Math.max(0, (wave.callT||0) - dt*2.2);
 }
 function updateWave(dt){
+  /* in the sandbox the clock simply does not run: no timer, no queue, no next
+     wave, and whatever you spawned stays the only thing on the field */
+  if(sandbox) return;
   wave.t += dt;
   updateCall(dt);
   if(wave.state==='ready'){
@@ -3438,25 +3503,25 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside the increased pool`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
   { id:'armor', name:'Reinforced Armour', icon:'shield', cls:'DEFENSE',
-    req:()=>player.armour < ARMOUR_FLAT_MAX,
+    req:()=>player.armourFlat < ARMOUR_FLAT_MAX && armourValue() < ARMOUR_VALUE_MAX,
     calc:m=>({v:Math.round(14+10*m)}),
     desc:c=>`+${c.v} flat armour (cap ${ARMOUR_FLAT_MAX}) — less damage from attacks, never from spells`,
-    apply:c=>{ player.armour = Math.min(ARMOUR_FLAT_MAX, player.armour + c.v); } },
+    apply:c=>{ player.armourFlat += c.v; syncStats(); } },
   { id:'armorinc', name:'Plated Rig', icon:'shieldplus', cls:'DEFENSE',
-    req:()=>player.armour>0 && player.incArmour < ARMOUR_INC_MAX,
+    req:()=>player.armourFlat>0 && armourValue() < ARMOUR_VALUE_MAX,
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased armour (cap ${Math.round(ARMOUR_INC_MAX*100)}%)`,
-    apply:c=>{ player.incArmour = Math.min(ARMOUR_INC_MAX, player.incArmour + c.v); } },
+    apply:c=>{ player.incArmour += c.v; syncStats(); } },
   { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
     req:()=>player.suppress < 1,
     calc:m=>({v:0.08+0.06*m}),
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
-    apply:c=>{ player.suppress = Math.min(1, player.suppress + c.v); } },
+    apply:c=>{ player.suppressFlat += c.v; syncStats(); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     req:()=>player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} sword attack range (cap ${56+REACH_MAX})`,
-    apply:c=>{ player.reach = Math.min(REACH_MAX, player.reach + c.v); } },
+    apply:c=>{ player.reachFlat += c.v; syncStats(); } },
   { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
     req:()=>player.atkRate > ATK_RATE_MIN,
     calc:m=>({v:0.10+0.05*m}),
@@ -3471,23 +3536,38 @@ const UPGRADES = [
     req:()=>player.critMultPct < CRIT_MULT_CAP,
     calc:m=>({v:Math.round(6+4.5*m)}),
     desc:c=>`+${c.v}% to critical strike multiplier (cap ${CRIT_MULT_CAP}%)`,
-    apply:c=>{ player.critMultPct = Math.min(CRIT_MULT_CAP, player.critMultPct + c.v); } },
+    apply:c=>{ player.critMultFlat += c.v; syncStats(); } },
   { id:'hp', name:'Sturdy Plates', icon:'heartplus', cls:'DEFENSE',
     req:()=>player.maxHp < heartCap(),
     calc:m=>({v:Math.max(2,Math.round(2*m))}),
     desc:c=>`+${c.v} FLAT max hearts, and heal what they add (cap ${heartCap()})`,
     apply:c=>{ addMaxHp(c.v); } },
+  /* the middle rung of the health ladder: Sturdy Plates adds flat hearts at the
+     bottom, Titanium Chassis is a legendary MORE at the top, and nothing in
+     between multiplied what the flat ones gave you. This does. */
+  { id:'hpinc', name:'Reinforced Frame', icon:'heartplus', cls:'DEFENSE', minRar:'epic',
+    req:()=>player.maxHp < heartCap(),
+    calc:m=>({v: m >= 4.3 ? 0.60 : 0.40}),
+    desc:c=>{
+      const before = player.maxHp;
+      const after = Math.min(heartCap(), Math.round(pool(HP_BASE, player.hpFlat, player.inc.hp + c.v, player.hpMore)));
+      return `${Math.round(c.v*100)}% INCREASED maximum hearts — `+
+        `${before} → ${after}, and it heals what it adds (cap ${heartCap()})`;
+    },
+    apply:c=>{ const before = player.maxHp;
+      player.inc.hp += c.v; syncStats();
+      if(player.maxHp > before) player.hp = Math.round(Math.min(player.maxHp, player.hp + (player.maxHp-before))*100)/100; } },
     { id:'regen', name:'Repair Bricks', icon:'regen', cls:'DEFENSE',
     req:()=>player.regenRate < REGEN_MAX,
     calc:m=>({v:0.035+0.022*m}),
     desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second per ${REGEN_REF_HP} max hearts `+
       `— it scales with your bar (cap ${REGEN_MAX.toFixed(2)})`,
-    apply:c=>{ player.regenRate = Math.min(REGEN_MAX, player.regenRate + c.v); } },
+    apply:c=>{ player.regenFlat += c.v; syncStats(); } },
   { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
     req:()=>player.heartChance < HEART_CHANCE_MAX,
     calc:m=>({v:Math.round(14+10*m)}),
     desc:c=>`${c.v}% INCREASED heart drop chance (cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
-    apply:c=>{ player.heartChance = Math.min(HEART_CHANCE_MAX, player.heartChance + c.v/100); } },
+    apply:c=>{ player.inc.heart += c.v/100; syncStats(); } },
   { id:'spd', name:'Sprint Studs', icon:'boot', cls:'UTILITY',
     req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
@@ -3510,27 +3590,27 @@ const UPGRADES = [
   { id:'wisdom', name:'Stud Wisdom', icon:'xp', cls:'UTILITY',
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% MORE XP — its own multiplier, so they compound`,
-    apply:c=>{ player.xpMul *= (1+c.v); } },
+    apply:c=>{ player.xpMore *= (1+c.v); syncStats(); } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.fire < RES_CAP,
+    req:()=>player.resFlat.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% fire resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.fire = Math.min(RES_CAP, player.res.fire + c.v); } },
+    apply:c=>{ player.resFlat.fire += c.v; syncStats(); } },
   { id:'resfrost', name:'Thermal Lining', icon:'snow', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.frost < RES_CAP,
+    req:()=>player.resFlat.frost < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% frost resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.frost = Math.min(RES_CAP, player.res.frost + c.v); } },
+    apply:c=>{ player.resFlat.frost += c.v; syncStats(); } },
   { id:'resshock', name:'Rubber Soles', icon:'bolt', cls:'DEFENSE', minRar:'rare',
-    req:()=>player.res.shock < RES_CAP,
+    req:()=>player.resFlat.shock < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
     desc:c=>`+${Math.round(c.v*100)}% lightning resistance (cap ${Math.round(RES_CAP*100)}%)`,
-    apply:c=>{ player.res.shock = Math.min(RES_CAP, player.res.shock + c.v); } },
+    apply:c=>{ player.resFlat.shock += c.v; syncStats(); } },
   { id:'resall', name:'Elementalist Bricks', icon:'prism', cls:'DEFENSE', minRar:'rare',
-    req:()=>ELEMENTS.some(el=>player.res[el] < RES_CAP),
+    req:()=>ELEMENTS.some(el=>player.resFlat[el] < RES_CAP),
     calc:m=>({v:0.025+0.022*m}),
     desc:c=>`+${Math.round(c.v*100)}% to fire, frost AND lightning resistance`,
-    apply:c=>{ for(const el of ELEMENTS) player.res[el] = Math.min(RES_CAP, player.res[el] + c.v); } },
+    apply:c=>{ for(const el of ELEMENTS) player.resFlat[el] += c.v; syncStats(); } },
   { id:'orbit', name:'Guardian Brick', icon:'orbit', cls:'SPELL', minRar:'uncommon',
     req:()=>canTakeSpell('orbit') && player.orbit.n < orbitMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -3883,11 +3963,11 @@ const FAV_WEIGHT = 3.2;
 const FAV_PERKS = {
   none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
-    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armour += 10;
-      p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpMul += 0.10; } },
+    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
+      p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
   sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
     apply(p){ p.flatSword += 1; p.inc.atk += 0.09;
-      p.reach = Math.min(REACH_MAX, p.reach + 8); } },
+      p.reachFlat += 8; } },
   orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
@@ -3915,9 +3995,9 @@ const FAV_PERKS = {
       p.baneDotFlat += 0.4; } },
   tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
-    apply(p){ p.hpFlat += 2; p.hp += 2; p.armour += 25;
-      for(const el of ELEMENTS) p.res[el] = Math.min(RES_CAP, p.res[el] + 0.08);
-      p.regenRate = Math.min(REGEN_MAX, p.regenRate + 0.02); } }
+    apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
+      for(const el of ELEMENTS) p.resFlat[el] += 0.08;
+      p.regenFlat += 0.02; } }
 };
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];
@@ -3986,7 +4066,7 @@ const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
-  { name:'SURVIVAL',        ids:['hp','regen','heart','armor','armorinc','suppress','morehp'] },
+  { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
@@ -4009,13 +4089,17 @@ function benchRange(u){
   const hi = (u.minRar === 'legendary') ? LEGENDARY_RANK : rarRank('epic');
   return [lo, Math.max(lo, hi)];
 }
+/* The bench used to open every brick at EPIC, which is a terrible default for
+   balancing: you are shown the best roll of every card and have to scroll each
+   one down to see what it is actually worth when it drops. It opens at each
+   brick's OWN floor now, and shift+scroll walks up from there. */
 function benchRarOf(u){
   const [lo, hi] = benchRange(u);
-  return RAR_ORDER[clamp(benchRar[u.id] ?? hi, lo, hi)];
+  return RAR_ORDER[clamp(benchRar[u.id] ?? lo, lo, hi)];
 }
 function benchRarStep(u, dir){
   const [lo, hi] = benchRange(u);
-  const cur = clamp(benchRar[u.id] ?? hi, lo, hi);
+  const cur = clamp(benchRar[u.id] ?? lo, lo, hi);
   const next = clamp(cur + dir, lo, hi);
   if(next === cur) return false;
   benchRar[u.id] = next;
@@ -4023,7 +4107,7 @@ function benchRarStep(u, dir){
 }
 /* =============================== TEST BENCH =============================== */
 /* A developer shortcut: hand yourself any brick at epic and max it out, or jump
-   straight to a wave. F1 toggles it during play. */
+   straight to a wave. Type 1337 during play to open it. */
 /* One click, one pick — the bench hands out a single brick at a time so you can
    walk a stat up and watch it change, and it stops dead at the same ceiling the
    real run does. Right-click takes every copy of that brick back out. */
@@ -4126,6 +4210,54 @@ function buildCheatRows(){
         catch(e){ cmpHide(); }
       }
     }, { passive:false });
+  }
+
+  /* --- SANDBOX ------------------------------------------------------------
+     Every monster in the game, by name, in the order the roster introduces
+     them, then the siege units and every boss. Built from the same tables the
+     waves are built from, so a monster added later turns up here for free. */
+  const sand = document.getElementById('cheatSandbox');
+  sand.innerHTML =
+    `<div class="cheatbtn${sandbox?' got':''}" data-sand="toggle">SANDBOX: ${sandbox?'ON':'OFF'}</div>`+
+    `<div class="cheatbtn" data-sand="clear">CLEAR THE FIELD</div>`;
+  for(const el of sand.children)
+    el.addEventListener('click', ()=>{
+      if(el.dataset.sand==='toggle'){
+        sandbox = !sandbox;
+        if(sandbox){
+          /* stop whatever the wave was doing and leave the field to you */
+          wave.queue.length = 0;
+          for(const e of enemies) e.dead = true;
+          wave.state = 'fight';
+        }
+      } else {
+        for(const e of enemies) e.dead = true;
+        projectiles.length = 0; hazards.length = 0;
+      }
+      SFX.click(); buildCheatRows();
+    });
+
+  const spawn = document.getElementById('cheatSpawn');
+  const mobKeys = [...ROSTER.map(r=>r.k),
+                   'stonegolem','icegolem','firegolem','stormgolem'];
+  const bossKeys = [...Object.keys(BOSSES), ...Object.keys(SUPERBOSSES)];
+  spawn.innerHTML =
+    mobKeys.map(k=>`<div class="cheatbtn" data-mob="${k}">${k}</div>`).join('') +
+    bossKeys.map(k=>`<div class="cheatbtn got" data-mob="boss" data-boss="${k}">${
+      (BOSSES[k]||SUPERBOSSES[k]).name}</div>`).join('');
+  for(const el of spawn.children){
+    const put = (n, elite)=>{
+      const p = player;
+      for(let i=0;i<n;i++){
+        const a = i/n*TAU + rnd(-0.2,0.2);
+        const d = n===1 ? 190 : rnd(170, 280);
+        spawnEnemy(el.dataset.mob, p.x+Math.cos(a)*d, p.y+Math.sin(a)*d,
+                   elite, false, el.dataset.boss || null);
+      }
+      SFX.click();
+    };
+    el.addEventListener('click', ev=> put(1, ev.shiftKey));
+    el.addEventListener('contextmenu', ev=>{ ev.preventDefault(); put(5, ev.shiftKey); });
   }
 
   const misc = document.getElementById('cheatMisc');
@@ -6488,7 +6620,7 @@ function updateEnemy(e, dt){
       e.aimT += dt;
       if(e.aimT>=0.45){
         e.mode='chase'; e.atkCd = e.fire;
-        projectiles.push({kind:'spit', x:e.x, y:e.y-16, sx:e.x, sy:e.y-16,
+        projectiles.push({kind:'spit', dmg:shotPow(e,'spit'), x:e.x, y:e.y-16, sx:e.x, sy:e.y-16,
           tx:clamp(player.x+rnd(-40,40), W.wall+30, W.w-W.wall-30),
           ty:clamp(player.y+rnd(-40,40), W.wall+30, W.h-W.wall-30),
           t:0, dur:0.8, spin:rnd(TAU), delay:0});
@@ -6607,7 +6739,7 @@ function updateEnemy(e, dt){
       e.modeT += dt;
       if(e.modeT>=0.6){
         e.mode='chase'; e.atkCd=3.4*e.atkS;
-        projectiles.push({kind:'jrock', x:e.x, y:e.y-30, sx:e.x, sy:e.y-30,
+        projectiles.push({kind:'jrock', dmg:shotPow(e,'jrock'), x:e.x, y:e.y-30, sx:e.x, sy:e.y-30,
           tx:clamp(player.x+rnd(-50,50), W.wall+40, W.w-W.wall-40),
           ty:clamp(player.y+rnd(-50,50), W.wall+40, W.h-W.wall-40),
           t:0, dur:1.0, spin:rnd(TAU), delay:0});
@@ -6722,8 +6854,8 @@ function updateEnemy(e, dt){
     const rmax = e.ring.max || REV_MAX;
     e.ring.r += (e.ring.speed||300)*dt;
     if(!e.ring.hit && !player.dead){
-      /* measured on the same squashed ellipse that is drawn */
-      const d = Math.hypot(player.x-e.x, (player.y-e.y)/GROUND_SQUASH);
+      /* a true circle, drawn and measured — see bossRingHit */
+      const d = dist(player, e);
       if(Math.abs(d - e.ring.r) < (e.ring.golem?28:22)){
         if(player.dash.t>0){ e.ring.hit = true; perfectDodge(player.x, player.y); }
         else if(player.invuln<=0){
@@ -6851,7 +6983,7 @@ function golemStomp(e, G){
     /* stone rips chunks out of the floor and flings them */
     for(let i=0;i<8;i++){
       const a = i/8*TAU;
-      projectiles.push({kind:'jrock', sx:e.x, sy:e.y-24,
+      projectiles.push({kind:'jrock', dmg:shotPow(e,'jrock'), sx:e.x, sy:e.y-24,
         tx:clamp(e.x+Math.cos(a)*G.stompR*0.9, W.wall+40, W.w-W.wall-40),
         ty:clamp(e.y+Math.sin(a)*G.stompR*0.9, W.wall+40, W.h-W.wall-40),
         t:0, dur:0.7, spin:rnd(TAU), delay:i*0.04});
@@ -6951,8 +7083,10 @@ function bossChase(b, toP, spd, dt, mul){
 }
 function bossRingHit(b){
   if(!b.ring.hit && !player.dead){
-    /* measured on the same squashed ellipse that is drawn */
-    const d = Math.hypot(player.x-b.x, (player.y-b.y)/GROUND_SQUASH);
+    /* A TRUE CIRCLE, drawn and measured. The squashed version reached a third
+       further north and south than the picture showed, which on the attack that
+       drags you into the middle first is the worst place to be lying about. */
+    const d = dist(player, b);
     if(Math.abs(d - b.ring.r) < 30){
       if(player.dash.t>0){ b.ring.hit = true; perfectDodge(player.x, player.y); }
       else if(player.invuln<=0){ playerDamage(2, b); b.ring.hit = true; }
@@ -6970,6 +7104,9 @@ const MACE_WIND = 0.55, MACE_SPIN_T = 4.2, MACE_SPIN_RATE = 11, MACE_TICK = 0.4;
    attack something you walked away from. It now charges at two and a half
    times its normal speed for the whole spin — the spin IS the chase. */
 const MACE_SPIN_SPD = 2.5;
+/* half the thickness of the swung head, in pixels — the blade is a line, but a
+   line with no width would be impossible to be hit by */
+const MACE_BLADE_HALF = 22;
 const SKULL_VOLLEYS = [5, 10];     /* rings per barrage, by tier */
 const SPIRAL_ARMS = 5;             /* sweeps per spiral */
 const SPIRAL_GAP = 0.45;           /* seconds between them */
@@ -6980,7 +7117,7 @@ function maceSpin(b, dt, tier, enr, toP){
   if(b.modeT < MACE_WIND){
     /* braced, mace back, the reach painted on the ground by the renderer */
     b.moving = false;
-    b.whirlA = -1.2;
+    b.whirlA = -1.2; b.whirlPrev = undefined;
     return false;
   }
   b.whirlA = (b.whirlA||0) + MACE_SPIN_RATE*dt;
@@ -6991,9 +7128,30 @@ function maceSpin(b, dt, tier, enr, toP){
   collideWorld(b);
   const reach = maceReach(b);
   b.maceCd = (b.maceCd||0) - dt;
-  if(!player.dead && player.dash.t<=0 && dist(b,player) < reach + player.r && b.maceCd<=0){
-    b.maceCd = MACE_TICK;
-    playerDamage(b.dmg+1, b);
+  /* THE BLADE HITS, NOT THE CIRCLE. Standing inside the sweep used to be enough;
+     the whole disc was live, so the attack was "do not be near it" rather than
+     "do not be where the sword is". Now the hit is the arc the head actually
+     swept THIS FRAME -- at eleven radians a second the tip crosses forty-odd
+     pixels between frames, so testing only its current angle would let you slip
+     through the gap. We test the wedge from last frame's angle to this one. */
+  const prevA = (b.whirlPrev === undefined) ? b.whirlA : b.whirlPrev;
+  b.whirlPrev = b.whirlA;
+  if(!player.dead && player.dash.t<=0 && b.maceCd<=0){
+    const d = dist(b, player);
+    if(d < reach + player.r){
+      /* how wide the hero looks from the boss at this range: close in, a body
+         subtends most of the circle, so the blade cannot miss it */
+      const half = Math.atan2(player.r + MACE_BLADE_HALF, Math.max(8, d));
+      const pa = angTo(b, player);
+      /* did the head sweep past the hero's bearing between the two frames? */
+      const from = angDiff(pa, prevA), to = angDiff(pa, b.whirlA);
+      const swept = (from <= half && from >= -half) || (to <= half && to >= -half) ||
+                    (from > 0 && to < 0 && (from - to) < Math.PI);
+      if(swept){
+        b.maceCd = MACE_TICK;
+        playerDamage(b.dmg+1, b);
+      }
+    }
   }
   if(Math.random()<0.7){
     const hx = b.x + Math.cos(b.whirlA)*reach, hy = b.y + Math.sin(b.whirlA)*reach;
@@ -7001,7 +7159,7 @@ function maceSpin(b, dt, tier, enr, toP){
       life:0.22, max:0.22, color:'#ffd166'});
   }
   if(b.modeT >= MACE_WIND + MACE_SPIN_T*(enr?1.35:1)){
-    b.whirlA = undefined;
+    b.whirlA = undefined; b.whirlPrev = undefined;
     addShake(0.3); SFX.slam();
     return true;
   }
@@ -7107,7 +7265,7 @@ function updateBoss(b, dt, toP, dP){
         const n = 12;
         for(let i=0;i<n;i++){
           const a2 = i/n*TAU;
-          projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
+          projectiles.push({kind:'vbrick', dmg:shotPow(b,'vbrick'), sx:b.x, sy:b.y-30,
             tx:clamp(b.x+Math.cos(a2)*300, 120, W.w-120),
             ty:clamp(b.y+Math.sin(a2)*300, 120, W.h-120),
             t:0, dur:0.75, spin:rnd(TAU), delay:i*0.05});
@@ -7124,7 +7282,7 @@ function updateBoss(b, dt, toP, dP){
         const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
         const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
+          projectiles.push({kind:'vbrick', dmg:shotPow(b,'vbrick'), sx:b.x, sy:b.y-30,
             tx:clamp(pts[i].x, 120, W.w-120),
             ty:clamp(pts[i].y, 120, W.h-120),
             t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
@@ -7451,7 +7609,7 @@ function updateBoss(b, dt, toP, dP){
         const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
         const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
+          projectiles.push({kind:'vbrick', dmg:shotPow(b,'vbrick'), sx:b.x, sy:b.y-30,
             tx:clamp(pts[i].x, 120, W.w-120),
             ty:clamp(pts[i].y, 120, W.h-120),
             t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
@@ -7525,7 +7683,7 @@ function updateBoss(b, dt, toP, dP){
         const lead = leadPlayer(b.x, b.y, 1.0, 0.9);
         const pts = bombSpread(lead.x, lead.y, n, 210, 80);
         for(let i=0;i<n;i++){
-          projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
+          projectiles.push({kind:'vbrick', dmg:shotPow(b,'vbrick'), sx:b.x, sy:b.y-30,
             tx:clamp(pts[i].x, 120, W.w-120),
             ty:clamp(pts[i].y, 120, W.h-120),
             t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.1});
@@ -7554,7 +7712,9 @@ function updateBoss(b, dt, toP, dP){
    about to come up. */
 const QUAKE_WIND = 0.9;           /* overhead, before the hammer falls */
 const QUAKE_WAVES = 3;
-const QUAKE_RADII = [130, 240, 360];   /* each wave reaches further than the last */
+/* The slam used to die out well inside the arena, so stepping back two paces
+   was the whole counterplay. The mountains ride a lot further out now. */
+const QUAKE_RADII = [190, 350, 520];   /* each wave reaches further than the last */
 const QUAKE_MAX = QUAKE_RADII[QUAKE_RADII.length-1];   /* how far the last wave reaches */
 const QUAKE_GAP = 0.42;           /* seconds between one wave and the next */
 const QUAKE_SPEED = 430;
@@ -7624,13 +7784,13 @@ function quakeTick(b, dt){
       for(let i=0;i<count;i++){
         const off = (i/(count-1) - 0.5) * QUAKE_ARC + rnd(-0.08, 0.08);
         const a = q.a + off;
-        addSpike(b.x + Math.cos(a)*rr, b.y + Math.sin(a)*rr*GROUND_SQUASH, a, b.dmg+1);
+        addSpike(b.x + Math.cos(a)*rr, b.y + Math.sin(a)*rr, a, b.dmg+1);
       }
       q.next++;
     }
     if(Math.random() < 0.9){
       const a = q.a + rnd(-QUAKE_ARC/2, QUAKE_ARC/2);
-      particles.push({kind:'spark', x:b.x+Math.cos(a)*q.r, y:b.y+Math.sin(a)*q.r*GROUND_SQUASH,
+      particles.push({kind:'spark', x:b.x+Math.cos(a)*q.r, y:b.y+Math.sin(a)*q.r,
         vx:rnd(-40,40), vy:rnd(-110,-40), life:0.34, max:0.34, color:'#b9c0c6'});
     }
     if(q.r > q.max) q.dead = true;
@@ -7762,7 +7922,7 @@ function updateSuperBoss(b, dt, toP, dP){
       const lead = leadPlayer(b.x, b.y, 1.0, 0.95);
       const pts = bombSpread(lead.x, lead.y, n, 290, 86);
       for(let i=0;i<n;i++){
-        projectiles.push({kind:'vbrick', sx:b.x, sy:b.y-30,
+        projectiles.push({kind:'vbrick', dmg:shotPow(b,'vbrick'), sx:b.x, sy:b.y-30,
           tx:clamp(pts[i].x, 120, W.w-120),
           ty:clamp(pts[i].y, 120, W.h-120),
           t:0, dur:rnd(0.75,0.95), spin:rnd(TAU), delay:i*0.08});
@@ -8221,7 +8381,9 @@ function updateProjectiles(dt){
         if(dist(pr,player)<conf.rr && !player.dead){
           if(player.dash.t>0){ if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x,pr.y); } }
           else if(player.invuln<=0){
-            playerDamage(pr.kind==='jrock' ? 2 : 1, pr);
+            /* it carries the damage worked out when it was thrown, so a wave-40
+               boss's brick is a wave-40 brick instead of a flat 1 forever */
+            playerDamage(pr.dmg || shotPow(pr.src, pr.kind), pr);
           }
         }
       }
@@ -10168,16 +10330,16 @@ function render(){
       const rgb = e.ring.golem==='ice' ? '191,227,255'
                 : e.ring.golem==='fire' ? '255,138,60'
                 : e.ring.golem==='stone' ? '201,206,201' : '255,209,102';
-      groundRing(ctx, e.x, e.y, e.ring.r, e.ring.golem ? 14 : 7, `rgba(${rgb},${kk*0.9})`);
+      flatRing(ctx, e.x, e.y, e.ring.r, e.ring.golem ? 14 : 7, `rgba(${rgb},${kk*0.9})`);
       if(e.ring.golem){
-        groundRing(ctx, e.x, e.y, e.ring.r-9, 4, `rgba(255,255,255,${kk*0.75})`);
+        flatRing(ctx, e.x, e.y, e.ring.r-9, 4, `rgba(255,255,255,${kk*0.75})`);
         /* studs riding the crest, so it reads as bricks lifting off the floor */
         const studs = 20;
         ctx.fillStyle = `rgba(255,255,255,${kk*0.55})`;
         for(let i=0;i<studs;i++){
           const sa = i/studs*TAU + e.ring.r*0.01;
           ctx.beginPath();
-          ctx.arc(e.x+Math.cos(sa)*e.ring.r, e.y+Math.sin(sa)*e.ring.r*GROUND_SQUASH,
+          ctx.arc(e.x+Math.cos(sa)*e.ring.r, e.y+Math.sin(sa)*e.ring.r,
             4*kk+1.5, 0, TAU);
           ctx.fill();
         }
@@ -10227,11 +10389,11 @@ function render(){
       if(e.mode==='quakeWind'){
         /* the ground the hammer is about to break, tightening as it falls */
         const k = clamp(e.modeT/QUAKE_WIND, 0, 1);
-        groundDisc(ctx, e.x, e.y, QUAKE_MAX, `rgba(207,214,221,${0.07+0.10*k})`);
+        flatDisc(ctx, e.x, e.y, QUAKE_MAX, `rgba(207,214,221,${0.07+0.10*k})`);
         ctx.setLineDash([18,13]);
-        groundRing(ctx, e.x, e.y, QUAKE_MAX, 6, `rgba(207,214,221,${0.5+0.35*Math.sin(vtime*18)})`);
+        flatRing(ctx, e.x, e.y, QUAKE_MAX, 6, `rgba(207,214,221,${0.5+0.35*Math.sin(vtime*18)})`);
         ctx.setLineDash([]);
-        groundRing(ctx, e.x, e.y, 24 + (QUAKE_MAX-24)*(1-k), 4, 'rgba(255,255,255,0.9)');
+        flatRing(ctx, e.x, e.y, 24 + (QUAKE_MAX-24)*(1-k), 4, 'rgba(255,255,255,0.9)');
       }
       if(e.quakes && e.quakes.length){
         /* each wave is an ARC, not a ring — it only exists inside the 180 fan
@@ -10239,7 +10401,9 @@ function render(){
         for(const q of e.quakes){
           const band = quakeBand(q);
           const fade = clamp(1 - q.r/q.max, 0, 1);
-          ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, GROUND_SQUASH);
+          /* a TRUE circle: the spikes come up on a circle, so the crest that
+             promises them has to be one too */
+          ctx.save(); ctx.translate(e.x, e.y);
           for(let i=-1;i<=1;i++){
             const rr = Math.max(2, q.r + i*band*0.62);
             ctx.strokeStyle = `rgba(220,228,234,${(i===0?0.85:0.38)*(0.3+0.7*fade)})`;
@@ -10336,28 +10500,27 @@ function render(){
       if(e.ring){
         const k2 = clamp(1-e.ring.r/RING_MAX,0,1);
         const band = '255,106,42';
-        /* a filled band on the floor, sweeping outward behind whatever it passes */
-        ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, GROUND_SQUASH);
+        /* a filled band on the floor, sweeping outward — a TRUE circle, because
+           that is what the hit test is */
         ctx.fillStyle = `rgba(${band},${k2*0.30})`;
         ctx.beginPath();
-        ctx.arc(0,0,e.ring.r,0,TAU);
-        ctx.arc(0,0,Math.max(1,e.ring.r-26),0,TAU,true);
+        ctx.arc(e.x,e.y,e.ring.r,0,TAU);
+        ctx.arc(e.x,e.y,Math.max(1,e.ring.r-26),0,TAU,true);
         ctx.fill();
-        ctx.restore();
-        groundRing(ctx, e.x, e.y, e.ring.r, 15, `rgba(${band},${k2*0.95})`);
-        groundRing(ctx, e.x, e.y, e.ring.r-10, 5, `rgba(255,255,255,${k2*0.85})`);
+        flatRing(ctx, e.x, e.y, e.ring.r, 15, `rgba(${band},${k2*0.95})`);
+        flatRing(ctx, e.x, e.y, e.ring.r-10, 5, `rgba(255,255,255,${k2*0.85})`);
         /* studded crest so it reads as bricks flying outward */
         const studs = 22;
         ctx.fillStyle = `rgba(255,255,255,${k2*0.5})`;
         for(let i=0;i<studs;i++){
           const sa = i/studs*TAU + e.ring.r*0.012;
           ctx.beginPath();
-          ctx.arc(e.x+Math.cos(sa)*e.ring.r, e.y+Math.sin(sa)*e.ring.r*GROUND_SQUASH,
+          ctx.arc(e.x+Math.cos(sa)*e.ring.r, e.y+Math.sin(sa)*e.ring.r,
             4.5*k2+1.5, 0, TAU);
           ctx.fill();
         }
         ctx.setLineDash([10,14]);
-        groundRing(ctx, e.x, e.y, RING_MAX, 3, `rgba(${band},0.3)`);
+        flatRing(ctx, e.x, e.y, RING_MAX, 3, `rgba(${band},0.3)`);
         ctx.setLineDash([]);
       }
     }
@@ -10457,15 +10620,17 @@ function render(){
     const k = clamp(pr.life/1.2, 0, 1);            /* fades out at the end */
     ctx.save();
     ctx.globalAlpha = k;
-    groundDisc(ctx, pr.x, pr.y, pr.r, 'rgba(150,166,182,0.10)');
+    /* a TRUE circle: the hit test is `hitsBody(e, pr.x, pr.y, pr.r)`, so the
+       flattened version was under-drawing its own reach north and south */
+    flatDisc(ctx, pr.x, pr.y, pr.r, 'rgba(150,166,182,0.10)');
     ctx.setLineDash([10,8]);
-    groundRing(ctx, pr.x, pr.y, pr.r, 3, `rgba(150,166,182,${0.35+0.25*Math.sin(vtime*11+pr.seed)})`);
+    flatRing(ctx, pr.x, pr.y, pr.r, 3, `rgba(150,166,182,${0.35+0.25*Math.sin(vtime*11+pr.seed)})`);
     ctx.setLineDash([]);
     for(let ri=0; ri<2; ri++){
       const n2 = 3+ri, rr = pr.r*(0.6+ri*0.42), w = ri? -3.6 : 4.8;
       for(let i=0;i<n2;i++){
         const a = vtime*w + i*TAU/n2 + pr.seed + ri;
-        const bx = pr.x + Math.cos(a)*rr, by = pr.y + Math.sin(a)*rr*0.72;
+        const bx = pr.x + Math.cos(a)*rr, by = pr.y + Math.sin(a)*rr;
         ctx.save(); ctx.translate(bx,by); ctx.rotate(a+Math.PI/2);
         drawBlade(ctx, 0.38, false);
         ctx.restore();
@@ -11232,16 +11397,18 @@ function drawEnemy(c, e){
   }
   if(e.type==='greenwarden'){
     const pulse = 0.55 + 0.45*Math.sin(vtime*2.2 + (e.phase||0));
+    /* a TRUE circle — it heals on `dist(e2,e) < WARDEN_R`, so the picture has
+       to be the circle the healing actually covers */
     c.fillStyle = `rgba(150,225,130,${0.055 + 0.035*pulse})`;
-    c.beginPath(); c.ellipse(e.x, e.y+2, WARDEN_R, WARDEN_R*GROUND_SQUASH, 0, 0, TAU); c.fill();
+    c.beginPath(); c.arc(e.x, e.y+2, WARDEN_R, 0, TAU); c.fill();
     c.setLineDash([12,10]);
     c.strokeStyle = `rgba(170,240,150,${0.35 + 0.30*pulse})`; c.lineWidth = 3;
-    c.beginPath(); c.ellipse(e.x, e.y+2, WARDEN_R, WARDEN_R*GROUND_SQUASH, 0, 0, TAU); c.stroke();
+    c.beginPath(); c.arc(e.x, e.y+2, WARDEN_R, 0, TAU); c.stroke();
     c.setLineDash([]);
     /* motes of it drifting up off the ground he owns */
     if(Math.random() < 0.6){
       const a = rnd(TAU), rr = WARDEN_R*Math.sqrt(Math.random());
-      particles.push({kind:'spark', x:e.x+Math.cos(a)*rr, y:e.y+Math.sin(a)*rr*GROUND_SQUASH,
+      particles.push({kind:'spark', x:e.x+Math.cos(a)*rr, y:e.y+Math.sin(a)*rr,
         vx:rnd(-6,6), vy:rnd(-30,-10), life:rnd(0.5,1.0), max:1.0, color:'#bdf0a8'});
     }
   }
@@ -11472,6 +11639,27 @@ function logEventK(key, txt, col){ clogPush(CLOG_EVT, key, txt, col); }
 function clogTop(obj, n){
   return Object.keys(obj).sort((a,b)=> obj[b]-obj[a]).slice(0, n);
 }
+/* EVERY source, biggest first, wrapped across as many lines as it takes. The
+   panel used to print the top three and swallow the rest, which meant a build
+   with a sword, two spells, poison and bleed could only ever see three of them
+   — exactly the ones you already knew were working. */
+function clogBreakdown(c, label, obj, total, x, y, col, width){
+  const keys = Object.keys(obj).sort((a,b)=> obj[b]-obj[a]);
+  c.font = '700 10px Fredoka';
+  c.fillStyle = col;
+  if(!keys.length){ c.fillText(label+': —', x, y); return y; }
+  const parts = keys.map(k=> k+' '+Math.round(obj[k]/Math.max(0.01,total)*100)+'%');
+  let line = label+': ', first = true;
+  for(const part of parts){
+    const next = line + (first ? '' : '  ') + part;
+    if(c.measureText(next).width > width && !first){
+      c.fillText(line, x, y); y += 12; line = '   ' + part; 
+    } else { line = next; }
+    first = false;
+  }
+  c.fillText(line, x, y);
+  return y;
+}
 function clogTabAt(x, y){
   for(const r of clogTabRects)
     if(x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h) return r.i;
@@ -11488,7 +11676,8 @@ function renderCombatLog(){
   if(!clogOn){ clogTabRects = []; return; }
   const w = 322, x = cw - w - 14, top = 108;
   const bottom = ch - 96;
-  const h = Math.min(bottom - top, 132 + CLOG_SHOW*14);
+  /* the breakdown wraps, so the panel has to have room for the extra lines */
+  const h = Math.min(bottom - top, 156 + CLOG_SHOW*14);
   ctx.save();
   ctx.fillStyle = 'rgba(10,14,19,0.80)';
   roundRect(ctx, x, top, w, h, 10); ctx.fill();
@@ -11530,22 +11719,14 @@ function renderCombatLog(){
     ctx.fillText('crit '+critPct+'%', x+196, y);
     ctx.fillText('hits '+clogRun.hits, x+262, y);
     y += 16;
-    const srcs = clogTop(clogSrc, 3);
-    ctx.font = '700 10px Fredoka'; ctx.fillStyle = '#bfe3ff';
-    ctx.fillText('TOP SOURCES: ' + (srcs.length
-      ? srcs.map(k=> k+' '+Math.round(clogSrc[k]/Math.max(1,clogRun.dealt)*100)+'%').join('  ')
-      : '—'), x+12, y);
+    y = clogBreakdown(ctx, 'SOURCES', clogSrc, clogRun.dealt, x+12, y, '#bfe3ff', w-30);
   } else if(clogView===CLOG_IN){
     ctx.fillStyle = '#ff8a6a'; ctx.fillText('DPS IN '+inc.toFixed(1), x+12, y);
     ctx.fillStyle = '#c9d2ce';
     ctx.fillText('total '+clogRun.taken.toFixed(1), x+116, y);
     ctx.fillText('evaded '+clogRun.evaded, x+212, y);
     y += 16;
-    const froms = clogTop(clogFrom, 3);
-    ctx.font = '700 10px Fredoka'; ctx.fillStyle = '#ff8a6a';
-    ctx.fillText('HURT BY: ' + (froms.length
-      ? froms.map(k=> k+' '+Math.round(clogFrom[k]/Math.max(0.01,clogRun.taken)*100)+'%').join('  ')
-      : '—'), x+12, y);
+    y = clogBreakdown(ctx, 'HURT BY', clogFrom, clogRun.taken, x+12, y, '#ff8a6a', w-30);
   } else {
     ctx.fillStyle = '#9fdc7e'; ctx.fillText('kills '+clogRun.kills, x+12, y);
     ctx.fillStyle = '#c9d2ce';
@@ -11709,7 +11890,11 @@ function renderHUD(){
   if(state==='title' || !player) return;
   const p = player;
   let xpY;
-  if(p.hp > HEART_POOL_AT || (p.hp > HEART_POOL_AT-3 && p.maxHp > HEART_POOL_AT)){
+  /* THE POOLED READOUT IS DECIDED BY THE BAR, NOT BY WHAT IS LEFT IN IT. This
+     used to switch on CURRENT health, so a hero with 250 maximum sitting on 40
+     fell back to one-pip-per-heart and drew two hundred and fifty of them —
+     sixteen rows of empty hearts across the screen. */
+  if(p.maxHp > HEART_POOL_AT){
     /* too many hearts to draw one each: three symbolic ones, a third of the pool apiece */
     const third = Math.max(1, p.maxHp/3);
     for(let i=0;i<3;i++)
