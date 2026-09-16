@@ -50,6 +50,10 @@
   #upgradeScreen h2{font-family:'Titan One';font-size:38px;color:#ffb900;text-shadow:0 4px 0 rgba(0,0,0,.4);letter-spacing:1px}
   #upgradeScreen .sub{color:#dfe4e2;margin:6px 0 26px;font-size:16px}
   #cards{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+  .wreq{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin:6px 0 2px}
+  .wreq b{font-family:'Fredoka';font-size:8.5px;font-weight:700;letter-spacing:.7px;
+    color:#5a6b57;background:rgba(90,107,87,.15);border:1px solid rgba(90,107,87,.35);
+    border-radius:5px;padding:1px 5px}
   .card{width:216px;background:#f4f1ea;border:3px solid #1b2a34;border-radius:16px;padding:16px 16px 30px;cursor:pointer;
     color:#1b2a34;transition:transform .14s, box-shadow .14s;position:relative;box-shadow:0 8px 0 rgba(0,0,0,.35)}
   .card:hover{transform:translateY(-10px) rotate(-1.2deg);box-shadow:0 18px 0 rgba(0,0,0,.35)}
@@ -3700,7 +3704,26 @@ const ICONS = {
   ward:'<path d="M12 2.6 l7.4 3 v5.2 c0 4.4 -3 8 -7.4 9.6 c-4.4 -1.6 -7.4 -5.2 -7.4 -9.6 V5.6 Z"/><path d="M8.4 12.4 l2.6 2.6 4.6 -5.6"/>',
   flame:'<path d="M12 2.4 c3.4 4.2 5.4 6.4 5.4 9.4 a5.4 5.4 0 0 1 -10.8 0 c0 -2.2 1.4 -3.8 2.8 -5.4 c.6 1.6 1.4 2.2 2 2.6 c.4 -2.6 -.8 -4.6 .6 -6.6 Z"/>',
   snow:'<path d="M12 2.5 v19 M3.8 7.2 l16.4 9.6 M20.2 7.2 l-16.4 9.6"/><path d="M12 6 l-2.2 -2 M12 6 l2.2 -2 M12 18 l-2.2 2 M12 18 l2.2 2"/>',
-  prism:'<path d="M12 3.4 L20.4 18.6 H3.6 Z"/><path d="M2 12 h4.6 M17.4 12 h4.6 M12 20.4 v2"/>',
+  /* ELEMENTAL RESISTANCE: the prism stands UP, and each face throws off one
+     element — a flame to the right, a bolt below, a flake to the left. */
+  prism:'<path d="M12 3.6 L19.8 17.6 H4.2 Z"/>'+
+        '<path d="M16.6 11.4 h1.8"/>'+
+        '<path d="M22.4 11.6 C22.4 13.1 21.4 13.9 20.3 13.9 C19.1 13.9 18.3 13 18.3 11.9 '+
+          'C18.3 10.5 19.7 10 19.9 8.3 C21.2 9.4 22.4 10.2 22.4 11.6 Z"/>'+
+        '<path d="M12 18.2 v0.9"/>'+
+        '<path d="M13 19.1 L10.7 19.1 L12 20.5 L10 20.5"/>'+
+        '<path d="M7.4 11.4 h-1.8"/>'+
+        '<path d="M2 11.6 v-2.4 M2 11.6 v2.4 M0 10.4 L4 12.8 M4 10.4 L0 12.8"/>',
+  /* ELEMENTAL DAMAGE: the same prism turned over, pointing DOWN — what you put
+     out rather than what you keep off. */
+  prismdn:'<path d="M12 20.4 L4.2 6.4 H19.8 Z"/>'+
+        '<path d="M16.6 12.6 h1.8"/>'+
+        '<path d="M22.4 12.8 C22.4 14.3 21.4 15.1 20.3 15.1 C19.1 15.1 18.3 14.2 18.3 13.1 '+
+          'C18.3 11.7 19.7 11.2 19.9 9.5 C21.2 10.6 22.4 11.4 22.4 12.8 Z"/>'+
+        '<path d="M12 5.8 v-0.9"/>'+
+        '<path d="M13 4.9 L10.7 4.9 L12 3.5 L10 3.5"/>'+
+        '<path d="M7.4 12.6 h-1.8"/>'+
+        '<path d="M2 12.8 v-2.4 M2 12.8 v2.4 M0 11.6 L4 14 M4 11.6 L0 14"/>',
   clock:'<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2 V12 l3.8 2.2"/>',
   burst:'<circle cx="12" cy="12" r="3"/><path d="M12 1.8 V5 M12 19 v3.2 M1.8 12 H5 M19 12 h3.2 M4.8 4.8 l2.3 2.3 M16.9 16.9 l2.3 2.3 M19.2 4.8 l-2.3 2.3 M7.1 16.9 l-2.3 2.3"/>',
   fist:'<path d="M7.4 11.6 V8.4 a2.1 2.1 0 0 1 4.2 0 v3.2 M11.6 11.6 V7.2 a2.1 2.1 0 0 1 4.2 0 v4.4 M15.8 11.6 V9 a2.1 2.1 0 0 1 4.2 0 v5.6 a6.4 6.4 0 0 1 -6.4 6.4 h-2.8 a5.4 5.4 0 0 1 -5.4 -5.4 v-4.6 a2.1 2.1 0 0 1 4.2 0"/>',
@@ -3739,7 +3762,7 @@ const UPGRADES = [
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to your ${weapon.elem||'elemental'} bolt — before any increase`,
     apply:c=>{ player.flatElem = Math.round((player.flatElem + c.v)*100)/100; } },
-  { id:'eleminc', name:'Elemental Focus', icon:'prism', cls:'OFFENSE', minRar:'uncommon',
+  { id:'eleminc', name:'Elemental Focus', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isCaster(),
     calc:m=>({v:0.08+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike`,
@@ -3756,6 +3779,7 @@ const UPGRADES = [
       `${Math.round(Math.min(BOLT_R_CAP, (weapon.boltR||46)*(1+Math.min(BOLT_R_MAX_INC, player.inc.boltR+c.v))))})`,
     apply:c=>{ player.inc.boltR += c.v; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex`,
     apply:c=>{ player.incMelee += c.v; } },
@@ -3956,7 +3980,7 @@ const UPGRADES = [
     desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.inc.chainRate += c.v; syncStats(); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('storm') && player.storm.n < stormMaxN(),
+    req:()=>!isCaster() && canTakeSpell('storm') && player.storm.n < stormMaxN(),
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=>{
       const cnt = player.storm.count;
@@ -3967,37 +3991,41 @@ const UPGRADES = [
     },
     apply:c=>{ player.storm.n = Math.min(stormMaxN(), player.storm.n + c.n); } },
   { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
+    /* blades are for a hero who carries one */
+    req:()=>!isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bladestorm blade — before any increase`,
     apply:c=>{ player.storm.dmg = Math.round((player.storm.dmg + c.v)*100)/100; } },
   { id:'stormsize', name:'Broad Blades', icon:'storm', cls:'SPELL',
-    req:()=>player.storm.n>0 && player.storm.size<STORM_MAX_SIZE,
+    req:()=>!isCaster() && player.storm.n>0 && player.storm.size<STORM_MAX_SIZE,
     calc:m=>({s:0.15*m}),
     desc:c=>`+${Math.round(c.s*100)}% blade size (cap ×${STORM_MAX_SIZE.toFixed(1)}) — `+
       `a bigger blade sweeps a wider spiral and catches more on the way out`,
     apply:c=>{ player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
   { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
-    req:()=>player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
+    req:()=>!isCaster() && player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (floor ${STORM_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.inc.stormRate += c.v; syncStats(); } },
   { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('vortex'),
+    req:()=>!isCaster() && canTakeSpell('vortex'),
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
     apply:c=>{ player.vortex.n += c.n; } },
   { id:'vortexpow', name:'Whirling Edge', icon:'vortex', cls:'SPELL', req:()=>player.vortex.n>0,
+    /* blades are for a hero who carries one */
+    req:()=>!isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every vortex tick — before any increase`,
     apply:c=>{ player.vortex.dmg = Math.round((player.vortex.dmg + c.v)*100)/100; } },
   { id:'vortexarea', name:'Vortex Reach', icon:'vortex', cls:'SPELL',
-    req:()=>player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
+    req:()=>!isCaster() && player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
     calc:m=>({v:Math.round(8*m)}),
     desc:c=>`+${c.v} blade vortex radius (cap ${VORTEX_MAX_R})`,
     apply:c=>{ player.vortex.r = Math.min(VORTEX_MAX_R, player.vortex.r + c.v); } },
   { id:'vortexrate', name:'Vortex Speed', icon:'clock', cls:'SPELL',
-    req:()=>player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
+    req:()=>!isCaster() && player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
     apply:c=>{ player.inc.vortexRate += c.v; syncStats(); } },
@@ -4054,14 +4082,14 @@ const UPGRADES = [
   /* BLEED lives in the crit tree, not in a tree of its own: a swing bleeds
      because it crit, and these two decide how often and how deep. */
   { id:'bleedchance', name:'Serrated Edge', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>player.bleedChance < 1,
+    req:()=>!isCaster() && player.bleedChance < 1,
     calc:m=>({v: byRar(m, [0.05, 0.08, 0.12, 0.18, 0.25])}),
     desc:c=>`+${Math.round(c.v*100)}% chance for a melee hit to open a BLEED — `+
       `on top of the ${Math.round(BLEED_CRIT_BASE*100)}% every critical already carries `+
       `(now ${Math.round(bleedChance(false)*100)}% on a swing, ${Math.round(bleedChance(true)*100)}% on a crit)`,
     apply:c=>{ player.bleedChanceFlat += c.v; syncStats(); } },
   { id:'bleedpow', name:'Deep Cuts', icon:'sword', cls:'OFFENSE', minRar:'rare',
-    req:()=>player.bleedShare < BLEED_SHARE_MAX,
+    req:()=>!isCaster() && player.bleedShare < BLEED_SHARE_MAX,
     calc:m=>({v: byRar(m, [0.03, 0.05, 0.08, 0.12, 0.18])}),
     desc:c=>{
       const next = Math.min(BLEED_SHARE_MAX, player.bleedShare + c.v);
@@ -4094,12 +4122,12 @@ const UPGRADES = [
         `laying a CHILL stack — five freezes solid`,
     apply:c=>{ player.freeze.n += c.n; } },
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
-    req:()=>player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
+    req:()=>isCaster() && player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
     calc:m=>({v:Math.round(28*m)}),
     desc:c=>`+${c.v} block freeze radius (cap ${FREEZE_MAX_R})`,
     apply:c=>{ player.freeze.r = Math.min(FREEZE_MAX_R, player.freeze.r + c.v); } },
   { id:'freezc', name:'Winter Wind', icon:'clock', cls:'SPELL',
-    req:()=>player.freeze.n>0 && player.freeze.rate > FREEZE_MIN_RATE,
+    req:()=>isCaster() && player.freeze.n>0 && player.freeze.rate > FREEZE_MIN_RATE,
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster (floor ${FREEZE_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.inc.freezeRate += c.v; syncStats(); } },
@@ -4135,7 +4163,7 @@ const UPGRADES = [
     },
     apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } },
   { id:'stormback', name:'Returning Blades', icon:'boomerang', cls:'SPELL', minRar:'legendary',
-    req:()=>player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
+    req:()=>!isCaster() && player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
     calc:m=>({n:1}),
     desc:c=> player.storm.boomer===0
       ? 'Storm blades stop fading at the end of their flight — each one wheels around and cuts its way back to you'
@@ -4149,7 +4177,7 @@ const UPGRADES = [
       `raking everything between`,
     apply:c=>{ player.orbit.pulse = 1; } },
   { id:'freezestun', name:'Absolute Zero', icon:'icecube', cls:'SPELL', minRar:'legendary',
-    req:()=>player.freeze.n>0 && !player.freeze.stun,
+    req:()=>isCaster() && player.freeze.n>0 && !player.freeze.stun,
     calc:m=>({n:1}),
     desc:c=>`Block Freeze no longer just slows — it freezes every caught foe SOLID `+
       `for ${FREEZE_STUN_T.toFixed(1)}s, the way a fifth chill stack freezes you`,
@@ -4205,7 +4233,7 @@ const UPGRADES = [
         `and ${Math.round(WHIRL_DEFLECT[2]*100)}% of incoming missiles are batted away. Still no rolling.`,
     apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
   { id:'vortextotem', name:'Lingering Vortex', icon:'totem', cls:'SPELL', minRar:'legendary',
-    req:()=>player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
+    req:()=>!isCaster() && player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
     calc:m=>({n:1}),
     desc:c=>{
       const lv = (player.vortex.totem||0) + 1;
@@ -4299,6 +4327,36 @@ const FAVOURITES = [
 let favourite = FAVOURITES[0];
 let godMode = false;
 let favSet = new Set();
+/* WHICH WEAPONS A BRICK SERVES. A brick with no `weap` of its own is read off
+   its `req` -- the gate is the truth, and this keeps the two from drifting
+   apart. The card prints the answer so you never have to guess why something
+   is not being offered. */
+const WEAP_TAGS = { melee:['SWORD','AXE','MACE'], cast:['STAFF'] };
+function brickWeapons(u){
+  if(u.weap) return WEAP_TAGS[u.weap] || WEAP_TAGS.melee;
+  /* ask the gate itself, once per weapon, with the real weapon swapped in */
+  const keep = weapon, out = [];
+  for(const id of WEAPON_KEYS){
+    weapon = WEAPONS[id];
+    /* the stats have to be REBUILT for the weapon being probed, or a gate that
+       reads a derived number — a cast floor, a reach cap — answers for whatever
+       the hero happens to be holding instead */
+    if(player) syncStats();
+    let ok = true;
+    try { ok = !u.req || !!u.req(); } catch(e){ ok = true; }
+    if(ok) out.push(WEAPONS[id].name);
+  }
+  weapon = keep;
+  if(player) syncStats();
+  return out;
+}
+/* the little row under a card: nothing when it works with everything, the
+   names when it does not */
+function weaponTagHtml(u){
+  const list = brickWeapons(u);
+  if(list.length >= WEAPON_KEYS.length) return '';
+  return `<div class="wreq">${list.map(n=>`<b>${n}</b>`).join('')}</div>`;
+}
 /* which favourites this weapon can actually make use of */
 function favAllowed(f){
   if(f.melee && isCaster()) return false;
@@ -4534,6 +4592,7 @@ function buildCheatRows(){
       <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
       <h3>${esc(u.name)}</h3><p>${body}</p>
+      ${weaponTagHtml(u)}
       <div class="rtag" style="background:${R.col}">${R.name}</div>
       ${hi>lo?`<div class="rscroll">⇅ shift+scroll</div>`:''}
       <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
@@ -5137,6 +5196,7 @@ function renderCards(){
         stroke-linecap="round" stroke-linejoin="round">${ICONS[card.t.icon]}</svg>
       <h3>${card.t.name}</h3><p>${card.t.desc(card.c, owned)}</p>
       <div class="rtag" style="background:${R.col}">${R.name}</div>
+      ${weaponTagHtml(card.t)}
       <div class="ctag" style="background:${CLS_COL[card.t.cls]||'#555'}">${card.t.cls}</div>
       <div class="key">${i+1}</div>`;
     if(card.rar==='legendary')
@@ -8674,6 +8734,16 @@ function updateProjectiles(dt){
           pr.dead = true; break;
         }
       }
+      /* it burns the SCENERY too — a staff hero opens chests and clears crates
+         the way a sword hero cuts them down. This is the hero's OWN bolt, so it
+         is never in the deflect list: that only ever holds what monsters throw. */
+      if(!pr.dead){
+        for(const prop of props){
+          if(prop.dead || prop.indestructible) continue;
+          if(dist(prop, pr) > prop.r + 10) continue;
+          pr.dead = true; break;
+        }
+      }
       if(pr.dead){
         /* it BURSTS. Everything caught takes the hit and catches fire, and the
            fire goes on FIRST so a body the bolt kills outright still dies
@@ -8687,6 +8757,14 @@ function updateProjectiles(dt){
           if(dist(e, pr) > pr.r + (e.r||12)) continue;
           burnEnemy(e, pr.dmg);
           hitEnemy(e, pr.dmg, angTo(pr, e), 140, 'fire', {});
+        }
+        /* everything breakable inside the burst takes a hit */
+        for(const prop of props){
+          if(prop.dead || prop.indestructible) continue;
+          if(dist(prop, pr) > pr.r + prop.r) continue;
+          prop.hp--; prop.flash = 1;
+          addSparks(prop.x, prop.y-8, 3, '#ff9a3c');
+          if(prop.hp <= 0) breakProp(prop);
         }
       }
     }

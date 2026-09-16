@@ -105,16 +105,23 @@ elemental), `Pyromancy` (increased fire) and `Wildfire` (a wider burst).
 clears them. It is only offered to a caster, the way the melee spells are only offered to
 a melee weapon.
 
-**Nothing is offered to a weapon that cannot use it.** A staff hero is never shown
-`Sharpened Blade`, `Longsword` or the legendary `Blademaster` — the whirl *is* the swing
-held down, and a staff has no swing. The favourites gate the same way: `Sword & Steel`,
-`Bladestorm` and `Blade Vortex` do not appear for a caster, and the new **`Elemental Arts`**
-and `Block Freeze` favourites do not appear for a melee weapon.
+**Nothing is offered to a weapon that cannot use it — and the card says so.** Every brick
+whose requirement is narrower than "any weapon" prints the weapons it serves in a small row
+under its text, read straight off its own gate so the label can never drift from the rule.
 
-**Bladestorm and Blade Vortex stay physical** whatever you are holding — they land physical
-damage and open wounds on their own merits, so a staff hero's blades still bleed even
-though the staff itself never can. A caster's cast interval also has its own floor, **0.34s**
-against melee's 0.10s, because a stream of fireballs is a hosepipe rather than a wizard.
+A staff hero is never shown `Sharpened Blade`, `Longsword`, `Blade Mastery`, the legendary
+`Blademaster`, the bleed bricks, or **either blade spell and its whole tree** — Bladestorm
+and Blade Vortex are for a hero who carries a blade. A melee hero is never shown the frost
+tree or the elemental one. The favourites gate the same way: `Sword & Steel`, `Bladestorm`
+and `Blade Vortex` do not appear for a caster, and the new **`Elemental Arts`** and
+`Block Freeze` favourites do not appear for a melee weapon.
+
+**Bladestorm and Blade Vortex stay physical** and open wounds on their own merits rather
+than on the weapon's. A caster's cast interval has its own floor, **0.34s** against melee's
+0.10s, because a stream of fireballs is a hosepipe rather than a wizard. The fireball breaks
+scenery like any swing — it opens chests and clears crates — but it is the hero's own
+projectile and carries no owner, so the deflect path, which only ever touches what monsters
+throw, can never bat one back at you.
 
 **Ability names never change.** A mace hero still takes `Bladestorm`, `Blade Vortex` and
 `Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
