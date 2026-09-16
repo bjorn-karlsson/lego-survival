@@ -127,7 +127,7 @@
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
-  #diffRow{display:flex;gap:10px;justify-content:center}
+  #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
   .diff{min-width:118px;padding:7px 13px 6px;border-radius:13px;cursor:pointer;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);
     font-family:'Titan One';font-size:13px;letter-spacing:1px;color:#f0e6e6;
@@ -238,13 +238,16 @@
     <div class="favhead">DIFFICULTY</div>
     <div id="diffRow"></div>
     <div class="diffblurb" id="diffBlurb"></div>
+    <div class="favhead">PICK A WEAPON — IT SETS YOUR PHYSICAL BASE, YOUR BRICKS DO THE REST</div>
+    <div id="weaponRow"></div>
+    <div class="diffblurb" id="weaponBlurb"></div>
     <div class="favhead">PICK A FAVOURITE — ITS BRICKS SHOW UP MORE OFTEN</div>
     <div id="favRow"></div>
     <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
     <div class="ctl">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
-      <span><kbd>LMB</kbd> <b>swing sword</b></span>
+      <span><kbd>LMB</kbd> <b>swing</b></span>
       <span><kbd>SPACE</kbd> <b>roll</b></span>
       <span><kbd>F</kbd> <b>start wave early</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
@@ -579,7 +582,9 @@ function syncStats(){
   p.speed   = Math.min(SPEED_MAX,  pool(SPEED_BASE, 0, i.speed, 1));
   p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
   p.studMul = pool(1, 0, i.studs, 1);
-  p.atkRate = paceOf(ATK_BASE, i.atk, ATK_RATE_MIN);
+  /* the weapon sets the BASE; the bricks scale it, exactly as before */
+  p.atkRate = paceOf(weapon.rate, i.atk, ATK_RATE_MIN);
+  p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
   p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, i.orbitSpd, 1));
   p.blaster.rate = paceOf(BLAST_RATE_BASE, i.blastRate, BLAST_MIN_RATE);
@@ -602,7 +607,7 @@ function syncStats(){
   p.armour      = pool(0, p.armourFlat, 0, 1);      /* the flat pool; armourValue() finishes it */
   p.reach       = Math.min(REACH_MAX,     pool(0, p.reachFlat, 0, 1));
   p.suppress    = Math.min(1,             pool(0, p.suppressFlat, 0, 1));
-  p.critMultPct = Math.min(CRIT_MULT_CAP, pool(CRIT_MULT_BASE, p.critMultFlat, 0, 1));
+  p.critMultPct = Math.min(CRIT_MULT_CAP, pool(weapon.critMult, p.critMultFlat, 0, 1));
   p.regenRate   = Math.min(REGEN_MAX,     pool(0, p.regenFlat, i.regen, 1));
   p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
   p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
@@ -759,9 +764,60 @@ function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
    `increased` modifiers of the same kind are ADDITIVE with one another; every
    `more` modifier is its own multiplier. 50% increased + 30% increased is ×1.80,
    while 50% more + 30% more is ×1.50 × 1.30.                                   */
-const SWORD_BASE      = 1;     /* base sword damage before any flat adds */
-const CRIT_BASE       = 0.05;  /* base critical strike chance */
-const CRIT_MULT_BASE  = 150;   /* base critical strike multiplier, in percent */
+/* ============================== WEAPONS ==============================
+   The hero's melee weapon is a TABLE ENTRY, not a special case anywhere in the
+   code. Every number the swing, the whirl, Blade Vortex and Bladestorm read
+   comes from here, so adding a fifth weapon is adding a row — nothing else.
+
+   THE ABILITY NAMES NEVER CHANGE. A mace hero still takes Bladestorm and Blade
+   Vortex and Sword & Steel; they simply behave like a mace. What the weapon
+   decides is the PHYSICAL side of the hero: base damage, how fast it swings,
+   how far it reaches, how often and how hard it crits, and how readily it opens
+   a wound.
+
+   `bleed` is a MORE multiplier on the chance to bleed, which is why an axe —
+   which crits constantly — is not also the best bleed weapon in the game: a
+   clean cut bleeds least, and a blunt one bleeds worst. */
+const WEAPONS = {
+  sword: { id:'sword', name:'SWORD', col:'#cfd6dd',
+    blurb:'Balanced. Every number in this game is written against it.',
+    dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
+    bleed:1.0, spin:1.40, kb:1.00 },
+  axe: { id:'axe', name:'AXE', col:'#e0a81a',
+    blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
+    dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
+    bleed:0.45, spin:1.55, kb:1.15 },
+  mace: { id:'mace', name:'MACE', col:'#b6532b',
+    blurb:'Hits hardest and opens the worst wounds. Slow, and it rarely crits.',
+    dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
+    bleed:1.90, spin:1.30, kb:1.55 },
+  staff: { id:'staff', name:'STAFF', col:'#9b45d6',
+    blurb:'Not finished yet — for now it swings exactly like a sword.',
+    dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
+    bleed:1.0, spin:1.40, kb:1.00 }
+};
+const WEAPON_KEYS = Object.keys(WEAPONS);
+let weapon = WEAPONS.sword;
+function setWeapon(id){
+  weapon = WEAPONS[id] || WEAPONS.sword;
+  try{ localStorage.setItem('bb_weapon', weapon.id); }catch(e){}
+  if(player) syncStats();
+  const row = document.getElementById('weaponRow');
+  if(row) for(const el of row.children){
+    const on = el.dataset.weapon === weapon.id;
+    el.classList.toggle('on', on);
+    el.style.borderColor = on ? weapon.col : 'rgba(255,255,255,.18)';
+    el.style.background  = on ? weapon.col : 'rgba(9,13,17,.34)';
+    el.style.color       = on ? '#12181d' : '#f0e6e6';
+    el.style.boxShadow   = on ? `0 4px 0 ${sh(weapon.col,-0.35)}` : 'none';
+  }
+  const blurb = document.getElementById('weaponBlurb');
+  if(blurb) blurb.textContent = weapon.blurb;
+}
+/* the baseline the rest of the game is balanced against, kept for the bricks
+   that quote a "base" number in their own text */
+const CRIT_BASE       = WEAPONS.sword.crit;
+const CRIT_MULT_BASE  = WEAPONS.sword.critMult;
 const CRIT_CHANCE_CAP = 0.95;
 const CRIT_MULT_CAP   = 600;
 /* Armour mitigates ATTACK hits: DR = Armour / (Armour + 5 × hit damage), so a
@@ -1232,7 +1288,7 @@ function newPlayer(){
   return {
     x:CX, y:CY-40, r:13, hp:HP_BASE, maxHp:HP_BASE, speed:SPEED_BASE,
     /* offence, in PoE terms */
-    flatSword:0,          /* flat added sword damage */
+    flatPhys:0,           /* flat added PHYSICAL damage — whatever you are holding */
     incMelee:0,           /* increased melee damage — sword, bladestorm, vortex */
     incSpell:0,           /* increased spell damage — orbit, blaster, storm bricks, bombs */
     incAll:0,             /* increased damage, everything (+5% per level) */
@@ -2388,7 +2444,10 @@ function baneStrike(e, dmg, dir, kb, dps, dur, stacks){
    brick makes your crits nastier AND your ordinary swings bleed at all. */
 function bleedChance(crit){
   const p = player;
-  return clamp((crit ? BLEED_CRIT_BASE : 0) + ((p && p.bleedChance) || 0), 0, 1);
+  /* the weapon is a MORE multiplier on the whole chance: an axe cuts clean and
+     barely bleeds, a mace mangles. Its own base and your bricks are one pool. */
+  const pooled = (crit ? BLEED_CRIT_BASE : 0) + ((p && p.bleedChance) || 0);
+  return clamp(pooled * weapon.bleed, 0, 1);
 }
 /* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
    rather than stacking beside it — so bleed rewards hitting hard, not often. */
@@ -2680,8 +2739,12 @@ function calcDamage(base, kind, more){
   if(more) for(const m of more) d *= m;
   return Math.max(0, d);
 }
-function swordBase(){ return SWORD_BASE + player.flatSword; }
-function swordDamage(more){ return calcDamage(swordBase(), 'melee', more); }
+/* The weapon's own base plus every flat PHYSICAL brick. Nothing here knows or
+   cares which weapon it is — that is the whole point. */
+function physBase(){ return weapon.dmg + player.flatPhys; }
+function physDamage(more){ return calcDamage(physBase(), 'melee', more); }
+/* kept under their old names so nothing that reads "the sword's damage" breaks */
+const swordBase = physBase, swordDamage = physDamage;
 function critChance(){ return clamp(player.critBase * (1 + player.incCrit), 0, CRIT_CHANCE_CAP); }
 function critMultPct(){ return Math.min(CRIT_MULT_CAP, player.critMultPct); }
 function critMult(){ return critMultPct()/100; }
@@ -3492,11 +3555,11 @@ const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     /* common barely sharpens it; rare and epic are a real weapon upgrade */
     calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8])}),
-    desc:c=>`+${fmtHp(c.v)} FLAT base damage to the sword — before any increase`,
-    apply:c=>{ player.flatSword = Math.round((player.flatSword + c.v)*100)/100; } },
+    desc:c=>`+${fmtHp(c.v)} FLAT PHYSICAL damage — before any increase, whatever you are holding`,
+    apply:c=>{ player.flatPhys = Math.round((player.flatPhys + c.v)*100)/100; } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased melee damage — sword, bladestorm and vortex`,
+    desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex`,
     apply:c=>{ player.incMelee += c.v; } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
     calc:m=>({v:0.06+0.04*m}),
@@ -3520,7 +3583,7 @@ const UPGRADES = [
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     req:()=>player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
-    desc:c=>`+${c.v} sword attack range (cap ${56+REACH_MAX})`,
+    desc:c=>`+${c.v} melee reach (cap ${weapon.reach+REACH_MAX})`,
     apply:c=>{ player.reachFlat += c.v; syncStats(); } },
   { id:'aspd', name:'Swift Hands', icon:'clock', cls:'OFFENSE',
     req:()=>player.atkRate > ATK_RATE_MIN,
@@ -3963,10 +4026,10 @@ const FAV_WEIGHT = 3.2;
 const FAV_PERKS = {
   none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
-    apply(p){ p.flatSword += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
+    apply(p){ p.flatPhys += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
       p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
-  sword: { lines:['+1 flat sword damage', '+8% swing rate', '+8 sword reach'],
-    apply(p){ p.flatSword += 1; p.inc.atk += 0.09;
+  sword: { lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
+    apply(p){ p.flatPhys += 1; p.inc.atk += 0.09;
       p.reachFlat += 8; } },
   orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
@@ -4046,6 +4109,17 @@ function setDifficulty(id){
   }
   const blurb = document.getElementById('diffBlurb');
   if(blurb) blurb.textContent = difficulty.blurb;
+}
+function buildWeaponRow(){
+  const row = document.getElementById('weaponRow');
+  if(!row) return;
+  row.innerHTML = WEAPON_KEYS.map(id=>
+    `<div class="diff" data-weapon="${id}">${WEAPONS[id].name}</div>`).join('');
+  for(const el of row.children)
+    el.addEventListener('click', ()=>{ SFX.click(); setWeapon(el.dataset.weapon); });
+  let saved = 'sword';
+  try{ saved = localStorage.getItem('bb_weapon') || 'sword'; }catch(e){}
+  setWeapon(WEAPONS[saved] ? saved : 'sword');
 }
 function buildDiffRow(){
   const row = document.getElementById('diffRow');
@@ -4511,21 +4585,22 @@ function spellSummaries(){
    lines, which is the only honest way to read it. */
 function swordDps(){
   const p = player;
-  const light = swordDamage(), spin = light*1.4;
+  const light = physDamage(), spin = light*weapon.spin;
   const swingT = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   const critAvg = 1 + critChance()*(critMult()-1);
   return ((light*2 + spin)/3) * (1/swingT) * critAvg;
 }
 /* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
 const STAT_PROBES = [
-  { g:'SWORD', k:'Sword hit',       get:()=> swordDamage(),            fmt:v=>fmtHp(v) },
-  { g:'SWORD', k:'Spin swing',      get:()=> swordDamage()*1.4,        fmt:v=>fmtHp(v) },
-  { g:'SWORD', k:'Sustained DPS',   get:()=> swordDps(),               fmt:v=>v.toFixed(1) },
-  { g:'SWORD', k:'Whirl DPS',       get:()=> player.blademaster>0 ? swordDamage([WHIRL_MUL])/WHIRL_TICK : 0,
+  { g:'PHYSICAL', k:'Weapon hit',     get:()=> physDamage(),             fmt:v=>fmtHp(v) },
+  { g:'PHYSICAL', k:'Spin swing',     get:()=> physDamage()*weapon.spin, fmt:v=>fmtHp(v) },
+  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> swordDps(),               fmt:v=>v.toFixed(1) },
+  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> player.blademaster>0 ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
-  { g:'SWORD', k:'Swing rate',      get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
-  { g:'SWORD', k:'Reach',           get:()=> 56+player.reach,          fmt:v=>Math.round(v)+' px' },
-  { g:'SWORD', k:'Crit chance',     get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
+  { g:'PHYSICAL', k:'Base + flat',    get:()=> physBase(),               fmt:v=>v.toFixed(2) },
+  { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
+  { g:'PHYSICAL', k:'Reach',          get:()=> weapon.reach+player.reach, fmt:v=>Math.round(v)+' px' },
+  { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
   { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%' },
   { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true },
   { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s' },
@@ -4873,9 +4948,19 @@ function renderCharSheet(){
       p.chill.stacks>0 ? `moving at ${Math.round(chillMul()*100)}% speed` : '')
   ]);
 
-  const sword = sBlock('SWORD', [
-    sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(56+p.reach)} reach · arc swing`),
-    sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(64+p.reach)} reach · every 3rd swing, full circle`),
+  const sword = sBlock(weapon.name, [
+    sRow('Weapon', weapon.name,
+      `${weapon.dmg} base · ${weapon.rate.toFixed(2)}s · ${Math.round(weapon.crit*100)}% crit`,
+      `${weapon.blurb}\n\n`+
+      `Base damage ${weapon.dmg} · swing ${weapon.rate.toFixed(2)}s · reach ${weapon.reach}\n`+
+      `Crit ${Math.round(weapon.crit*100)}% for ×${(weapon.critMult/100).toFixed(2)}\n`+
+      `Spin swing ×${weapon.spin.toFixed(2)} · knockback ×${weapon.kb.toFixed(2)}\n`+
+      `Bleed chance ×${weapon.bleed.toFixed(2)}\n\n`+
+      `Every brick you own works with every weapon — the weapon sets the base,\n`+
+      `your bricks scale it. Ability names never change: a mace still swings\n`+
+      `Bladestorm, it just swings it like a mace.`),
+    sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(weapon.reach+p.reach)} reach · arc swing`),
+    sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(weapon.spinReach+p.reach)} reach · every 3rd swing, ×${weapon.spin.toFixed(2)} MORE`),
     ...(p.blademaster>0 ? [sRow('Blademaster', '×'+p.blademaster,
       `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed · `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% deflect · no roll`,
@@ -4888,46 +4973,48 @@ function renderCharSheet(){
     sRow('Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
-        : `${p.atkRate.toFixed(2)}s per swing — ${ATK_BASE}s base / (1 + ${Math.round(p.inc.atk*100)}%)`),
+        : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
     sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target')
   ]);
 
   const crit = sBlock('CRITICALS', [
     sRow('Crit chance', (cc*100).toFixed(1)+'%',
-      `${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round(p.incCrit*100)}% increased)`
+      `${(weapon.crit*100).toFixed(0)}% ${weapon.name.toLowerCase()} base × (1 + ${Math.round(p.incCrit*100)}% increased)`
       + (cc>=CRIT_CHANCE_CAP ? ' — at the cap' : ''),
       `Final crit chance = Base × (1 + total increased).\n`+
       `Increases are additive with one another, then multiply the base once.\n\n`+
-      `Yours: ${(CRIT_BASE*100).toFixed(0)}% base × (1 + ${Math.round(p.incCrit*100)}%) = ${(cc*100).toFixed(1)}%\n`+
+      `Yours: ${(weapon.crit*100).toFixed(0)}% ${weapon.name.toLowerCase()} base × (1 + ${Math.round(p.incCrit*100)}%) = ${(cc*100).toFixed(1)}%\n`+
       `Capped at ${Math.round(CRIT_CHANCE_CAP*100)}%.`),
     sRow('Crit multiplier', critMultPct()+'%',
       `a crit deals ${critMultPct()}% of the hit`
       + (critMultPct()>=CRIT_MULT_CAP ? ' — at the cap' : ''),
       `Crit multiplier is how much of the hit a critical strike deals.\n`+
-      `${CRIT_MULT_BASE}% is the base; +X% to multiplier adds points to it.\n\n`+
-      `Yours: ${CRIT_MULT_BASE}% base + ${critMultPct()-CRIT_MULT_BASE}% = ${critMultPct()}%\n`+
+      `${weapon.critMult}% is the ${weapon.name.toLowerCase()}'s base; +X% to multiplier adds points to it.\n\n`+
+      `Yours: ${weapon.critMult}% base + ${critMultPct()-weapon.critMult}% = ${critMultPct()}%\n`+
       `Your ${light.toFixed(1)} sword hit crits for ${(light*critMult()).toFixed(1)}.\n`+
       `Capped at ${CRIT_MULT_CAP}%.`),
     sRow('Average multiplier', '×'+critAvg.toFixed(2), 'expected damage across all hits')
   ], sBar(cc, '#ffd166'));
 
   const power = sBlock('DAMAGE PIPELINE', [
-    sRow('Sword base + flat', swordBase().toFixed(1),
-      `${SWORD_BASE} base + ${fmtHp(p.flatSword)} flat added`,
+    sRow('Physical base + flat', physBase().toFixed(2),
+      `${weapon.name.toLowerCase()} ${weapon.dmg} base + ${fmtHp(p.flatPhys)} flat added`,
       `FLAT added damage is summed with the base BEFORE anything scales it,\n`+
       `so flat is worth most when you already have big increases, and vice versa.\n\n`+
+      `The BASE is your weapon's. Every flat brick adds to the same pool whatever\n`+
+      `you are holding, so a build is never locked to one weapon.\n\n`+
       `Damage = (Base + Flat) × (1 + increased) × each more multiplier\n`+
-      `Yours:  (${SWORD_BASE} + ${fmtHp(p.flatSword)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)} = ${light.toFixed(2)}`),
+      `Yours:  (${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)} = ${light.toFixed(2)}`),
     sRow('Increased damage', Math.round(p.incAll*100)+'%', '+5% per level — applies to everything',
       `INCREASED modifiers of the same kind are ADDITIVE with one another,\n`+
       `then multiply the base once.\n`+
       `50% increased + 30% increased = ×1.80, NOT ×1.50 × 1.30.\n\n`+
-      `Yours: ${Math.round(p.incAll*100)}% from levels + ${Math.round(p.incMelee*100)}% melee`+
-      ` = ×${(1+p.incAll+p.incMelee).toFixed(2)} on a sword hit.`),
-    sRow('Increased melee', Math.round(p.incMelee*100)+'%', 'sword, bladestorm & vortex',
-      `Adds into the same pool as your increased damage, for melee only.\n\n`+
-      `Sword: (${SWORD_BASE} + ${fmtHp(p.flatSword)} flat) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) = `+
-      `${((SWORD_BASE+p.flatSword)*(1+p.incAll+p.incMelee)).toFixed(2)} before more multipliers.`),
+      `Yours: ${Math.round(p.incAll*100)}% from levels + ${Math.round(p.incMelee*100)}% physical`+
+      ` = ×${(1+p.incAll+p.incMelee).toFixed(2)} on a weapon hit.`),
+    sRow('Increased physical', Math.round(p.incMelee*100)+'%', 'your weapon, bladestorm & vortex',
+      `Adds into the same pool as your increased damage, for physical only.\n\n`+
+      `${weapon.name}: (${weapon.dmg} + ${fmtHp(p.flatPhys)} flat) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) = `+
+      `${((weapon.dmg+p.flatPhys)*(1+p.incAll+p.incMelee)).toFixed(2)} before more multipliers.`),
     sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks',
       `The spell half of the same pool. Bladestorm and vortex are melee, not spells.\n\n`+
       `A 5-base spell hit: 5 × (1 + ${Math.round((p.incAll+p.incSpell)*100)}%) × ${p.moreAll.toFixed(2)} = `+
@@ -4973,7 +5060,7 @@ function renderCharSheet(){
       `Yours: ×${p.moreAll.toFixed(3)} on every hit.\n`+
       `The spin swing is a separate 40% more on top.`),
     sRow('Sword hit', light.toFixed(2),
-      `(${SWORD_BASE} + ${fmtHp(p.flatSword)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)}`)
+      `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)}`)
   ]);
 
   const loot = sBlock('LOOT & XP', [
@@ -5276,7 +5363,7 @@ function updatePlayer(dt){
     /* the legs keep working under the crouch, whether or not you are walking */
     p.walk += dt*16;
     p.swing = null;                       /* the whirl and a swing are exclusive */
-    const reach = 56 + p.reach;
+    const reach = weapon.reach + p.reach;
     const dmg = swordDamage([WHIRL_MUL]);
     for(const en of enemiesNear(p.x, p.y, reach + 80)){
       if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
@@ -5367,8 +5454,10 @@ function updatePlayer(dt){
           let within = s.spin ? x>0.12 : inSweep(Math.atan2(en.y-p.y,en.x-p.x), s.from, s.to, e, 0.45+span);
           if(within){
             s.hit.add(en);
-            const dmg = swordDamage(s.spin ? [1.4] : null);   /* spin = 40% MORE */
-            hitEnemy(en, dmg, Math.atan2(en.y-p.y,en.x-p.x), s.spin?300:210, 'sword', {spin:s.spin});
+            /* the spin is a MORE multiplier, and how big it is is the weapon's */
+            const dmg = physDamage(s.spin ? [weapon.spin] : null);
+            hitEnemy(en, dmg, Math.atan2(en.y-p.y,en.x-p.x),
+                     (s.spin?300:210)*weapon.kb, 'sword', {spin:s.spin});
             if(s.spin) addShake(0.12);
           }
         }
@@ -5807,9 +5896,9 @@ function startSwing(aim){
   retPulse = 1;
   const spin = p.combo===2;
   const s = { t:0, dur: spin?0.34:0.2, spin, hit:new Set(), hitP:new Set(), aim };
-  if(spin){ s.from = aim; s.to = aim + TAU*0.95; s.reach = 64 + p.reach; }
-  else if(p.combo===0){ s.from = aim-1.5; s.to = aim+1.15; s.reach = 56 + p.reach; }
-  else { s.from = aim+1.5; s.to = aim-1.15; s.reach = 56 + p.reach; }
+  if(spin){ s.from = aim; s.to = aim + TAU*0.95; s.reach = weapon.spinReach + p.reach; }
+  else if(p.combo===0){ s.from = aim-1.5; s.to = aim+1.15; s.reach = weapon.reach + p.reach; }
+  else { s.from = aim+1.5; s.to = aim-1.15; s.reach = weapon.reach + p.reach; }
   s.cur = s.from;
   p.swing = s;
   SFX.swing();
@@ -10642,7 +10731,7 @@ function render(){
      squashed one: the hit test is a circle, so a flattened drawing meant the
      blade struck a foot above and below the ring you could see. */
   if(player && player.whirl && !player.dead){
-    const reach = 56 + player.reach;
+    const reach = weapon.reach + player.reach;
     ctx.save();
     /* the floor the whirl actually covers */
     ctx.fillStyle = 'rgba(232,238,242,0.07)';
@@ -12416,6 +12505,7 @@ function frame(now){
 resetRun(true);
 buildFavRow();
 buildDiffRow();
+buildWeaponRow();
 showBest();
 fitTitle();
 requestAnimationFrame(frame);

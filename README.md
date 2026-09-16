@@ -68,6 +68,28 @@ no slot at all — and its bricks turn up more often, plus a starting kit to mat
 
 </td><td width="33%" valign="top">
 
+### 🗡️ Pick a weapon
+
+Your weapon is a **table row**, not a special case in the code. It sets the physical side
+of the hero — base damage, swing time, reach, how often and how hard it crits, and how
+readily a hit opens a wound — and every brick you own scales it from there.
+
+| | base | swing | reach | crit | crit mult | bleed | spin |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
+| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
+| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
+| **STAFF** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
+
+An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
+hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
+is slow and crits rarely. The staff is not finished; it swings exactly like a sword for now.
+
+**Ability names never change.** A mace hero still takes `Bladestorm`, `Blade Vortex` and
+`Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
+**flat physical damage** and `Blade Mastery` grants **increased physical damage**, so every
+brick works with every weapon and no build is locked to one.
+
 ### 🩸 Elements & ailments
 
 Fire, frost and lightning each stack. **The fifth stack breaks something**: burning
