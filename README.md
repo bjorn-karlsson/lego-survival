@@ -193,7 +193,9 @@ against you critting.
 
 **All three go the other way too.** Fire burns a monster, frost chills it, and lightning
 now **SHOCKS** it: a shocked body takes **+7% damage per stack, five deep — +35% from
-everything you own**, not just from lightning. It is a multiplier on the *body*, so it sits
+everything you own**, not just from lightning. It is **drawn**, too — arcs crawl the
+silhouette rather than pips sitting beside it, so a shocked body reads as shocked from
+across the field while it is moving, and the fifth stack sparks off it. It is a multiplier on the *body*, so it sits
 outside the hero's own damage ceiling and it makes every other source in your build land
 harder. That is what the storm brick is for now.
 
@@ -216,6 +218,15 @@ is `Conductor`. The way to make the storm come round faster is to **own more bri
 stagger between them is no longer a fixed 0.2s but **the interval divided by the bank**, so
 five bricks fire 0.40s apart, for ever. A bank used to empty itself in the first second of
 every two and then stand idle; it reads as a rhythm now rather than a volley.
+
+**The blightspitter** is the monster side of the same idea. Every other ranged monster asks
+you to dodge one thing once; this one asks you to give up **ground**. The gobbet it lobs is
+nearly harmless — priced at 35% of its damage, and then cut again by armour — but it leaves
+a **pool of blight** that bites every 0.55s for as long as you stand in it, for 5.5 seconds.
+It leads your movement a little, so walking in a straight line does not beat it, and a few
+of them working together can close a corridor and push you back into the pack. It is
+deliberately fragile and takes **20% more fire**: the answer is to kill it, not to out-heal
+it.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
@@ -547,7 +558,8 @@ read straight off the stack count, and they expire together.
 |---|---|---|
 | ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
 | 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
-| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed** |
+| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed**. **Five stacks freeze it solid** |
+| ⚡ **Shocked** | Any storm bolt that rolls `Conductor` | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
 | 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
 
 Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
@@ -560,6 +572,8 @@ feeds, and each drips its numbers in its own colour — green for the rot, red f
 | ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
 | 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
 | ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
+| ⚡ **Shock arcs** | your storm bolts, with `Conductor` | Lightning crawls the body's silhouette while shock holds on it, deepening with the stack count; at five it sparks off |
+| 🟢 **Blight pool** | the **blightspitter** | Ground it lobbed, not a hit it landed: bites every 0.55s for 5.5s while you stand in it, and does nothing at all once you step out |
 | 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself. He is the fattest body on the field that is not a golem or a boss (**95 base**, against a bastion's 46) and shrugs off chip damage: he deals no damage at all, so the health bar *is* the fight, and at 30 he popped before the aura ever mattered |
 | 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
 
@@ -722,20 +736,80 @@ A monster now carries a **LEVEL**, separate from the wave it spawned in, and it 
 
 | | monster level | health, damage and armour |
 |---|--:|--:|
-| before wave 20 | **0** | ×1.00 — the early game is untouched |
-| wave 20 | 1 | ×1.11 |
-| wave 30 | 4 | ×1.52 |
-| wave 40 | 7 | ×2.08 |
+| before wave 10 | **0** | ×1.00 — the opening waves are untouched |
+| wave 10 | 1 | ×1.11 |
+| wave 20 | 3 | ×1.37 |
+| wave 30 | 6 | ×1.87 |
+| wave 40 | 8 | ×2.30 |
 | wave 50 | 11 | ×3.15 |
-| wave 60 | 14 | ×4.31 |
+| wave 60 | 13 | ×3.88 |
 
-One level every three waves past wave 20, **+11% each**, multiplied on **top** of the wave
+One level every four waves past wave 10, **+11% each**, multiplied on **top** of the wave
 curve rather than added into it — and capped at level 40, so a very long run is a fight
-rather than a wall. Measured end to end, a wave-60 brute now has **×1.78 the health and
-×1.75 the damage** of a wave-50 one, where before the change it was ×1.30 and ×1.28.
+rather than a wall. Measured end to end, a wave-60 brute has **×1.78 the health and ×1.75
+the damage** of a wave-50 one, where before levels existed it was ×1.30 and ×1.28.
+
+Levels start at wave 10 rather than 20, and the cadence went from one every three waves to
+one every four *at the same time*, deliberately. Rank is `(wave − start) / every`, so
+pulling the start down lifts **every** later wave as well — the two changes together put the
+first level ten waves earlier while landing waves 50 and 60 within a hair of where they
+already were. Earlier, not harder.
 
 The level shows beside the wave number in the HUD once it starts to bite, and on the
 character sheet with the arithmetic behind it.
+
+## Wave modifiers
+
+Every wave from **6** rolls a modifier, and another every twelve waves after that, up to
+four. They are rolled **once**, when the wave is composed, and held for its whole life — so
+a wave has an identity you can read off the banner and plan around rather than a difficulty
+that drifts under you. They sit under the wave number in the HUD until it is cleared, each
+in its own colour, and they go in the combat log too.
+
+| | |
+|---|---|
+| **HARDY** | monsters have 30% more health |
+| **BRUTAL** | monsters deal 25% more damage |
+| **SWIFT** | monsters move 18% faster |
+| **FRENZIED** | monsters attack 25% faster |
+| **PLATED** | monsters have double armour |
+| **WARDED** | monsters suppress 30% of spell damage |
+| **RESISTANT** | monsters gain 35% resistance to every element |
+| **SLIPPERY** | monsters evade 12% of your hits |
+| **HORDE** | 40% more monsters, each with 15% less health |
+| **OPULENT** | monsters are tougher, and pay double |
+| **WARBAND** | one monster in six is an elite |
+
+Each one is a plain multiplier applied **at spawn**, after the wave curve, the monster level
+and the difficulty — so a modifier multiplies the finished number rather than a base that
+has not been built yet, and nothing reaches into a body that is already standing. A body
+gets a **copy** of its species' resistance table for exactly this reason: `RESISTANT` writes
+to it, and writing to the shared definition would have made the modifier permanent for the
+rest of the run. A test asserts the species comes back clean afterwards.
+
+---
+
+## Monsters resist what they are made of
+
+The hero has had elemental resistance since the first commit and monsters never did, which
+meant a fire golem was exactly as flammable as a skeleton — every golem was a reskin as far
+as your build was concerned.
+
+| | resists | weak to | |
+|---|---|---|---|
+| **Fire golem** | fire **90%** | frost **−35%** | shock 20% |
+| **Ice golem** | frost **90%** | fire **−35%** | shock 20% |
+| **Storm golem** | lightning **90%** | frost **−35%** | fire 20% |
+| **Stone golem** | 25% of everything | — | and **×3.2 armour** |
+| Lords · mages | 75% · 45% of their own element | the opposite one | |
+
+A **negative** resistance is a weakness and multiplies *up*, so a fire golem takes **135**
+from a 100-damage frost hit and **10** from the same hit in fire. Which spell you are
+holding decides which golem is a problem.
+
+Stone is the exception on purpose: it is rock, so it is **armour** — and armour only ever
+touches *attacks*. You cannot out-swing a stone golem; you burn it. Resistance caps at
+**90%** even under `RESISTANT`, so max resistance is a wall rather than immunity.
 
 ---
 
@@ -797,9 +871,9 @@ read off the **live hero**, so a brick taken at common and again at epic shows w
 of them are doing now. It is filed in the bench's own order, and a spell's section is headed
 with that spell's live damage.
 
-**It does not pause the game.** The state machine stays on `play` the whole time, the
-overlay is click-through everywhere except the panel itself, and the page refreshes twice a
-second so the numbers keep up with the wave that is still happening around you.
+**It pauses.** It was built not to, and that was simply wrong: reading nine sections of
+cards while a wave-40 pack walks into you is not a choice anyone makes twice. It takes its
+own state, so the world freezes and stays drawn behind it.
 
 ### The DPS tab — <kbd>L</kbd>, then the fourth tab
 

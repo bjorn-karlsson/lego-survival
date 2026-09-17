@@ -269,12 +269,9 @@
      draw a brick, and a second way of drawing one is a second thing to keep
      in step. The wave does NOT stop while this is open, which is why the panel
      leaves the bottom of the screen clear: you can still see your feet. */
-  /* THE OVERLAY LETS THE FIGHT THROUGH. Everything but the panel itself is
-     click-through, so the half of the screen the book is not covering is still
-     your game — which is the whole point of it not pausing. */
-  #bookScreen{justify-content:flex-start;overflow:hidden;pointer-events:none;
-    background:rgba(9,13,17,.42);backdrop-filter:blur(2px)}
-  .sheet.book{max-height:82vh;margin:2vh 0;pointer-events:auto}
+  #bookScreen{justify-content:flex-start;overflow:hidden;
+    background:rgba(9,13,17,.62);backdrop-filter:blur(3px)}
+  .sheet.book{max-height:88vh;margin:2vh 0}
   .bookgrid{display:flex;flex-direction:column;gap:16px;width:100%}
   .booksec{width:100%}
   .bookhead{font-family:'Titan One';font-size:11px;letter-spacing:2.4px;color:#ffd76e;
@@ -437,7 +434,7 @@
       <div class="sheetsub" id="bookSub"></div>
     </div>
     <div class="sheetbody" id="bookBody"></div>
-    <div class="sheetfoot">P or ESC to close &middot; <b>the wave does not stop</b> while this is open</div>
+    <div class="sheetfoot">P or ESC to close &middot; the wave is paused while this is open</div>
   </div>
 </div>
 
@@ -969,8 +966,13 @@ function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
    and from there every level is MOB_LEVEL_STEP more of everything than the one
    below it, MULTIPLIED on top of the wave curve rather than added into it. That
    is the difference between a curve that levels off and one that does not. */
-const MOB_LEVEL_FROM  = 20;    /* no level at all before this wave */
-const MOB_LEVEL_EVERY = 3;     /* waves per level after it */
+/* WHERE THE LEVELS START, and how fast they come. Moving the start earlier
+   without also slowing the cadence would have inflated the far end too: rank is
+   (wave - FROM)/EVERY, so pulling FROM down lifts EVERY late wave as well. 10
+   and 4 puts the first level at wave 10 instead of 20 while landing wave 50 and
+   wave 60 within a hair of where they already were — earlier, not harder. */
+const MOB_LEVEL_FROM  = 10;    /* no level at all before this wave */
+const MOB_LEVEL_EVERY = 4;     /* waves per level after it */
 const MOB_LEVEL_STEP  = 0.11;  /* compounding, per level */
 const MOB_LEVEL_MAX   = 40;    /* a ceiling, so a 200-wave run is not a wall */
 function mobRank(w){
@@ -1130,6 +1132,31 @@ const ECHILL_T    = 4;
 const ESHOCK_MAX  = 5;       /* stacks */
 const ESHOCK_STEP = 0.07;    /* MORE damage taken, per stack */
 const ESHOCK_T    = 4;       /* seconds a stack lasts, refreshed by the next */
+/* BLIGHT — the pool a blightspitter leaves. It is a ZONE, not a hit: it ticks
+   while you stand in it and it does nothing at all once you step out, so the
+   whole monster is a question about where you are standing. It ticks on its own
+   clock rather than every frame, or a wave-40 pool would delete you between two
+   footsteps. */
+const VENOM_LIFE = 5.5;      /* seconds the pool lingers */
+const VENOM_TICK = 0.55;     /* seconds between bites */
+const VENOM_SHARE = 0.45;    /* of the gobbet's damage, per bite */
+/* WHICH ELEMENT A SOURCE IS. The hero has had elemental resistance since the
+   start and monsters never did, which meant a fire golem was exactly as flammable
+   as a skeleton — every golem was a reskin as far as your build was concerned.
+   One table, read by the one place a hit is mitigated, so a new elemental source
+   inherits every monster's resistance to it by being named here. */
+const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
+                      frost:'frost', freeze:'frost',
+                      chain:'shock', shock:'shock' };
+/* a monster's resistance to one element, 0 when it has none. Capped below 1 for
+   everything except an IMMUNE marker, so "max resistance" is a wall and not a
+   divide-by-zero — you can still grind a fire golem down with fire, it is simply
+   the worst possible way to do it. */
+const ERES_CAP = 0.90;
+function enemyRes(e, el){
+  if(!e || !e.res || !el) return 0;
+  return Math.min(ERES_CAP, e.res[el] || 0);
+}
 const EBURN_MAX    = 5;      /* the fifth stack breaks and brands */
 const EBURN_DUR    = 6;      /* how long one stack burns */
 const EBURN_SHARE  = 0.30;   /* of the hit that lit it, per second, per stack */
@@ -1485,7 +1512,7 @@ window.addEventListener('keydown', e=>{
   /* P IS THE SPELLBOOK, and the spellbook does not stop the wave — the state
      machine is left on 'play' throughout, so everything keeps updating behind
      it. ESC still pauses, but closes the book first if it is open. */
-  if(e.code==='KeyP' && (state==='play'||state==='pause')) toggleBook();
+  if(e.code==='KeyP' && (state==='play'||state==='book')) toggleBook();
   if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
@@ -1511,7 +1538,6 @@ window.addEventListener('mousedown', e=>{
       if(t >= 0){ clogView = t; SFX.pick(); }
       return;
     }
-    if(bookHit(e.clientX, e.clientY)) return;
     mouse.down = true;
   }
 });
@@ -2342,15 +2368,28 @@ const EDEF = {
   necromancer:{ hp:8,  speed:50, r:13, scale:1.0,  dmg:1, xp:10, studs:[8,14],
              col:{head:'#eef0ee', torso:'#3a2a55', legs:'#271b3a', hands:'#c9b8e8', hair:'#271b3a'}, style:'hexer' },
   pyromancer:{ hp:5,  speed:56, r:12, scale:0.92, dmg:1, xp:6, studs:[5,9], fire:3.0,
+             res:{fire:0.45},
              col:{head:'#eef0ee', torso:'#8a2f1d', legs:'#5e1f13', hands:'#ffb066', hair:'#5e1f13'}, style:'hexer' },
   frostmage:{ hp:5,  speed:56, r:12, scale:0.92, dmg:1, xp:6, studs:[5,9], fire:3.2,
+             res:{frost:0.45},
              col:{head:'#eef0ee', torso:'#2e6f9e', legs:'#1d4a6b', hands:'#bfe3ff', hair:'#1d4a6b'}, style:'hexer' },
   stormcaller:{ hp:5,  speed:62, r:12, scale:0.92, dmg:1, xp:6, studs:[5,9], fire:2.5,
+             res:{shock:0.45},
              col:{head:'#eef0ee', torso:'#9a7d1e', legs:'#6b5714', hands:'#ffe95a', hair:'#6b5714'}, style:'hexer' },
   lobber:  { hp:7,  speed:52,  r:13, scale:0.95, dmg:1, xp:8, studs:[6,10],
              col:{head:'#eef0ee', torso:'#3d7a2b', legs:'#2f5e23', hands:'#8ac24a', hair:'#2f5e23'}, style:'skel' },
   marksman:{ hp:6,  speed:70,  r:12, scale:0.9,  dmg:1, xp:8, studs:[6,10], fire:2.6,
              col:{head:'#f6f2e4', torso:'#c9a83a', legs:'#9a8228', hands:'#f6f2e4', hair:'#8a7d4a'}, style:'skel' },
+  /* THE BLIGHTSPITTER. Every other ranged monster asks you to dodge one thing
+     once; this one asks you to give up GROUND. The gobbet it lobs barely hurts
+     on impact — what matters is the pool of blight it leaves, which keeps eating
+     at you for as long as you stand in it, so a few of them working together can
+     close a corridor and push you into the pack. It is the monster side of the
+     hero's own Brickbane, and it is deliberately fragile: the answer is to kill
+     it, not to out-heal it. */
+  blightspitter:{ hp:7, speed:56, r:12, scale:0.95, dmg:1, xp:11, studs:[8,13], fire:3.4,
+             res:{fire:-0.20},
+             col:{head:'#d8e8bc', torso:'#4c7a2b', legs:'#33551d', hands:'#9ede5a', hair:'#33551d'}, style:'skel' },
   /* NEW: crypt bat — chains 3 charges in a row */
   cryptbat:{ hp:6, speed:120, r:11, scale:0.9, dmg:1, xp:5, studs:[4,7],
              col:{head:'#4a3f5e', torso:'#3a3350', legs:'#2a2440', hands:'#5a4f70', hair:'#3a3350'}, style:'stalker' },
@@ -2367,10 +2406,13 @@ const EDEF = {
   necrolord:{ hp:34, speed:44, r:16, scale:1.35, dmg:1, xp:30, studs:[22,38],
              col:{head:'#eef0ee', torso:'#4a2f75', legs:'#31204d', hands:'#dccdf5', hair:'#31204d'}, style:'hexer' },
   pyrolord:{ hp:20, speed:50, r:15, scale:1.25, dmg:1, xp:22, studs:[16,26], fire:3.4,
+             res:{fire:0.75, frost:-0.25},
              col:{head:'#eef0ee', torso:'#b23a1f', legs:'#7a2413', hands:'#ffc07a', hair:'#7a2413'}, style:'hexer' },
   frostlord:{ hp:20, speed:50, r:15, scale:1.25, dmg:1, xp:22, studs:[16,26], fire:3.6,
+             res:{frost:0.75, fire:-0.25},
              col:{head:'#eef0ee', torso:'#3a8ec9', legs:'#22587f', hands:'#d8efff', hair:'#22587f'}, style:'hexer' },
   stormlord:{ hp:20, speed:58, r:15, scale:1.25, dmg:1, xp:22, studs:[16,26], fire:2.9,
+             res:{shock:0.75, frost:-0.25},
              col:{head:'#eef0ee', torso:'#c9a523', legs:'#8a7115', hands:'#fff3a0', hair:'#8a7115'}, style:'hexer' },
   overseer:{ hp:26, speed:48, r:14, scale:1.2, dmg:1, xp:35, studs:[25,40], fire:6.0,
              col:{head:'#eef0ee', torso:'#8a7115', legs:'#5e4a12', hands:'#ffe95a', hair:'#5e4a12'}, style:'hexer' },
@@ -2399,21 +2441,34 @@ const EDEF = {
   /* MINI GOLEMS — what is left when a golem comes apart. Small, quick, no
      abilities at all: they just run you down and leave their element on you. */
   ministone:{ hp:11, speed:112, r:10, scale:0.85, dmg:1, xp:6, studs:[4,9], mini:'stone',
+             res:{fire:0.15, frost:0.15, shock:0.15}, armourMul:2.0,
              col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
   miniice:  { hp:9,  speed:122, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'ice', elem:'frost',
+             res:{frost:0.75, fire:-0.25, shock:0.15},
              col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
   minifire: { hp:9,  speed:128, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'fire', elem:'fire',
+             res:{fire:0.75, frost:-0.25, shock:0.15},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' },
   /* GOLEMS — slow siege units: they lumber in, charge, then plant a delayed AoE stomp */
   stormgolem:{ hp:46, speed:36, r:20, scale:1.85, dmg:2, xp:32, studs:[22,34], golem:'storm', elem:'shock',
+             res:{shock:0.90, frost:-0.35, fire:0.20},
              col:{head:'#6e6848', torso:'#4a4636', legs:'#2a2820', hands:'#ffe95a', hair:'#38352a'}, style:'brute' },
   ministorm:{ hp:9,  speed:124, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'storm', elem:'shock',
+             res:{shock:0.75, frost:-0.25, fire:0.15},
              col:{head:'#6e6848', torso:'#4a4636', legs:'#2a2820', hands:'#ffe95a', hair:'#38352a'}, style:'imp' },
+  /* A GOLEM IS MADE OF ITS ELEMENT. Stone is rock, so it is armour — and armour
+     only ever touches ATTACKS, which is the whole point: you cannot out-swing a
+     stone golem, you burn it. The other three are nearly immune to their own
+     element and soft to the one that beats it, so which spell you are holding
+     decides which golem is a problem. */
   stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:2, xp:26, studs:[18,30], golem:'stone',
+             armourMul:3.2, res:{fire:0.25, frost:0.25, shock:0.25},
              col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
   icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'ice',
+             res:{frost:0.90, fire:-0.35, shock:0.20},
              col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
   firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'fire',
+             res:{fire:0.90, frost:-0.35, shock:0.20},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' }
 };
 /* Each golem has its OWN kit now. Stone is the only one that charges in and
@@ -2458,14 +2513,18 @@ const SHOT_SHARE = { arrow:0.85, bolt:0.80, frostbolt:0.80, batbolt:0.50,
                      skull:0.34, hexbolt:0.30,
                      /* the thrown ones: a brick to the head should be worth more
                         than an arrow, and these were all hardcoded at 1 */
-                     vbrick:1.10, jrock:1.30, spit:0.70 };
+                     vbrick:1.10, jrock:1.30, spit:0.70,
+                     /* the gobbet itself is nearly harmless — the POOL is the
+                        weapon, so the impact is priced to make you move, not to
+                        punish you for being hit by it */
+                     venom:0.35 };
 function shotPow(src, kind){
   return Math.max(1, Math.round(((src && src.dmg) || 1) * (SHOT_SHARE[kind] || 0.6) * 10) / 10);
 }
 /* ranged monsters get half the wave armor — melee stays the threat */
 const RANGED_SET = new Set(['archer','spitter','hexer','pyromancer','frostmage','stormcaller',
   'lobber','marksman','necromancer','necrolord','pyrolord','frostlord','stormlord','overseer',
-  'shadestorm']);
+  'shadestorm','blightspitter']);
 const BOSSES = {
   brickthane:{ name:'VON BRICKTHANE', hp:90,  speed:52, r:26, scale:2.15, dmg:2, xp:40, studs:[40,60],
     col:{head:'#3a3f44', torso:'#23272b', legs:'#1b1f23', hands:'#2f3438', hair:'#2f3438'}, style:'boss' },
@@ -2554,6 +2613,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig, btier:tier+2,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armour: (70 + st*70 + st*st*45) * (B.armourMul||1),
+        res: Object.assign({fire:0, frost:0, shock:0}, B.res || null),
         suppress: B.style==='skel' ? 0.62 : 0.30,
         speed:B.speed*(1+tier*0.03),
         dmg:Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1) * mobRankMul()),
@@ -2597,6 +2657,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         nextAtk:2.2, ring:null, cycle:0 };
     }
     rollBossTraits(e);
+    applyWaveMods(e);
     enemies.push(e);
     SFX.build();
     return;
@@ -2621,6 +2682,9 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     armour, suppress, mlvl: rank,
+    /* a COPY, never the EDEF object itself — a wave modifier writes to this and
+       would otherwise edit the species for the rest of the run */
+    res: Object.assign({fire:0, frost:0, shock:0}, d.res || null),
     speed:d.speed*spdS*(elite?0.95:1)*(magic?1.3:1),
     atkS, fire: d.fire ? d.fire*atkS : undefined, touchCd: 0.9*atkS,
     col:d.col, style:d.style, xp:d.xp, studs:{a:d.studs[0], b:d.studs[1]},
@@ -2634,6 +2698,9 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     evade: d.evade ? Math.min(EVADE_CAP, d.evade * (elite?1.25:1) * (magic?1.1:1)) : 0,
     mini:d.mini||null, touchElem:d.elem||null,
     path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1 };
+  /* LAST, so a modifier multiplies the finished number rather than a base the
+     wave curve and the monster level have not been applied to yet */
+  applyWaveMods(e);
   enemies.push(e);
   SFX.build();
 }
@@ -2729,6 +2796,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     /* attacks meet armour, scaled against the size of this very hit */
     d *= (1 - armourDR(e.armour||0, d));
   }
+  /* THE MONSTER'S OWN ELEMENTAL RESISTANCE, read once for every elemental
+     source there is. A negative resistance is a weakness and multiplies UP,
+     which is how a fire golem is soft to frost without needing a second rule. */
+  const selem = SOURCE_ELEM[source];
+  if(selem) d *= (1 - enemyRes(e, selem));
   /* SHOCK is a multiplier ON THE BODY, so it applies to every source alike and
      after mitigation — being shocked does not help you through armour, it makes
      whatever did get through hurt more. */
@@ -3602,6 +3674,7 @@ const ROSTER = [
   { k:'hexer',       at:14, cost:12, flavour:0.8 },
   { k:'revenant',    at:16, cost:14, flavour:1 },
   { k:'lobber',      at:17, cost:15, flavour:0.9 },
+  { k:'blightspitter', at:12, cost:11, flavour:0.85 },
   { k:'pyromancer',  at:19, cost:16, flavour:0.9 },
   { k:'frostmage',   at:21, cost:16, flavour:0.9 },
   { k:'necromancer', at:22, cost:18, flavour:0.8 },
@@ -3777,13 +3850,80 @@ function spendBudget(pool, budget){
   }
   return q;
 }
+/* ================= WAVE MODIFIERS — the map affixes ==================
+   Every wave from WAVE_MOD_FROM rolls one, and a second every WAVE_MOD_STEP
+   waves after that. They are rolled ONCE when the wave is composed and held for
+   its whole life, so a wave has an identity you can read off the banner and
+   plan around, rather than a difficulty that drifts under you.
+   Each one is a plain multiplier or flag applied at SPAWN — nothing here reaches
+   into a body that is already standing, which keeps a mid-wave reroll impossible
+   and makes the whole system one function long. `apply` gets the freshly built
+   enemy; `budget` gets the wave's brick budget and hands one back. */
+const WAVE_MOD_FROM = 6;     /* the first wave that rolls one */
+const WAVE_MOD_STEP = 12;    /* another one every this many waves */
+const WAVE_MOD_MAX  = 4;
+const WAVE_MODS = [
+  { id:'hardy',   name:'HARDY',      col:'#ff8a6a', tip:'monsters have 30% more health',
+    apply:e=>{ e.maxHp = Math.ceil(e.maxHp*1.30); e.hp = e.maxHp; } },
+  { id:'brutal',  name:'BRUTAL',     col:'#ff5a4a', tip:'monsters deal 25% more damage',
+    apply:e=>{ e.dmg = Math.max(1, Math.round(e.dmg*1.25)); } },
+  { id:'swift',   name:'SWIFT',      col:'#9fe8ff', tip:'monsters move 18% faster',
+    apply:e=>{ e.speed *= 1.18; } },
+  { id:'frenzied',name:'FRENZIED',   col:'#ffd166', tip:'monsters attack 25% faster',
+    apply:e=>{ e.atkS *= 0.75; if(e.fire) e.fire *= 0.75; e.touchCd *= 0.75; } },
+  { id:'plated',  name:'PLATED',     col:'#cfd6dd', tip:'monsters have double armour',
+    apply:e=>{ e.armour = (e.armour||0)*2; } },
+  { id:'warded',  name:'WARDED',     col:'#b98cff', tip:'monsters suppress 30% of spell damage',
+    apply:e=>{ e.suppress = Math.min(0.75, (e.suppress||0) + 0.30); } },
+  { id:'resist',  name:'RESISTANT',  col:'#8ac24a', tip:'monsters gain 35% resistance to every element',
+    apply:e=>{ for(const el of ELEMENTS) e.res[el] = (e.res[el]||0) + 0.35; } },
+  { id:'slippery',name:'SLIPPERY',   col:'#c9b8e8', tip:'monsters evade 12% of your hits',
+    apply:e=>{ e.evade = Math.min(EVADE_CAP, (e.evade||0) + 0.12); } },
+  { id:'horde',   name:'HORDE',      col:'#ffb900', tip:'40% more monsters, each with 15% less health',
+    budget:b=>Math.round(b*1.40),
+    apply:e=>{ e.maxHp = Math.max(1, Math.ceil(e.maxHp*0.85)); e.hp = e.maxHp; } },
+  { id:'rich',    name:'OPULENT',    col:'#ffe95a', tip:'monsters are tougher, and pay double',
+    apply:e=>{ e.maxHp = Math.ceil(e.maxHp*1.20); e.hp = e.maxHp;
+               e.xp = Math.round(e.xp*2); e.studs.a *= 2; e.studs.b *= 2; } },
+  { id:'elites',  name:'WARBAND',    col:'#ffd76e', tip:'one monster in six is an elite',
+    elite:0.17 }
+];
+let waveMods = [];
+function waveModCount(n){
+  if(n < WAVE_MOD_FROM) return 0;
+  return Math.min(WAVE_MOD_MAX, 1 + Math.floor((n - WAVE_MOD_FROM) / WAVE_MOD_STEP));
+}
+function rollWaveMods(n){
+  const want = waveModCount(n), pool = WAVE_MODS.slice(), out = [];
+  while(out.length < want && pool.length) out.push(pool.splice(irnd(0, pool.length-1), 1)[0]);
+  return out;
+}
+/* what the modifiers do to the wave's budget, before a single body is picked */
+function waveModBudget(b){
+  let out = b;
+  for(const m of waveMods) if(m.budget) out = m.budget(out);
+  return out;
+}
+/* ...and to one body, the moment it is built */
+function applyWaveMods(e){
+  for(const m of waveMods) if(m.apply) try { m.apply(e); } catch(err){}
+}
+/* the extra chance a body is an elite, from WARBAND */
+function waveModElite(){
+  let p = 0;
+  for(const m of waveMods) if(m.elite) p = Math.max(p, m.elite);
+  return p;
+}
 function composeWave(n){
+  /* rolled here and held for the whole wave, so what the banner promises is
+     what every body in it actually gets */
+  waveMods = rollWaveMods(n);
   const pool = wavePool(n);
   let q = [];
   if(n%5===0){
     /* a boss wave spends a slice of the budget on an escort rather than a
        hand-counted handful, so the escort keeps pace with the roster */
-    const escort = Math.round(waveBudget(n) * (n%RAID_WAVE===0 ? 0.55 : 0.40));
+    const escort = Math.round(waveModBudget(waveBudget(n)) * (n%RAID_WAVE===0 ? 0.55 : 0.40));
     q = spendBudget(pool, escort);
     shuffleArr(q);
     if(n%RAID_WAVE===0) q.unshift('boss','boss','boss','boss','boss','boss');  /* the raid */
@@ -3791,7 +3931,7 @@ function composeWave(n){
     seedGolems(q, n);
     return q;
   }
-  q = spendBudget(pool, waveBudget(n));
+  q = spendBudget(pool, waveModBudget(waveBudget(n)));
   shuffleArr(q);
   seedGolems(q, n);
   return q;
@@ -3804,6 +3944,7 @@ function shuffleArr(a){
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
+  for(const m of waveMods) logEvent('   '+m.name+' — '+m.tip, m.col);
   queueTrackForWave(n);
   /* the wave is BUILT now and spawns when the break runs out */
   const afterBoss = n>1 && (n-1)%5===0;
@@ -3822,9 +3963,14 @@ function startWave(n){
       ? SUPERBOSSES[ultraForWave(n)].name
       : BOSSES[bkeys[(Math.max(1,Math.floor(n/5))-1)%bkeys.length]].name;
   }
+  /* the modifiers go under the wave number, where the biome line used to sit —
+     they are the thing worth reading before the break runs out */
+  const modLine = waveMods.length
+    ? waveMods.map(m=>m.name).join('  ·  ')
+    : (n===1 ? biomeName()+' · Slash with LMB · SPACE to roll!' : '');
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
-    boss ? bname+' approaches...'
-      : (n===1 ? biomeName()+' · Slash with LMB · SPACE to roll!' : ''),
+    boss ? (bname+' approaches...' + (waveMods.length ? '   ['+waveMods.map(m=>m.name).join(' · ')+']' : ''))
+      : modLine,
     boss ? (n%10===0 ? '#c95bd0' : '#ff5a4a') : '#ffb900', boss?2.2:1.7,
     boss && n%10===0 ? 60 : 54);
   if(boss) SFX.roar();
@@ -3931,7 +4077,8 @@ function updateWave(dt){
                 spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
                   clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), true, false);
             } else {
-              spawnEnemy(type, pos.x, pos.y, packable && Math.random() < 0.15*pk);
+              spawnEnemy(type, pos.x, pos.y,
+                (packable && Math.random() < 0.15*pk) || Math.random() < waveModElite());
             }
           }
         }
@@ -6520,35 +6667,31 @@ const SECTION_SPELL = {
   'BLOCK FREEZE':'freeze', 'BRICKBANE':'bane'
   /* NB: the bomb summary is filed under its brick id, not the spell key */
 };
-/* is this click on the book itself, rather than the game behind it? */
-function bookHit(x, y){
-  if(!bookOn) return false;
-  const el = document.querySelector('#bookScreen .sheet.book');
-  if(!el) return false;
-  const r = el.getBoundingClientRect();
-  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-}
 function toggleBook(){
-  bookOn = !bookOn;
   const el = document.getElementById('bookScreen');
-  if(bookOn){ renderSpellbook(); el.classList.remove('hidden'); }
-  else { el.classList.add('hidden'); cmpHide(); }
-  SFX.click();
+  if(!bookOn && state === 'play'){
+    bookOn = true;
+    renderSpellbook();
+    el.classList.remove('hidden');
+    state = 'book'; cv.style.cursor = 'default';
+    SFX.click();
+  } else if(bookOn){
+    closeBook();
+    try{ window.focus(); }catch(err){}
+    SFX.click();
+  }
 }
-/* the fight carries on behind an open book, so its numbers would go stale
-   within a second of opening it. Twice a second is enough to track a wave
-   without rebuilding the DOM every frame. */
-let bookRefresh = 0;
-function bookTick(dt){
-  if(!bookOn) return;
-  bookRefresh -= dt;
-  if(bookRefresh <= 0){ bookRefresh = 0.5; renderSpellbook(); }
-}
+/* THE BOOK STOPS THE WAVE, the way the character sheet does. It was built not
+   to, and that was simply wrong: reading nine sections of cards while a wave 40
+   pack walks into you is not a choice anyone makes twice. It takes its own
+   state, so the update loop freezes and the world behind it stays drawn, and
+   nothing in it needs refreshing any more because nothing is moving. */
 function closeBook(){
   if(!bookOn) return;
   bookOn = false;
   const el = document.getElementById('bookScreen');
   if(el) el.classList.add('hidden');
+  if(state === 'book'){ state = 'play'; cv.style.cursor = 'none'; }
   cmpHide();
 }
 function toggleChar(){
@@ -6565,10 +6708,13 @@ function toggleChar(){
   }
 }
 function openUpgrades(mode='wave', forceRar){
-  if(state!=='play') return;
-  /* the book stops refreshing the moment the state leaves 'play', so leaving it
-     open over the reward cards would strand a frozen page on top of them */
+  /* CLOSE THE BOOK FIRST, then guard. The book holds its own state, so doing the
+     guard first meant a level-up or a cleared wave that landed while the book
+     was open hit `state !== 'play'` and was thrown away — the reward simply
+     never appeared. closeBook() puts the state back, and then the guard is
+     asking the question it means to ask. */
   closeBook();
+  if(state!=='play') return;
   upgradeMode = mode;
   forcedRarity = forceRar || null;
   screenRerolls = 0;
@@ -8134,6 +8280,26 @@ function updateEnemy(e, dt){
       }
     } else {
       if(e.atkCd<=0 && dP < 400){ e.mode='aim'; e.aimT=0; }
+    }
+  }
+  else if(e.type==='blightspitter'){
+    /* it keeps its distance like any caster and lobs the gobbet in an arc, so it
+       can drop blight over a wall of its own bodies and onto your feet */
+    const mv = enemyCasterMove(e, dt, toP, dP, 430, 300);
+    vx = mv.x; vy = mv.y;
+    if(e.mode==='aim'){
+      e.aimT += dt;
+      if(e.aimT >= 0.7){
+        e.mode='chase'; e.atkCd = e.fire;
+        projectiles.push({kind:'venom', dmg:shotPow(e,'venom'), x:e.x, y:e.y-16, sx:e.x, sy:e.y-16,
+          /* it leads you a little, so simply walking in a line does not beat it */
+          tx:clamp(player.x + (player.vx||0)*0.35 + rnd(-34,34), W.wall+30, W.w-W.wall-30),
+          ty:clamp(player.y + (player.vy||0)*0.35 + rnd(-34,34), W.wall+30, W.h-W.wall-30),
+          t:0, dur:0.9, spin:rnd(TAU), delay:0});
+        SFX.grunt();
+      }
+    } else {
+      if(e.atkCd<=0 && dP < 470){ e.mode='aim'; e.aimT=0; }
     }
   }
   else if(e.type==='overseer'){
@@ -9928,7 +10094,7 @@ function updateProjectiles(dt){
       }
     }
     else if(pr.kind==='vbrick'||pr.kind==='spit'||pr.kind==='jrock'||pr.kind==='molten'
-          ||pr.kind==='fireball'||pr.kind==='meteor'){
+          ||pr.kind==='fireball'||pr.kind==='meteor'||pr.kind==='venom'){
       if(pr.x===undefined){ pr.x = pr.sx; pr.y = pr.sy; pr.px = pr.sx; pr.py = pr.sy; }
       if(pr.delay>0){ pr.delay-=dt; continue; }
       pr.t += dt;
@@ -9959,6 +10125,20 @@ function updateProjectiles(dt){
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(1, pr, 'fire');
+          }
+          continue;
+        }
+        if(pr.kind==='venom'){
+          /* a weak splash, and then the thing that actually matters */
+          const fr = pr.fr || 58;
+          explode(pr.x, pr.y, fr*0.5, 0, {hostile:true,
+            brickCols:['#2f5e23','#8ac24a','#4c7a2b'], shake:0.10});
+          hazards.push({kind:'venom', x:pr.x, y:pr.y, r:fr, life:VENOM_LIFE, max:VENOM_LIFE,
+                        dmg: pr.dmg, tick:0, seed:rnd(TAU)});
+          SFX.boomSmall();
+          if(dist(pr,player)<fr*0.7 && !player.dead){
+            if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
+            else if(player.invuln<=0) playerDamage(pr.dmg, pr, null);
           }
           continue;
         }
@@ -10058,6 +10238,19 @@ function updateFx(dt){
       for(const en of enemies)
         if(!en.dead && en.state==='active' && !en.golem && !en.mini && dist(h,en) < h.r*0.9)
           en.slowT = Math.max(en.slowT, 0.8);   /* the frost field catches its own side too */
+      continue;
+    }
+    if(h.kind==='venom'){
+      if(Math.random()<0.45)
+        particles.push({kind:'spark', x:h.x+rnd(-h.r*0.8,h.r*0.8), y:h.y+rnd(-h.r*0.5,h.r*0.5),
+          vx:rnd(-10,10), vy:rnd(-34,-6), life:rnd(0.4,0.9), max:0.9,
+          color: Math.random()<0.5 ? '#8ac24a' : '#5f9a2e'});
+      h.tick -= dt;
+      if(h.tick <= 0){
+        h.tick = VENOM_TICK;
+        if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.9)
+          playerDamage(Math.max(0.5, (h.dmg||1)*VENOM_SHARE), h, null);
+      }
       continue;
     }
     if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.88)
@@ -10208,6 +10401,50 @@ function drawBleedMark(c, e){
 /* A BURNING BODY WEARS ITS FIRES: one flame pip per stack across its shoulders,
    and the BURNT marks above them, because how deep a body is burning decides
    whether the next bolt breaks it. */
+/* SHOCK, ON THE BODY. The ailment landed and nothing said so, which made the
+   one mechanic whose whole job is "hit this one next" invisible. Arcs crawl the
+   silhouette rather than pips sitting beside it: a shocked body should read as
+   shocked from across the field, at a glance, while it is moving. The yellow
+   deepens with the stack count, and the arcs jitter on their own clock so a pack
+   of five shocked bodies does not strobe in unison. */
+function drawShockArcs(c, e){
+  const n = shockStacksOn(e);
+  if(!n) return;
+  const s = e.scale || 1, k = n / ESHOCK_MAX;
+  const top = e.y - 44*s, h = 44*s, w = 15*s;
+  /* a charged haze, brighter the deeper the stacks */
+  c.save();
+  c.fillStyle = `rgba(255,233,90,${0.035 + 0.032*n})`;
+  c.beginPath(); c.ellipse(e.x, e.y - 20*s, w*1.05, 23*s, 0, 0, TAU); c.fill();
+  /* the arcs themselves — one per stack, each a jagged line down the body */
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  for(let i=0;i<n;i++){
+    /* a per-arc clock, so they crackle independently */
+    const t = vtime*11 + i*2.7 + (e.phase||0)*3;
+    const side = (i % 2) ? 1 : -1;
+    /* the arcs HUG the silhouette — pushed out to its edge and jittering only a
+       little, so the body stays readable underneath them */
+    const x0 = e.x + side*w*(0.78 + 0.16*Math.sin(t*0.7));
+    c.beginPath();
+    for(let seg=0; seg<=4; seg++){
+      const f = seg/4;
+      const px = x0 + Math.sin(t + seg*2.2)*w*0.22*(1-f*0.35);
+      const py = top + h*f;
+      seg ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    /* drawn twice: a wide soft glow, then the hot white core over it */
+    c.strokeStyle = `rgba(255,214,60,${0.22 + 0.20*k})`; c.lineWidth = 2.3;
+    c.stroke();
+    c.strokeStyle = `rgba(255,252,214,${0.40 + 0.28*k})`; c.lineWidth = 1.0;
+    c.stroke();
+  }
+  /* at full stacks it sparks off the body as well, so the cap is a visible state
+     and not just a number that stopped going up */
+  if(n >= ESHOCK_MAX && Math.random() < 0.35)
+    particles.push({kind:'spark', x:e.x+rnd(-11,11)*s, y:e.y-rnd(4,40)*s,
+      vx:rnd(-40,40), vy:rnd(-70,-10), life:rnd(0.12,0.28), max:0.28, color:'#fff6b0'});
+  c.restore();
+}
 function drawBurnPips(c, e){
   const n = burnStacksOn(e), marks = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
   if(!n && !marks) return;
@@ -11807,7 +12044,10 @@ const LOB_CONF = {
   spit:  {rr:46, sc:0.7, cols:['#2f5e23','#5f8f33'], tele:28},
   molten:{rr:66, sc:0.85,cols:['#c2410c','#7c2d12'], tele:34},
   fireball:{rr:44, sc:0.7,cols:['#c2410c','#5c1f0e'], tele:26},
-  meteor:{rr:50, sc:1,   cols:['#b5370d','#2a1f1a'], tele:30}
+  meteor:{rr:50, sc:1,   cols:['#b5370d','#2a1f1a'], tele:30},
+  /* the blight gobbet: a bigger telegraph than its damage deserves, because the
+     thing you are dodging is the GROUND it is about to become */
+  venom: {rr:58, sc:0.85,cols:['#4c7a2b','#8ac24a'], tele:44}
 };
 function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -11891,6 +12131,29 @@ function render(){
         ctx.beginPath(); ctx.arc(h.x, h.y-28, 10, 0, TAU); ctx.fill();
         ctx.globalAlpha = 1;
       }
+      continue;
+    }
+    if(h.kind==='venom'){
+      /* a low, creeping pool — deliberately flat and dark rather than a bright
+         circle, so it reads as ground you do not want to be on rather than as
+         one of your own spells */
+      ctx.fillStyle = `rgba(47,94,35,${0.42*k})`;
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r*0.62, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(138,194,74,${0.26*k})`;
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r*0.78, h.r*0.48, 0, 0, TAU); ctx.fill();
+      /* bubbles working their way up through it */
+      ctx.fillStyle = `rgba(190,232,130,${0.5*k})`;
+      for(let i=0;i<9;i++){
+        const a = i*2.399 + (h.seed||0);
+        const bob = (Math.sin(vtime*2.2 + i*1.7 + (h.seed||0)) + 1)*0.5;
+        const rr = h.r*0.80*Math.sqrt(i/9);
+        ctx.beginPath();
+        ctx.arc(h.x+Math.cos(a)*rr, h.y+Math.sin(a)*rr*0.62 - bob*3,
+                1.6 + bob*2.4, 0, TAU);
+        ctx.fill();
+      }
+      ctx.strokeStyle = `rgba(122,176,66,${0.55*k})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r*0.62, 0, 0, TAU); ctx.stroke();
       continue;
     }
     if(h.kind==='frost'){
@@ -13260,6 +13523,7 @@ function drawEnemy(c, e){
   drawBleedMark(c, e);
   drawPoisonCount(c, e);
   drawBurnPips(c, e);
+  drawShockArcs(c, e);
   /* frostbite tint */
   if(e.slowT>0){
     c.save(); c.globalAlpha = 0.45;
@@ -13897,6 +14161,33 @@ function renderHUD(){
       ctx.fillStyle = '#ff8a6a'; ctx.fillText(lt, cw/2 + half + 10, 30);
       ctx.textAlign = 'center'; ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     }
+    /* THE WAVE'S MODIFIERS, for as long as the wave lasts. A banner you can
+       miss is not how you tell someone the pack they are about to fight has
+       double armour — these sit under the wave number until it is cleared,
+       each in its own colour so the set reads at a glance. */
+    if(waveMods.length){
+      ctx.font = '700 11px "Titan One"';
+      /* during the break the countdown and its bar own the two rows under the
+         wave number, so the chips drop below them rather than through them */
+      const modY = wave.state==='ready' ? 74 : 62;
+      const gap = 9, pad = 7;
+      let total = 0;
+      const widths = waveMods.map(m=>{ const w = ctx.measureText(m.name).width + pad*2;
+        total += w; return w; });
+      total += gap*(waveMods.length-1);
+      let mx = cw/2 - total/2;
+      for(let i=0;i<waveMods.length;i++){
+        const m = waveMods[i], w = widths[i];
+        ctx.fillStyle = 'rgba(12,16,20,0.62)';
+        roundRect(ctx, mx, modY, w, 17, 6); ctx.fill();
+        ctx.strokeStyle = m.col; ctx.lineWidth = 1.4;
+        roundRect(ctx, mx, modY, w, 17, 6); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.fillStyle = m.col;
+        ctx.fillText(m.name, mx + w/2, modY + 9.5);
+        mx += w + gap;
+      }
+      ctx.textAlign = 'center'; ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
+    }
     ctx.font='600 13px Fredoka'; ctx.fillStyle='#c9d2ce';
     if(wave.state==='ready'){
       const t = Math.max(0, wave.readyT);
@@ -14229,6 +14520,7 @@ function resetRun(demo){
   syncStats();
   if(!demo) applyFavPerks();
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0 };
+  waveMods = [];
   rollRoster();
   if(demo){
     for(let i=0;i<4;i++){ const sp = randomSpawnPos();
@@ -14322,7 +14614,6 @@ function update(dt, raw){
   }
   else if(state==='play'){
     runTime += dt;
-    bookTick(dt);
     navBudget = NAV_BUDGET;
     mouse.wx = cam.x + (mouse.x - cw/2)/zoom;
     mouse.wy = cam.y + (mouse.y - ch/2)/zoom;
