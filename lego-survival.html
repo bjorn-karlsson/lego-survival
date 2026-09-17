@@ -16,6 +16,39 @@
   #titleScreen{background-color:rgba(10,14,12,.82);
     background-image:radial-gradient(circle, rgba(255,255,255,.05) 5px, transparent 6px);
     background-size:44px 44px}
+  /* The title box used to float alone in a lot of empty red. The build panel
+     lives beside it now and wraps underneath when the window is too narrow. */
+  .titlewrap{display:flex;gap:20px;align-items:flex-start;justify-content:center;
+    flex-wrap:wrap;width:100%;padding:0 12px;box-sizing:border-box}
+  #comboPanel{width:352px;flex:0 0 352px;background:rgba(10,15,13,.86);
+    border:2px solid rgba(255,214,110,.32);border-radius:20px;padding:14px 16px 16px;
+    text-align:left;font-family:'Fredoka';color:#e8ece9;
+    max-height:min(86vh,900px);overflow-y:auto;overflow-x:hidden;
+    box-shadow:0 12px 34px rgba(0,0,0,.55)}
+  #comboPanel h4{margin:0 0 2px;font-family:'Titan One';font-size:15px;color:#ffd76e;
+    letter-spacing:.6px;line-height:1.25}
+  #comboPanel .cpsub{font-size:10.5px;color:#9fb0a4;margin-bottom:10px;letter-spacing:.5px}
+  #comboPanel .cphead{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;
+    color:#ffe6a3;margin:12px 0 5px;display:flex;align-items:center;gap:7px}
+  #comboPanel .cphead::after{content:'';flex:1;height:2px;border-radius:1px;
+    background:rgba(255,230,163,.22)}
+  #comboPanel .cprow{display:flex;justify-content:space-between;gap:8px;
+    font-size:11.5px;padding:2px 0;border-bottom:1px dotted rgba(255,255,255,.07)}
+  #comboPanel .cprow span{color:#c4cfc7}
+  #comboPanel .cprow b{color:#fff;font-weight:700;white-space:nowrap}
+  #comboPanel .cprow i{font-style:normal;font-weight:700;font-size:10.5px;margin-left:5px}
+  #comboPanel .up{color:#7ddc6a}  #comboPanel .dn{color:#ff6a5a}
+  #comboPanel li{font-size:11px;color:#cfe0d4;margin:2px 0 2px 14px;line-height:1.45}
+  #comboPanel ul{margin:2px 0 0;padding:0}
+  #comboPanel .cpbrick{display:flex;gap:8px;align-items:flex-start;margin:5px 0;
+    padding:5px 7px;border-radius:8px;background:rgba(255,255,255,.04)}
+  #comboPanel .cpbrick.off{opacity:.34}
+  #comboPanel .cpbrick svg{width:17px;height:17px;flex:0 0 17px;margin-top:1px}
+  #comboPanel .cpbrick div{min-width:0}
+  #comboPanel .cpbrick b{display:block;font-size:11px;color:#fff;font-weight:700}
+  #comboPanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
+  #comboPanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
+  #comboPanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
   .boxplate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;
     box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25);
     padding:4px 34px 18px;text-align:center;max-width:820px;transform:rotate(-.5deg);
@@ -245,6 +278,7 @@
 <canvas id="game" tabindex="0"></canvas>
 
 <div id="titleScreen" class="overlay">
+ <div class="titlewrap">
   <div class="boxplate">
     <div class="topstuds"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="badge">BRICK-BUILT ACTION RPG</div>
@@ -273,6 +307,8 @@
     </div>
     <div class="best" id="bestLine"></div>
   </div>
+  <aside id="comboPanel"></aside>
+ </div>
 </div>
 
 <div id="upgradeScreen" class="overlay hidden">
@@ -575,6 +611,13 @@ function pool(base, flat, inc, more){
    rate, so the interval it leaves you is base / (1 + increases). It approaches
    the floor and never passes it, and two 20% cards are 40% rather than 36%. */
 function paceOf(base, inc, floor){ return Math.max(floor, base / (1 + (inc||0))); }
+/* A WEAPON'S ATTACK SPEED IS ATTACK SPEED, wherever the attack comes from. The
+   staff's +20% was only reaching its own bolt, so a hero holding the fastest
+   casting weapon in the game cast every actual SPELL at exactly the same rate
+   as a hero holding a mace. It sums into every cooldown pool now, the way an
+   increase is supposed to — one pool per spell, with the weapon's contribution
+   added to each. */
+function wInc(pool){ return (pool || 0) + ((weapon && weapon.incAtk) || 0); }
 /* Rebuild every derived number from its pools. Cheap, and called after anything
    that can move one — a brick, a starting perk, a rebuild. */
 /* Every damage-over-time in the game runs through here: its own base and flat
@@ -601,16 +644,19 @@ function syncStats(){
   p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), atkFloor());
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
-  p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, i.orbitSpd, 1));
-  p.blaster.rate = paceOf(BLAST_RATE_BASE, i.blastRate, BLAST_MIN_RATE);
-  p.chain.rate   = paceOf(CHAIN_RATE_BASE, i.chainRate, CHAIN_MIN_RATE);
-  p.storm.rate   = paceOf(STORM_RATE_BASE, i.stormRate, STORM_MIN_RATE);
-  p.vortex.rate  = paceOf(VORTEX_RATE_BASE, i.vortexRate, VORTEX_MIN_RATE);
+  p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, wInc(i.orbitSpd), 1));
+  p.blaster.rate = paceOf(BLAST_RATE_BASE, wInc(i.blastRate), BLAST_MIN_RATE);
+  p.chain.rate   = paceOf(CHAIN_RATE_BASE, wInc(i.chainRate), CHAIN_MIN_RATE);
+  p.storm.rate   = paceOf(STORM_RATE_BASE, wInc(i.stormRate), STORM_MIN_RATE);
+  p.vortex.rate  = paceOf(VORTEX_RATE_BASE, wInc(i.vortexRate), VORTEX_MIN_RATE);
+  /* the vortex pays for its own speed in hit size, but only for the increases
+     the BRICKS bought: a weapon that swings faster should not quietly shrink
+     the hit as well. `i.vortexRate` here on purpose, not wInc(). */
   p.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, 1/(1 + i.vortexRate*0.5));
-  p.freeze.rate  = paceOf(FREEZE_RATE_BASE, i.freezeRate, FREEZE_MIN_RATE);
-  p.bomb.rate    = paceOf(BOMB_RATE_BASE, i.bombRate, BOMB_MIN_RATE);
+  p.freeze.rate  = paceOf(FREEZE_RATE_BASE, wInc(i.freezeRate), FREEZE_MIN_RATE);
+  p.bomb.rate    = paceOf(BOMB_RATE_BASE, wInc(i.bombRate), BOMB_MIN_RATE);
   p.bomb.r = Math.min(BOMB_MAX_R, pool(BOMB_R_BASE, 0, i.bombR, 1));
-  p.bane.rate = paceOf(BANE_RATE_BASE, i.baneRate, BANE_MIN_RATE);
+  p.bane.rate = paceOf(BANE_RATE_BASE, wInc(i.baneRate), BANE_MIN_RATE);
   p.bane.r    = Math.min(BANE_R_MAX, pool(BANE_R_BASE, 0, i.baneR, 1));
   p.bane.dot  = dotRate(BANE_DOT_BASE, p.baneDotFlat||0);
   /* bleed: a flat chance pool and a share of the hit, both hard-capped */
@@ -847,6 +893,7 @@ function setWeapon(id){
   }
   const blurb = document.getElementById('weaponBlurb');
   if(blurb) blurb.textContent = weapon.blurb;
+  buildComboPanel();
 }
 /* the baseline the rest of the game is balanced against, kept for the bricks
    that quote a "base" number in their own text */
@@ -4316,7 +4363,7 @@ const FAV_WEIGHT = 3.2;
    all of that for a little of everything.
    `lines` is what the hover panel shows; `apply` is what actually happens. */
 const FAV_PERKS = {
-  none: { lines:['+0.5 flat sword damage', '+1 max heart', '+10 armour',
+  none: { lines:['+0.5 flat physical damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
     apply(p){ p.flatPhys += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
       p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
@@ -4431,6 +4478,7 @@ function setFavourite(id){
   try{ localStorage.setItem('bb_fav', favourite.id); }catch(e){}
   const row = document.getElementById('favRow');
   if(row) for(const el of row.children) el.classList.toggle('on', el.dataset.fav===favourite.id);
+  buildComboPanel();
 }
 function setDifficulty(id){
   difficulty = DIFFS[id] || DIFFS.hard;
@@ -4522,6 +4570,122 @@ function weaponTip(w){
   L.push('Ability names never change: ' + anA(w.name.toLowerCase()));
   L.push('still swings Bladestorm.');
   return L.join('\n');
+}
+/* WHAT THIS COMBINATION ACTUALLY OPENS WITH. Rather than describe the weapon
+   and the favourite separately and leave you to do the arithmetic, this builds
+   a throwaway hero, gives it the favourite's starting kit with the chosen weapon
+   in its hands, and reads the finished numbers straight off the same functions
+   the game plays with. Nothing is estimated and nothing is duplicated. */
+function comboPreview(favId){
+  const keepP = player, keepF = favourite, keepW = weapon;
+  const f = FAVOURITES.find(x=>x.id===favId) || FAVOURITES[0];
+  /* stand a throwaway hero up from scratch, holding whatever `weapon` currently
+     points at. Called again per weapon below, to ask a brick's own requirement
+     whether the WEAPON is what is turning it away or merely the empty hand. */
+  const build = ()=>{
+    player = newPlayer();
+    favourite = f;
+    syncStats();
+    const perk = FAV_PERKS[f.id];
+    if(perk) try { perk.apply(player); } catch(e){}
+    syncStats();
+  };
+  build();
+  const p = player, cast = isCaster();
+  const hit = cast ? boltDamage() : physDamage();
+  const out = {
+    hearts: p.maxHp,
+    hitLabel: cast ? 'Bolt damage' : 'Weapon hit',
+    hit,
+    rate: 1/p.atkRate,
+    rateLabel: cast ? 'Casts a second' : 'Swings a second',
+    dps: cast ? hit/p.atkRate : swordDps(),
+    crit: critChance()*100,
+    critMult: critMultPct(),
+    armour: armourValue(),
+    speed: p.speed,
+    regen: p.regenRate,
+    spells: SPELL_KEYS.filter(k=>p[k] && p[k].n > 0).map(k=>k)
+  };
+  /* WHICH OF THE FAVOURITE'S BRICKS THIS HERO CAN ACTUALLY BE OFFERED. Asking
+     each brick's own req() is the only honest test, but it has to be asked of
+     the hero the favourite BUILDS — the menu's blank player owns no Brickbane,
+     so every poison brick would answer no for a reason that has nothing to do
+     with the weapon. When a brick still says no, the same question is put to
+     the other weapons: a yes anywhere else means the weapon is the blocker and
+     the brick is greyed out for good; a no everywhere means it is a brick you
+     unlock later in the run, which is not a warning, it is just Tuesday. */
+  out.bricks = (f.ids || []).map(id => {
+    const u = UPGRADES.find(x => x.id === id);
+    if(!u) return null;
+    const ask = () => { try { return !u.req || !!u.req(); } catch(e){ return false; } };
+    const open = ask();
+    let elsewhere = false;
+    if(!open){
+      for(const k of WEAPON_KEYS){
+        if(k === keepW.id) continue;
+        weapon = WEAPONS[k]; build();
+        if(ask()){ elsewhere = true; break; }
+      }
+      weapon = keepW; build();
+    }
+    let body = '';
+    try { body = u.desc(u.calc(RARITY.rare.mult), 0); } catch(e){ body = ''; }
+    return { name:u.name, icon:u.icon, body, open, blocked: !open && elsewhere };
+  }).filter(Boolean);
+  player = keepP; favourite = keepF; weapon = keepW;
+  if(player) syncStats();
+  return out;
+}
+function buildComboPanel(){
+  const el = document.getElementById('comboPanel');
+  if(!el) return;
+  const f = favourite, base = comboPreview('none'), now = comboPreview(f.id);
+  const num = (v, d) => (d===0 ? Math.round(v) : v.toFixed(d===undefined?2:d));
+  /* every row carries its difference from running this weapon with no
+     favourite at all, so the favourite's contribution is never guesswork */
+  const row = (label, v, b, d, unit) => {
+    let tag = '';
+    if(Math.abs(v-b) > 1e-6){
+      const pct = Math.round((v/(b||1) - 1)*100);
+      tag = `<i class="${v>b?'up':'dn'}">${pct>0?'+':''}${pct}%</i>`;
+    }
+    return `<div class="cprow"><span>${label}</span><b>${num(v,d)}${unit||''}${tag}</b></div>`;
+  };
+  const perk = FAV_PERKS[f.id];
+  const bricks = now.bricks.map(b=>
+    `<div class="cpbrick${b.blocked?' off':''}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="${b.blocked?'#7c8a80':'#ffd76e'}" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[b.icon]||''}</svg>
+      <div><b>${esc(b.name)}${b.blocked?' \u2014 never offered to '+anA(weapon.name.toLowerCase()):''}</b>`+
+     `<em>${esc(b.body)}</em></div>
+    </div>`).join('');
+  el.innerHTML =
+    `<h4>${weapon.name} \u00d7 ${esc(f.name).toUpperCase()}</h4>
+     <div class="cpsub">${esc(weapon.blurb)}</div>` +
+    (perk ? `<div class="cphead">YOU START WITH</div><ul>${
+        perk.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>` : '') +
+    `<div class="cphead">OPENING STATS</div>
+     <div class="cpvs">every % is what this favourite is worth against
+     NO FAVOURITE on the same weapon</div>` +
+    row('Hearts', now.hearts, base.hearts, 0) +
+    row(now.hitLabel, now.hit, base.hit) +
+    row(now.rateLabel, now.rate, base.rate) +
+    row('Damage a second', now.dps, base.dps, 1) +
+    row('Crit chance', now.crit, base.crit, 1, '%') +
+    row('Crit multiplier', now.critMult, base.critMult, 0, '%') +
+    row('Armour', now.armour, base.armour, 0) +
+    row('Move speed', now.speed, base.speed, 0) +
+    (now.regen > 0 ? row('Regeneration', now.regen, base.regen, 3, '/s') : '') +
+    (now.spells.length ? `<div class="cprow"><span>Starts with</span><b>${
+        now.spells.map(k=>k.toUpperCase()).join(', ')}</b></div>` : '') +
+    (bricks ? `<div class="cphead">BRICKS THAT COME UP MORE OFTEN</div>${bricks}
+       <div class="cpnote">Shown at RARE, read off this exact hero. A greyed brick is one this
+       weapon can never roll &mdash; either it is the wrong class of brick, or the weapon already
+       sits on that stat's cap. Pick another weapon or another favourite.</div>`
+     : `<div class="cpnote">No favourite weights nothing: every brick in the bench is
+        equally likely, and the kit above is what you are paid for spreading yourself
+        thin. Pick a favourite to see what committing to one costs, and buys.</div>`);
 }
 function buildWeaponRow(){
   const row = document.getElementById('weaponRow');

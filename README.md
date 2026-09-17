@@ -64,7 +64,8 @@ you a fifth stop being offered and everything that deepens the four you have kee
 `Bomb Volley` · **`Brickbane`**
 
 Pick a **favourite** at the menu — including `Sword & Steel` or `Tough Bricks`, which spend
-no slot at all — and its bricks turn up more often, plus a starting kit to match.
+no slot at all — and its bricks turn up more often, plus a starting kit to match. The panel
+beside the title box shows [what the pairing actually opens with](#the-combination-panel).
 
 </td><td width="33%" valign="top">
 
@@ -141,6 +142,17 @@ throw, can never bat one back at you.
 `Sword & Steel` — the names are the abilities', not the weapon's. `Sharpened Blade` grants
 **flat physical damage** and `Blade Mastery` grants **increased physical damage**, so every
 brick works with every weapon and no build is locked to one.
+
+**A weapon's attack speed is attack speed.** The staff's **+20% increased cast speed** is
+not a property of its fireball — it sums into the cooldown pool of *every* spell you own, the
+way an increase is supposed to. A staff hero's Brick Blaster fires every **2.00s** against a
+sword hero's 2.40s, its Storm Brick every 1.83s against 2.20s, Bomb Volley 5.83s against
+7.00s, Brickbane 3.50s against 4.20s, and the guardian ring turns at **3.12 rad/s** against
+2.60. One pool per spell, the weapon's contribution added to each, so nothing compounds and
+nothing is missed. *(It is worth knowing that this lands the staff's blaster exactly on the
+`BLAST_MIN_RATE` floor of 2.00s from the first wave, which makes `Rapid Blaster` a dead brick
+for a caster — the menu panel below greys it out rather than letting you find out the hard
+way.)*
 
 **The art follows the weapon too.** You hold what you picked, you swing it, and your spells
 throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
@@ -375,6 +387,49 @@ back onto walkable floor the moment they touch down, so a lake or a boulder neve
 carpet the ground whatever the odds said. A prize that would be the fourth of its kind
 already lying around simply does not appear: **3 of each buff, 10 hearts, 5 chests**. Pick
 them up and the tap opens again.
+
+---
+
+## The combination panel
+
+There are four weapons and twelve favourites, and the interesting question is never what
+either one does on its own — it is what the pair opens with. *What if I put Brickbane on a
+staff? What does a mace do to Sword & Steel?* The panel on the right-hand edge of the title
+screen answers it before you commit, and it answers it by **playing the combination**, not
+by describing it.
+
+Picking a weapon or a favourite stands up a **throwaway hero** from `newPlayer()`, puts the
+weapon in its hands, applies the favourite's starting kit, runs `syncStats()`, and then reads
+the finished numbers off **the same functions the game itself plays with** — `physDamage()`,
+`boltDamage()`, `swordDps()`, `critChance()`, `armourValue()`. Nothing in the panel is
+estimated, restated or maintained by hand, so it cannot drift from the game the way a written
+table would. The live hero is put back untouched afterwards.
+
+Each row carries its difference from **running that same weapon with no favourite at all**,
+so the favourite's contribution is never guesswork — and the trade is honest in both
+directions. `No Favourite` is not nothing: it hands you a heart, 10 armour, +5% damage and
++4% move speed as a consolation prize, which is why committing to Brickbane reads as
+**−14% hearts** and **−100% armour** next to it. That is the actual price of the spell.
+
+The panel also lists **every brick the favourite weights toward you**, shown at RARE, with
+each description rendered against that same previewed hero — so Brickbane's `Choking Spread`
+reads *"widen the wedge 90° → 159°"*, starting from the 90° the favourite already gave you,
+rather than from the 35° a hero who owns no Brickbane would have.
+
+**A brick is judged on the hero the favourite builds.** This matters more than it sounds.
+Every Brickbane brick requires that you *own* Brickbane, which the favourite hands you — ask
+that gate on the blank hero standing in the menu and all five read as locked, and the panel
+blames the weapon for something the weapon had nothing to do with. So the gate is asked of
+the previewed hero. When a brick still says no, the same question is put to the **other three
+weapons**: a yes anywhere else means the weapon is genuinely the blocker and the brick is
+greyed out with *"never offered to a staff"*; a no everywhere means it is simply a brick you
+unlock later in the run, which is not a warning and is not greyed.
+
+That wording is deliberately broader than "not for a staff", because two different things
+land in the same place: a brick can be the wrong *class* — the blade tree on a caster — or
+the weapon can already sit on that stat's **cap**, which is what happens to `Rapid Blaster`
+the moment the staff's cast speed puts the blaster on its 2.00s floor. Either way you will
+never be offered it, and that is what the panel promises.
 
 ---
 
