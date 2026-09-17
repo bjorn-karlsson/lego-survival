@@ -68,6 +68,11 @@
   .cpanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
   .cpanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
   .cpanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
+  /* a row you can hover for the explanation says so, rather than hiding it */
+  .cpanel .cptip{cursor:help}
+  .cpanel .cptip span{border-bottom:1px dotted rgba(255,214,110,.42)}
+  .cpanel .cptip:hover{background:rgba(255,214,110,.08);border-radius:4px}
+  .cpanel .cptip:hover span{color:#ffe6a3}
   .boxplate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;
     box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25);
     padding:4px 34px 18px;text-align:center;max-width:820px;transform:rotate(-.5deg);
@@ -242,6 +247,46 @@
   #cmpPanel .down{color:#ff6a5a}
   #cmpPanel .fresh{color:#e8ebe9}
   #cmpPanel .cmpnone{font-size:11.5px;color:#c9d2ce;line-height:1.5;text-align:center;padding:4px 2px}
+  /* ---- the spellbook ----
+     Every brick the run is actually carrying, drawn as the bench card it came
+     from and DEALT INTO STACKS: three of a brick is three cards, fanned, with
+     the numbers read off the live hero rather than off the card you were
+     offered. It reuses `.card.mini` wholesale — the bench already knows how to
+     draw a brick, and a second way of drawing one is a second thing to keep
+     in step. The wave does NOT stop while this is open, which is why the panel
+     leaves the bottom of the screen clear: you can still see your feet. */
+  /* THE OVERLAY LETS THE FIGHT THROUGH. Everything but the panel itself is
+     click-through, so the half of the screen the book is not covering is still
+     your game — which is the whole point of it not pausing. */
+  #bookScreen{justify-content:flex-start;overflow:hidden;pointer-events:none;
+    background:rgba(9,13,17,.42);backdrop-filter:blur(2px)}
+  .sheet.book{max-height:82vh;margin:2vh 0;pointer-events:auto}
+  .bookgrid{display:flex;flex-direction:column;gap:16px;width:100%}
+  .booksec{width:100%}
+  .bookhead{font-family:'Titan One';font-size:11px;letter-spacing:2.4px;color:#ffd76e;
+    margin:0 0 8px;display:flex;align-items:center;gap:9px}
+  .bookhead::after{content:'';flex:1;height:2px;border-radius:1px;
+    background:rgba(255,214,110,.20)}
+  .bookhead em{font-style:normal;color:#8ea092;font-family:'Fredoka';font-size:10px;
+    letter-spacing:.4px;font-weight:600}
+  .bookrow{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start;padding:2px 0 26px}
+  /* a deck: the card itself, with one ghost per extra copy stacked behind it */
+  .deck{position:relative;flex:0 0 auto}
+  .deck .ghost{position:absolute;inset:0;border-radius:12px;transform-origin:50% 0;
+    background:linear-gradient(180deg,#39424a,#252c33);
+    border:2px solid rgba(255,255,255,.10);box-shadow:0 4px 12px rgba(0,0,0,.45)}
+  .deck .card.mini{position:relative;z-index:6}
+  .deck .dcount{position:absolute;right:-9px;top:-9px;z-index:8;
+    min-width:24px;height:24px;border-radius:12px;padding:0 6px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Titan One';font-size:12px;color:#20160a;background:#ffd76e;
+    box-shadow:0 3px 9px rgba(0,0,0,.5)}
+  .booknone{font-size:12px;color:#a9b8ad;padding:6px 2px}
+  .bookspell{display:flex;align-items:center;gap:9px;font-size:12px;color:#cfe0d4;
+    background:rgba(255,255,255,.05);border-radius:9px;padding:6px 10px;margin:0 0 8px}
+  .bookspell svg{width:18px;height:18px;flex:0 0 18px}
+  .bookspell b{color:#fff}
+  .bookspell i{font-style:normal;color:#8ea092;margin-left:auto;white-space:nowrap}
   /* ---- character sheet ---- */
   #charScreen{justify-content:flex-start;overflow:hidden}
   .sheet{width:min(1180px,96vw);max-height:94vh;margin:3vh 0;display:flex;flex-direction:column;
@@ -321,7 +366,8 @@
       <span><kbd>F</kbd> <b>start wave early</b></span>
       <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>L</kbd> <b>combat log</b></span>
-      <span><kbd>P</kbd> <b>pause</b></span>
+      <span><kbd>P</kbd> <b>spellbook</b></span>
+      <span><kbd>ESC</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>sound</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
     </div>
@@ -367,6 +413,17 @@
       <div class="cheatrow" id="cheatSpawn"></div>
     </div>
     <div class="sheetfoot">ESC to close · type <b>1337</b> during play to open it</div>
+  </div>
+</div>
+
+<div id="bookScreen" class="overlay hidden">
+  <div class="sheet book">
+    <div class="sheethead">
+      <h2>SPELLBOOK</h2>
+      <div class="sheetsub" id="bookSub"></div>
+    </div>
+    <div class="sheetbody" id="bookBody"></div>
+    <div class="sheetfoot">P or ESC to close &middot; <b>the wave does not stop</b> while this is open</div>
   </div>
 </div>
 
@@ -1037,6 +1094,32 @@ const EMBER_SHARE  = 0.45;           /* of the hit that threw it */
 const EMBER_SPD    = 430;
 const EMBER_DEPTH  = 3;              /* how far one chain may travel */
 const EMBER_CD     = 0.25;           /* per body, so a target is not a fountain */
+/* WHO AN EMBER GOES FOR. Nearest-only meant a packed crowd never spread: every
+   ember piled onto whatever body was closest, which — in a chain reaction — was
+   almost always one that was already alight. A fire that only feeds itself is
+   not a chain. These three numbers are the whole preference, expressed as
+   PIXELS OF DETOUR an ember is willing to fly, so it stays one comparison:
+     - a body already burning costs EMBER_LIT_COST, so an unburnt body most of
+       the way across the seek radius still beats a burning one at your feet
+     - each ember already sent to a body costs EMBER_SPREAD_COST, so a volley of
+       five lights five bodies rather than five-times-one
+     - nothing past EMBER_SEEK_R is considered at all, so an ember never flies
+       the length of the map to find fresh meat */
+const EMBER_SEEK_R      = 520;
+const EMBER_LIT_COST    = 460;
+const EMBER_SPREAD_COST = 240;
+function emberTarget(from, src, taken){
+  let best = null, bestScore = Infinity;
+  for(const e2 of enemies){
+    if(e2===src || e2.dead || e2.state!=='active') continue;
+    const d = dist(e2, from);
+    if(d > EMBER_SEEK_R) continue;
+    const score = d + (burnStacksOn(e2) > 0 ? EMBER_LIT_COST : 0)
+                    + ((taken && taken.get(e2)) || 0) * EMBER_SPREAD_COST;
+    if(score < bestScore){ bestScore = score; best = e2; }
+  }
+  return best;
+}
 function burnCap(){
   return EBURN_MAX * (BURN_CAP_MUL[(player && player.ember) || 0] || 1);
 }
@@ -1342,7 +1425,12 @@ window.addEventListener('keydown', e=>{
   keys[e.code] = true;
   if(e.code==='KeyF' && state==='play' && wave.state==='ready') waveSkip();
   if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
-  if((e.code==='KeyP'||e.code==='Escape') && (state==='play'||state==='pause')) togglePause();
+  /* P IS THE SPELLBOOK, and the spellbook does not stop the wave — the state
+     machine is left on 'play' throughout, so everything keeps updating behind
+     it. ESC still pauses, but closes the book first if it is open. */
+  if(e.code==='KeyP' && (state==='play'||state==='pause')) toggleBook();
+  if(e.code==='Escape' && bookOn){ toggleBook(); }
+  else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
@@ -1366,6 +1454,7 @@ window.addEventListener('mousedown', e=>{
       if(t >= 0){ clogView = t; SFX.pick(); }
       return;
     }
+    if(bookHit(e.clientX, e.clientY)) return;
     mouse.down = true;
   }
 });
@@ -2709,21 +2798,26 @@ function emberScatter(src, hit, depth){
   if(!rank || depth >= EMBER_DEPTH) return;
   if((src.emberCd || 0) > 0) return;      /* one body is not a machine gun */
   src.emberCd = EMBER_CD;
-  let tgt = null, best = 1e9;
-  for(const e2 of enemies){
-    if(e2===src || e2.dead || e2.state!=='active') continue;
-    const d = dist(e2, src);
-    if(d < best){ best = d; tgt = e2; }
-  }
-  const loop = !tgt;                      /* nothing else standing: come home */
   const n = EMBER_SHOTS[rank] || 0;
+  /* one target CHOSEN PER EMBER, not one for the volley, and each choice knows
+     what the earlier ones took — five embers out of a body in a crowd light
+     five bodies */
+  const taken = new Map();
   for(let i=0;i<n;i++){
-    const a = (i/n)*TAU + rnd(-0.3, 0.3);
-    projectiles.push({ kind:'ember', x:src.x, y:src.y-16,
-      vx:Math.cos(a)*EMBER_SPD*0.5, vy:Math.sin(a)*EMBER_SPD*0.5,
+    const tgt = emberTarget(src, src, taken);
+    const loop = !tgt;                    /* nothing in reach: come home */
+    if(tgt) taken.set(tgt, (taken.get(tgt) || 0) + 1);
+    /* THE SPREAD IS NOT A FAN. Evenly spaced spokes plus a small nudge read as
+       a machine part firing; embers come off a burning body in whatever
+       direction and at whatever speed the fire threw them, and they hang in the
+       air for different lengths of time before they start hunting. */
+    const a = rnd(0, TAU);
+    const spd = EMBER_SPD * rnd(0.28, 0.95);
+    projectiles.push({ kind:'ember', x:src.x + rnd(-7,7), y:src.y-16 + rnd(-8,6),
+      vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
       tgt: loop ? src : tgt, loop, src,
       dmg: hit*EMBER_SHARE, depth: depth+1,
-      out: loop ? rnd(0.18,0.32) : rnd(0.05,0.14),   /* flung out before it homes */
+      out: (loop ? rnd(0.16,0.40) : rnd(0.04,0.26)) * rnd(0.75, 1.35),
       life:2.2, seed:rnd(TAU) });
   }
   addSparks(src.x, src.y-18, 4 + n, '#ffb02e');
@@ -3381,6 +3475,7 @@ function perfectDodge(x,y){
   SFX.deflect();
 }
 function playerDie(){
+  closeBook();
   const p = player; p.dead = true; p.deadT = 0;
   spawnBricks(p.x, p.y, [HERO_COLORS.head, HERO_COLORS.torso, HERO_COLORS.legs, PAL.hyellow], 18, 280);
   SFX.brick(9); SFX.hurt(); addShake(0.55); tScale = 0.3;
@@ -4229,9 +4324,11 @@ const UPGRADES = [
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
     apply:c=>{ player.vortex.n += c.n; } },
-  { id:'vortexpow', name:'Whirling Edge', icon:'vortex', cls:'SPELL', req:()=>player.vortex.n>0,
-    /* blades are for a hero who carries one */
-    req:()=>!isCaster(),
+  { id:'vortexpow', name:'Whirling Edge', icon:'vortex', cls:'SPELL',
+    /* ONE req, not two. A second `req:` key on the same object silently wins,
+       so this brick was offered to a hero who owns no vortex at all — and then
+       moved nothing, because every vortex probe reads player.vortex.n. */
+    req:()=>!isCaster() && player.vortex.n>0,
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every vortex tick — before any increase`,
     apply:c=>{ player.vortex.dmg = Math.round((player.vortex.dmg + c.v)*100)/100; } },
@@ -4754,18 +4851,28 @@ function buildComboPanel(){
   const stats = document.getElementById('comboStats');
   const el    = document.getElementById('comboBricks');
   if(!stats || !el) return;
-  const f = favourite, base = comboPreview('none'), now = comboPreview(f.id);
+  const f = favourite, cast = isCaster();
+  const base = comboPreview('none'), now = comboPreview(f.id);
   const num = (v, d) => (d===0 ? Math.round(v) : v.toFixed(d===undefined?2:d));
   /* every row carries its difference from running this weapon with no
      favourite at all, so the favourite's contribution is never guesswork */
-  const row = (label, v, b, d, unit) => {
+  /* the SAME sentence the reward comparison and the character sheet show, so a
+     stat is explained once and read in three places. `why` names the probe key
+     when the panel's own label differs from the probe's. */
+  const row = (label, v, b, d, unit, why) => {
     let tag = '';
     if(Math.abs(v-b) > 1e-6){
       const pct = Math.round((v/(b||1) - 1)*100);
       tag = `<i class="${v>b?'up':'dn'}">${pct>0?'+':''}${pct}%</i>`;
     }
-    return `<div class="cprow"><span>${label}</span><b>${num(v,d)}${unit||''}${tag}</b></div>`;
+    const tip = why ? statWhy(why[0], why[1]) : '';
+    return `<div class="cprow${tip?' cptip':''}"${tip?` title="${esc(tip)}"`:''}>`+
+      `<span>${label}</span><b>${num(v,d)}${unit||''}${tag}</b></div>`;
   };
+  /* a tiny helper for the rows that are the panel's own, not a probe's */
+  const orow = (label, value, tip) =>
+    `<div class="cprow${tip?' cptip':''}"${tip?` title="${esc(tip)}"`:''}>`+
+    `<span>${label}</span><b>${value}</b></div>`;
   const perk = FAV_PERKS[f.id];
   const bricks = now.bricks.map(b=>
     `<div class="cpbrick${b.blocked?' off':''}">
@@ -4782,29 +4889,34 @@ function buildComboPanel(){
     `<div class="cphead">OPENING STATS</div>
      <div class="cpvs">every % is what this favourite is worth against
      NO FAVOURITE on the same weapon</div>` +
-    row('Hearts', now.hearts, base.hearts, 0) +
-    row(now.hitLabel, now.hit, base.hit) +
-    row(now.rateLabel, now.rate, base.rate) +
-    row('Damage a second', now.dps, base.dps, 1) +
-    row('Crit chance', now.crit, base.crit, 1, '%') +
-    row('Crit multiplier', now.critMult, base.critMult, 0, '%') +
-    row('Armour', now.armour, base.armour, 0) +
-    row('Move speed', now.speed, base.speed, 0) +
-    (now.regen > 0 ? row('Regeneration', now.regen, base.regen, 3, '/s') : '') +
+    row('Hearts', now.hearts, base.hearts, 0, '', ['DEFENCE','Max hearts']) +
+    row(now.hitLabel, now.hit, base.hit, undefined, '',
+        cast ? ['FIREBALL','Bolt damage'] : ['PHYSICAL','Weapon hit']) +
+    row(now.rateLabel, now.rate, base.rate, undefined, '', ['PHYSICAL','Swing rate']) +
+    row('Damage a second', now.dps, base.dps, 1, '',
+        cast ? ['FIREBALL','Bolt DPS'] : ['PHYSICAL','Sustained DPS']) +
+    row('Crit chance', now.crit, base.crit, 1, '%', ['PHYSICAL','Crit chance']) +
+    row('Crit multiplier', now.critMult, base.critMult, 0, '%', ['SWORD','Crit damage']) +
+    row('Armour', now.armour, base.armour, 0, '', ['DEFENCE','Armour']) +
+    row('Move speed', now.speed, base.speed, 0, '', ['UTILITY','Move speed']) +
+    (now.regen > 0 ? row('Regeneration', now.regen, base.regen, 3, '/s', ['DEFENCE','Regeneration']) : '') +
     (now.spells.length ? `<div class="cprow"><span>Starts with</span><b>${
         now.spells.map(k=>k.toUpperCase()).join(', ')}</b></div>` : '') +
     `<div class="cphead">CEILINGS</div>
      <div class="cpvs">nothing in a run climbs past these, however long it runs</div>` +
-    `<div class="cprow"><span>Increased damage</span><b>${Math.round(INC_DMG_CAP*100)}%</b></div>
-     <div class="cprow"><span>MORE multiplier</span><b>\u00d7${MORE_DMG_CAP.toFixed(2)}</b></div>
-     <div class="cprow"><span>Crit chance</span><b>${Math.round(CRIT_CHANCE_CAP*100)}%</b></div>
-     <div class="cprow"><span>Crit multiplier</span><b>${CRIT_MULT_CAP}%</b></div>` +
+    orow('Increased damage', Math.round(INC_DMG_CAP*100)+'%',
+      'every increase that applies to one hit, summed — levels, physical, spell, elemental — stops here') +
+    orow('MORE multiplier', '\u00d7'+MORE_DMG_CAP.toFixed(2),
+      'every PERMANENT more multiplier together. A timed rage buff multiplies on top of this, on purpose') +
+    orow('Crit chance', Math.round(CRIT_CHANCE_CAP*100)+'%', statWhy('PHYSICAL','Crit chance')) +
+    orow('Crit multiplier', CRIT_MULT_CAP+'%', statWhy('SWORD','Crit damage')) +
     `<div class="cphead">ABILITY FLOORS</div>
      <div class="cpvs">CAST SPEED shortens every ability at once — each one stops here</div>` +
     Object.keys(SPELL_FLOOR).map(k=>
-      `<div class="cprow"><span>${esc(SPELL_NAME[k]||k)}</span>`+
-      `<b>${SPELL_FLOOR[k].toFixed(2)}s</b></div>`).join('') +
-    `<div class="cprow"><span>Guardian ring</span><b>${ORBIT_MAX_SPD.toFixed(1)} rad/s</b></div>`;
+      orow(esc(SPELL_NAME[k]||k), SPELL_FLOOR[k].toFixed(2)+'s',
+        `however much CAST SPEED you buy, ${SPELL_NAME[k]||k} never comes round faster than this`)).join('') +
+    orow('Guardian ring', ORBIT_MAX_SPD.toFixed(1)+' rad/s',
+      'past this the guardian bricks strobe instead of spinning');
 
   el.innerHTML =
     (bricks ? `<div class="cphead">BRICKS THAT COME UP MORE OFTEN</div>${bricks}
@@ -5303,15 +5415,138 @@ function swordDps(){
   const critAvg = 1 + critChance()*(critMult()-1);
   return ((light*2 + spin)/3) * (1/swingT) * critAvg;
 }
+/* WHAT EVERY STAT ACTUALLY MEANS, in one table keyed "GROUP|Key". It lives
+   beside the probes rather than inside them so one sentence serves all three
+   places a stat is read: the reward comparison, the character sheet, and the
+   title screen's stats panel. A probe may carry its own `why:` instead — this
+   fills in everything that does not. Anything with no entry shows no tooltip
+   rather than a wrong one; statWhy() is the only reader. */
+const STAT_WHY = {
+  'PHYSICAL|Weapon hit':    'one ordinary swing, before crits. (Base + flat) × (1 + increased) × each more',
+  'PHYSICAL|Spin swing':    'every third swing is a spin — a MORE multiplier of its own, on top of everything',
+  'PHYSICAL|Sustained DPS': 'the real number: the 2-light-1-spin combo, at your swing rate, with crits averaged in',
+  'PHYSICAL|Whirl DPS':     'Blademaster: what standing inside the whirl costs a body that stays there',
+  'PHYSICAL|Base + flat':   'your weapon plus every FLAT physical brick — the number every increase then multiplies',
+  'PHYSICAL|Swing rate':    'swings a second. This is ATTACK SPEED — the hands. CAST SPEED is the abilities',
+  'PHYSICAL|Reach':         'how far the arc reaches. A spin reaches further still',
+  'PHYSICAL|Crit chance':   'your weapon base × (1 + increased). A crit also rolls for bleed',
+  'SWORD|Crit damage':      'what a critical strike deals, as a share of the hit. 150% means one and a half times',
+  'DAMAGE|Increased melee': 'the POOL: physical only — weapon, bladestorm, vortex. Increases ADD to one another',
+  'DAMAGE|Increased spell': 'the POOL: everything you cast. Adds into the same sum, never multiplies it',
+  'DAMAGE|Increased all':   'the POOL from levels (+5% each) — it applies to every kind of damage you deal',
+  'DAMAGE|On a weapon hit': 'the DERIVED number a physical hit is multiplied by: all + melee, stopped at the ceiling',
+  'DAMAGE|On a spell hit':  'the DERIVED number a spell hit is multiplied by: all + spell, stopped at the ceiling',
+  'DAMAGE|Damage over time':'one pool for every lingering damage: poison, bleed and burning alike',
+  'DAMAGE|More damage':     'MORE multipliers never add — each is its own multiplier, applied after every increase',
+  'DEFENCE|Max hearts':     'how much you can take. Regeneration is a share of this, so a bigger bar refills faster',
+  'DEFENCE|Armour':         'flat armour × (1 + increased). It reduces ATTACKS only, never spells',
+  'DEFENCE|Hit taken (6)':  'what a 6-damage attack actually costs you after armour — armour is worth less the harder the hit',
+  'DEFENCE|Suppression':    'chance a SPELL hit lands for a reduced share instead of in full. Armour does not touch spells',
+  'DEFENCE|Regeneration':   'hearts a second, out of combat and in. It runs at ×2 between waves',
+  'DEFENCE|Fire res':       'less fire damage taken, and shorter burning',
+  'DEFENCE|Frost res':      'less frost damage taken, and fewer chill stacks landing',
+  'DEFENCE|Lightning res':  'less shock damage taken, and less chance a hit on you crits',
+  'DEFENCE|Heart drops':    'chance a monster leaves a heart. A boss always leaves one',
+  'UTILITY|Move speed':     'pixels a second. The single most valuable defensive stat in the game',
+  'UTILITY|Roll cooldown':  'seconds between rolls. You are invulnerable for the whole roll',
+  'UTILITY|Pickup range':   'how far studs come to you. It pulls STUDS only — every prize is walked to',
+  'UTILITY|Stud gain':      'studs are the reroll currency, so this is really "how many second looks do I get"',
+  'UTILITY|XP gain':        'levels are +5% increased damage each, so XP gain is damage at one remove',
+  'GUARDIAN BRICK|Damage per hit':'one brick touching one body. It is a SPELL, so it reads the spell pool',
+  'GUARDIAN BRICK|Bricks':  'how many orbit you. They are spread evenly around the ring',
+  'GUARDIAN BRICK|Ring reach':'the radius they hold. Wider covers more but spends longer away from any one body',
+  'GUARDIAN BRICK|Brick size':'a bigger brick overlaps more of a body, so it connects more reliably',
+  'GUARDIAN BRICK|Spin speed':'radians a second. CAST SPEED turns the ring faster, up to its own cap',
+  'BRICK BLASTER|Damage per brick':'one brick out of the volley, hitting one body',
+  'BRICK BLASTER|Bricks per volley':'they fan toward your cursor, so a wide volley trades focus for coverage',
+  'BRICK BLASTER|Volley damage':'the whole volley into one body — only honest at point blank',
+  'BRICK BLASTER|Pierce':   'bodies one brick carries through before it shatters. Scattershot pays for it in damage',
+  'BRICK BLASTER|Damage down a line':'the volley against a QUEUE of foes, counting pierce — the number that matters in a corridor',
+  'BRICK BLASTER|Interval': 'seconds between volleys. CAST SPEED shortens it, down to its own floor',
+  'BRICK BLASTER|Volley DPS':'sustained, one target, at your current interval',
+  'STORM BRICK|Opening strike':'what the bolt does to the FIRST body it touches, before any leap',
+  'STORM BRICK|Targets per bolt':'how many bodies one bolt walks through in total',
+  'STORM BRICK|1st leap':   'each leap carries less than the one before it — this is the second body',
+  'STORM BRICK|2nd leap':   'the third body, and so on down the chain',
+  'STORM BRICK|3rd leap':   'the fourth body. The falloff has a floor, so a long chain never reaches zero',
+  'STORM BRICK|Damage down a bolt':'every body one bolt touches, added up — the number to compare against a single-target spell',
+  'STORM BRICK|Hovering bricks':'each one fires its own full bolt, so this multiplies everything above',
+  'STORM BRICK|Interval':   'seconds between volleys. CAST SPEED shortens it, down to its own floor',
+  'BLADESTORM|Damage per blade':'one blade, one body. Bladestorm is PHYSICAL, so it can open a bleed',
+  'BLADESTORM|Blades per burst':'they fly outward in a ring, so the burst is area damage that also single-targets well up close',
+  'BLADESTORM|Burst damage':'every blade into one body — the point-blank number',
+  'BLADESTORM|Blade size':  'a bigger blade connects more reliably at range, where the ring has spread out',
+  'BLADESTORM|Burst DPS':   'sustained against one body, at your current interval',
+  'BLADE VORTEX|Damage per tick':'the vortex hits on a timer, not on contact. PHYSICAL, so it bleeds',
+  'BLADE VORTEX|Duration':  'how long one vortex lasts once cast',
+  'BLADE VORTEX|Radius':    'everything inside is hit on every tick, so radius is a straight damage multiplier in a crowd',
+  'BLADE VORTEX|Interval':  'seconds between casts. CAST SPEED shortens it, down to its own floor',
+  'BLADE VORTEX|DPS to one foe':'one body standing in it for the whole duration',
+  'BOMB VOLLEY|Damage per blast':'one bomb going off, to everything inside the radius',
+  'BOMB VOLLEY|Bombs':      'they land on a compass around you, so the volley covers ground rather than stacking',
+  'BOMB VOLLEY|Blast radius':'the whole circle takes the full blast — there is no falloff toward the edge',
+  'BOMB VOLLEY|Interval':   'seconds between volleys. CAST SPEED shortens it, down to its own floor',
+  'BOMB VOLLEY|Volley DPS': 'every bomb into one body, sustained. In a crowd it is worth far more than this',
+  'BLOCK FREEZE|Radius':    'everything inside is hit and chilled. Each extra rank widens it',
+  'BLOCK FREEZE|Freeze duration':'how long the chill holds. Five chill stacks freeze a body solid',
+  'BRICKBANE|Opening hit':  'the cloud hits once as it passes, and THEN poisons. This is the hit',
+  'BRICKBANE|Doses per touch':'how many poison stacks one pass lays. More doses is more damage over time, not a bigger hit',
+  'BRICKBANE|Poison per second':'one dose, per second. It reads the increased DAMAGE OVER TIME pool',
+  'BRICKBANE|Poison duration':'how long one dose runs before it wears off',
+  'BRICKBANE|Damage per dose':'one dose over its whole life',
+  'BRICKBANE|Stack ceiling':'the most doses one body can carry. Spore Burst doubles it, then doubles it again',
+  'BRICKBANE|At full depth':'a fully poisoned body, every dose ticking at once — the number bosses die to',
+  'BRICKBANE|Burst reach':  'Spore Burst: when a poisoned body dies its stacks TRANSFER to everything in here',
+  'BRICKBANE|Spread':       'the wedge the gas comes out in. At 360° it comes off you in every direction',
+  'BRICKBANE|Reach':        'how far the cloud travels before it thins out',
+  'BRICKBANE|Interval':     'seconds between clouds. CAST SPEED shortens it, down to its own floor'
+};
+function statWhy(sOrG, k){
+  if(typeof sOrG === 'object' && sOrG) return sOrG.why || STAT_WHY[sOrG.g+'|'+sOrG.k] || '';
+  /* looked up BY NAME, which has to reach a probe's own inline `why:` too, or
+     the stats the fireball carries on the probe itself come back blank */
+  const hit = STAT_WHY[sOrG+'|'+k];
+  if(hit) return hit;
+  const pr = STAT_PROBES.find(x => x.g === sOrG && x.k === k);
+  return (pr && pr.why) || '';
+}
 /* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
 const STAT_PROBES = [
-  { g:'ELEMENTAL', k:'Bolt damage',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true },
-  { g:'ELEMENTAL', k:'Bolt base + flat',   get:()=> isCaster() ? boltBase() : 0,   fmt:v=>v.toFixed(2), zero:true },
-  { g:'ELEMENTAL', k:'Burst radius',       get:()=> isCaster() ? boltRadius() : 0, fmt:v=>Math.round(v)+' px', zero:true },
-  { g:'ELEMENTAL', k:'Burn stack cap',     get:()=> isCaster() ? burnCap() : 0, fmt:v=>Math.round(v)+'', zero:true },
-  { g:'ELEMENTAL', k:'Embers per trigger', get:()=> EMBER_SHOTS[(player&&player.ember)||0]||0, fmt:v=>Math.round(v)+'', zero:true },
-  { g:'ELEMENTAL', k:'Increased elemental',get:()=> incElemAll(weapon.elem||'fire')*100, fmt:v=>Math.round(v)+'%', zero:true },
-  { g:'ELEMENTAL', k:'Increased spell',    get:()=> incSpellAll()*100,        fmt:v=>Math.round(v)+'%', zero:true },
+  /* THE FIREBALL IS NOT "ELEMENTAL". Elemental is the GLOBAL tree — the pools
+     every elemental source in the game reads. The staff's own attack is one
+     ability like any other, and filing it under the global tree made a card
+     that widened the burst look like a card that changed the whole build. */
+  { g:'FIREBALL', k:'Bolt damage',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true,
+    why:'what one fireball lands for on impact, before the fire it leaves behind' },
+  { g:'FIREBALL', k:'Bolt base + flat',   get:()=> isCaster() ? boltBase() : 0,   fmt:v=>v.toFixed(2), zero:true,
+    why:'the weapon base plus every FLAT elemental brick — the number every increase then multiplies' },
+  { g:'FIREBALL', k:'Burst radius',       get:()=> isCaster() ? boltRadius() : 0, fmt:v=>Math.round(v)+' px', zero:true,
+    why:'everything inside this takes the hit and catches fire, so it is area AND ignition' },
+  { g:'FIREBALL', k:'Casts a second',     get:()=> isCaster() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'your own hands — ATTACK SPEED, not the CAST SPEED that shortens your abilities' },
+  { g:'FIREBALL', k:'Bolt DPS',           get:()=> isCaster() ? boltDamage()/player.atkRate : 0, fmt:v=>v.toFixed(1), zero:true,
+    why:'impact damage only, one target, before burning and before crits' },
+  { g:'FIREBALL', k:'Embers per trigger', get:()=> EMBER_SHOTS[(player&&player.ember)||0]||0, fmt:v=>Math.round(v)+'', zero:true,
+    why:'hitting an ALREADY BURNING body throws this many embers, each seeking a body that is not yet alight' },
+  /* BURNING is the ailment the fireball causes, and it is damage over time, so
+     it reads the Rotbrick pool — which is exactly what no probe said before. */
+  { g:'BURNING', k:'Per stack',      get:()=> isCaster() ? dotRate(boltDamage()*EBURN_SHARE, 0) : 0,
+    fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'one stack of fire, per second. '+Math.round(EBURN_SHARE*100)+'% of the hit that lit it, then the increased DAMAGE OVER TIME pool' },
+  { g:'BURNING', k:'Stack cap',      get:()=> isCaster() ? burnCap() : 0, fmt:v=>Math.round(v)+'', zero:true,
+    why:'stacks all burn at once. Reaching the cap breaks them: the fires go out and the body is BURNT' },
+  { g:'BURNING', k:'At the cap',     get:()=> isCaster() ? dotRate(boltDamage()*EBURN_SHARE, 0)*burnCap() : 0,
+    fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'every stack burning together — the most fire one body can be carrying' },
+  { g:'BURNING', k:'Total per stack',get:()=> isCaster() ? dotRate(boltDamage()*EBURN_SHARE, 0)*EBURN_DUR : 0,
+    fmt:v=>v.toFixed(1), zero:true,
+    why:'what one stack deals over its whole '+EBURN_DUR+'s life, if nothing refreshes it' },
+  { g:'BURNING', k:'BURNT mark',     get:()=> isCaster() ? (1+BURNT_STEP)*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'fire taken per mark, stacking to '+BURNT_MAX+' marks (×'+Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)+' at full)' },
+  { g:'ELEMENTAL', k:'Increased elemental',get:()=> incElemAll(weapon.elem||'fire')*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'the GLOBAL elemental pool: fire, frost and lightning alike, from whatever source' },
+  { g:'ELEMENTAL', k:'Increased fire',     get:()=> ((player&&player.inc.fire)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'fire only — it adds into the same pool as the elemental one, it does not multiply it' },
   { g:'PHYSICAL', k:'Weapon hit',     get:()=> isCaster() ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Spin swing',     get:()=> isCaster() ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true },
@@ -5321,12 +5556,28 @@ const STAT_PROBES = [
   { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
   { g:'PHYSICAL', k:'Reach',          get:()=> isCaster() ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
-  { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%' },
-  { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true },
-  { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s' },
-  { g:'BLEED', k:'Total per wound', get:()=> player.bleedShare*BLEED_T*100, fmt:v=>v.toFixed(0)+'%' },
-  { g:'BLEED', k:'Wounds at once',  get:()=> BLEED_STACK_MAX, fmt:v=>Math.round(v)+'' },
-  { g:'BLEED', k:'Fully opened',    get:()=> player.bleedShare*BLEED_STACK_MAX*100, fmt:v=>v.toFixed(0)+'%/s' },
+  { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%',
+    why:'a critical strike opens a wound this often. Only PHYSICAL hits bleed — your weapon, bladestorm and vortex' },
+  { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true,
+    why:'`Serrated Edge` buys bleed on hits that did NOT crit' },
+  { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s',
+    why:'one wound bleeds this share of the hit that opened it, per second — before the damage-over-time pool' },
+  /* THE NUMBERS THE GAME ACTUALLY DEALS. Every row above is a SHARE, so none of
+     them moved when an increased-damage-over-time brick was hovered — which is
+     how Rotbrick came to show an empty panel on a bleeding build. These read
+     dotRate() against a real weapon hit, so they move with everything: flat
+     physical, increased physical, the more pool AND the Rotbrick pool. */
+  { g:'BLEED', k:'One wound',       get:()=> isCaster() ? 0 : dotRate(physDamage()*player.bleedShare, 0),
+    fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'what one open wound costs a body per second, on a real hit from your weapon' },
+  { g:'BLEED', k:'Damage per wound',get:()=> isCaster() ? 0 : dotRate(physDamage()*player.bleedShare, 0)*BLEED_T,
+    fmt:v=>v.toFixed(1), zero:true,
+    why:'one wound over its whole '+BLEED_T+'s, if it runs to the end' },
+  { g:'BLEED', k:'Fully opened',    get:()=> isCaster() ? 0 : dotRate(physDamage()*player.bleedShare, 0)*BLEED_STACK_MAX,
+    fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'all '+BLEED_STACK_MAX+' wounds bleeding at once. This is why staying on a boss beats hitting it harder once' },
+  { g:'BLEED', k:'Wounds at once',  get:()=> BLEED_STACK_MAX, fmt:v=>Math.round(v)+'',
+    why:'past this a new cut displaces the SHALLOWEST wound, and only if it is deeper than that one' },
   { g:'SWORD', k:'Crit damage',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
@@ -5357,7 +5608,16 @@ const STAT_PROBES = [
   { g:'GUARDIAN BRICK', k:'Ring reach',     get:()=> player.orbit.n ? player.orbit.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'GUARDIAN BRICK', k:'Brick size',     get:()=> player.orbit.n ? player.orbit.size : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'GUARDIAN BRICK', k:'Spin speed',     get:()=> player.orbit.n ? player.orbit.spd : 0, fmt:v=>v.toFixed(2), zero:true },
-  { g:'GUARDIAN BRICK', k:'DPS to one foe',  get:()=> orbitDps(), fmt:v=>v.toFixed(1), zero:true },
+  { g:'GUARDIAN BRICK', k:'DPS to one foe',  get:()=> orbitDps(), fmt:v=>v.toFixed(1), zero:true,
+    why:'one body standing in the ring, struck as often as the ring allows' },
+  /* Tidal Orbit changes the ring from a fixed circle into a sweep; nothing read
+     that, so the only legendary in the tree showed an empty panel */
+  { g:'GUARDIAN BRICK', k:'Sweeps in to',   get:()=> (player.orbit.n && player.orbit.pulse) ? player.orbit.r*ORBIT_PULSE_IN : 0,
+    fmt:v=>Math.round(v)+' px', zero:true,
+    why:'Tidal Orbit: the ring stops holding its circle and breathes in to here' },
+  { g:'GUARDIAN BRICK', k:'…and out to',    get:()=> (player.orbit.n && player.orbit.pulse) ? player.orbit.r*ORBIT_PULSE_OUT : 0,
+    fmt:v=>Math.round(v)+' px', zero:true,
+    why:'…and back out to here, PAST the ring reach cap, raking everything between' },
   { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
@@ -5377,12 +5637,37 @@ const STAT_PROBES = [
   { g:'STORM BRICK', k:'Damage down a bolt',get:()=> chainBoltTotal(), fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Hovering bricks',   get:()=> Math.min(chainMaxZappers(), player.chain.zappers), fmt:v=>Math.round(v)+'', zero:true },
   { g:'STORM BRICK', k:'Interval',          get:()=> player.chain.n ? player.chain.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
-  { g:'STORM BRICK', k:'DPS, all bricks',   get:()=> player.chain.n ? chainBoltTotal()*Math.min(chainMaxZappers(), player.chain.zappers)/player.chain.rate : 0, fmt:v=>v.toFixed(1), zero:true },
+  { g:'STORM BRICK', k:'DPS, all bricks',   get:()=> player.chain.n ? chainBoltTotal()*Math.min(chainMaxZappers(), player.chain.zappers)/player.chain.rate : 0, fmt:v=>v.toFixed(1), zero:true,
+    why:'every hovering brick firing a full bolt down a packed line' },
+  /* Crackling Storm turns one leap into a branching tree — a number, and a very
+     large one, that no probe was reading */
+  { g:'STORM BRICK', k:'Ways per leap',     get:()=> player.chain.n ? 1 + (player.chain.fork||0) + (player.chain.fork ? 1 : 0) : 0,
+    fmt:v=>Math.round(v)+'', zero:true,
+    why:'Crackling Storm: each leap FORKS this many ways instead of one, so a bolt walks the pack as a tree' },
+  { g:'STORM BRICK', k:'Bodies a bolt reaches', get:()=>{
+      if(!player.chain.n) return 0;
+      const ways = 1 + (player.chain.fork||0) + (player.chain.fork ? 1 : 0), leaps = player.chain.n - 1;
+      let n = 1, tier = 1;
+      for(let i=0;i<leaps;i++){ tier *= ways; n += tier; }
+      return Math.min(CHAIN_MAX_NODES, n); },
+    fmt:v=>Math.round(v)+'', zero:true,
+    why:'what one bolt actually touches once it has finished branching (hard cap '+CHAIN_MAX_NODES+' nodes)' },
   { g:'BLADESTORM', k:'Damage per blade',   get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BLADESTORM', k:'Blades per burst',   get:()=> player.storm.n*player.storm.count, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BLADESTORM', k:'Burst damage',       get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADESTORM', k:'Blade size',         get:()=> player.storm.n ? player.storm.size : 0, fmt:v=>'×'+v.toFixed(2), zero:true },
-  { g:'BLADESTORM', k:'Interval',           get:()=> player.storm.n ? player.storm.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLADESTORM', k:'Interval',           get:()=> player.storm.n ? player.storm.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true,
+    why:'seconds between bursts. Every CAST SPEED increase shortens it, down to its own floor' },
+  /* Returning Blades multiplies how many times one blade can cut. That is the
+     whole brick, and no probe said it. */
+  { g:'BLADESTORM', k:'Passes per blade',   get:()=> player.storm.n ? 1 + (player.storm.boomer||0)*(player.storm.boomer>1?1.5:1) : 0,
+    fmt:v=>v.toFixed(1), zero:true,
+    why:'Returning Blades: a blade wheels around and cuts its way back instead of fading' },
+  { g:'BLADESTORM', k:'Burst, every pass',  get:()=> player.storm.n
+      ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count
+        * (1 + (player.storm.boomer||0)*(player.storm.boomer>1?1.5:1)) : 0,
+    fmt:v=>v.toFixed(1), zero:true,
+    why:'the whole burst counting every return pass — what a burst is worth against something that cannot dodge' },
   { g:'BLADESTORM', k:'Burst DPS',          get:()=> player.storm.n ? calcDamage(player.storm.dmg,'melee')*player.storm.n*player.storm.count/player.storm.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLADE VORTEX', k:'Damage per tick',  get:()=> player.vortex.n ? calcDamage(player.vortex.dmg,'melee') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BLADE VORTEX', k:'Duration',         get:()=> player.vortex.n ? player.vortex.dur + (player.vortex.n-1)*0.4 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
@@ -5397,7 +5682,13 @@ const STAT_PROBES = [
   { g:'BOMB VOLLEY', k:'Volley DPS',        get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell')*player.bomb.n/player.bomb.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'BLOCK FREEZE', k:'Radius',           get:()=> player.freeze.n ? player.freeze.r + (player.freeze.n-1)*30 : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur + (player.freeze.n-1)*1.2 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
-  { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true,
+    why:'seconds between blasts. CAST SPEED shortens it, down to its own floor' },
+  { g:'BLOCK FREEZE', k:'Frost damage',     get:()=> player.freeze.n ? frostDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
+    why:'it is a real elemental hit, not just a slow — it reads the spell AND the frost pools' },
+  { g:'BLOCK FREEZE', k:'Held solid for',   get:()=> (player.freeze.n && player.freeze.stun) ? FREEZE_STUN_T : 0,
+    fmt:v=>v.toFixed(1)+'s', zero:true,
+    why:'Absolute Zero: every caught body is frozen SOLID this long, the way a fifth chill stack freezes you' },
   { g:'BRICKBANE', k:'Opening hit',      get:()=> player.bane.n ? calcDamage(player.bane.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BRICKBANE', k:'Doses per touch',  get:()=> player.bane.n ? player.bane.stacks : 0, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICKBANE', k:'Poison per second',get:()=> player.bane.n ? player.bane.dot : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
@@ -5476,7 +5767,7 @@ function previewPick(u, c){
        first time is not a downgrade, it is simply what it costs. */
     const fresh = !!s.zero && (a === 0 || b === 0);
     const better = (b > a) === (s.hi !== false);
-    rows.push({ g:s.g, k:s.k,
+    rows.push({ g:s.g, k:s.k, why: statWhy(s),
       from: (s.zero && a === 0) ? '—' : s.fmt(a),
       to:   (s.zero && b === 0) ? '—' : s.fmt(b),
       up: better, fresh });
@@ -5505,7 +5796,9 @@ function cmpShow(u, c, anchor, title, avoid){
     let g = null;
     for(const r of rows){
       if(r.g !== g){ g = r.g; html += `<div class="cmpg">${esc(g)}</div>`; }
-      html += `<div class="cmprow"><span>${esc(r.k)}</span>`+
+      /* the explanation rides along as a native tooltip: the panel is already
+         a hover, so a second hover layer inside it would fight the first */
+      html += `<div class="cmprow"${r.why?` title="${esc(r.why)}"`:''}><span>${esc(r.k)}</span>`+
         `<b><i class="was">${esc(r.from)}</i> → <i class="${r.fresh?'fresh':(r.up?'up':'down')}">${esc(r.to)}</i></b></div>`;
     }
   }
@@ -5941,13 +6234,141 @@ function renderCharSheet(){
     `<div class="chipgroup"><span class="chiphead">${c}</span>${byCls[c].join('')}</div>`
   ).join('') || '<div class="chipgroup"><div class="chip">Fresh build — no bricks taken yet</div></div>';
 
+  /* EVERY STAT, GENERATED FROM THE PROBES. The hand-written blocks above carry
+     the deep explanations, but they are hand-written — a probe added to the
+     comparison could sit there for months without ever reaching this screen.
+     This section is the SAME list the reward comparison reads, so the coverage
+     cannot drift by construction, and each row carries its own explanation. */
+  const probeGroups = [];
+  for(const sp of STAT_PROBES){
+    let grp = probeGroups.find(x=>x.g===sp.g);
+    if(!grp){ grp = {g:sp.g, rows:[]}; probeGroups.push(grp); }
+    let v = null;
+    try { v = sp.get(); } catch(e){ v = null; }
+    const dead = v === null || !isFinite(v) || (sp.zero && v === 0);
+    grp.rows.push(sRow(esc(sp.k), dead ? '—' : sp.fmt(v), '', statWhy(sp)));
+  }
+  const allStats = probeGroups.map(grp => sBlock(esc(grp.g), grp.rows)).join('');
+
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
      <div class="sgrid">${vitals}${move}${sword}${crit}${power}${resist}${ail}${curseBlock}${loot}${run}</div>
      <div class="seclabel">SPELLS</div>
      <div class="spellgrid">${spellHtml}</div>
+     <div class="seclabel">EVERY STAT &mdash; HOVER ANY ROW</div>
+     <div class="sgrid">${allStats}</div>
      <div class="seclabel">BRICKS TAKEN</div>
      <div id="charChips" style="display:flex;flex-direction:column;gap:10px;align-items:center">${upHtml}</div>`;
+}
+/* THE SPELLBOOK. Everything the run is carrying, dealt into stacks: one card
+   per brick, with a ghost card behind it for every extra copy, read off the
+   LIVE hero rather than off the card you were offered — so a brick you took at
+   common and again at epic shows what the pair of them are doing now. The bench
+   already knows how to draw a brick, so the markup is the bench's, class for
+   class; the only thing here that is new is the stacking. */
+let bookOn = false;
+function bookCard(u, n){
+  const R = RARITY[benchRarOf(u)];
+  let body = '';
+  try { body = esc(u.desc(u.calc(R.mult), n)); } catch(e){ body = ''; }
+  /* one ghost per extra copy, up to four — past that the count badge says it
+     better than a stack of slivers does */
+  const ghosts = Math.min(4, Math.max(0, n-1));
+  let g = '';
+  for(let i=ghosts;i>0;i--)
+    g += `<div class="ghost" style="transform:translate(${i*5}px,${i*6}px) rotate(${i*1.3}deg)"></div>`;
+  return `<div class="deck">${g}
+    ${n>1?`<div class="dcount">\u00d7${n}</div>`:''}
+    <div class="card mini" data-up="${u.id}">
+      <div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
+      <h3>${esc(u.name)}</h3><p>${body}</p>
+      <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
+    </div></div>`;
+}
+function renderSpellbook(){
+  const body = document.getElementById('bookBody');
+  if(!body || !player) return;
+  const byId = {}; for(const u of UPGRADES) byId[u.id] = u;
+  const owned = Object.keys(taken).filter(id => byId[id] && taken[id] > 0);
+  let cards = 0; for(const id of owned) cards += taken[id];
+  document.getElementById('bookSub').textContent =
+    `${owned.length} brick${owned.length===1?'':'s'} · ${cards} card${cards===1?'':'s'} · `+
+    `${spellsOwned()} of ${SPELL_MAX} spell slots · ${weapon.name} · level ${player.level}`;
+
+  /* the bench's own filing, so a brick is in the same place in both screens */
+  const used = new Set(), secs = [];
+  for(const sec of BENCH_SECTIONS){
+    const list = sec.ids.filter(id => owned.includes(id) && !used.has(id));
+    for(const id of list) used.add(id);
+    if(list.length) secs.push([sec.name, list]);
+  }
+  const rest = owned.filter(id => !used.has(id));
+  if(rest.length) secs.push(['EVERYTHING ELSE', rest]);
+
+  /* a spell section gets the spell's own live summary above its bricks, which
+     is the one thing the bench has no reason to show and a spellbook does */
+  const sums = {}; for(const sp of spellSummaries()) sums[sp.id] = sp;
+  const html = secs.map(([name, ids]) => {
+    let n = 0; for(const id of ids) n += taken[id];
+    const sp = sums[SECTION_SPELL[name]];
+    return `<div class="booksec">
+      <div class="bookhead">${esc(name)}<em>${ids.length} brick${ids.length===1?'':'s'}, ${n} card${n===1?'':'s'}</em></div>
+      ${sp ? `<div class="bookspell">
+         <svg viewBox="0 0 24 24" fill="none" stroke="#d6a6ff" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">${ICONS[sp.icon]||''}</svg>
+         <b>${esc(sp.name)}</b> <span>${esc(sp.head)}</span></div>` : ''}
+      <div class="bookrow">${ids.map(id => bookCard(byId[id], taken[id])).join('')}</div>
+    </div>`;
+  }).join('');
+  body.innerHTML = `<div class="bookgrid">${html || 
+    '<div class="booknone">Nothing taken yet. Bricks come from waves, levels, bosses and chests.</div>'}</div>`;
+  /* the same now -> next panel the bench and the reward screen use */
+  for(const el of body.querySelectorAll('.card.mini')){
+    const u = byId[el.dataset.up];
+    if(u) cmpWire(el, u, u.calc(RARITY[benchRarOf(u)].mult),
+      u.name + ' \u00b7 ' + RARITY[benchRarOf(u)].name + ' \u00b7 one more');
+  }
+}
+/* which bench section belongs to which spell, so the book can head a section
+   with that spell's live numbers */
+const SECTION_SPELL = {
+  'GUARDIAN BRICK':'orbit', 'BRICK BLASTER':'blaster', 'STORM BRICK':'chain',
+  'BLADESTORM':'storm', 'BLADE VORTEX':'vortex', 'BOMB VOLLEY':'bombplus',
+  'BLOCK FREEZE':'freeze', 'BRICKBANE':'bane'
+  /* NB: the bomb summary is filed under its brick id, not the spell key */
+};
+/* is this click on the book itself, rather than the game behind it? */
+function bookHit(x, y){
+  if(!bookOn) return false;
+  const el = document.querySelector('#bookScreen .sheet.book');
+  if(!el) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+function toggleBook(){
+  bookOn = !bookOn;
+  const el = document.getElementById('bookScreen');
+  if(bookOn){ renderSpellbook(); el.classList.remove('hidden'); }
+  else { el.classList.add('hidden'); cmpHide(); }
+  SFX.click();
+}
+/* the fight carries on behind an open book, so its numbers would go stale
+   within a second of opening it. Twice a second is enough to track a wave
+   without rebuilding the DOM every frame. */
+let bookRefresh = 0;
+function bookTick(dt){
+  if(!bookOn) return;
+  bookRefresh -= dt;
+  if(bookRefresh <= 0){ bookRefresh = 0.5; renderSpellbook(); }
+}
+function closeBook(){
+  if(!bookOn) return;
+  bookOn = false;
+  const el = document.getElementById('bookScreen');
+  if(el) el.classList.add('hidden');
+  cmpHide();
 }
 function toggleChar(){
   if(state==='play'){
@@ -5964,6 +6385,9 @@ function toggleChar(){
 }
 function openUpgrades(mode='wave', forceRar){
   if(state!=='play') return;
+  /* the book stops refreshing the moment the state leaves 'play', so leaving it
+     open over the reward cards would strand a frozen page on top of them */
+  closeBook();
   upgradeMode = mode;
   forcedRarity = forceRar || null;
   screenRerolls = 0;
@@ -9127,12 +9551,10 @@ function updateProjectiles(dt){
            dead, and the next nearest body is a better answer than fizzling */
         let t = pr.tgt;
         if(!t || t.dead || t.state!=='active'){
-          t = null; let best = 1e9;
-          for(const e2 of enemies){
-            if(e2===pr.src || e2.dead || e2.state!=='active') continue;
-            const d = dist(e2, pr); if(d < best){ best = d; t = e2; }
-          }
-          /* still nothing standing — go home to the body that threw it */
+          /* the same preference as the throw: an ember that outlives its mark
+             must not fall back to nearest-only, or the spread stops halfway */
+          t = emberTarget(pr, pr.src, null);
+          /* still nothing in reach — go home to the body that threw it */
           if(!t && pr.src && !pr.src.dead && pr.src.state==='active'){ t = pr.src; pr.loop = true; }
           pr.tgt = t;
         }
@@ -12703,8 +13125,59 @@ const CLOG_MAX = 200;        /* lines kept per tab */
 const CLOG_SHOW = 15;        /* lines drawn */
 const CLOG_MERGE = 0.45;     /* seconds within which repeat hits fold into one line */
 const CLOG_WINDOW = 5;       /* seconds the DPS meters average over */
-const CLOG_OUT = 0, CLOG_IN = 1, CLOG_EVT = 2;
-const CLOG_TABS = ['DEALT', 'TAKEN', 'EVENTS'];
+const CLOG_OUT = 0, CLOG_IN = 1, CLOG_EVT = 2, CLOG_DPS = 3;
+const CLOG_TABS = ['DEALT', 'TAKEN', 'EVENTS', 'DPS'];
+/* PER-ABILITY DPS OVER A MINUTE. The run totals answer "what did the most
+   damage all run", which flatters whatever you picked first and buries a spell
+   that only came online at wave 30. This answers the balance question instead —
+   what is each ability doing RIGHT NOW — by keeping one bucket a second per
+   source and rolling them forward. Sixty buckets of a double is nothing, and a
+   source that has gone quiet ages out of its own accord rather than sitting at
+   its old number for ever. */
+const CLOG_DPS_WIN = 60;
+let clogDps = {};                     /* source -> { b:[60], sec } */
+function dpsSlot(source){
+  let s = clogDps[source];
+  if(!s) s = clogDps[source] = { b:new Array(CLOG_DPS_WIN).fill(0), sec:Math.floor(runTime) };
+  return s;
+}
+/* ONE wrap, used by everything that indexes a bucket. JavaScript's % keeps the
+   sign of its left operand, so a plain `x % WIN` on anything negative indexes
+   off the end of the array and silently writes a property instead of a slot —
+   which meant a roll could leave stale buckets behind and still look right. */
+function dpsIdx(n){ return ((n % CLOG_DPS_WIN) + CLOG_DPS_WIN) % CLOG_DPS_WIN; }
+/* age a source's buckets up to `now`, zeroing every second it missed. A gap
+   wider than the window means everything it holds is stale. */
+function dpsRoll(s, now){
+  if(now === s.sec) return;
+  if(now < s.sec || now - s.sec >= CLOG_DPS_WIN){ s.b.fill(0); s.sec = now; return; }
+  for(let i = 1; i <= now - s.sec; i++) s.b[dpsIdx(s.sec + i)] = 0;
+  s.sec = now;
+}
+function dpsAdd(source, d){
+  const now = Math.floor(runTime), s = dpsSlot(source);
+  dpsRoll(s, now);
+  s.b[dpsIdx(now)] += d;
+}
+/* the window is only as long as the run has been going, or a spell picked up
+   ten seconds ago reads as a sixth of what it is actually doing */
+function dpsWindow(){ return Math.max(1, Math.min(CLOG_DPS_WIN, runTime)); }
+function dpsOf(source){
+  const s = clogDps[source];
+  if(!s) return 0;
+  dpsRoll(s, Math.floor(runTime));
+  let sum = 0; for(const v of s.b) sum += v;
+  return sum / dpsWindow();
+}
+/* newest-last, so a sparkline reads left to right like every other chart */
+function dpsSeries(source){
+  const s = clogDps[source];
+  if(!s) return [];
+  dpsRoll(s, Math.floor(runTime));
+  const out = [], now = s.sec;
+  for(let i = CLOG_DPS_WIN - 1; i >= 0; i--) out.push(s.b[dpsIdx(now - i)]);
+  return out;
+}
 let clogOn = false;
 let clogView = CLOG_OUT;
 let clogLines = [[], [], []];         /* one scrollback per tab */
@@ -12716,7 +13189,7 @@ let clogAilAcc = 0;
 let clogTabRects = [];                /* filled in by the renderer, read by the mouse */
 function clogReset(){
   clogLines = [[], [], []];
-  clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {};
+  clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {}; clogDps = {};
   clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
   clogAilAcc = 0;
 }
@@ -12727,7 +13200,7 @@ function clogToggle(){
 }
 function clogCycle(){
   if(!clogOn){ clogToggle(); return; }
-  clogView = (clogView + 1) % 3;
+  clogView = (clogView + 1) % CLOG_TABS.length;
 }
 /* Lines merge while they repeat: twenty orbit ticks in a third of a second are
    one line that counts up, not twenty lines that scroll the tab away. */
@@ -12768,6 +13241,7 @@ function clogRate(arr){
 function logDealt(e, d, source, crit, suppressed){
   clogRun.dealt += d; clogRun.hits++; if(crit) clogRun.crits++;
   clogSrc[source] = (clogSrc[source]||0) + d;
+  dpsAdd(source, d);
   clogOutW.push({ t: runTime, d }); clogTrim(clogOutW);
   if(!clogOn) return;
   const name = e.bname || e.type;
@@ -12840,6 +13314,109 @@ function clogTabAt(x, y){
 }
 /* The panel eats clicks that land on it, so poking a tab does not also swing
    the sword at whatever is standing behind it. */
+/* one colour per damage source, held steady across the whole run so a bar and
+   its sparkline are the same thing at a glance */
+const DPS_COLS = {
+  sword:'#cfd6dd', storm:'#9fe8ff', vortex:'#b98cff', orbit:'#ffd166', blaster:'#ffe9b0',
+  chain:'#9ad8ff', bomb:'#ffb04a', bane:'#9fdc7e', fire:'#ff8a3c', frost:'#bfe3ff',
+  burn:'#ff6a1a', bleed:'#ff5a5a', poison:'#7fd44a', ember:'#ffb02e', whirl:'#e6e6e6'
+};
+const CLOG_DPS_ROWS = 9;      /* sources listed; the rest fold into ONE row */
+const CLOG_DPS_ROWH = 26;
+/* how many rows the chart will draw, so the panel can be the right height
+   before a single one of them is drawn */
+function dpsRowCount(){
+  let n = 0;
+  for(const k in clogDps) if(dpsOf(k) > 0.0001) n++;
+  return Math.min(n, CLOG_DPS_ROWS);
+}
+function dpsColour(k){
+  if(DPS_COLS[k]) return DPS_COLS[k];
+  /* anything new gets a stable colour from its own name rather than a random one */
+  let n = 0; for(let i=0;i<k.length;i++) n = (n*31 + k.charCodeAt(i)) & 0xffff;
+  return 'hsl('+(n % 360)+',62%,68%)';
+}
+/* THE CHART. One row per source: name, its DPS over the window, a share bar,
+   and a sixty-second sparkline so a spell that has gone quiet looks different
+   from one that never fired. Everything is drawn from dpsSeries(), so the
+   picture and the number can never disagree. */
+function drawDpsTab(c, x, y, w, panelBottom){
+  const keys = Object.keys(clogDps);
+  const rows = keys.map(k=>({ k, dps: dpsOf(k) })).filter(r=>r.dps > 0.0001)
+                   .sort((a,b)=> b.dps - a.dps);
+  const win = dpsWindow();
+  let total = 0; for(const r of rows) total += r.dps;
+  c.font = '700 11px Fredoka';
+  c.fillStyle = '#bfe3ff';
+  c.fillText('TOTAL '+total.toFixed(1)+'/s', x+12, y);
+  c.fillStyle = '#8e9aa4';
+  c.fillText('last '+Math.round(win)+'s'+(win < CLOG_DPS_WIN ? ' (filling)' : ''), x+118, y);
+  c.textAlign = 'right';
+  c.fillText(rows.length+' source'+(rows.length===1?'':'s'), x+w-12, y);
+  c.textAlign = 'left';
+  y += 14;
+  c.strokeStyle = 'rgba(150,170,190,0.2)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(x+10, y); c.lineTo(x+w-10, y); c.stroke();
+  y += 12;
+  if(!rows.length){
+    c.font = '600 11px Fredoka'; c.fillStyle = '#5f6b75';
+    c.fillText('nothing has dealt damage yet', x+12, y);
+    return y + 14;
+  }
+  /* fold the tail into one row rather than dropping it — a build with twelve
+     sources should still add up to the total printed above */
+  let show = rows, rest = null;
+  if(rows.length > CLOG_DPS_ROWS){
+    show = rows.slice(0, CLOG_DPS_ROWS - 1);
+    const tail = rows.slice(CLOG_DPS_ROWS - 1);
+    let d = 0; for(const r of tail) d += r.dps;
+    rest = { k:'+'+tail.length+' more', dps:d, tail:true };
+  }
+  const peak = Math.max(1e-6, rows[0].dps);
+  const list = rest ? show.concat([rest]) : show;
+  const barX = x + 96, barW = w - 96 - 68;
+  for(const r of list){
+    if(y + CLOG_DPS_ROWH > panelBottom - 4) break;
+    const col = r.tail ? '#7c8a80' : dpsColour(r.k);
+    c.font = '700 11px Fredoka'; c.fillStyle = col;
+    c.fillText(r.k.length > 13 ? r.k.slice(0,12)+'…' : r.k, x+12, y+6);
+    /* the share bar */
+    c.fillStyle = 'rgba(255,255,255,0.07)';
+    roundRect(c, barX, y+1, barW, 10, 5); c.fill();
+    c.fillStyle = col;
+    const bw = Math.max(2, barW * (r.dps/peak));
+    roundRect(c, barX, y+1, bw, 10, 5); c.fill();
+    /* the number, right-aligned so the column reads as a column */
+    c.font = '700 11px Fredoka'; c.fillStyle = '#e8ece9';
+    c.textAlign = 'right';
+    c.fillText(r.dps.toFixed(1)+'/s', x+w-12, y+6);
+    c.font = '600 9px Fredoka'; c.fillStyle = '#8e9aa4';
+    c.fillText(total > 0 ? Math.round(r.dps/total*100)+'%' : '0%', x+w-12, y+17);
+    c.textAlign = 'left';
+    /* the sparkline: sixty seconds of this one source, newest on the right */
+    if(!r.tail){
+      const ser = dpsSeries(r.k);
+      let hi = 0; for(const v of ser) if(v > hi) hi = v;
+      if(hi > 0){
+        const sx = barX, sy = y + 13, sh = 11, sw = barW;
+        c.globalAlpha = 0.85;
+        c.strokeStyle = col; c.lineWidth = 1.2;
+        c.beginPath();
+        for(let i=0;i<ser.length;i++){
+          const px = sx + (i/(ser.length-1))*sw;
+          const py = sy + sh - (ser[i]/hi)*sh;
+          i ? c.lineTo(px, py) : c.moveTo(px, py);
+        }
+        c.stroke();
+        c.globalAlpha = 1;
+      }
+    }
+    y += CLOG_DPS_ROWH;
+  }
+  c.font = '600 9px Fredoka'; c.fillStyle = '#5f6b75';
+  c.fillText('bar = share of the best · line = this source, second by second', x+12, y+4);
+  return y + 14;
+}
 function clogHit(x, y){
   if(!clogOn || !clogTabRects.length) return false;
   const p0 = clogTabRects[0].panel;
@@ -12847,10 +13424,15 @@ function clogHit(x, y){
 }
 function renderCombatLog(){
   if(!clogOn){ clogTabRects = []; return; }
-  const w = 322, x = cw - w - 14, top = 108;
+  /* four tabs need a little more width than three did, or EVENTS runs into DPS */
+  const w = 348, x = cw - w - 14, top = 108;
   const bottom = ch - 96;
   /* the breakdown wraps, so the panel has to have room for the extra lines */
-  const h = Math.min(bottom - top, 156 + CLOG_SHOW*14);
+  /* the DPS tab is sized to the sources it actually has, not to the most it
+     could ever show — an empty half-panel below five rows reads as a bug */
+  const h = Math.min(bottom - top,
+    clogView===CLOG_DPS ? 132 + Math.max(1, dpsRowCount())*CLOG_DPS_ROWH
+                        : 156 + CLOG_SHOW*14);
   ctx.save();
   ctx.fillStyle = 'rgba(10,14,19,0.80)';
   roundRect(ctx, x, top, w, h, 10); ctx.fill();
@@ -12866,8 +13448,8 @@ function renderCombatLog(){
   /* ---- the tabs ---- */
   clogTabRects = [];
   const panel = { x, y:top, w, h };
-  const tw = (w - 24)/3;
-  for(let i=0;i<3;i++){
+  const tw = (w - 24)/CLOG_TABS.length;
+  for(let i=0;i<CLOG_TABS.length;i++){
     const tx = x+12 + i*tw, th = 19;
     const on = clogView===i;
     ctx.fillStyle = on ? 'rgba(255,215,110,0.22)' : 'rgba(255,255,255,0.06)';
@@ -12900,6 +13482,10 @@ function renderCombatLog(){
     ctx.fillText('evaded '+clogRun.evaded, x+212, y);
     y += 16;
     y = clogBreakdown(ctx, 'HURT BY', clogFrom, clogRun.taken, x+12, y, '#ff8a6a', w-30);
+  } else if(clogView===CLOG_DPS){
+    y = drawDpsTab(ctx, x, y, w, top + h);
+    ctx.globalAlpha = 1; ctx.restore();
+    return;
   } else {
     ctx.fillStyle = '#9fdc7e'; ctx.fillText('kills '+clogRun.kills, x+12, y);
     ctx.fillStyle = '#c9d2ce';
@@ -13462,6 +14048,7 @@ function updateCamera(raw, tx0, ty0){
 }
 function startGame(){
   audioInit();
+  closeBook();
   document.getElementById('cheatScreen').classList.add('hidden');
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('titleScreen').classList.add('hidden');
@@ -13494,6 +14081,7 @@ function togglePause(){
     document.getElementById('pauseScreen').classList.add('hidden'); }
 }
 function backToTitle(){
+  closeBook();
   document.getElementById('cheatScreen').classList.add('hidden');
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
@@ -13534,6 +14122,7 @@ function update(dt, raw){
   }
   else if(state==='play'){
     runTime += dt;
+    bookTick(dt);
     navBudget = NAV_BUDGET;
     mouse.wx = cam.x + (mouse.x - cw/2)/zoom;
     mouse.wy = cam.y + (mouse.y - ch/2)/zoom;

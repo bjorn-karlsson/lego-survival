@@ -107,17 +107,34 @@ elemental), `Pyromancy` (increased fire), `Wildfire` (a wider burst), and the le
 **`Ember Scatter`**.
 
 **Ember Scatter** is the fireball's payoff. Hitting a body that is **already burning**
-knocks **2 embers** off it — **5** once upgraded — and each one flies to the nearest *other*
-monster and sets that alight too, for 45% of the hit that threw it. With nothing else
-standing they **loop back** into the body that threw them, so it is never dead weight
-against a boss on its own. It also deepens the well: fire piles **10 stacks** instead of
-five, **20** upgraded, so BURNT comes round rarer but the burn underneath it is four times
-the size.
+knocks **2 embers** off it — **5** once upgraded — and each one sets another monster alight
+for 45% of the hit that threw it. With nothing in reach they **loop back** into the body
+that threw them, so it is never dead weight against a boss on its own. It also deepens the
+well: fire piles **10 stacks** instead of five, **20** upgraded, so BURNT comes round rarer
+but the burn underneath it is four times the size.
+
+**An ember goes looking for something that is not on fire.** Nearest-first meant a chain
+reaction fed itself: in a packed crowd every ember piled onto whatever was closest, which
+was almost always a body already alight. The preference is one comparison, expressed in
+**pixels of detour an ember will fly**:
+
+| | cost |
+|---|--:|
+| distance to the body | 1 px per px |
+| the body is **already burning** | **+460** — so an unburnt body most of the way across the seek radius still beats a burning one at your feet |
+| each ember **already sent** to that body this volley | **+240** — so a volley of five lights five bodies, not five-times-one |
+| further than **520 px** | not considered at all — an ember never crosses the map for fresh meat |
+
+A burning body is still a target when it is the only thing standing, so an ember is never
+wasted; and the mid-flight retarget asks the same question, so an ember that outlives its
+mark does not fall back to nearest-only halfway there.
+
+They no longer leave in an even fan, either. Evenly spaced spokes plus a nudge read as a
+machine part firing; embers now come off in **any direction, at any speed between 28% and
+95%**, and hang in the air for **different lengths of time** before they start hunting.
 
 A chain travels **3 bodies deep** and one body can only throw embers every 0.25s, so a
-packed crowd lights up and then settles rather than running away — measured at a peak of 92
-embers across fourteen bodies, every one of them alight, back to zero in about three
-seconds.
+packed crowd lights up and then settles rather than running away.
 
 **`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
 **chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
@@ -665,6 +682,76 @@ legendary rate of Hard for the privilege.
 
 ---
 
+## Reading your own build
+
+Three screens answer three different questions, and all three are driven from **one list of
+stat probes** so they can never drift apart.
+
+### The reward comparison — *what would this brick do?*
+
+Hovering a reward, or any card on the test bench, applies it to a **copy** of the hero,
+reads all 111 probes again, and lists only what actually moved, as `now → next`. Because
+the probes include every spell's damage, one *"+18% increased spell damage"* card shows its
+effect on the blaster, the storm brick and the bombs on separate lines.
+
+Every probe now also carries **one sentence saying what the stat is**, which shows as a
+tooltip on the row — the same sentence, from the same table, in all three screens below.
+
+A brick that moved **no** probe used to show an empty panel, which is how `Rotbrick` came to
+say nothing at all on a build that was bleeding and burning: every bleed probe was a
+**share** of the hit, and none of them read the damage-over-time pool. There are real
+numbers now — `One wound`, `Damage per wound`, `Fully opened`, and a whole `BURNING` group —
+so an increased-damage-over-time card shows its effect on poison, bleed **and** fire at
+once. Four legendaries (`Tidal Orbit`, `Crackling Storm`, `Returning Blades`,
+`Absolute Zero`) were silent for the same reason and now have probes of their own. A test
+walks every brick on every weapon and fails if any of them moves nothing.
+
+The **fireball left `ELEMENTAL`**. Elemental is the *global* tree — the pools every
+elemental source reads — and filing the staff's own attack under it made a card that
+widened the burst look like a card that changed the whole build. `FIREBALL` and `BURNING`
+are their own groups.
+
+### The character sheet — <kbd>C</kbd> — *what am I right now?*
+
+The hand-written blocks at the top carry the deep explanations. Underneath them,
+**EVERY STAT** is generated straight from the probe list, grouped, with each row's
+explanation on hover — so a probe added for the comparison reaches this screen the same day
+rather than months later. A test asserts all 111 appear.
+
+### The spellbook — <kbd>P</kbd> — *what am I carrying?*
+
+Every brick the run holds, drawn as the bench card it came from and **dealt into stacks**:
+three of a brick is three cards fanned behind one another with a `×3` badge, and the text is
+read off the **live hero**, so a brick taken at common and again at epic shows what the pair
+of them are doing now. It is filed in the bench's own order, and a spell's section is headed
+with that spell's live damage.
+
+**It does not pause the game.** The state machine stays on `play` the whole time, the
+overlay is click-through everywhere except the panel itself, and the page refreshes twice a
+second so the numbers keep up with the wave that is still happening around you.
+
+### The DPS tab — <kbd>L</kbd>, then the fourth tab
+
+The run totals answer *"what did the most damage all run"*, which flatters whatever you
+picked first and buries a spell that only came online at wave 30. The **DPS** tab answers
+the balance question instead: what is each ability doing *right now*.
+
+One bucket a second per damage source, sixty of them, rolled forward as the clock moves —
+so a source that has gone quiet ages out of its own accord instead of sitting at its old
+number for ever. Each row is the source, its rate over the window, a share bar against the
+best one, its percentage, and a **sixty-second sparkline**. Bleed, burning and poison are
+their own sources, so you can see exactly what an ailment build is really doing.
+
+The window is only as long as the run has been going, or a spell picked up ten seconds ago
+would read as a sixth of what it is actually doing; the header says `(filling)` until it has
+a full minute. Every bucket index goes through one wrap helper: JavaScript's `%` keeps the
+sign of its left operand, so a plain `x % 60` on anything negative indexes off the end of
+the array and silently writes a *property* rather than a slot — a roll that looks like it
+cleared thirty buckets and cleared two. Sources past the ninth fold into one `+N more` row rather than being dropped,
+so the rows still add up to the total printed above.
+
+---
+
 ## Controls
 
 | | |
@@ -675,9 +762,10 @@ legendary rate of Hard for the privilege.
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles taken / dealt / events |
+| <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
+| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
-| <kbd>P</kbd> or <kbd>Esc</kbd> | pause |
+| <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
 
 ---
