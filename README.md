@@ -64,8 +64,12 @@ you a fifth stop being offered and everything that deepens the four you have kee
 `Bomb Volley` · **`Brickbane`**
 
 Pick a **favourite** at the menu — including `Sword & Steel` or `Tough Bricks`, which spend
-no slot at all — and its bricks turn up more often, plus a starting kit to match. The panel
-beside the title box shows [what the pairing actually opens with](#the-combination-panel).
+no slot at all — and its bricks turn up more often, plus a starting kit to match. The panels
+either side of the title box show [what the pairing actually opens
+with](#the-combination-panel).
+
+`Runic Tempo` is the one brick that speeds up **all four at once** — see
+[ability floors](#ability-floors).
 
 </td><td width="33%" valign="top">
 
@@ -149,10 +153,14 @@ way an increase is supposed to. A staff hero's Brick Blaster fires every **2.00s
 sword hero's 2.40s, its Storm Brick every 1.83s against 2.20s, Bomb Volley 5.83s against
 7.00s, Brickbane 3.50s against 4.20s, and the guardian ring turns at **3.12 rad/s** against
 2.60. One pool per spell, the weapon's contribution added to each, so nothing compounds and
-nothing is missed. *(It is worth knowing that this lands the staff's blaster exactly on the
-`BLAST_MIN_RATE` floor of 2.00s from the first wave, which makes `Rapid Blaster` a dead brick
-for a caster — the menu panel below greys it out rather than letting you find out the hard
-way.)*
+nothing is missed.
+
+That change exposed a floor that had been sitting almost on its own base: the blaster's was
+**2.00s against a 2.40s base**, 17% of headroom — one brick's worth for a sword hero, and
+none at all for a staff, whose cast speed landed it exactly on the floor from the first wave
+and made `Rapid Blaster` a card that could never be offered. The floor is **1.20s** now,
+which gives the line the same 100% of room the storm brick has (2.20 → 1.00) and is still
+nowhere near a machine gun with a volley that size.
 
 **The art follows the weapon too.** You hold what you picked, you swing it, and your spells
 throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
@@ -411,6 +419,14 @@ directions. `No Favourite` is not nothing: it hands you a heart, 10 armour, +5% 
 +4% move speed as a consolation prize, which is why committing to Brickbane reads as
 **−14% hearts** and **−100% armour** next to it. That is the actual price of the spell.
 
+**Two panels, not one.** The numbers and the brick list answer different questions — *what
+do I open with* and *what will I be offered* — and stacking them in one column made a panel
+taller than a laptop window, which is how it grew a scrollbar and started clipping. They sit
+either side of the red box now: the stats, the run's **ceilings** and every ability's
+**floor** on the left, the bricks on the right. The title screen also scrolls when it has to
+and stops centring the moment centring would push the start button off the top, which is the
+flex overflow trap that was cutting the box in half on a short window.
+
 The panel also lists **every brick the favourite weights toward you**, shown at RARE, with
 each description rendered against that same previewed hero — so Brickbane's `Choking Spread`
 reads *"widen the wedge 90° → 159°"*, starting from the 90° the favourite already gave you,
@@ -427,9 +443,8 @@ unlock later in the run, which is not a warning and is not greyed.
 
 That wording is deliberately broader than "not for a staff", because two different things
 land in the same place: a brick can be the wrong *class* — the blade tree on a caster — or
-the weapon can already sit on that stat's **cap**, which is what happens to `Rapid Blaster`
-the moment the staff's cast speed puts the blaster on its 2.00s floor. Either way you will
-never be offered it, and that is what the panel promises.
+the weapon can already sit on that stat's **cap**. Either way you will never be offered it,
+and that is what the panel promises.
 
 ---
 
@@ -505,7 +520,7 @@ feeds, and each drips its numbers in its own colour — green for the rot, red f
 | ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
 | 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
 | ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
-| 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself |
+| 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself. He is the fattest body on the field that is not a golem or a boss (**95 base**, against a bastion's 46) and shrugs off chip damage: he deals no damage at all, so the health bar *is* the fight, and at 30 he popped before the aura ever mattered |
 | 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
 
 ### 👑 Boss traits
@@ -536,8 +551,8 @@ offered at all.
 |---|--:|---|--:|---|--:|
 | Armour reduction | 85% | Guardian bricks | 15 | Rage | ×2 |
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
-| Critical chance | 95% | Blaster bricks | 40 | Fortune | ×2 |
-| Critical multiplier | 600% | Blaster pierce | 8 | Heart stacks | 5 |
+| Critical chance | **80%** | Blaster bricks | 40 | Fortune | ×2 |
+| Critical multiplier | **300%** | Blaster pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
@@ -549,6 +564,45 @@ offered at all.
 | | | Bombs | 8 | | |
 | | | Blast radius | 110 px | | |
 | | | Cluster ranks | 2 | | |
+
+### The damage ceiling
+
+Increases and MORE multipliers were the two numbers nothing ever stopped. An hour into a
+run they were both past **+800%**, which is not a build, it is an overflow — so both now
+have a ceiling, and so does every ability's cooldown:
+
+| | ceiling | what it is |
+|---|--:|---|
+| **Increased damage** | **+400%** | *every* increase that applies to one hit, summed: levels, physical, spell, elemental, all of it |
+| **MORE multiplier** | **×3.00** | every permanent MORE together. A timed buff — rage — multiplies on **top** of it, on purpose |
+| **Damage over time** | **+400%** | the Rotbrick pool, the same ceiling as a hit |
+| **Critical chance** | **80%** | |
+| **Critical multiplier** | **300%** | |
+
+The **pools stay uncapped**, as every pool here does — a ceiling on a pool quietly makes
+the next brick worthless while the bench goes on selling it. The ceiling sits on the
+**derived** number, in one place that every attack in the game reads, and the bricks that
+feed it stop being offered once you reach it. The character sheet prints the number the hit
+actually uses and says *"— at the cap"* when the pool behind it has run ahead.
+
+### Ability floors
+
+`Quickening` is **attack speed** — your own hands, the swing or the bolt. `Runic Tempo` is
+**cast speed**: every *ability* you own, all at once, and the only brick that touches all of
+them. They are increases, so an ability's own rate bricks, the global cast-speed pool and
+the weapon's attack speed all **sum** into one pool per ability — none of them multiplies.
+
+Each ability then stops at its **own floor**, which is what keeps it recognisable however
+much tempo the hero buys:
+
+| | floor | | floor |
+|---|--:|---|--:|
+| Brick Blaster | 1.20s | Block Freeze | 3.50s |
+| Storm Brick | 1.00s | Bomb Volley | 2.00s |
+| Bladestorm | 2.00s | Brickbane | 1.10s |
+| Blade Vortex | 3.00s | Guardian ring | 7.5 rad/s |
+
+Runic Tempo stops being offered once every ability you actually own sits on its floor.
 
 A **favourite** lifts the cap of its own spell by one, so a Storm Brick run reaches six
 hovering bricks and a Bomb Volley run nine bombs. The spell its kit hands you counts as

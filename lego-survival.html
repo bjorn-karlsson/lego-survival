@@ -13,42 +13,61 @@
   .hidden{display:none !important}
   .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:rgba(9,13,17,.55);backdrop-filter:blur(3px);z-index:10;color:#f2f3f2}
+  /* `justify-content:center` on a column TALLER than the window pushes its top
+     off the top edge, where no scrollbar can reach it — the classic flex
+     overflow trap. The title screen scrolls when it has to, and stops centring
+     the moment centring would hide the start button. */
   #titleScreen{background-color:rgba(10,14,12,.82);
     background-image:radial-gradient(circle, rgba(255,255,255,.05) 5px, transparent 6px);
-    background-size:44px 44px}
-  /* The title box used to float alone in a lot of empty red. The build panel
-     lives beside it now and wraps underneath when the window is too narrow. */
-  .titlewrap{display:flex;gap:20px;align-items:flex-start;justify-content:center;
+    background-size:44px 44px;
+    overflow-y:auto;justify-content:safe center;padding:18px 0}
+  /* THE TITLE BOX USED TO FLOAT ALONE IN A LOT OF EMPTY RED, and then the build
+     panel went beside it and grew a scrollbar instead: one column carrying the
+     stats AND the bricks is simply taller than a laptop window. There are two
+     panels now, one on each side of the box — the numbers on the left, the
+     bricks on the right — which halves the tallest column and fills the empty
+     space the box was floating in. They are `order`ed so that when the window
+     is too narrow to hold three columns they wrap UNDER the box rather than
+     shoving it off centre. */
+  .titlewrap{display:flex;gap:18px;align-items:flex-start;justify-content:center;
     flex-wrap:wrap;width:100%;padding:0 12px;box-sizing:border-box}
-  #comboPanel{width:352px;flex:0 0 352px;background:rgba(10,15,13,.86);
+  .boxplate{order:2}
+  #comboStats{order:1}  #comboBricks{order:3}
+  @media (max-width:1240px){ .boxplate{order:1} #comboStats{order:2} #comboBricks{order:3} }
+  .cpanel{width:330px;flex:0 1 330px;background:rgba(10,15,13,.86);
     border:2px solid rgba(255,214,110,.32);border-radius:20px;padding:14px 16px 16px;
     text-align:left;font-family:'Fredoka';color:#e8ece9;
-    max-height:min(86vh,900px);overflow-y:auto;overflow-x:hidden;
+    max-height:min(88vh,980px);overflow-y:auto;overflow-x:hidden;
     box-shadow:0 12px 34px rgba(0,0,0,.55)}
-  #comboPanel h4{margin:0 0 2px;font-family:'Titan One';font-size:15px;color:#ffd76e;
+  /* when it does have to scroll, it says so instead of hiding a hairline bar */
+  .cpanel::-webkit-scrollbar{width:9px}
+  .cpanel::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:5px}
+  .cpanel::-webkit-scrollbar-thumb{background:rgba(255,214,110,.42);border-radius:5px}
+  .cpanel::-webkit-scrollbar-thumb:hover{background:rgba(255,214,110,.66)}
+  .cpanel h4{margin:0 0 2px;font-family:'Titan One';font-size:15px;color:#ffd76e;
     letter-spacing:.6px;line-height:1.25}
-  #comboPanel .cpsub{font-size:10.5px;color:#9fb0a4;margin-bottom:10px;letter-spacing:.5px}
-  #comboPanel .cphead{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;
+  .cpanel .cpsub{font-size:10.5px;color:#9fb0a4;margin-bottom:10px;letter-spacing:.5px}
+  .cpanel .cphead{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;
     color:#ffe6a3;margin:12px 0 5px;display:flex;align-items:center;gap:7px}
-  #comboPanel .cphead::after{content:'';flex:1;height:2px;border-radius:1px;
+  .cpanel .cphead::after{content:'';flex:1;height:2px;border-radius:1px;
     background:rgba(255,230,163,.22)}
-  #comboPanel .cprow{display:flex;justify-content:space-between;gap:8px;
+  .cpanel .cprow{display:flex;justify-content:space-between;gap:8px;
     font-size:11.5px;padding:2px 0;border-bottom:1px dotted rgba(255,255,255,.07)}
-  #comboPanel .cprow span{color:#c4cfc7}
-  #comboPanel .cprow b{color:#fff;font-weight:700;white-space:nowrap}
-  #comboPanel .cprow i{font-style:normal;font-weight:700;font-size:10.5px;margin-left:5px}
-  #comboPanel .up{color:#7ddc6a}  #comboPanel .dn{color:#ff6a5a}
-  #comboPanel li{font-size:11px;color:#cfe0d4;margin:2px 0 2px 14px;line-height:1.45}
-  #comboPanel ul{margin:2px 0 0;padding:0}
-  #comboPanel .cpbrick{display:flex;gap:8px;align-items:flex-start;margin:5px 0;
+  .cpanel .cprow span{color:#c4cfc7}
+  .cpanel .cprow b{color:#fff;font-weight:700;white-space:nowrap}
+  .cpanel .cprow i{font-style:normal;font-weight:700;font-size:10.5px;margin-left:5px}
+  .cpanel .up{color:#7ddc6a}  .cpanel .dn{color:#ff6a5a}
+  .cpanel li{font-size:11px;color:#cfe0d4;margin:2px 0 2px 14px;line-height:1.45}
+  .cpanel ul{margin:2px 0 0;padding:0}
+  .cpanel .cpbrick{display:flex;gap:8px;align-items:flex-start;margin:5px 0;
     padding:5px 7px;border-radius:8px;background:rgba(255,255,255,.04)}
-  #comboPanel .cpbrick.off{opacity:.34}
-  #comboPanel .cpbrick svg{width:17px;height:17px;flex:0 0 17px;margin-top:1px}
-  #comboPanel .cpbrick div{min-width:0}
-  #comboPanel .cpbrick b{display:block;font-size:11px;color:#fff;font-weight:700}
-  #comboPanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
-  #comboPanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
-  #comboPanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
+  .cpanel .cpbrick.off{opacity:.34}
+  .cpanel .cpbrick svg{width:17px;height:17px;flex:0 0 17px;margin-top:1px}
+  .cpanel .cpbrick div{min-width:0}
+  .cpanel .cpbrick b{display:block;font-size:11px;color:#fff;font-weight:700}
+  .cpanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
+  .cpanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
+  .cpanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
   .boxplate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;
     box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25);
     padding:4px 34px 18px;text-align:center;max-width:820px;transform:rotate(-.5deg);
@@ -279,6 +298,7 @@
 
 <div id="titleScreen" class="overlay">
  <div class="titlewrap">
+  <aside id="comboStats" class="cpanel"></aside>
   <div class="boxplate">
     <div class="topstuds"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="badge">BRICK-BUILT ACTION RPG</div>
@@ -307,7 +327,7 @@
     </div>
     <div class="best" id="bestLine"></div>
   </div>
-  <aside id="comboPanel"></aside>
+  <aside id="comboBricks" class="cpanel"></aside>
  </div>
 </div>
 
@@ -611,22 +631,27 @@ function pool(base, flat, inc, more){
    rate, so the interval it leaves you is base / (1 + increases). It approaches
    the floor and never passes it, and two 20% cards are 40% rather than 36%. */
 function paceOf(base, inc, floor){ return Math.max(floor, base / (1 + (inc||0))); }
-/* A WEAPON'S ATTACK SPEED IS ATTACK SPEED, wherever the attack comes from. The
-   staff's +20% was only reaching its own bolt, so a hero holding the fastest
-   casting weapon in the game cast every actual SPELL at exactly the same rate
-   as a hero holding a mace. It sums into every cooldown pool now, the way an
-   increase is supposed to — one pool per spell, with the weapon's contribution
-   added to each. */
-function wInc(pool){ return (pool || 0) + ((weapon && weapon.incAtk) || 0); }
+/* EVERY INCREASE THAT SHORTENS A SPELL'S COOLDOWN, gathered in one place.
+   Three things feed it and all three are INCREASES, so they sum and none of
+   them gets a multiplier of its own:
+     - the spell's own rate bricks   (Foul Bellows, Rapid Blaster, ...)
+     - the global CAST SPEED pool    (Runic Tempo — every ability at once)
+     - the weapon's attack speed     (a weapon's attack speed is attack speed,
+                                      wherever the attack comes from)
+   Each spell then divides its own base by the total and stops at its OWN floor,
+   which is why a bomb volley can never become a machine gun however fast the
+   hero gets. The basic swing or bolt is deliberately NOT in here — that is
+   `inc.atk`, and it is the one thing CAST SPEED does not touch. */
+function castInc(pool){
+  return (pool || 0) + ((player && player.inc && player.inc.cast) || 0)
+                     + ((weapon && weapon.incAtk) || 0);
+}
 /* Rebuild every derived number from its pools. Cheap, and called after anything
    that can move one — a brick, a starting perk, a rebuild. */
 /* Every damage-over-time in the game runs through here: its own base and flat
    additions, then the ONE increased-damage-over-time pool, PoE order as ever.
    A new ailment only has to call this to inherit Rotbrick for free. */
-function dotRate(base, flat){
-  const p = player;
-  return pool(base, flat || 0, (p && p.inc.dot) || 0, 1);
-}
+function dotRate(base, flat){ return pool(base, flat || 0, dotInc(), 1); }
 /* whether an increased-damage-over-time brick is worth anything to this hero —
    the single place to extend when a second source of it arrives */
 function hasAnyDot(){ return !!(player && player.bane && player.bane.n > 0); }
@@ -644,19 +669,19 @@ function syncStats(){
   p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), atkFloor());
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
-  p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, wInc(i.orbitSpd), 1));
-  p.blaster.rate = paceOf(BLAST_RATE_BASE, wInc(i.blastRate), BLAST_MIN_RATE);
-  p.chain.rate   = paceOf(CHAIN_RATE_BASE, wInc(i.chainRate), CHAIN_MIN_RATE);
-  p.storm.rate   = paceOf(STORM_RATE_BASE, wInc(i.stormRate), STORM_MIN_RATE);
-  p.vortex.rate  = paceOf(VORTEX_RATE_BASE, wInc(i.vortexRate), VORTEX_MIN_RATE);
+  p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, castInc(i.orbitSpd), 1));
+  p.blaster.rate = paceOf(BLAST_RATE_BASE, castInc(i.blastRate), BLAST_MIN_RATE);
+  p.chain.rate   = paceOf(CHAIN_RATE_BASE, castInc(i.chainRate), CHAIN_MIN_RATE);
+  p.storm.rate   = paceOf(STORM_RATE_BASE, castInc(i.stormRate), STORM_MIN_RATE);
+  p.vortex.rate  = paceOf(VORTEX_RATE_BASE, castInc(i.vortexRate), VORTEX_MIN_RATE);
   /* the vortex pays for its own speed in hit size, but only for the increases
      the BRICKS bought: a weapon that swings faster should not quietly shrink
-     the hit as well. `i.vortexRate` here on purpose, not wInc(). */
+     the hit as well. `i.vortexRate` here on purpose, not castInc(). */
   p.vortex.hitMul = Math.max(VORTEX_MIN_HITMUL, 1/(1 + i.vortexRate*0.5));
-  p.freeze.rate  = paceOf(FREEZE_RATE_BASE, wInc(i.freezeRate), FREEZE_MIN_RATE);
-  p.bomb.rate    = paceOf(BOMB_RATE_BASE, wInc(i.bombRate), BOMB_MIN_RATE);
+  p.freeze.rate  = paceOf(FREEZE_RATE_BASE, castInc(i.freezeRate), FREEZE_MIN_RATE);
+  p.bomb.rate    = paceOf(BOMB_RATE_BASE, castInc(i.bombRate), BOMB_MIN_RATE);
   p.bomb.r = Math.min(BOMB_MAX_R, pool(BOMB_R_BASE, 0, i.bombR, 1));
-  p.bane.rate = paceOf(BANE_RATE_BASE, wInc(i.baneRate), BANE_MIN_RATE);
+  p.bane.rate = paceOf(BANE_RATE_BASE, castInc(i.baneRate), BANE_MIN_RATE);
   p.bane.r    = Math.min(BANE_R_MAX, pool(BANE_R_BASE, 0, i.baneR, 1));
   p.bane.dot  = dotRate(BANE_DOT_BASE, p.baneDotFlat||0);
   /* bleed: a flat chance pool and a share of the hit, both hard-capped */
@@ -713,7 +738,13 @@ function regenScale(){
    seconds of it, which is what makes a thirty-second rest after a boss a rest. */
 const REGEN_BREAK_MUL = 2;
 const HEART_CHANCE_MAX = 2.0;    /* +200% of a very small base, not +200 points */
-const BLAST_MIN_RATE = 2.00;   /* a volley of piercing bricks is not a machine gun */
+/* THE BLASTER'S FLOOR SAT ALMOST ON ITS OWN BASE. 2.40s base against a 2.00s
+   floor is 17% of headroom — one brick's worth for a sword hero, and none at
+   all for a staff, whose +20% cast speed landed it exactly on the floor from
+   the first wave and made `Rapid Blaster` a card that could never be offered.
+   1.20s gives the line the same 100% of room the storm brick has (2.20 → 1.00)
+   and is still nowhere near a machine gun with a volley this size. */
+const BLAST_MIN_RATE = 1.20;
 const STORM_MIN_RATE = 2.00;
 const VORTEX_MIN_RATE = 3.00;
 const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
@@ -778,6 +809,26 @@ function chainLeapFrac(i, leaps){
   return start + (floor - start)*t;
 }
 const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead of spinning */
+/* EVERY ABILITY'S OWN FLOOR, in one table. Cast speed is global now, so the
+   floors are what keeps each ability recognisable: a storm brick never fires
+   more than once a second however much tempo the hero buys, and a bomb volley
+   never more than once every two. Read by the gate on the cast-speed brick and
+   by the character sheet, so neither can drift from what syncStats() enforces. */
+const SPELL_FLOOR = { blaster:BLAST_MIN_RATE, chain:CHAIN_MIN_RATE, storm:STORM_MIN_RATE,
+                      vortex:VORTEX_MIN_RATE, freeze:FREEZE_MIN_RATE, bomb:BOMB_MIN_RATE,
+                      bane:BANE_MIN_RATE };
+const SPELL_NAME = { orbit:'Guardian Brick', blaster:'Brick Blaster', chain:'Storm Brick',
+                     storm:'Bladestorm', vortex:'Blade Vortex', freeze:'Block Freeze',
+                     bomb:'Bomb Volley', bane:'Brickbane' };
+/* Is a global cast-speed brick worth anything to this hero? Only while at least
+   one ability they actually own still sits above its own floor. */
+function castRoom(){
+  const p = player;
+  if(!p) return false;
+  for(const k in SPELL_FLOOR)
+    if(p[k] && p[k].n > 0 && p[k].rate > SPELL_FLOOR[k] + 1e-9) return true;
+  return !!(p.orbit && p.orbit.n > 0 && p.orbit.spd < ORBIT_MAX_SPD - 1e-9);
+}
 const VORTEX_MIN_HITMUL = 0.45;
 const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above this they strobe */
 /* how far the warden's mending reaches, and what it gives back a second */
@@ -899,8 +950,18 @@ function setWeapon(id){
    that quote a "base" number in their own text */
 const CRIT_BASE       = WEAPONS.sword.crit;
 const CRIT_MULT_BASE  = WEAPONS.sword.critMult;
-const CRIT_CHANCE_CAP = 0.95;
-const CRIT_MULT_CAP   = 600;
+const CRIT_CHANCE_CAP = 0.80;
+const CRIT_MULT_CAP   = 300;
+/* THE CEILING ON THE DAMAGE MULTIPLIERS. Every increase in this game sums into
+   a pool and every MORE multiplies into another, and until now nothing ever
+   stopped either — a wave-50 hero arrived at +800% increased damage and a more
+   multiplier with three digits in it, which is not a build, it is an overflow.
+   The POOLS stay uncapped, the way every pool here does: a ceiling on a pool
+   quietly makes the next brick worthless while the bench goes on selling it.
+   The ceiling sits on the DERIVED number instead — one place, read by every
+   attack in the game — and the bricks stop being offered once you reach it. */
+const INC_DMG_CAP  = 4.00;   /* +400% increased damage, every pool together */
+const MORE_DMG_CAP = 3.00;   /* x3.00 from every permanent MORE multiplier */
 /* Armour mitigates ATTACK hits: DR = Armour / (Armour + 5 × hit damage), so a
    big hit punches through armour that shrugs off small ones. */
 const ARMOUR_DR_CAP   = 0.85;
@@ -1434,7 +1495,7 @@ function newPlayer(){
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
-    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, roll:0, regen:0, heart:0,
+    inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, cast:0, roll:0, regen:0, heart:0,
           elem:0, fire:0, frost:0, shock:0, boltR:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
@@ -2150,8 +2211,12 @@ const EDEF = {
   /* THE GREENWARDEN. A tall wizard with a green staff who never attacks you at
      all — he stands in the middle of the pack and MENDS it. Everything inside
      his aura knits itself back together; he alone gets nothing from it, which
-     is the whole reason he is the one you kill first. */
-  greenwarden:{ hp:30, speed:46, r:15, scale:1.45, dmg:1, xp:34, studs:[26,42],
+     is the whole reason he is the one you kill first. He is also the fattest
+     body on the field that is not a golem or a boss: he does no damage, so the
+     health bar IS the fight, and at 30 he popped before the aura ever mattered.
+     He costs the wave budget nearly twice what he did, so a wave still cannot
+     be all wardens, and he pays out like the priority target he is. */
+  greenwarden:{ hp:95, speed:46, r:15, scale:1.45, dmg:1, xp:52, studs:[36,58], armourMul:1.6,
              col:{head:'#eef0ee', torso:'#2f6b33', legs:'#1d4523', hands:'#bdf0a8', hair:'#1d4523'}, style:'hexer' },
   necrolord:{ hp:34, speed:44, r:16, scale:1.35, dmg:1, xp:30, studs:[22,38],
              col:{head:'#eef0ee', torso:'#4a2f75', legs:'#31204d', hands:'#dccdf5', hair:'#31204d'}, style:'hexer' },
@@ -2962,10 +3027,37 @@ function gainXp(n, fromMob){
 /* A live rage brick is a MORE multiplier like any other — it sits outside the
    increased pool, so it doubles whatever the build already does. */
 function rageMul(){ return player.rageT > 0 ? player.rageMul : 1; }
-function calcDamage(base, kind, more){
+/* Every increase that applies to ONE hit, summed into the single pool PoE says
+   it is, and then stopped at the ceiling. `kind` picks the second pool; `el`
+   adds the elemental ones on top, because a fireball is a spell AND an element. */
+function incTotal(kind, el){
   const p = player;
-  const inc = p.incAll + (kind==='melee' ? incMeleeAll() : kind==='spell' ? incSpellAll() : 0);
-  let d = base * (1 + inc) * p.moreAll * rageMul();
+  if(!p) return 0;
+  return Math.min(INC_DMG_CAP,
+    p.incAll
+    + (kind==='melee' ? incMeleeAll() : kind==='spell' ? incSpellAll() : 0)
+    + (el ? incElemAll(el) : 0));
+}
+/* The product of every PERMANENT more multiplier, stopped at its own ceiling.
+   A timed buff multiplies on TOP of that on purpose: the cap exists to stop a
+   build compounding forever, not to make the payoff of a rage brick vanish at
+   exactly the moment you spend it. */
+function moreTotal(){ return player ? Math.min(MORE_DMG_CAP, player.moreAll) * rageMul() : 1; }
+/* what the SHEET should print for the more multiplier: the number the hit
+   actually uses, not the pool behind it, plus a word when they have parted ways */
+function moreShown(){ return player ? Math.min(MORE_DMG_CAP, player.moreAll) : 1; }
+function dotInc(){ return player ? Math.min(INC_DMG_CAP, player.inc.dot) : 0; }
+function atCap(v, cap){ return v >= cap - 1e-9 ? ' — at the cap' : ''; }
+/* Is there anything left to sell? A brick that can no longer move the number it
+   sells is not offered, exactly as the armour and crit bricks already work. The
+   pool behind it keeps filling if something else writes to it; the GATE reads
+   the ceiling, so the offer comes back the moment the hero is under it again. */
+function incRoom(kind, el){ return incTotal(kind, el) < INC_DMG_CAP - 1e-9; }
+function incCapTag(kind, el){
+  return `(now ${Math.round(incTotal(kind, el)*100)}%, cap ${Math.round(INC_DMG_CAP*100)}%)`;
+}
+function calcDamage(base, kind, more){
+  let d = base * (1 + incTotal(kind)) * moreTotal();
   if(more) for(const m of more) d *= m;
   return Math.max(0, d);
 }
@@ -2986,9 +3078,7 @@ function boltBase(){ return weapon.dmg + player.flatElem; }
 /* ...and what it actually lands for. Spell damage AND elemental damage both
    apply, because a fireball is both. */
 function boltDamage(more){
-  const p = player, el = weapon.elem || 'fire';
-  const inc = p.incAll + incSpellAll() + incElemAll(el);
-  let d = boltBase() * (1 + inc) * p.moreAll * rageMul();
+  let d = boltBase() * (1 + incTotal('spell', weapon.elem || 'fire')) * moreTotal();
   if(more) for(const m of more) d *= m;
   return Math.max(0, d);
 }
@@ -2997,9 +3087,8 @@ function isCaster(){ return !!(weapon && weapon.cast); }
    and the frost pool, exactly as the fire bolt reads fire. */
 const FREEZE_DMG_BASE = 1.6;
 function frostDamage(){
-  const p = player;
-  const inc = p.incAll + incSpellAll() + incElemAll('frost');
-  return Math.max(0, (FREEZE_DMG_BASE + p.flatElem) * (1 + inc) * p.moreAll * rageMul());
+  return Math.max(0, (FREEZE_DMG_BASE + player.flatElem)
+    * (1 + incTotal('spell', 'frost')) * moreTotal());
 }
 const BOLT_R_MAX_INC = 1.2;    /* increased burst radius the bricks can buy */
 const BOLT_R_CAP = 120;
@@ -3341,7 +3430,7 @@ const ROSTER = [
   { k:'frostlord',   at:37, cost:40, flavour:0.7 },
   { k:'stormlord',   at:38, cost:42, flavour:0.7 },
   { k:'necrolord',   at:39, cost:45, flavour:0.7 },
-  { k:'greenwarden', at:23, cost:26, flavour:0.65 },
+  { k:'greenwarden', at:23, cost:40, flavour:0.65 },
   { k:'impmaster',   at:33, cost:50, flavour:0.7 },
   { k:'overseer',    at:39, cost:55, flavour:0.6 }
 ];
@@ -3819,6 +3908,9 @@ const ICONS = {
         '<path d="M7.4 12.6 h-1.8"/>'+
         '<path d="M2 12.8 v-2.4 M2 12.8 v2.4 M0 11.6 L4 14 M4 11.6 L0 14"/>',
   clock:'<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2 V12 l3.8 2.2"/>',
+  /* tempo: a clock leaning forward with the motion lines it left behind */
+  tempo:'<circle cx="14" cy="12" r="7.2"/><path d="M14 7.6 V12 l3.2 1.9"/>'+
+        '<path d="M4.6 7.5 H1.4 M4 12 H0.8 M4.6 16.5 H1.4"/>',
   burst:'<circle cx="12" cy="12" r="3"/><path d="M12 1.8 V5 M12 19 v3.2 M1.8 12 H5 M19 12 h3.2 M4.8 4.8 l2.3 2.3 M16.9 16.9 l2.3 2.3 M19.2 4.8 l-2.3 2.3 M7.1 16.9 l-2.3 2.3"/>',
   fist:'<path d="M7.4 11.6 V8.4 a2.1 2.1 0 0 1 4.2 0 v3.2 M11.6 11.6 V7.2 a2.1 2.1 0 0 1 4.2 0 v4.4 M15.8 11.6 V9 a2.1 2.1 0 0 1 4.2 0 v5.6 a6.4 6.4 0 0 1 -6.4 6.4 h-2.8 a5.4 5.4 0 0 1 -5.4 -5.4 v-4.6 a2.1 2.1 0 0 1 4.2 0"/>',
   spin:'<path d="M20.4 12 a8.4 8.4 0 1 1 -3.4 -6.7"/><path d="M17 2.4 l.4 3.4 -3.4 .2"/><path d="M12 12 l7 -7"/>',
@@ -3857,14 +3949,16 @@ const UPGRADES = [
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to your ${weapon.elem||'elemental'} bolt — before any increase`,
     apply:c=>{ player.flatElem = Math.round((player.flatElem + c.v)*100)/100; } },
   { id:'eleminc', name:'Elemental Focus', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>isCaster(),
+    req:()=>isCaster() && incRoom('spell', weapon.elem||'fire'),
     calc:m=>({v:0.08+0.05*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike`,
+    desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike `+
+      `${incCapTag('spell', weapon.elem||'fire')}`,
     apply:c=>{ player.inc.elem += c.v; } },
   { id:'firinc', name:'Pyromancy', icon:'pyro', cls:'OFFENSE', minRar:'rare',
-    req:()=>isCaster(),
+    req:()=>isCaster() && incRoom('spell', 'fire'),
     calc:m=>({v:0.14+0.08*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased FIRE damage — the bolt and the burning both`,
+    desc:c=>`${Math.round(c.v*100)}% increased FIRE damage — the bolt and the burning both `+
+      `${incCapTag('spell', 'fire')}`,
     apply:c=>{ player.inc.fire += c.v; } },
   { id:'boltarea', name:'Wildfire', icon:'bomb', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isCaster() && player.inc.boltR < BOLT_R_MAX_INC,
@@ -3887,13 +3981,16 @@ const UPGRADES = [
     },
     apply:c=>{ player.ember = Math.min(EMBER_MAX, (player.ember||0) + 1); } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>!isCaster() && incRoom('melee'),
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex`,
+    desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex `+
+      `${incCapTag('melee')}`,
     apply:c=>{ player.incMelee += c.v; } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
+    req:()=>player.moreAll < MORE_DMG_CAP - 1e-9,
     calc:m=>({v:0.06+0.04*m}),
-    desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside the increased pool`,
+    desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside `+
+      `the increased pool (now ×${moreShown().toFixed(2)}, cap ×${MORE_DMG_CAP.toFixed(2)})`,
     apply:c=>{ player.moreAll *= (1+c.v); } },
   { id:'armor', name:'Reinforced Armour', icon:'shield', cls:'DEFENSE',
     req:()=>player.armourFlat < ARMOUR_FLAT_MAX && armourValue() < ARMOUR_VALUE_MAX,
@@ -3922,6 +4019,15 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased ATTACK SPEED — swings and casts alike `+
       `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':'swing'})`,
     apply:c=>{ player.inc.atk += c.v; syncStats(); } },
+  /* THE GLOBAL CAST SPEED. `Quickening` is the hero's own hands — it shortens
+     the swing or the bolt. This is every ABILITY the hero owns, all at once,
+     and it is the only brick that touches all of them. */
+  { id:'castspd', name:'Runic Tempo', icon:'tempo', cls:'SPELL', minRar:'uncommon',
+    req:()=>spellsOwned() > 0 && castRoom(),
+    calc:m=>({v:0.10+0.06*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased CAST SPEED — every ability you own comes off `+
+      `cooldown faster, each one stopping at its own floor`,
+    apply:c=>{ player.inc.cast += c.v; syncStats(); } },
   { id:'crit', name:'Lucky Brick', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>critChance() < CRIT_CHANCE_CAP,
     calc:m=>({v:0.16+0.13*m}),
@@ -4055,8 +4161,10 @@ const UPGRADES = [
     desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.inc.blastRate += c.v; syncStats(); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
+    req:()=>incRoom('spell'),
     calc:m=>({v:0.07+0.045*m}),
-    desc:c=>`${Math.round(c.v*100)}% increased spell damage — every brick you cast`,
+    desc:c=>`${Math.round(c.v*100)}% increased spell damage — every brick you cast `+
+      `${incCapTag('spell')}`,
     apply:c=>{ player.incSpell += c.v; } },
   { id:'chain', name:'Storm Brick', icon:'chain', cls:'SPELL', minRar:'uncommon',
     req:()=>canTakeSpell('chain') && player.chain.n < chainMaxTargets(),
@@ -4182,10 +4290,11 @@ const UPGRADES = [
   /* not a Brickbane brick — a DAMAGE brick that happens to have one customer
      so far. Everything the hero inflicts that eats away over time reads it. */
   { id:'banedotinc', name:'Rotbrick', icon:'arcane', cls:'OFFENSE', minRar:'rare',
-    req:()=>hasAnyDot(),
+    req:()=>hasAnyDot() && player.inc.dot < INC_DMG_CAP - 1e-9,
     calc:m=>({v:0.10+0.07*m}),
     desc:c=>`${Math.round(c.v*100)}% increased DAMAGE OVER TIME — every lingering `+
-      `damage you inflict, whatever put it there`,
+      `damage you inflict, whatever put it there (now ${Math.round(dotInc()*100)}%, `+
+      `cap ${Math.round(INC_DMG_CAP*100)}%)`,
     apply:c=>{ player.inc.dot += c.v; syncStats(); } },
   /* BLEED lives in the crit tree, not in a tree of its own: a swing bleeds
      because it crit, and these two decide how often and how deep. */
@@ -4637,9 +4746,14 @@ function comboPreview(favId){
   if(player) syncStats();
   return out;
 }
+/* TWO PANELS, NOT ONE. The numbers and the brick list are different questions
+   — "what do I open with" and "what will I be offered" — and stacking them in
+   one column made a panel taller than a laptop window, which is how it grew a
+   scrollbar and started clipping. They sit either side of the red box now. */
 function buildComboPanel(){
-  const el = document.getElementById('comboPanel');
-  if(!el) return;
+  const stats = document.getElementById('comboStats');
+  const el    = document.getElementById('comboBricks');
+  if(!stats || !el) return;
   const f = favourite, base = comboPreview('none'), now = comboPreview(f.id);
   const num = (v, d) => (d===0 ? Math.round(v) : v.toFixed(d===undefined?2:d));
   /* every row carries its difference from running this weapon with no
@@ -4660,7 +4774,7 @@ function buildComboPanel(){
       <div><b>${esc(b.name)}${b.blocked?' \u2014 never offered to '+anA(weapon.name.toLowerCase()):''}</b>`+
      `<em>${esc(b.body)}</em></div>
     </div>`).join('');
-  el.innerHTML =
+  stats.innerHTML =
     `<h4>${weapon.name} \u00d7 ${esc(f.name).toUpperCase()}</h4>
      <div class="cpsub">${esc(weapon.blurb)}</div>` +
     (perk ? `<div class="cphead">YOU START WITH</div><ul>${
@@ -4679,13 +4793,29 @@ function buildComboPanel(){
     (now.regen > 0 ? row('Regeneration', now.regen, base.regen, 3, '/s') : '') +
     (now.spells.length ? `<div class="cprow"><span>Starts with</span><b>${
         now.spells.map(k=>k.toUpperCase()).join(', ')}</b></div>` : '') +
+    `<div class="cphead">CEILINGS</div>
+     <div class="cpvs">nothing in a run climbs past these, however long it runs</div>` +
+    `<div class="cprow"><span>Increased damage</span><b>${Math.round(INC_DMG_CAP*100)}%</b></div>
+     <div class="cprow"><span>MORE multiplier</span><b>\u00d7${MORE_DMG_CAP.toFixed(2)}</b></div>
+     <div class="cprow"><span>Crit chance</span><b>${Math.round(CRIT_CHANCE_CAP*100)}%</b></div>
+     <div class="cprow"><span>Crit multiplier</span><b>${CRIT_MULT_CAP}%</b></div>` +
+    `<div class="cphead">ABILITY FLOORS</div>
+     <div class="cpvs">CAST SPEED shortens every ability at once — each one stops here</div>` +
+    Object.keys(SPELL_FLOOR).map(k=>
+      `<div class="cprow"><span>${esc(SPELL_NAME[k]||k)}</span>`+
+      `<b>${SPELL_FLOOR[k].toFixed(2)}s</b></div>`).join('') +
+    `<div class="cprow"><span>Guardian ring</span><b>${ORBIT_MAX_SPD.toFixed(1)} rad/s</b></div>`;
+
+  el.innerHTML =
     (bricks ? `<div class="cphead">BRICKS THAT COME UP MORE OFTEN</div>${bricks}
        <div class="cpnote">Shown at RARE, read off this exact hero. A greyed brick is one this
        weapon can never roll &mdash; either it is the wrong class of brick, or the weapon already
        sits on that stat's cap. Pick another weapon or another favourite.</div>`
-     : `<div class="cpnote">No favourite weights nothing: every brick in the bench is
-        equally likely, and the kit above is what you are paid for spreading yourself
-        thin. Pick a favourite to see what committing to one costs, and buys.</div>`);
+     : `<div class="cphead">BRICKS THAT COME UP MORE OFTEN</div>
+        <div class="cpnote">No favourite weights nothing: every brick in the bench is
+        equally likely, and the kit opposite is what you are paid for spreading yourself
+        thin. Pick a favourite to see what committing to one costs, and buys.</div>`) +
+    '';
 }
 function buildWeaponRow(){
   const row = document.getElementById('weaponRow');
@@ -5038,7 +5168,7 @@ function spellSummaries(){
     const hitCd = clamp(0.5*2.6/p.orbit.spd, 0.05, 0.5);
     out.push({ id:'orbit', icon:'orbit', name:'Guardian Brick', head:per(d)+' per hit', tip:
       `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
-      `${per(d)} per hit — ${p.orbit.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
+      `${per(d)} per hit — ${p.orbit.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)${moreShown()>1?` × ${moreShown().toFixed(2)} more`:''}\n`+
       `A foe can be struck every ${hitCd.toFixed(2)}s`+
       (p.orbit.pulse ? `\nTidal Orbit: the ring breathes from ${Math.round(p.orbit.r*ORBIT_PULSE_IN)} `+
         `out to ${Math.round(p.orbit.r*ORBIT_PULSE_OUT)} — past its own cap — and back` : '') });
@@ -5054,7 +5184,7 @@ function spellSummaries(){
         ? `Scattershot ×${p.blaster.split}: each brick becomes ${shards} shards of ${per(each)} — `+
           `${Math.round(BLAST_SPLIT_KEEP[p.blaster.split]*100)}% of the ${per(d)} apiece, `+
           `${per(d*shards*BLAST_SPLIT_KEEP[p.blaster.split])} a brick\n`
-        : `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`)+
+        : `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)${moreShown()>1?` × ${moreShown().toFixed(2)} more`:''}\n`)+
       (p.blaster.pierce>0
         ? `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'} — `+
           `${Math.round(blastPierceFall(p.blaster.pierce)*100)}% less on each one, `+
@@ -5076,7 +5206,7 @@ function spellSummaries(){
     const zn = Math.min(chainMaxZappers(), p.chain.zappers);
     out.push({ id:'chain', icon:'chain', name:'Storm Brick', head:per(d)+' opening strike', tip:
       `${zn} zapper${zn>1?'s, each on its own':' on a'} ${p.chain.rate.toFixed(2)}s cooldown\n`+
-      `Opening strike ${per(d)} — ${p.chain.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
+      `Opening strike ${per(d)} — ${p.chain.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)\n`+
       (leaps>0
         ? `Leaps land for ${steps.join(' / ')}${leaps>4?' …':''} of the opening — a longer chain holds up better\n`
         : `No leaps yet — take another Storm Brick to start chaining\n`)+
@@ -5095,8 +5225,8 @@ function spellSummaries(){
     const total = p.bane.dot * p.bane.dotT;
     out.push({ id:'bane', icon:'bane', name:'Brickbane', head:per(d)+' opening hit', tip:
       `A ${deg}° wedge${deg>=359?' — all the way round you':''} reaching ${rr}px, every ${p.bane.rate.toFixed(2)}s\n`+
-      `Opening hit ${per(d)} — ${p.bane.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)`+
-      `${p.moreAll>1?` × ${p.moreAll.toFixed(2)} more`:''}\n`+
+      `Opening hit ${per(d)} — ${p.bane.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)`+
+      `${moreShown()>1?` × ${moreShown().toFixed(2)} more`:''}\n`+
       `POISON: ${p.bane.dot.toFixed(2)}/s a stack for ${p.bane.dotT.toFixed(1)}s — ${total.toFixed(1)} a stack\n`+
       `Every touch lays ${p.bane.stacks} dose${p.bane.stacks>1?'s':''} at once\n`+
       `Stacks to ${POISON_MAX*POISON_CAP_MUL[p.bane.burst]} on a monster and `+
@@ -5112,7 +5242,7 @@ function spellSummaries(){
     const d = calcDamage(p.storm.dmg,'melee'), blades = p.storm.n*p.storm.count;
     out.push({ id:'storm', icon:'storm', name:'Bladestorm', head:per(d)+' per blade', tip:
       `${blades} blades every ${p.storm.rate.toFixed(2)}s\n`+
-      `${per(d)} each — ${p.storm.dmg} base × (1 + ${Math.round((p.incMelee+p.incAll)*100)}% increased)\n`+
+      `${per(d)} each — ${p.storm.dmg} base × (1 + ${Math.round(incTotal('melee')*100)}% increased)\n`+
       `Full burst: ${per(d*blades)} spread around you`+
       (p.storm.boomer>0 ? `\nReturning Blades ×${p.storm.boomer}: `+
         (p.storm.boomer>1 ? 'four passes per blade — out, home, out, home'
@@ -5145,7 +5275,7 @@ function spellSummaries(){
     out.push({ id:'bombplus', icon:'bomb', name:'Bomb Volley', head:per(d)+' per blast', tip:
       `${p.bomb.n} bomb${p.bomb.n>1?'s':''} of ${bombMaxN()} every ${p.bomb.rate.toFixed(2)}s\n`+
       clusterLine+
-      `${per(d)} in a ${Math.round(p.bomb.r)} radius — ${p.bomb.dmg} base × (1 + ${Math.round((p.incSpell+p.incAll)*100)}% increased)\n`+
+      `${per(d)} in a ${Math.round(p.bomb.r)} radius — ${p.bomb.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)\n`+
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
   }
   if(p.freeze.n>0){
@@ -5201,8 +5331,11 @@ const STAT_PROBES = [
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased all',  get:()=> player.incAll*100,        fmt:v=>Math.round(v)+'%' },
-  { g:'DAMAGE', k:'Damage over time', get:()=> player.inc.dot, fmt:v=>Math.round(v*100)+'%' },
-  { g:'DAMAGE', k:'More damage',    get:()=> player.moreAll,           fmt:v=>'×'+v.toFixed(2) },
+  /* the two DERIVED numbers, the ones a hit is actually multiplied by */
+  { g:'DAMAGE', k:'On a weapon hit',get:()=> incTotal('melee')*100,    fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'On a spell hit', get:()=> incTotal('spell')*100,    fmt:v=>Math.round(v)+'%' },
+  { g:'DAMAGE', k:'Damage over time', get:()=> dotInc(),               fmt:v=>Math.round(v*100)+'%' },
+  { g:'DAMAGE', k:'More damage',    get:()=> moreShown(),              fmt:v=>'×'+v.toFixed(2) },
   { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
@@ -5556,9 +5689,9 @@ function renderCharSheet(){
         `A staff does not swing. Its basic attack is a bolt of its element, and it\n`+
         `is BOTH a spell and elemental damage, so both pools apply.\n\n`+
         `(${weapon.dmg} base + ${fmtHp(p.flatElem)} flat)\n`+
-        ` × (1 + ${Math.round(p.incAll*100)}% all + ${Math.round(incSpellAll()*100)}% spell`+
-        ` + ${Math.round(incElemAll(weapon.elem)*100)}% ${weapon.elem})`+
-        ` × ${p.moreAll.toFixed(2)} more = ${boltDamage().toFixed(2)}`),
+        ` × (1 + ${Math.round(incTotal('spell', weapon.elem)*100)}% increased`+
+        `${atCap(incTotal('spell', weapon.elem), INC_DMG_CAP)})`+
+        ` × ${moreShown().toFixed(2)} more = ${boltDamage().toFixed(2)}`),
       sRow('Burst radius', Math.round(boltRadius())+' px',
         `everything caught takes the hit and catches fire (cap ${BOLT_R_CAP})`),
       ...(p.ember ? [sRow('Ember Scatter', '\u00d7'+p.ember,
@@ -5595,7 +5728,22 @@ function renderCharSheet(){
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
         : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
-    sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target')
+    sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target'),
+    /* the second speed stat, and the one that is easy to confuse with the first */
+    sRow('Cast speed', Math.round(castInc(0)*100)+'%',
+      'every ABILITY, not the hands',
+      `ATTACK SPEED above is your own hands — the swing or the bolt.\n`+
+      `CAST SPEED is every ability you own: guardian ring, blaster, storm brick,\n`+
+      `bladestorm, vortex, block freeze, bombs, brickbane.\n\n`+
+      `They are increases, so they SUM into one pool per ability and none of them\n`+
+      `multiplies: an ability's own rate bricks + ${Math.round(p.inc.cast*100)}% global cast speed`+
+      `${weapon.incAtk ? ` + ${Math.round(weapon.incAtk*100)}% from the ${weapon.name.toLowerCase()}` : ''}.\n\n`+
+      `Every one of them then stops at its OWN floor, which is why a bomb volley\n`+
+      `never becomes a machine gun however much tempo you buy:\n`+
+      Object.keys(SPELL_FLOOR).map(k=>
+        `  ${(SPELL_NAME[k]||k).padEnd(15)} ${SPELL_FLOOR[k].toFixed(2)}s`+
+        `${p[k] && p[k].n>0 ? `   (now ${p[k].rate.toFixed(2)}s`+
+          `${p[k].rate <= SPELL_FLOOR[k]+1e-9 ? ', at the floor' : ''})` : ''}`).join('\n'))
   ]);
 
   const crit = sBlock('CRITICALS', [
@@ -5625,20 +5773,22 @@ function renderCharSheet(){
       `The BASE is your weapon's. Every flat brick adds to the same pool whatever\n`+
       `you are holding, so a build is never locked to one weapon.\n\n`+
       `Damage = (Base + Flat) × (1 + increased) × each more multiplier\n`+
-      `Yours:  (${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)} = ${light.toFixed(2)}`),
-    sRow('Increased damage', Math.round(p.incAll*100)+'%', '+5% per level — applies to everything',
+      `Yours:  (${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)} = ${light.toFixed(2)}`),
+    sRow('Increased damage', Math.round(incTotal('melee')*100)+'%'
+        + atCap(incTotal('melee'), INC_DMG_CAP),
+      `+5% per level, and everything else that says "increased" (cap ${Math.round(INC_DMG_CAP*100)}%)`,
       `INCREASED modifiers of the same kind are ADDITIVE with one another,\n`+
       `then multiply the base once.\n`+
       `50% increased + 30% increased = ×1.80, NOT ×1.50 × 1.30.\n\n`+
       `Yours: ${Math.round(p.incAll*100)}% from levels + ${Math.round(p.incMelee*100)}% physical`+
-      ` = ×${(1+p.incAll+p.incMelee).toFixed(2)} on a weapon hit.`),
+      ` = ×${(1+incTotal('melee')).toFixed(2)} on a weapon hit.`),
     sRow('Increased physical', Math.round(p.incMelee*100)+'%', 'your weapon, bladestorm & vortex',
       `Adds into the same pool as your increased damage, for physical only.\n\n`+
-      `${weapon.name}: (${weapon.dmg} + ${fmtHp(p.flatPhys)} flat) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) = `+
-      `${((weapon.dmg+p.flatPhys)*(1+p.incAll+p.incMelee)).toFixed(2)} before more multipliers.`),
+      `${weapon.name}: (${weapon.dmg} + ${fmtHp(p.flatPhys)} flat) × (1 + ${Math.round(incTotal('melee')*100)}%) = `+
+      `${((weapon.dmg+p.flatPhys)*(1+incTotal('melee'))).toFixed(2)} before more multipliers.`),
     sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks',
       `The spell half of the same pool. Bladestorm and vortex are melee, not spells.\n\n`+
-      `A 5-base spell hit: 5 × (1 + ${Math.round((p.incAll+p.incSpell)*100)}%) × ${p.moreAll.toFixed(2)} = `+
+      `A 5-base spell hit: 5 × (1 + ${Math.round(incTotal('spell')*100)}%) × ${moreShown().toFixed(2)} = `+
       `${calcDamage(5,'spell').toFixed(2)}`),
     sRow('Increased damage over time', Math.round(p.inc.dot*100)+'%',
       hasAnyDot() ? 'every lingering damage you inflict' : 'nothing you own deals damage over time yet'),
@@ -5672,16 +5822,18 @@ function renderCharSheet(){
       `Past ${BLEED_STACK_MAX} a new cut displaces the SHALLOWEST wound, and only if it is `+
       `deeper than that one. Stay on a boss and keep swinging: every hit trades your `+
       `worst wound up for a better one.`),
-    sRow('More multipliers', '×'+p.moreAll.toFixed(2),
-      'each MORE modifier multiplies on its own',
+    sRow('More multipliers', '×'+moreShown().toFixed(2) + atCap(player.moreAll, MORE_DMG_CAP),
+      `each MORE modifier multiplies on its own (cap ×${MORE_DMG_CAP.toFixed(2)})`,
       `MORE modifiers are NOT added together — each one is its own multiplier,\n`+
       `applied after every increase.\n`+
       `50% more + 30% more = ×1.50 × 1.30 = ×1.95, not ×1.80.\n`+
       `That is why they are rare and why they stay strong on a big build.\n\n`+
-      `Yours: ×${p.moreAll.toFixed(3)} on every hit.\n`+
-      `The spin swing is a separate 40% more on top.`),
+      `Yours: ×${moreShown().toFixed(3)} on every hit`+
+      `${player.moreAll > MORE_DMG_CAP + 1e-9 ? ` (the pool holds ×${player.moreAll.toFixed(2)}, `+
+        `stopped at the ×${MORE_DMG_CAP.toFixed(2)} ceiling)` : ''}.\n`+
+      `An ability's own more multiplier, and the spin swing's 40%, sit on top of it.`),
     sRow('Sword hit', light.toFixed(2),
-      `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round((p.incAll+p.incMelee)*100)}%) × ${p.moreAll.toFixed(2)}`)
+      `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
   ]);
 
   const loot = sBlock('LOOT & XP', [
@@ -5823,9 +5975,9 @@ function openUpgrades(mode='wave', forceRar){
     ['Crit mult', critMultPct()+'%'],
     ['Armour', Math.round(armourValue())],
     ['Sword hit', swordDamage().toFixed(1)],
-    ['Inc. melee', Math.round((player.incMelee+player.incAll)*100)+'%'],
-    ['Inc. spell', Math.round((player.incSpell+player.incAll)*100)+'%'],
-    ['More dmg', '×'+player.moreAll.toFixed(2)],
+    ['Inc. melee', Math.round(incTotal('melee')*100)+'%'],
+    ['Inc. spell', Math.round(incTotal('spell')*100)+'%'],
+    ['More dmg', '×'+moreShown().toFixed(2)],
     ['Suppress', Math.round(suppressChance()*100)+'%'],
     ['Stud gain', '×'+player.studMul.toFixed(2)],
     ['XP gain', '×'+player.xpMul.toFixed(2)],
@@ -10399,7 +10551,11 @@ function drawAxe(c, s, bright){
   /* THE HEAD IS MOUNTED ACROSS THE HAFT, not along it. An axe bit sits at right
      angles to the shaft with its edge running parallel to it — a head pointing
      the same way the handle does is a mace on a stick, which is exactly what
-     this looked like. Haft along +x, head standing off to one side. */
+     this looked like. Haft along +x, head standing off to one side.
+     WHICH SIDE MATTERS. Held, the hero carries the haft straight up (a -90°
+     turn), which maps local +y to world +x — so the bit has to sit on the +y
+     side of the haft for the axe to face EAST in the hand instead of back over
+     the shoulder. Everything below the haft is mirrored for that reason. */
   c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = PAL.brown;
   c.fillRect(-9*s, -2.4*s, 43*s, 4.8*s);
@@ -10407,23 +10563,23 @@ function drawAxe(c, s, bright){
   /* the bit: rooted on the haft, flaring up and out, edge running along x */
   c.fillStyle = steel;
   c.beginPath();
-  c.moveTo(20*s, -2*s);                                 /* root, toe side */
-  c.lineTo(15*s, -12*s);                                /* the beard, hooking back */
-  c.quadraticCurveTo(24*s, -22*s, 36*s, -19*s);         /* THE EDGE, along the haft */
-  c.quadraticCurveTo(34*s, -9*s, 31*s, -2*s);           /* heel back down to the haft */
+  c.moveTo(20*s, 2*s);                                  /* root, toe side */
+  c.lineTo(15*s, 12*s);                                 /* the beard, hooking back */
+  c.quadraticCurveTo(24*s, 22*s, 36*s, 19*s);           /* THE EDGE, along the haft */
+  c.quadraticCurveTo(34*s, 9*s, 31*s, 2*s);             /* heel back down to the haft */
   c.closePath(); c.fill(); c.stroke();
   /* the bevel, traced just inside the edge */
   c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
   c.beginPath();
-  c.moveTo(17*s, -13*s);
-  c.quadraticCurveTo(25*s, -19.5*s, 34*s, -17*s);
+  c.moveTo(17*s, 13*s);
+  c.quadraticCurveTo(25*s, 19.5*s, 34*s, 17*s);
   c.stroke();
   /* the eye — the dark collar where the haft passes through the head */
   c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = bright ? '#c8ced4' : '#9ba19d';
   c.beginPath();
-  c.moveTo(21*s, -5.5*s); c.lineTo(30*s, -5.5*s);
-  c.lineTo(30*s, 3.4*s);  c.lineTo(21*s, 3.4*s);
+  c.moveTo(21*s, 5.5*s);  c.lineTo(30*s, 5.5*s);
+  c.lineTo(30*s, -3.4*s); c.lineTo(21*s, -3.4*s);
   c.closePath(); c.fill(); c.stroke();
   /* butt cap, so the grip end reads as a grip */
   c.fillStyle = PAL.gold;
