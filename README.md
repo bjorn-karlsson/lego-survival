@@ -191,8 +191,31 @@ Fire, frost and lightning each stack. **The fifth stack breaks something**: burn
 becomes a pool of damage over time, chill freezes you solid, shock leaves every hit
 against you critting.
 
+**All three go the other way too.** Fire burns a monster, frost chills it, and lightning
+now **SHOCKS** it: a shocked body takes **+7% damage per stack, five deep — +35% from
+everything you own**, not just from lightning. It is a multiplier on the *body*, so it sits
+outside the hero's own damage ceiling and it makes every other source in your build land
+harder. That is what the storm brick is for now.
+
+Each element also has **its own increase**: `Pyromancy` (fire), `Cryomancy` (frost) and
+`Conduction` (lightning), alongside the global `Elemental Focus`. Each is offered only to a
+hero who owns the thing it is for, so a fire caster is never handed a lightning card it
+cannot use. They **add into the elemental pool**; they never multiply it.
+
 Imp masters lay **curses** on top — SUNDERED, LEADEN, BRITTLE, WITHERED — that strip
 resistance, slow your swing, thin your armour and choke your regeneration.
+
+**The Storm Brick is LIGHTNING.** It used to be a plain spell hit, which meant a caster's
+whole elemental tree did nothing for the one spell visibly made of lightning. It reads the
+**flat elemental** pool the way the fireball does, and both the **spell** and **elemental**
+increases apply — so `Elemental Focus`, `Conduction`, `Orb Mastery` and `Ember Core` all
+move it, while `Pyromancy` correctly does not. `Conductor` buys its chance to shock.
+
+Its interval is a flat **2.00s** and it has no rate brick of its own any more — that slot
+is `Conductor`. The way to make the storm come round faster is to **own more bricks**: the
+stagger between them is no longer a fixed 0.2s but **the interval divided by the bank**, so
+five bricks fire 0.40s apart, for ever. A bank used to empty itself in the first second of
+every two and then stand idle; it reads as a rhythm now rather than a volley.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
@@ -574,7 +597,8 @@ offered at all.
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |
-| Curse stacks on you | 9 | Poison on a boss | 12 | | |
+| Curse stacks on you | 9 | Poison on a boss | 12 | Shock on a monster | 5 (+35%) |
+| Monster level | 40 | Storm shock chance | 100% | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
 | | | Gas reach | 430 px | | |
@@ -615,11 +639,16 @@ much tempo the hero buys:
 | | floor | | floor |
 |---|--:|---|--:|
 | Brick Blaster | 1.20s | Block Freeze | 3.50s |
-| Storm Brick | 1.00s | Bomb Volley | 2.00s |
+| Storm Brick | 1.00s\* | Bomb Volley | 2.00s |
 | Bladestorm | 2.00s | Brickbane | 1.10s |
 | Blade Vortex | 3.00s | Guardian ring | 7.5 rad/s |
 
 Runic Tempo stops being offered once every ability you actually own sits on its floor.
+
+\* The storm brick's **base** is a flat 2.00s and it has no rate brick of its own — only
+the global cast speed and a caster weapon can move it, and only down to 1.00s. Owning more
+bricks is what makes the storm come round faster, because the stagger is the interval
+divided by the bank.
 
 A **favourite** lifts the cap of its own spell by one, so a Storm Brick run reaches six
 hovering bricks and a Bomb Volley run nine bombs. The spell its kit hands you counts as
@@ -682,6 +711,34 @@ legendary rate of Hard for the privilege.
 
 ---
 
+## Monsters have a level
+
+The wave curve is a **polynomial**, and a polynomial flattens in relative terms. By wave 50,
+ten more waves bought the roster about a third more health — which, against a hero whose own
+damage now has a ceiling, read as no change at all. Wave 50 and wave 60 felt the same
+because proportionally they nearly were.
+
+A monster now carries a **LEVEL**, separate from the wave it spawned in, and it **compounds**:
+
+| | monster level | health, damage and armour |
+|---|--:|--:|
+| before wave 20 | **0** | ×1.00 — the early game is untouched |
+| wave 20 | 1 | ×1.11 |
+| wave 30 | 4 | ×1.52 |
+| wave 40 | 7 | ×2.08 |
+| wave 50 | 11 | ×3.15 |
+| wave 60 | 14 | ×4.31 |
+
+One level every three waves past wave 20, **+11% each**, multiplied on **top** of the wave
+curve rather than added into it — and capped at level 40, so a very long run is a fight
+rather than a wall. Measured end to end, a wave-60 brute now has **×1.78 the health and
+×1.75 the damage** of a wave-50 one, where before the change it was ×1.30 and ×1.28.
+
+The level shows beside the wave number in the HUD once it starts to bite, and on the
+character sheet with the arithmetic behind it.
+
+---
+
 ## Reading your own build
 
 Three screens answer three different questions, and all three are driven from **one list of
@@ -694,8 +751,22 @@ reads all 111 probes again, and lists only what actually moved, as `now → next
 the probes include every spell's damage, one *"+18% increased spell damage"* card shows its
 effect on the blaster, the storm brick and the bombs on separate lines.
 
-Every probe now also carries **one sentence saying what the stat is**, which shows as a
-tooltip on the row — the same sentence, from the same table, in all three screens below.
+Every probe carries **one sentence saying what the stat is** — the same sentence, from the
+same table, in all three screens below.
+
+On the title screen that sentence used to be a `title=` attribute, which was the same as
+not having one: a native tooltip needs about a second of *stationary* hover on an 18px row
+before the browser draws anything, so in practice nothing ever appeared. It is a real
+hover panel now — it shows the moment the pointer lands, it is styled like the rest of the
+screen, and the test asserts the tooltip's **computed box is visible and on screen**
+rather than merely that the attribute exists.
+
+**A spell upgrade is never offered for a spell you do not own.** `Storm Edge` carried two
+`req:` keys on the same object literal — JavaScript keeps the last one, and the one that
+lost was the one checking you owned a Bladestorm — so a sword hero was offered upgrades to
+a spell they had never picked up. `gate2.js` now walks every spell tree against a hero who
+owns nothing and fails on anything that answers yes; the brick that *grants* the spell is
+the only thing allowed through.
 
 A brick that moved **no** probe used to show an empty panel, which is how `Rotbrick` came to
 say nothing at all on a build that was bleeding and burning: every bleed probe was a

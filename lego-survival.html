@@ -68,11 +68,25 @@
   .cpanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
   .cpanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
   .cpanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
-  /* a row you can hover for the explanation says so, rather than hiding it */
-  .cpanel .cptip{cursor:help}
+  /* A REAL TOOLTIP, NOT THE BROWSER'S. A `title=` attribute needs about a
+     second of stationary hover on an 18px row before the OS draws anything, so
+     in practice the explanations were invisible — the attribute was there and
+     nothing ever showed it. This is the same hover-driven panel the weapon row
+     already uses: it appears the moment the pointer lands, it is styled like
+     the rest of the screen, and a test can actually assert that it is visible.
+     The panel has `overflow-y:auto`, which clips an absolutely positioned child,
+     so the tip is FIXED and placed from JS against the row's own rectangle. */
+  .cpanel .cptip{cursor:help;position:relative}
   .cpanel .cptip span{border-bottom:1px dotted rgba(255,214,110,.42)}
-  .cpanel .cptip:hover{background:rgba(255,214,110,.08);border-radius:4px}
+  .cpanel .cptip:hover{background:rgba(255,214,110,.10);border-radius:4px}
   .cpanel .cptip:hover span{color:#ffe6a3}
+  #statTip{position:fixed;display:none;max-width:310px;background:#12181d;
+    border:2px solid #ffb900;border-radius:12px;padding:10px 14px;font-size:12px;
+    font-weight:500;color:#f2f3f2;line-height:1.55;text-align:left;z-index:200;
+    box-shadow:0 10px 30px rgba(0,0,0,.75);font-family:'Fredoka';
+    pointer-events:none;letter-spacing:0}
+  #statTip b{display:block;font-family:'Titan One';font-size:10.5px;letter-spacing:1.6px;
+    color:#ffd76e;margin-bottom:5px}
   .boxplate{background:linear-gradient(180deg,#e2323a,#c31f27);border-radius:26px;
     box-shadow:0 10px 0 #8f161d,0 26px 60px rgba(0,0,0,.55),inset 0 2px 0 rgba(255,255,255,.25);
     padding:4px 34px 18px;text-align:center;max-width:820px;transform:rotate(-.5deg);
@@ -574,7 +588,17 @@ const ZORB_SPIN = 2.1;                    /* rad/s, clockwise */
 const ZORB_ARM = 165;                     /* how far the lightning arm reaches */
 const ZORB_ZAP_GAP = 0.11;
 const ZORB_STACKS = 5;                    /* shock stacks a direct orb hit lands */
-const CHAIN_ZAP_GAP = 0.2;                /* stagger between storm bricks firing */
+/* THE STAGGER IS THE RATE DIVIDED BY THE BANK. A fixed 0.2s gap meant a bank of
+   five emptied itself in the first second of every two and then stood idle, so
+   more bricks bought a bigger flash rather than a steadier storm. Spread across
+   the interval instead, five bricks on a 2.00s cooldown fire 0.40s apart, for
+   ever, and the bank reads as a rhythm rather than a volley. */
+function chainGap(){
+  const p = player;
+  if(!p || !p.chain) return 0.2;
+  const z = Math.max(1, Math.min(chainMaxZappers(), p.chain.zappers));
+  return p.chain.rate / z;
+}
 const CHAIN_JUMP_GAP = 0.1;               /* delay between one leap and the next */
 const CHAIN_MAX_NODES = 40;               /* ceiling on one forked bolt */
 /* How far a bolt can walk. Nothing capped the chain before, so a stack of Storm
@@ -633,7 +657,10 @@ const ATK_BASE = 0.34;         /* seconds per swing */
 const DASH_BASE = 0.9;         /* seconds between rolls */
 const MAGNET_BASE = 95;        /* stud pickup radius */
 const ORBIT_SPD_BASE = 2.6;
-const BLAST_RATE_BASE = 2.4, CHAIN_RATE_BASE = 2.2, STORM_RATE_BASE = 6.5;
+/* the storm brick sits at a flat 2.00s and has no rate brick of its own any
+   more — its old `Charged Storm` slot is the shock-chance brick now, so the way
+   to make the storm come round faster is to own more bricks, not to buy speed */
+const BLAST_RATE_BASE = 2.4, CHAIN_RATE_BASE = 2.0, STORM_RATE_BASE = 6.5;
 const VORTEX_RATE_BASE = 9, FREEZE_RATE_BASE = 10, BOMB_RATE_BASE = 7;
 /* BRICKBANE. A cloud of green gas coughed out in a wedge in front of you. It
    hits once when the front washes over a body, and then it KEEPS hitting — the
@@ -932,6 +959,28 @@ const DIFFS = {
 let difficulty = DIFFS.hard;
 /* the effective wave a monster is built at — difficulty shifts the whole curve */
 function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
+/* THE MONSTER'S OWN LEVEL, and it is not the wave it spawned in. The wave curve
+   is a polynomial, and a polynomial FLATTENS in relative terms: by wave 50 ten
+   more waves bought the roster about a third more health, which against a hero
+   whose own damage is now capped read as no change at all. Wave 50 and wave 60
+   felt the same because, proportionally, they nearly were.
+   A monster now carries a LEVEL that COMPOUNDS. It is worth nothing until the
+   game has already got hard — the first twenty waves are exactly as they were —
+   and from there every level is MOB_LEVEL_STEP more of everything than the one
+   below it, MULTIPLIED on top of the wave curve rather than added into it. That
+   is the difference between a curve that levels off and one that does not. */
+const MOB_LEVEL_FROM  = 20;    /* no level at all before this wave */
+const MOB_LEVEL_EVERY = 3;     /* waves per level after it */
+const MOB_LEVEL_STEP  = 0.11;  /* compounding, per level */
+const MOB_LEVEL_MAX   = 40;    /* a ceiling, so a 200-wave run is not a wall */
+function mobRank(w){
+  const n = (w === undefined ? wave.n : w);
+  if(n < MOB_LEVEL_FROM) return 0;
+  return Math.min(MOB_LEVEL_MAX, Math.floor((n - MOB_LEVEL_FROM) / MOB_LEVEL_EVERY) + 1);
+}
+/* what one level is worth. ONE number, read by health, damage and armour alike,
+   so a level always means the same thing wherever it is applied. */
+function mobRankMul(r){ return Math.pow(1 + MOB_LEVEL_STEP, r === undefined ? mobRank() : r); }
 /* ---- damage model ----------------------------------------------------------
    Every hit in the game is built the same way:
      Damage = (Base + Flat added) × (1 + increased − reduced) × ∏(1 + more) × ∏(1 − less)
@@ -1073,6 +1122,14 @@ const ECHILL_MAX  = 5;
 const ECHILL_STEP = 0.13;    /* slower per stack */
 const ECHILL_FLOOR = 0.32;
 const ECHILL_T    = 4;
+/* ENEMY SHOCK — the lightning ailment, and the mirror of the shock that lands
+   on YOU. A shocked body simply TAKES MORE, from everything, which is what the
+   storm brick is now for: the bolt itself is modest and the shock it leaves
+   makes every other source you own land harder. It is a MORE multiplier on the
+   body, not on the hero, so it sits outside the hero's own damage ceiling. */
+const ESHOCK_MAX  = 5;       /* stacks */
+const ESHOCK_STEP = 0.07;    /* MORE damage taken, per stack */
+const ESHOCK_T    = 4;       /* seconds a stack lasts, refreshed by the next */
 const EBURN_MAX    = 5;      /* the fifth stack breaks and brands */
 const EBURN_DUR    = 6;      /* how long one stack burns */
 const EBURN_SHARE  = 0.30;   /* of the hit that lit it, per second, per stack */
@@ -1640,7 +1697,7 @@ function newPlayer(){
     bleedChanceFlat:0, bleedShareFlat:0, bleedChance:0, bleedShare:BLEED_SHARE_BASE,
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
-    chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0 },
+    chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0, shock:0 },
     bomb:{ n:0, dmg:2, r:BOMB_R_BASE, rate:BOMB_RATE_BASE, cd:3, cluster:0 },
     /* raised by a favourite's starting perk, once, at the beginning of a run */
     capUp:{ orbit:0, blaster:0, chain:0, bomb:0 },
@@ -2492,13 +2549,15 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
     /* the first ultra used to fold to any build; it now starts from a real base */
       const mult = 1 + (st-1)*2.3;
-      const bhp = Math.round((B.hp*mult*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp);
+      const bhp = Math.round((B.hp*mult*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp
+                             * mobRankMul());
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig, btier:tier+2,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
         hp:bhp, maxHp:bhp, armour: (70 + st*70 + st*st*45) * (B.armourMul||1),
         suppress: B.style==='skel' ? 0.62 : 0.30,
         speed:B.speed*(1+tier*0.03),
-        dmg:Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1)),
+        dmg:Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1) * mobRankMul()),
+        mlvl: mobRank(),
         xp:Math.round(B.xp*(1+(st-1)*0.8)), studs:{a:B.studs[0], b:B.studs[1]},
         atkS:Math.max(0.42, (1-(wave.n-1)*0.02)*difficulty.atk*(B.atkMul||1)), touchCd:0.8,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
@@ -2545,13 +2604,15 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   const d = EDEF[type];
   const lvl = mobLevel();
   /* steep HP curve so wave 20/30 stay hard */
-  const hpS  = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp;
+  /* the wave curve, and then the monster's own LEVEL multiplied on top of it */
+  const rank = mobRank(), rankMul = mobRankMul(rank);
+  const hpS  = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp * rankMul;
   /* flat armour, fed into the same DR curve the player uses */
   const armour = lvl * 1.1 * (type==='bastion' ? 1.8 : 1) * (d.armourMul || 1)
-    * (RANGED_SET.has(type) ? 0.45 : 1) * (elite ? 1.4 : 1) * (d.golem ? 1.6 : 1);
+    * (RANGED_SET.has(type) ? 0.45 : 1) * (elite ? 1.4 : 1) * (d.golem ? 1.6 : 1) * rankMul;
   /* spell suppression: the arcane ones shrug off half a spell hit */
   const suppress = magic ? 0.30 : (typeof type === 'string' && type.endsWith('lord')) ? 0.20 : 0;
-  const dmgB = (lvl-1)*0.55 + Math.pow(Math.max(0, lvl-8), 1.45)*0.14;
+  const dmgB = ((lvl-1)*0.55 + Math.pow(Math.max(0, lvl-8), 1.45)*0.14) * rankMul;
   const spdS = (1.07 + Math.min(0.55, (lvl-1)*0.028)) * difficulty.spd;
   let atkS = Math.max(0.58, 1 - (lvl-1)*0.03) * difficulty.atk;
   if(magic) atkS *= 0.7;
@@ -2559,7 +2620,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     dmg: Math.max(1, Math.round((d.dmg + dmgB + (magic?1:0)) * difficulty.dmg)),
     hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
     maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
-    armour, suppress,
+    armour, suppress, mlvl: rank,
     speed:d.speed*spdS*(elite?0.95:1)*(magic?1.3:1),
     atkS, fire: d.fire ? d.fire*atkS : undefined, touchCd: 0.9*atkS,
     col:d.col, style:d.style, xp:d.xp, studs:{a:d.studs[0], b:d.studs[1]},
@@ -2660,12 +2721,18 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
     d *= burntMul(e);
   } else if(SPELL_SOURCES.has(source)){
-    /* spells meet suppression, never armour */
+    /* spells meet suppression, never armour. The storm brick is in this set and
+       stays in it: being LIGHTNING changes how its damage is BUILT, not how it
+       is mitigated — it is still a spell arriving at a body. */
     if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
   } else {
     /* attacks meet armour, scaled against the size of this very hit */
     d *= (1 - armourDR(e.armour||0, d));
   }
+  /* SHOCK is a multiplier ON THE BODY, so it applies to every source alike and
+     after mitigation — being shocked does not help you through armour, it makes
+     whatever did get through hurt more. */
+  d *= shockMulOn(e);
   /* BLEED rolls off the damage that ACTUALLY landed, after armour, so a swing
      that barely got through barely bleeds. Ticks never re-roll it. */
   if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit, source))
@@ -2745,6 +2812,19 @@ function bleedChance(crit, src){
 function burntMul(e){
   const n = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
   return Math.pow(1 + BURNT_STEP, n);
+}
+function shockStacksOn(e){ return (e.shockN && e.shockT > 0) ? e.shockN : 0; }
+function shockMulOn(e){ return 1 + ESHOCK_STEP*shockStacksOn(e); }
+function shockEnemy(e, n){
+  if(!e || e.dead || e.state!=='active') return;
+  const before = shockStacksOn(e);
+  e.shockN = Math.min(ESHOCK_MAX, before + Math.max(1, n||1));
+  e.shockT = ESHOCK_T;
+  if(e.shockN > before){
+    addSparks(e.x, e.y-18*(e.scale||1), 2, '#ffe95a');
+    if(e.shockN === ESHOCK_MAX && before < ESHOCK_MAX)
+      addDmg(e.x, e.y-46*(e.scale||1), 'SHOCKED', '#ffe95a', 14);
+  }
 }
 function chillStacksOn(e){ return (e.chillN && e.chillT > 0) ? e.chillN : 0; }
 function chillMulOn(e){ return Math.max(ECHILL_FLOOR, 1 - ECHILL_STEP*chillStacksOn(e)); }
@@ -3184,6 +3264,18 @@ function frostDamage(){
   return Math.max(0, (FREEZE_DMG_BASE + player.flatElem)
     * (1 + incTotal('spell', 'frost')) * moreTotal());
 }
+/* THE STORM BRICK IS LIGHTNING. It used to be a plain spell hit, which meant a
+   caster's whole elemental tree did nothing for the one spell that is visibly
+   made of lightning. It reads the flat ELEMENTAL pool the way the fireball
+   does, and the increased pools it applies are the spell one AND the elemental
+   ones — so `Elemental Focus` and the new `Conduction` both move it, and so
+   does every increase that applies to everything. */
+function shockDamage(base){
+  return Math.max(0, ((base === undefined ? player.chain.dmg : base) + player.flatElem)
+    * (1 + incTotal('spell', 'shock')) * moreTotal());
+}
+/* how often one of its bolts shocks what it touches */
+function chainShockChance(){ return clamp((player && player.chain.shock) || 0, 0, 1); }
 const BOLT_R_MAX_INC = 1.2;    /* increased burst radius the bricks can buy */
 const BOLT_R_CAP = 120;
 function boltRadius(){
@@ -4055,6 +4147,23 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased FIRE damage — the bolt and the burning both `+
       `${incCapTag('spell', 'fire')}`,
     apply:c=>{ player.inc.fire += c.v; } },
+  /* THE OTHER TWO ELEMENTS GET THEIR OWN POOL. Fire had one because the staff
+     is fire; frost and lightning had nowhere to put an increase, which is why a
+     Block Freeze or storm-brick build could only ever buy the GLOBAL elemental
+     pool. Each of these is offered only to a hero who owns the thing it is for,
+     so a fire caster is never handed a lightning card it cannot use. */
+  { id:'froinc', name:'Cryomancy', icon:'snow', cls:'OFFENSE', minRar:'rare',
+    req:()=>player.freeze.n > 0 && incRoom('spell', 'frost'),
+    calc:m=>({v:0.14+0.08*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased FROST damage — Block Freeze and every chill `+
+      `it lays ${incCapTag('spell', 'frost')}`,
+    apply:c=>{ player.inc.frost += c.v; } },
+  { id:'shockinc', name:'Conduction', icon:'zapper', cls:'OFFENSE', minRar:'rare',
+    req:()=>player.chain.n > 0 && incRoom('spell', 'shock'),
+    calc:m=>({v:0.14+0.08*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased LIGHTNING damage — every storm bolt and `+
+      `every leap it makes ${incCapTag('spell', 'shock')}`,
+    apply:c=>{ player.inc.shock += c.v; } },
   { id:'boltarea', name:'Wildfire', icon:'bomb', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isCaster() && player.inc.boltR < BOLT_R_MAX_INC,
     calc:m=>({v:0.12+0.09*m}),
@@ -4286,10 +4395,13 @@ const UPGRADES = [
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to the storm brick — the opening strike and every leap off it`,
     apply:c=>{ player.chain.dmg = Math.round((player.chain.dmg + c.v)*100)/100; } },
-  { id:'chainrate', name:'Charged Storm', icon:'clock', cls:'SPELL', req:()=>player.chain.n>0 && player.chain.rate>CHAIN_MIN_RATE,
-    calc:m=>({v:0.14+0.06*m}),
-    desc:c=>`Storm bricks zap ${Math.round(c.v*100)}% faster (floor ${CHAIN_MIN_RATE.toFixed(1)}s)`,
-    apply:c=>{ player.inc.chainRate += c.v; syncStats(); } },
+  { id:'chainshock', name:'Conductor', icon:'zapper', cls:'SPELL', minRar:'uncommon',
+    req:()=>player.chain.n>0 && chainShockChance() < 1,
+    calc:m=>({v: byRar(m, [0.12, 0.18, 0.28, 0.40, 0.60])}),
+    desc:c=>`+${Math.round(c.v*100)}% chance a storm bolt SHOCKS what it touches `+
+      `(now ${Math.round(chainShockChance()*100)}%) — a shocked body takes `+
+      `${Math.round(ESHOCK_STEP*100)}% MORE damage from everything, stacking ${ESHOCK_MAX} deep`,
+    apply:c=>{ player.chain.shock = Math.min(1, (player.chain.shock||0) + c.v); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
     req:()=>!isCaster() && canTakeSpell('storm') && player.storm.n < stormMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -4301,9 +4413,13 @@ const UPGRADES = [
         : `Spell: a whirl of ${c.n*cnt} swords bursts out of you (cap ${STORM_MAX_BLADES})`;
     },
     apply:c=>{ player.storm.n = Math.min(stormMaxN(), player.storm.n + c.n); } },
-  { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL', req:()=>player.storm.n>0,
-    /* blades are for a hero who carries one */
-    req:()=>!isCaster(),
+  { id:'stormpow', name:'Storm Edge', icon:'storm', cls:'SPELL',
+    /* ONE req, not two. A second `req:` key on the same object literal silently
+       wins, and the one that lost here was the one checking you own the spell —
+       so a sword hero was offered upgrades to a Bladestorm they had never
+       picked up. gate2.js walks every spell tree against a hero who owns
+       nothing and fails on anything that answers yes. */
+    req:()=>!isCaster() && player.storm.n>0,
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bladestorm blade — before any increase`,
     apply:c=>{ player.storm.dmg = Math.round((player.storm.dmg + c.v)*100)/100; } },
@@ -4626,7 +4742,7 @@ const FAVOURITES = [
   { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
-  { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainrate','orbm'] },
+  { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainshock','eleminc','shockinc','orbm'] },
   { id:'storm',   name:'Bladestorm',   icon:'storm', melee:true, ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',melee:true, ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','eleminc','elemflat'] },
@@ -4847,6 +4963,46 @@ function comboPreview(favId){
    — "what do I open with" and "what will I be offered" — and stacking them in
    one column made a panel taller than a laptop window, which is how it grew a
    scrollbar and started clipping. They sit either side of the red box now. */
+/* ONE tooltip element for the whole title screen, moved and refilled as the
+   pointer lands on a row. Fixed-position, because both panels scroll and an
+   absolutely positioned child of a scrolling box gets clipped by it. */
+let statTipEl = null;
+function statTip(){
+  if(!statTipEl){
+    statTipEl = document.createElement('div');
+    statTipEl.id = 'statTip';
+    document.body.appendChild(statTipEl);
+  }
+  return statTipEl;
+}
+function statTipHide(){ if(statTipEl) statTipEl.style.display = 'none'; }
+function statTipShow(row, label, text){
+  const el = statTip();
+  el.innerHTML = `<b>${esc(label)}</b>${esc(text)}`;
+  el.style.display = 'block';
+  const r = row.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  /* to the right of the panel when there is room, to its left when there is not
+     — the left-hand panel would otherwise push its tip off the screen edge */
+  let x = r.right + 14;
+  if(x + w > window.innerWidth - 8) x = r.left - w - 14;
+  if(x < 8) x = 8;
+  let y = r.top - 6;
+  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  el.style.left = Math.round(x)+'px';
+  el.style.top  = Math.round(Math.max(8, y))+'px';
+}
+/* wire every explained row in a panel that has just been rebuilt */
+function wireStatTips(root){
+  if(!root) return;
+  for(const row of root.querySelectorAll('.cprow.cptip')){
+    const why = row.getAttribute('data-why') || '';
+    const label = (row.querySelector('span') || {}).textContent || '';
+    if(!why) continue;
+    row.addEventListener('mouseenter', ()=> statTipShow(row, label, why));
+    row.addEventListener('mouseleave', statTipHide);
+  }
+}
 function buildComboPanel(){
   const stats = document.getElementById('comboStats');
   const el    = document.getElementById('comboBricks');
@@ -4866,12 +5022,12 @@ function buildComboPanel(){
       tag = `<i class="${v>b?'up':'dn'}">${pct>0?'+':''}${pct}%</i>`;
     }
     const tip = why ? statWhy(why[0], why[1]) : '';
-    return `<div class="cprow${tip?' cptip':''}"${tip?` title="${esc(tip)}"`:''}>`+
+    return `<div class="cprow${tip?' cptip':''}"${tip?` data-why="${esc(tip)}"`:''}>`+
       `<span>${label}</span><b>${num(v,d)}${unit||''}${tag}</b></div>`;
   };
   /* a tiny helper for the rows that are the panel's own, not a probe's */
   const orow = (label, value, tip) =>
-    `<div class="cprow${tip?' cptip':''}"${tip?` title="${esc(tip)}"`:''}>`+
+    `<div class="cprow${tip?' cptip':''}"${tip?` data-why="${esc(tip)}"`:''}>`+
     `<span>${label}</span><b>${value}</b></div>`;
   const perk = FAV_PERKS[f.id];
   const bricks = now.bricks.map(b=>
@@ -4928,6 +5084,11 @@ function buildComboPanel(){
         equally likely, and the kit opposite is what you are paid for spreading yourself
         thin. Pick a favourite to see what committing to one costs, and buys.</div>`) +
     '';
+  /* both panels were just rebuilt from scratch, so every listener went with
+     them — rewire before the pointer has a chance to land on anything */
+  statTipHide();
+  wireStatTips(stats);
+  wireStatTips(el);
 }
 function buildWeaponRow(){
   const row = document.getElementById('weaponRow');
@@ -4961,14 +5122,14 @@ const BENCH_SECTIONS = [
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
   /* ELEMENTAL is the GLOBAL tree: pools every elemental source reads, wherever
      it came from. The fireball's own numbers live with the fireball. */
-  { name:'ELEMENTAL',       ids:['eleminc','firinc'] },
+  { name:'ELEMENTAL',       ids:['eleminc','firinc','froinc','shockinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
-  { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainrate','chainfork'] },
+  { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainshock','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
@@ -5305,7 +5466,7 @@ function spellSummaries(){
       `Full volley: ${per(d*p.blaster.n)} across ${p.blaster.n*shards} projectile${p.blaster.n*shards>1?'s':''}` });
   }
   if(p.chain.n>0 && p.chain.zappers>0){
-    const d = calcDamage(p.chain.dmg,'spell');
+    const d = shockDamage();
     const leaps = p.chain.n - 1;
     const ways = 1 + (p.chain.fork||0) + (p.chain.fork ? 1 : 0);
     let total = d;
@@ -5464,7 +5625,6 @@ const STAT_WHY = {
   'BRICK BLASTER|Damage down a line':'the volley against a QUEUE of foes, counting pierce — the number that matters in a corridor',
   'BRICK BLASTER|Interval': 'seconds between volleys. CAST SPEED shortens it, down to its own floor',
   'BRICK BLASTER|Volley DPS':'sustained, one target, at your current interval',
-  'STORM BRICK|Opening strike':'what the bolt does to the FIRST body it touches, before any leap',
   'STORM BRICK|Targets per bolt':'how many bodies one bolt walks through in total',
   'STORM BRICK|1st leap':   'each leap carries less than the one before it — this is the second body',
   'STORM BRICK|2nd leap':   'the third body, and so on down the chain',
@@ -5547,6 +5707,10 @@ const STAT_PROBES = [
     why:'the GLOBAL elemental pool: fire, frost and lightning alike, from whatever source' },
   { g:'ELEMENTAL', k:'Increased fire',     get:()=> ((player&&player.inc.fire)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'fire only — it adds into the same pool as the elemental one, it does not multiply it' },
+  { g:'ELEMENTAL', k:'Increased frost',    get:()=> ((player&&player.inc.frost)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'frost only — Block Freeze and every chill it lays. Adds into the elemental pool, never multiplies it' },
+  { g:'ELEMENTAL', k:'Increased lightning',get:()=> ((player&&player.inc.shock)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'lightning only — every storm bolt and every leap it makes. Adds into the elemental pool, never multiplies it' },
   { g:'PHYSICAL', k:'Weapon hit',     get:()=> isCaster() ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Spin swing',     get:()=> isCaster() ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true },
@@ -5627,7 +5791,8 @@ const STAT_PROBES = [
     fmt:v=>v.toFixed(1), zero:true },
   { g:'BRICK BLASTER', k:'Interval',        get:()=> player.blaster.n ? player.blaster.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
   { g:'BRICK BLASTER', k:'Volley DPS',       get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n/player.blaster.rate : 0, fmt:v=>v.toFixed(1), zero:true },
-  { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? calcDamage(player.chain.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
+  { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? shockDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
+    why:'LIGHTNING damage, so it reads the flat elemental pool and both the spell and elemental increases — not just spell damage' },
   { g:'STORM BRICK', k:'Targets per bolt',  get:()=> player.chain.n, fmt:v=>Math.round(v)+'', zero:true },
   /* the leaps written out one by one, so a chain brick shows you what the second
      and third foe in the line are actually going to take */
@@ -5637,6 +5802,12 @@ const STAT_PROBES = [
   { g:'STORM BRICK', k:'Damage down a bolt',get:()=> chainBoltTotal(), fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Hovering bricks',   get:()=> Math.min(chainMaxZappers(), player.chain.zappers), fmt:v=>Math.round(v)+'', zero:true },
   { g:'STORM BRICK', k:'Interval',          get:()=> player.chain.n ? player.chain.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
+  { g:'STORM BRICK', k:'Shock chance',      get:()=> player.chain.n ? chainShockChance()*100 : 0,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'how often a bolt SHOCKS what it touches. A shocked body takes more damage from everything you own, not just from lightning' },
+  { g:'STORM BRICK', k:'Shocked takes',     get:()=> (player.chain.n && chainShockChance()>0)
+      ? (1 + ESHOCK_STEP*ESHOCK_MAX)*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'a fully shocked body, all '+ESHOCK_MAX+' stacks — this multiplies every source you have, which is the point of the storm brick' },
   { g:'STORM BRICK', k:'DPS, all bricks',   get:()=> player.chain.n ? chainBoltTotal()*Math.min(chainMaxZappers(), player.chain.zappers)/player.chain.rate : 0, fmt:v=>v.toFixed(1), zero:true,
     why:'every hovering brick firing a full bolt down a packed line' },
   /* Crackling Storm turns one leap into a branching tree — a number, and a very
@@ -5707,7 +5878,7 @@ function chainLeapDmg(i){
   const p = player;
   const leaps = p.chain.n - 1;
   if(!p.chain.n || leaps < i) return 0;
-  return calcDamage(p.chain.dmg,'spell') * chainLeapFrac(i, leaps);
+  return shockDamage() * chainLeapFrac(i, leaps);
 }
 /* a guardian brick can strike the same foe every hitCd, and there are n of them */
 function orbitDps(){
@@ -5728,7 +5899,7 @@ function vortexDps(){
 function chainBoltTotal(){
   const p = player;
   if(!p.chain.n) return 0;
-  const d = calcDamage(p.chain.dmg,'spell');
+  const d = shockDamage();
   const leaps = p.chain.n - 1;
   let total = d;
   for(let i=1;i<=leaps;i++) total += d*chainLeapFrac(i, leaps);
@@ -6199,6 +6370,16 @@ function renderCharSheet(){
   const run = sBlock('THIS RUN', [
     sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
     sRow('Wave', String(wave.n), best>0 ? `personal best: wave ${best}` : ''),
+    sRow('Monster level', String(mobRank()),
+      mobRank()>0 ? `everything spawns with ×${mobRankMul().toFixed(2)} health, damage and armour`
+                  : `starts at wave ${MOB_LEVEL_FROM}, then one level every ${MOB_LEVEL_EVERY} waves`,
+      `A monster's LEVEL is separate from the wave it spawned in.\n\n`+
+      `The wave curve is a polynomial, and a polynomial flattens: by wave 50,\n`+
+      `ten more waves bought the roster about a third more health, which against\n`+
+      `a capped hero read as no change at all.\n\n`+
+      `A level COMPOUNDS instead — ${Math.round(MOB_LEVEL_STEP*100)}% more health, damage and armour each,\n`+
+      `multiplied on top of the wave curve rather than added into it.\n`+
+      `Nothing before wave ${MOB_LEVEL_FROM} carries one, so the early game is untouched.`),
     sRow('Monsters smashed', String(p.kills), ''),
     sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, ''),
     sRow('Favourite', favourite.id==='none' ? 'none' : favourite.name,
@@ -6902,7 +7083,7 @@ function updatePlayer(dt){
     while(chn.cds.length < zappers) chn.cds.push(chn.rate * chn.cds.length / zappers);
     chn.cds.length = zappers;
     let cands = null, fired = false;
-    const zapDmg = calcDamage(chn.dmg,'spell');
+    const zapDmg = shockDamage();
     const claimed = new Set();   /* spread the bricks over different first targets */
     /* the bricks take it in turns — a whole bank going off on one frame read as a
        single flash, and you could not tell how many you had */
@@ -6917,7 +7098,7 @@ function updatePlayer(dt){
       if(!pool.length) pool = cands.filter(e=>!e.dead);
       if(!pool.length){ chn.cds[z] = 0; continue; }   /* stay charged — fires the frame a foe walks in */
       chn.cds[z] = chn.rate;                          /* only consumed when it actually fires */
-      chn.gap = CHAIN_ZAP_GAP;
+      chn.gap = chainGap();
       fired = true;
       /* Plot the whole bolt FIRST, so the falloff can be stretched across the
          foes it will actually reach rather than a fixed per-leap cut. With
@@ -6961,6 +7142,10 @@ function updatePlayer(dt){
         const fire = ()=>{
           addZap(n2.fx, n2.fy, n2.e.x, n2.e.y-14, n2.depth);
           if(n2.e.dead || n2.e.state!=='active') return;
+          /* the SHOCK goes on before the hit, the way the fireball lights a body
+             before it strikes it — so a bolt that finishes something off still
+             shocked it, and a shocked body takes the bolt's own hit harder */
+          if(Math.random() < chainShockChance()) shockEnemy(n2.e, 1);
           hitEnemy(n2.e, dmg, angTo({x:n2.fx,y:n2.fy}, n2.e), 0, 'chain', {spin:true});
         };
         if(n2.depth===0) fire(); else schedule(n2.depth*CHAIN_JUMP_GAP, fire);
@@ -7508,6 +7693,7 @@ function updateEnemy(e, dt){
   if(e.bleed)  bleedTick(e, dt);
   if(e.eburn || e.burnt) burnTickEnemy(e, dt);
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
+  if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
   if(e.emberCd > 0) e.emberCd -= dt;
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
@@ -13696,7 +13882,21 @@ function renderHUD(){
     ctx.textAlign='center'; ctx.font='700 20px "Titan One"';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     const left = enemies.filter(e=>!e.dead&&e.state==='active').length + wave.queue.length;
-    ctx.strokeText('WAVE '+wave.n, cw/2, 32); ctx.fillStyle='#f2f3f2'; ctx.fillText('WAVE '+wave.n, cw/2, 32);
+    /* the monster LEVEL rides beside the wave number once it starts to bite —
+       it is the number that explains why wave 60 hurts more than wave 50, so it
+       has to be something you can actually see */
+    const ml = mobRank();
+    const wtxt = 'WAVE '+wave.n;
+    ctx.strokeText(wtxt, cw/2, 32); ctx.fillStyle='#f2f3f2'; ctx.fillText(wtxt, cw/2, 32);
+    if(ml > 0){
+      const half = ctx.measureText(wtxt).width/2;
+      ctx.textAlign = 'left'; ctx.font='700 12px "Titan One"';
+      ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=3.5;
+      const lt = 'MOB LV '+ml;
+      ctx.strokeText(lt, cw/2 + half + 10, 30);
+      ctx.fillStyle = '#ff8a6a'; ctx.fillText(lt, cw/2 + half + 10, 30);
+      ctx.textAlign = 'center'; ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
+    }
     ctx.font='600 13px Fredoka'; ctx.fillStyle='#c9d2ce';
     if(wave.state==='ready'){
       const t = Math.max(0, wave.readyT);
