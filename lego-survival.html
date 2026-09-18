@@ -308,6 +308,22 @@
     background:linear-gradient(180deg,#39424a,#252c33);
     border:2px solid rgba(255,255,255,.10);box-shadow:0 4px 12px rgba(0,0,0,.45)}
   .deck .card.mini{position:relative;z-index:6}
+  /* CLICK A STACK AND IT FANS OUT. The ghosts behind a deck say how many copies
+     you own but not WHICH ones — and two copies of the same brick are rarely the
+     same card, because each was rolled at its own rarity. Opening a deck lays
+     them out in the order they were taken, each at the rarity it actually came
+     in at. Only one deck is open at a time. */
+  .deck{cursor:pointer}
+  .deck .fan{display:none}
+  .deck.open{z-index:30}
+  .deck.open > .ghost{display:none}
+  .deck.open > .card.mini{display:none}
+  .deck.open .fan{display:flex;gap:12px;align-items:flex-start}
+  .deck .fancard{position:relative;flex:0 0 auto}
+  .deck .fancard .pick{position:absolute;left:50%;transform:translateX(-50%);
+    bottom:-17px;font-family:'Titan One';font-size:8.5px;letter-spacing:1.4px;
+    color:#8ea092;white-space:nowrap}
+  .deck.open .dcount{background:#7ed4ff;color:#0d1a22}
   .deck .dcount{position:absolute;right:-9px;top:-9px;z-index:8;
     min-width:24px;height:24px;border-radius:12px;padding:0 6px;
     display:flex;align-items:center;justify-content:center;
@@ -805,6 +821,12 @@ function syncStats(){
   for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
   /* the weapon's own thirst is part of the finished number, not of the pool the
      bricks write into — same shape as suppression and mitigation */
+  /* the slam, capped on the derived number like everything else */
+  if(p.slam){
+    p.slamArc   = Math.min(slamArcCap(),    SLAM_ARC_BASE + (p.slam.arcFlat||0));
+    p.slamRange = Math.min(SLAM_RANGE_MAX,  pool(SLAM_RANGE_BASE, 0, p.slam.rangeInc||0, 1));
+    p.slamSpeed = Math.min(SLAM_SPEED_MAX,  pool(SLAM_SPEED_BASE, 0, p.slam.spdInc||0,   1));
+  }
   p.leech       = Math.min(LEECH_MAX,        pool(0, p.leechFlat, 0, 1) + weaponLeech());
   p.leechChance = Math.min(LEECH_CHANCE_MAX, pool(0, p.leechChanceFlat, 0, 1) + weaponLeechChance());
 }
@@ -1067,6 +1089,29 @@ const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
    per-hit ceiling is the one that matters late — a share of a wave-50 hit is an
    entire health bar, so no single swing may return more than this much of your
    maximum however big the number on the screen was. */
+/* THE GROUND SLAM — every ceiling it has. A basic attack that covers an arc is
+   only fair while the arc, the reach and the speed all stop somewhere. */
+const SLAM_ARC_BASE  = Math.PI*0.55;  /* just under 100 degrees to start */
+const SLAM_ARC_MAX   = Math.PI;       /* 180 degrees, and no further... */
+const SLAM_ARC_FULL  = TAU;           /* ...until SLAM OF THE ELEMENTS, twice */
+const SLAM_RANGE_BASE = 200, SLAM_RANGE_MAX = 430;
+const SLAM_SPEED_BASE = 620, SLAM_SPEED_MAX = 1400;   /* how fast the fault runs out */
+const SLAM_WIND       = 0.16;   /* the head coming down, before the floor breaks */
+const SLAM_RAY_GAP    = 0.27;   /* radians between one line of stone and the next */
+const SLAM_RAYS_MAX   = 26;
+const SLAM_STEP       = 52;     /* pixels between one row of teeth and the next */
+/* HALF OF WHAT IT WAS. At 0.62 a tooth, a body held in the middle of the
+   fault took 1.86 swings a slam AND every other body in the fan took the same —
+   an AoE basic attack out-damaging the single-target one it replaced. The tooth
+   is roughly half of that now: three of them land 0.92 of a swing on one body,
+   so the mace trades single-target for coverage instead of getting both. */
+const SLAM_SHARE      = 0.307;  /* one tooth, against one full swing */
+const SLAM_MAX_HITS   = 3;      /* how many teeth of ONE slam may bite one body */
+const SLAM_ELEM_SHARE = 0.5;    /* how much of the tooth the legendary converts */
+const SLAM_ELEMS      = ['fire', 'shock', 'frost'];
+const SLAM_ELEM_MAX   = 2;
+const SLAM_COL  = { fire:'#ff9a3c', shock:'#ffe95a', frost:'#bfe3ff' };
+const SLAM_AIL  = { fire:'BURN', shock:'SHOCK', frost:'CHILL' };
 const LEECH_MAX        = 0.25;   /* share of the hit, at most */
 const LEECH_CHANCE_MAX = 0.60;   /* how often, at most */
 const LEECH_HIT_CAP    = 0.03;   /* of MAX hearts, per swing */
@@ -1095,19 +1140,43 @@ function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
    and from there every level is MOB_LEVEL_STEP more of everything than the one
    below it, MULTIPLIED on top of the wave curve rather than added into it. That
    is the difference between a curve that levels off and one that does not. */
-/* WHERE THE LEVELS START, and how fast they come. Moving the start earlier
-   without also slowing the cadence would have inflated the far end too: rank is
-   (wave - FROM)/EVERY, so pulling FROM down lifts EVERY late wave as well. 10
-   and 4 puts the first level at wave 10 instead of 20 while landing wave 50 and
-   wave 60 within a hair of where they already were — earlier, not harder. */
-const MOB_LEVEL_FROM  = 10;    /* no level at all before this wave */
-const MOB_LEVEL_EVERY = 4;     /* waves per level after it */
+/* WHERE THE LEVELS START, AND HOW FAST THEY COME. One cadence for the whole run
+   could only be wrong at one end or the other: slow enough to leave the opening
+   alone meant the late game flattened again, fast enough to keep the late game
+   climbing meant wave 6 had a level on it.
+   So the cadence has BANDS. Levels start at wave 5 and come slowly; every ten
+   waves from twenty they come faster, until past forty every single wave is
+   another level. Each band only counts the waves inside it, so the schedule is
+   continuous — crossing a boundary never jumps the rank or takes one away. */
+const MOB_LEVEL_BANDS = [
+  { from: 5,  every: 4 },   /* the first level lands ON wave 5 */
+  { from: 20, every: 3 },
+  { from: 30, every: 2 },
+  { from: 40, every: 1 },
+];
+const MOB_LEVEL_FROM  = MOB_LEVEL_BANDS[0].from;   /* no level at all before this wave */
 const MOB_LEVEL_STEP  = 0.11;  /* compounding, per level */
-const MOB_LEVEL_MAX   = 40;    /* a ceiling, so a 200-wave run is not a wall */
+const MOB_LEVEL_MAX   = 100;   /* a ceiling, so a 200-wave run is not a wall */
 function mobRank(w){
   const n = (w === undefined ? wave.n : w);
   if(n < MOB_LEVEL_FROM) return 0;
-  return Math.min(MOB_LEVEL_MAX, Math.floor((n - MOB_LEVEL_FROM) / MOB_LEVEL_EVERY) + 1);
+  let r = 1;                  /* the wave the levels start on IS level one */
+  for(let i=0;i<MOB_LEVEL_BANDS.length;i++){
+    const b = MOB_LEVEL_BANDS[i];
+    if(n < b.from) break;
+    /* only the waves that fall INSIDE this band, so the bands compose */
+    const next = MOB_LEVEL_BANDS[i+1];
+    const end = next ? Math.min(n, next.from) : n;
+    r += Math.floor((end - b.from) / b.every);
+  }
+  return Math.min(MOB_LEVEL_MAX, r);
+}
+/* the cadence in force at a given wave, for the sheet and the bench */
+function mobLevelEvery(w){
+  const n = (w === undefined ? wave.n : w);
+  let e = MOB_LEVEL_BANDS[0].every;
+  for(const b of MOB_LEVEL_BANDS) if(n >= b.from) e = b.every;
+  return e;
 }
 /* what one level is worth. ONE number, read by health, damage and armour alike,
    so a level always means the same thing wherever it is applied. */
@@ -1144,10 +1213,15 @@ const WEAPONS = {
     bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe',
     lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20 },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
-    blurb:'Hits hardest and opens the worst wounds. Slow, and it rarely crits.',
+    blurb:'Does not swing \u2014 it SLAMS. A fault of stone teeth opens in front of you.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
     bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace',
-    lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10 },
+    lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10,
+    /* THE MACE DOES NOT SWING. Its basic attack is the boss's own slam, turned
+       around: it drives the head into the floor and a fan of stone tears up out
+       of the ground in front of it. Reach, the spin combo and the whirl all go;
+       the fan is what it has instead. */
+    slam:true },
   /* THE STAFF DOES NOT SWING. Its basic attack is a FIREBALL, so it trades the
      whole melee kit — reach, the spin combo, bleed — for elemental damage and
      the ailment that comes with it. It is the first caster weapon; frost and
@@ -1241,10 +1315,13 @@ const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
    The vortex and the lingering totem used to report as 'sword', which muddled
    the combat log and meant the weapon's own bleed multiplier was applied to
    spells it has nothing to do with. */
-const MELEE_SOURCES = new Set(['sword','storm','vortex']);
+const MELEE_SOURCES = new Set(['sword','storm','vortex','slam']);
 /* WHAT DRINKS. Lifesteal is the weapon's, not the build's: your own swing and
    the whirl it becomes both report as 'sword', and nothing else does. A spell
    that happens to land physical damage is still a spell. */
+/* the slam does NOT drink per spike — one slam throws up to thirty of them, and
+   thirty rolls of a per-swing leech is a health bar. It drinks once, off the
+   whole slam, in fireSlam's tally. */
 const LEECH_SOURCES = new Set(['sword']);
 /* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
    An ordinary swing never opens one on its own: the chance starts at nothing and
@@ -1301,7 +1378,12 @@ const VENOM_SHARE = 0.45;    /* of the gobbet's damage, per bite */
    inherits every monster's resistance to it by being named here. */
 const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
                       frost:'frost', freeze:'frost',
-                      chain:'shock', shock:'shock' };
+                      chain:'shock', shock:'shock',
+                      /* the elemental halves of a SLAM OF THE ELEMENTS spike.
+                         They are converted ATTACK damage, so they meet armour
+                         like the physical half does and then pay the monster's
+                         resistance on top — one rule for all three. */
+                      slamfire:'fire', slamfrost:'frost', slamshock:'shock' };
 /* a monster's resistance to one element, 0 when it has none. Capped below 1 for
    everything except an IMMUNE marker, so "max resistance" is a wall and not a
    divide-by-zero — you can still grind a fire golem down with fire, it is simply
@@ -1705,7 +1787,7 @@ let vtime = 0;
 let frameRaw = 1/60;   /* real seconds of the frame being drawn */
 let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
-let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[];
+let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[], pspikes=[];
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0 };
 let banner = null;
 let choices = [], taken = {};
@@ -1819,6 +1901,9 @@ function newPlayer(){
     flatElem:0, ember:0,
     resFlat:{ fire:0, frost:0, shock:0 },
     leechFlat:0, leechChanceFlat:0,
+    /* the ground slam's own pools; every one of them has a ceiling in syncStats */
+    slam:{ flat:0, arcFlat:0, rangeInc:0, spdInc:0, elem:0, cycle:0 },
+    slamAct:null, slamPose:0, slamAim:0,
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
@@ -3519,6 +3604,8 @@ function boltDamage(more){
   return Math.max(0, d);
 }
 function isCaster(){ return !!(weapon && weapon.cast); }
+/* the mace, and anything else that ever earns the ground slam */
+function isSlammer(){ return !!(weapon && weapon.slam); }
 /* Block Freeze's own damage. It is elemental, so it reads the elemental pool
    and the frost pool, exactly as the fire bolt reads fire. */
 const FREEZE_DMG_BASE = 1.6;
@@ -4211,7 +4298,8 @@ function startWave(n){
      they are the thing worth reading before the break runs out */
   const modLine = waveMods.length
     ? waveMods.map(m=>m.name).join('  ·  ')
-    : (n===1 ? biomeName()+' · Slash with LMB · SPACE to roll!' : '');
+    : (n===1 ? biomeName()+' · '+(isCaster()?'Cast':isSlammer()?'Slam':'Slash')+
+               ' with LMB · SPACE to roll!' : '');
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
     boss ? (bname+' approaches...' + (waveMods.length ? '   ['+waveMods.map(m=>m.name).join(' · ')+']' : ''))
       : modLine,
@@ -4601,6 +4689,46 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex `+
       `${incCapTag('melee')}`,
     apply:c=>{ player.incMelee += c.v; } },
+  /* ------------------------------ THE SLAM -------------------------------- */
+  /* Only a slammer is ever offered these, the same way only a caster is offered
+     the fireball's own bricks. Every one of them is gated on its ceiling too, so
+     a maxed fan stops appearing on the reward screen entirely. */
+  { id:'slampow', name:'Fault Hammer', icon:'fist', cls:'OFFENSE',
+    req:()=>isSlammer(),
+    calc:m=>({v: byRar(m, FLAT_SPELL)}),
+    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every tooth of the slam — before any increase`,
+    apply:c=>{ player.slam.flat = Math.round((player.slam.flat + c.v)*100)/100; syncStats(); } },
+  { id:'slamarc', name:'Wider Fault', icon:'range', cls:'OFFENSE',
+    req:()=>isSlammer() && player.slamArc < slamArcCap() - 1e-6,
+    calc:m=>({v: 0.18+0.12*m}),
+    desc:c=>`The fault opens ${Math.round(c.v*57.3)}\u00b0 wider — ${Math.round(player.slamArc*57.3)}\u00b0 \u2192 `+
+      `${Math.round(Math.min(slamArcCap(), player.slamArc+c.v)*57.3)}\u00b0 (cap ${Math.round(slamArcCap()*57.3)}\u00b0). `+
+      `A wider fan throws MORE teeth, never the same teeth further apart`,
+    apply:c=>{ player.slam.arcFlat += c.v; syncStats(); } },
+  { id:'slamrange', name:'Deep Fault', icon:'range', cls:'OFFENSE',
+    req:()=>isSlammer() && player.slamRange < SLAM_RANGE_MAX - 1e-6,
+    calc:m=>({v: 0.10+0.075*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased slam RANGE — ${Math.round(player.slamRange)} \u2192 `+
+      `${Math.round(Math.min(SLAM_RANGE_MAX, pool(SLAM_RANGE_BASE,0,player.slam.rangeInc+c.v,1)))} px `+
+      `(cap ${SLAM_RANGE_MAX})`,
+    apply:c=>{ player.slam.rangeInc += c.v; syncStats(); } },
+  { id:'slamspd', name:'Fault Line', icon:'clock', cls:'OFFENSE',
+    req:()=>isSlammer() && player.slamSpeed < SLAM_SPEED_MAX - 1e-6,
+    calc:m=>({v: 0.12+0.09*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased slam SPEED — the fault runs out at `+
+      `${Math.round(Math.min(SLAM_SPEED_MAX, pool(SLAM_SPEED_BASE,0,player.slam.spdInc+c.v,1)))} px/s `+
+      `(cap ${SLAM_SPEED_MAX}), so the far teeth land before anything can walk off them`,
+    apply:c=>{ player.slam.spdInc += c.v; syncStats(); } },
+  { id:'slamelem', name:'Slam of the Elements', icon:'prism', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isSlammer() && player.slam.elem < SLAM_ELEM_MAX,
+    calc:m=>({n:1}),
+    desc:c=> player.slam.elem===0
+      ? `Every slam CYCLES an element — \u{1f525} fire, \u26a1 lightning, \u2744 frost, in turn. `+
+        `Half of every tooth is converted into it and brings its ailment with it: `+
+        `burning, shock, chill. The physical half still bleeds`
+      : `The fault closes into a RING: the fan opens all the way to `+
+        `${Math.round(SLAM_ARC_FULL*57.3)}\u00b0, so the stone comes up all around you`,
+    apply:c=>{ player.slam.elem = Math.min(SLAM_ELEM_MAX, player.slam.elem + 1); syncStats(); } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
     req:()=>player.moreAll < MORE_DMG_CAP - 1e-9,
     calc:m=>({v:0.06+0.04*m}),
@@ -4623,8 +4751,9 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
     apply:c=>{ player.suppressFlat += c.v; syncStats(); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
-    /* a staff has no reach to lengthen — it throws */
-    req:()=>!isCaster() && player.reach < REACH_MAX,
+    /* a staff has no reach to lengthen — it throws. Nor has a mace: it does not
+       swing at all any more, so reach would buy it nothing. */
+    req:()=>!isCaster() && !isSlammer() && player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} melee reach (cap ${weapon.reach+REACH_MAX})`,
     apply:c=>{ player.reachFlat += c.v; syncStats(); } },
@@ -5078,8 +5207,9 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.fork = Math.min(CHAIN_FORK_MAX, (player.chain.fork||0) + 1); } },
   { id:'blademaster', name:'Blademaster', icon:'spin', cls:'OFFENSE', minRar:'legendary',
-    /* the whirl IS the swing held down — a staff has no swing to hold */
-    req:()=>!isCaster() && player.blademaster < WHIRL_MAX,
+    /* the whirl IS the swing held down — a staff has no swing to hold, and a
+       mace has traded its swing for the ground slam */
+    req:()=>!isCaster() && !isSlammer() && player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
     desc:c=> player.blademaster===0
       ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
@@ -5128,6 +5258,9 @@ const FAV_PERKS = {
   sword: { lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
     apply(p){ p.flatPhys += 1; p.inc.atk += 0.09;
       p.reachFlat += 8; } },
+  slam: { lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
+                 '+15% slam range'],
+    apply(p){ p.slam.flat += 1; p.slam.arcFlat += 20*Math.PI/180; p.slam.rangeInc += 0.15; } },
   orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
@@ -5175,7 +5308,11 @@ const FAVOURITES = [
   /* `melee` and `cast` gate a favourite to the weapons that can actually use it:
      there is no point weighting the reward roll toward bricks you will never be
      offered. A favourite with neither flag suits any weapon. */
-  { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
+  { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, swing:true,
+    ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
+  /* the mace's own opening hand — Sword & Steel for a weapon with no sword */
+  { id:'slam',    name:'Earthshaker',  icon:'fist',  melee:true, slam:true,
+    ids:['slampow','slamarc','slamrange','slamspd','dmg','aspd','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainshock','eleminc','shockinc','orbm'] },
@@ -5227,6 +5364,10 @@ function weaponTagHtml(u){
 function favAllowed(f){
   if(f.melee && isCaster()) return false;
   if(f.cast && !isCaster())  return false;
+  /* a slam favourite is no use to a weapon that swings, and Sword & Steel is no
+     use to one that does not */
+  if(f.slam && !isSlammer()) return false;
+  if(f.swing && isSlammer()) return false;
   return true;
 }
 function setFavourite(id){
@@ -5308,6 +5449,15 @@ function weaponTip(w){
       '<b class="up">\u25b2</b>'));
     L.push(row('Lifesteal',       Math.round((w.leechChance||0)*100)+'% for '+
       ((w.leech||0)*100).toFixed(1)+'%',                 d(w.leech, b.leech)));
+    if(w.slam){
+      L.push('');
+      L.push('IT DOES NOT SWING. Its basic attack is a GROUND');
+      L.push('SLAM: a fault opens in front of you and lines of');
+      L.push('stone teeth tear up out of it, '+Math.round(SLAM_SHARE*100)+'% of a swing');
+      L.push('each, physical, bleeding. Up to '+SLAM_MAX_HITS+' bite one body.');
+      L.push('It has its own bricks and its own legendary, and');
+      L.push('is offered none of the sword\u2019s.');
+    }
   }
   L.push('');
   /* one attack a second, crits folded in — the honest single-number comparison.
@@ -5568,6 +5718,7 @@ function buildDiffRow(){
    under EVERYTHING ELSE, so a new brick is never invisible. */
 const BENCH_SECTIONS = [
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
+  { name:'GROUND SLAM',     ids:['slampow','slamarc','slamrange','slamspd','slamelem'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
   /* ELEMENTAL is the GLOBAL tree: pools every elemental source reads, wherever
      it came from. The fireball's own numbers live with the fireball. */
@@ -5620,11 +5771,13 @@ function benchRarStep(u, dir){
 /* One click, one pick — the bench hands out a single brick at a time so you can
    walk a stat up and watch it change, and it stops dead at the same ceiling the
    real run does. Right-click takes every copy of that brick back out. */
-function grantOne(id){
+function grantOne(id, rar){
   const u = UPGRADES.find(x=>x.id===id);
   if(!u) return;
   try { if(u.req && !u.req()) { buildCheatRows(); return; } } catch(e){ return; }
-  applyPick(u, benchRarOf(u));
+  /* the bench's own tier unless a caller names one — granting a brick at a
+     chosen rarity is the only way to stand up a hero with a REAL mixed stack */
+  applyPick(u, (rar && RARITY[rar]) ? rar : benchRarOf(u));
   buildCheatRows();
 }
 function revokeAll(id){
@@ -6060,9 +6213,14 @@ function spellSummaries(){
    lines, which is the only honest way to read it. */
 function swordDps(){
   const p = player;
-  const light = physDamage(), spin = light*weapon.spin;
   const swingT = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   const critAvg = 1 + critChance()*(critMult()-1);
+  /* A SLAMMER HAS NO SWING to average. Its basic attack is a fan of teeth, and
+     what one body takes from one fan is however many of them reach it — capped
+     at SLAM_MAX_HITS, and only worth counting for a body actually standing in
+     the fault, which is what this number is for. */
+  if(isSlammer()) return slamSpikeDamage() * SLAM_MAX_HITS * (1/swingT) * critAvg;
+  const light = physDamage(), spin = light*weapon.spin;
   return ((light*2 + spin)/3) * (1/swingT) * critAvg;
 }
 /* WHAT EVERY STAT ACTUALLY MEANS, in one table keyed "GROUP|Key". It lives
@@ -6200,14 +6358,15 @@ const STAT_PROBES = [
     why:'frost only — Block Freeze and every chill it lays. Adds into the elemental pool, never multiplies it' },
   { g:'ELEMENTAL', k:'Increased lightning',get:()=> ((player&&player.inc.shock)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'lightning only — every storm bolt and every leap it makes. Adds into the elemental pool, never multiplies it' },
-  { g:'PHYSICAL', k:'Weapon hit',     get:()=> isCaster() ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
-  { g:'PHYSICAL', k:'Spin swing',     get:()=> isCaster() ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
-  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true },
-  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
+  { g:'PHYSICAL', k:'Weapon hit',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
+    why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth' },
+  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && !isSlammer() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
-  { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : physBase(),               fmt:v=>v.toFixed(2), zero:true },
+  { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : (isSlammer() ? slamBase() : physBase()), fmt:v=>v.toFixed(2), zero:true },
   { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
-  { g:'PHYSICAL', k:'Reach',          get:()=> isCaster() ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
   { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%',
     why:'a critical strike opens a wound this often. Only PHYSICAL hits bleed — your weapon, bladestorm and vortex' },
@@ -6240,6 +6399,21 @@ const STAT_PROBES = [
   { g:'DAMAGE', k:'On a spell hit', get:()=> incTotal('spell')*100,    fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Damage over time', get:()=> dotInc(),               fmt:v=>Math.round(v*100)+'%' },
   { g:'DAMAGE', k:'More damage',    get:()=> moreShown(),              fmt:v=>'×'+v.toFixed(2) },
+  { g:'GROUND SLAM', k:'Damage a tooth', get:()=> isSlammer() ? slamSpikeDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
+    why:'one stone tooth. A body in the fan is bitten by up to '+SLAM_MAX_HITS+' of them, so a slam landed dead centre is worth several' },
+  { g:'GROUND SLAM', k:'Base + flat',    get:()=> isSlammer() ? slamBase() : 0, fmt:v=>v.toFixed(2), zero:true,
+    why:'the weapon plus every FLAT physical brick and every Fault Hammer — the number the increases then multiply' },
+  { g:'GROUND SLAM', k:'Fault width',    get:()=> isSlammer() ? player.slamArc*57.2958 : 0, fmt:v=>Math.round(v)+'\u00b0', zero:true,
+    why:'how wide the fan opens. 180\u00b0 is the ceiling until SLAM OF THE ELEMENTS is taken twice, which opens it to a full ring' },
+  { g:'GROUND SLAM', k:'Fault reach',    get:()=> isSlammer() ? player.slamRange : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'GROUND SLAM', k:'Fault speed',    get:()=> isSlammer() ? player.slamSpeed : 0, fmt:v=>Math.round(v)+' px/s', zero:true,
+    why:'how fast the fault runs outward. Slow, and the far teeth arrive after the pack has walked off them' },
+  { g:'GROUND SLAM', k:'Teeth a slam',   get:()=> isSlammer() ? slamRays(player.slamArc)*Math.max(2, Math.round(player.slamRange/SLAM_STEP)) : 0,
+    fmt:v=>Math.round(v)+'', zero:true,
+    why:'lines of stone times rows. Widening the fault adds lines, deepening it adds rows' },
+  { g:'GROUND SLAM', k:'Slams a second', get:()=> isSlammer() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
+  { g:'GROUND SLAM', k:'Element cycle',  get:()=> (player.slam && player.slam.elem) || 0, fmt:v=>v>=2?'ring + cycle':(v?'cycling':'\u2014'), zero:true,
+    why:'SLAM OF THE ELEMENTS: each slam converts half of every tooth into fire, then lightning, then frost, and brings that ailment with it' },
   { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
@@ -6760,6 +6934,27 @@ function renderCharSheet(){
         `multiplier — four marks is ×${Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)} fire taken.\n\n`+
         `Burning is damage over time, so it reads your increased damage over\n`+
         `time (${Math.round(p.inc.dot*100)}%) exactly like poison and bleed.`)
+    ] : isSlammer() ? [
+      sRow('One tooth', slamSpikeDamage().toFixed(1)+' dmg',
+        `${Math.round(p.slamArc*57.3)}\u00b0 fault \u00b7 ${Math.round(p.slamRange)} px \u00b7 `+
+        `${slamRays(p.slamArc)*Math.max(2,Math.round(p.slamRange/SLAM_STEP))} teeth a slam`,
+        `A mace does not swing. It drives the head into the floor and a FAULT opens:\n`+
+        `lines of stone teeth tearing up out of the ground in a fan, running outward\n`+
+        `at ${Math.round(p.slamSpeed)} px/s.\n\n`+
+        `Each tooth is ${Math.round(SLAM_SHARE*100)}% of a full swing and is PHYSICAL, so it bleeds and\n`+
+        `reads every increase a swing would.\n\n`+
+        `ONE BODY may be bitten by at most ${SLAM_MAX_HITS} teeth of the same slam, so standing in\n`+
+        `the middle of the fault is a reward and not an execution.\n\n`+
+        `Ceilings: ${Math.round(slamArcCap()*57.3)}\u00b0 wide, ${SLAM_RANGE_MAX} px deep, ${SLAM_SPEED_MAX} px/s.`),
+      ...(p.slam.elem>0 ? [sRow('Slam of the Elements', '\u00d7'+p.slam.elem,
+        `next: ${SLAM_AIL[slamElement()]} \u00b7 ${Math.round(SLAM_ELEM_SHARE*100)}% of every tooth converted`,
+        `Each slam takes the next element in turn \u2014 fire, lightning, frost \u2014 and converts\n`+
+        `${Math.round(SLAM_ELEM_SHARE*100)}% of every tooth into it. The converted half pays the monster's\n`+
+        `resistance and leaves that element's ailment behind: burning, shock, chill.\n\n`+
+        `The physical half is untouched, so the slam still opens wounds.\n\n`+
+        (p.slam.elem>=SLAM_ELEM_MAX
+          ? `TAKEN TWICE: the fault closes into a full ${Math.round(SLAM_ARC_FULL*57.3)}\u00b0 ring.`
+          : `Take it again and the fault opens all the way to ${Math.round(SLAM_ARC_FULL*57.3)}\u00b0.`))] : [])
     ] : [
       sRow('Light swing', light.toFixed(1)+' dmg', `${Math.round(weapon.reach+p.reach)} reach · arc swing`),
       sRow('Spin swing', spin.toFixed(1)+' dmg', `${Math.round(weapon.spinReach+p.reach)} reach · every 3rd swing, ×${weapon.spin.toFixed(2)} MORE`)
@@ -6773,11 +6968,12 @@ function renderCharSheet(){
       `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
       `it is up and cannot roll out of anything. The blade turns aside `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% of the missiles that reach it.`)] : []),
-    sRow(isCaster() ? 'Cast rate' : 'Swing rate', swings.toFixed(2)+'/s',
+    sRow(isCaster() ? 'Cast rate' : isSlammer() ? 'Slam rate' : 'Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
         : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
-    sRow('Sustained DPS', (comboAvg*swings*critAvg).toFixed(1), 'average combo, crits included, one target'),
+    sRow('Sustained DPS', (isSlammer() ? swordDps() : comboAvg*swings*critAvg).toFixed(1),
+      isSlammer() ? 'one body held in the fault, crits included' : 'average combo, crits included, one target'),
     /* the second speed stat, and the one that is easy to confuse with the first */
     sRow('Cast speed', Math.round(castInc(0)*100)+'%',
       'every ABILITY, not the hands',
@@ -6881,8 +7077,12 @@ function renderCharSheet(){
       `${player.moreAll > MORE_DMG_CAP + 1e-9 ? ` (the pool holds ×${player.moreAll.toFixed(2)}, `+
         `stopped at the ×${MORE_DMG_CAP.toFixed(2)} ceiling)` : ''}.\n`+
       `An ability's own more multiplier, and the spin swing's 40%, sit on top of it.`),
-    sRow('Sword hit', light.toFixed(2),
-      `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
+    isSlammer()
+      ? sRow('One tooth', slamSpikeDamage().toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.slam.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
+          `× ${moreShown().toFixed(2)} × ${SLAM_SHARE} share`)
+      : sRow(isCaster() ? 'Bolt hit' : 'Sword hit', light.toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
   ]);
 
   const loot = sBlock('LOOT & XP', [
@@ -6955,16 +7155,24 @@ function renderCharSheet(){
   const run = sBlock('THIS RUN', [
     sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
     sRow('Wave', String(wave.n), best>0 ? `personal best: wave ${best}` : ''),
-    sRow('Monster level', String(mobRank()),
-      mobRank()>0 ? `everything spawns with ×${mobRankMul().toFixed(2)} health, damage and armour`
-                  : `starts at wave ${MOB_LEVEL_FROM}, then one level every ${MOB_LEVEL_EVERY} waves`,
+    sRow('Monster level', String(mobRank())+(mobRank()>=MOB_LEVEL_MAX ? ' (max)' : ''),
+      mobRank()>0 ? `×${mobRankMul().toFixed(2)} health, damage and armour · `+
+                    (mobLevelEvery()===1 ? 'a level every wave now'
+                                         : `one level every ${mobLevelEvery()} waves now`)
+                  : `starts at wave ${MOB_LEVEL_FROM}, then one level every ${mobLevelEvery(MOB_LEVEL_FROM)} waves`,
       `A monster's LEVEL is separate from the wave it spawned in.\n\n`+
       `The wave curve is a polynomial, and a polynomial flattens: by wave 50,\n`+
       `ten more waves bought the roster about a third more health, which against\n`+
       `a capped hero read as no change at all.\n\n`+
       `A level COMPOUNDS instead — ${Math.round(MOB_LEVEL_STEP*100)}% more health, damage and armour each,\n`+
       `multiplied on top of the wave curve rather than added into it.\n`+
-      `Nothing before wave ${MOB_LEVEL_FROM} carries one, so the early game is untouched.`),
+      `Nothing before wave ${MOB_LEVEL_FROM} carries one, so the opening is untouched.\n\n`+
+      `THEY COME FASTER AS THE RUN GOES ON:\n`+
+      MOB_LEVEL_BANDS.map((b,i)=>{
+        const next = MOB_LEVEL_BANDS[i+1];
+        return `  wave ${b.from}${next?'\u2013'+(next.from-1):'+'}: `+
+               (b.every===1 ? 'a level EVERY WAVE' : `one level every ${b.every} waves`);
+      }).join('\n')+`\n\nThe ceiling is level ${MOB_LEVEL_MAX}.`),
     sRow('Monsters smashed', String(p.kills), ''),
     sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, ''),
     sRow('Favourite', favourite.id==='none' ? 'none' : favourite.name,
@@ -7033,25 +7241,50 @@ function renderCharSheet(){
    already knows how to draw a brick, so the markup is the bench's, class for
    class; the only thing here that is new is the stacking. */
 let bookOn = false;
-function bookCard(u, n){
-  const R = RARITY[benchRarOf(u)];
+/* one card face, at one rarity. `wire` marks it for the now -> next hover panel;
+   a card inside an opened fan is a record of a pick and gets no such panel. */
+function bookFace(u, rarKey, n, wire){
+  const R = RARITY[rarKey];
   let body = '';
   try { body = esc(u.desc(u.calc(R.mult), n)); } catch(e){ body = ''; }
+  return `<div class="card mini"${wire?` data-up="${u.id}"`:''}>
+      <div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
+      <h3>${esc(u.name)}</h3><p>${body}</p>
+      <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
+    </div>`;
+}
+/* WHICH COPIES YOU ACTUALLY TOOK. The build log records a rarity per pick, so a
+   deck can be opened into the real cards rather than n copies of a guess. A
+   brick handed over by a favourite's starting kit has no pick behind it, so the
+   fan is padded from the front and says so. */
+function bookPicks(id, n){
+  const got = buildLog.filter(e=>e.id===id).map(e=>e.rar);
+  const out = [];
+  for(let i=got.length;i<n;i++) out.push(null);     /* starting kit, unrolled */
+  for(const r of got) out.push(r);
+  return out.slice(Math.max(0, out.length-n));
+}
+function bookCard(u, n){
+  const R = RARITY[benchRarOf(u)];
   /* one ghost per extra copy, up to four — past that the count badge says it
      better than a stack of slivers does */
   const ghosts = Math.min(4, Math.max(0, n-1));
   let g = '';
   for(let i=ghosts;i>0;i--)
     g += `<div class="ghost" style="transform:translate(${i*5}px,${i*6}px) rotate(${i*1.3}deg)"></div>`;
-  return `<div class="deck">${g}
+  const picks = bookPicks(u.id, n);
+  const fan = picks.map((rk, i)=>{
+    const key = rk || benchRarOf(u);
+    const lbl = rk ? RARITY[key].name : 'starting kit';
+    return `<div class="fancard">${bookFace(u, key, i+1, false)}
+      <div class="pick">${esc(String(lbl).toUpperCase())}</div></div>`;
+  }).join('');
+  return `<div class="deck" data-deck="${u.id}">${g}
     ${n>1?`<div class="dcount">\u00d7${n}</div>`:''}
-    <div class="card mini" data-up="${u.id}">
-      <div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
-      <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon]||''}</svg>
-      <h3>${esc(u.name)}</h3><p>${body}</p>
-      <div class="ctag" style="background:${CLS_COL[u.cls]||'#555'}">${u.cls}</div>
-    </div></div>`;
+    ${bookFace(u, benchRarOf(u), n, true)}
+    <div class="fan">${fan}</div></div>`;
 }
 function renderSpellbook(){
   const body = document.getElementById('bookBody');
@@ -7090,12 +7323,26 @@ function renderSpellbook(){
   }).join('');
   body.innerHTML = `<div class="bookgrid">${html || 
     '<div class="booknone">Nothing taken yet. Bricks come from waves, levels, bosses and chests.</div>'}</div>`;
-  /* the same now -> next panel the bench and the reward screen use */
-  for(const el of body.querySelectorAll('.card.mini')){
+  /* the same now -> next panel the bench and the reward screen use. Only the
+     closed face of a deck carries it — a card in an opened fan is history, and
+     "one more" is not a question you are asking of it. */
+  for(const el of body.querySelectorAll('.card.mini[data-up]')){
     const u = byId[el.dataset.up];
     if(u) cmpWire(el, u, u.calc(RARITY[benchRarOf(u)].mult),
       u.name + ' \u00b7 ' + RARITY[benchRarOf(u)].name + ' \u00b7 one more');
   }
+  /* click a stack to see the copies; opening one closes whatever was open */
+  for(const deck of body.querySelectorAll('.deck')){
+    deck.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      const was = deck.classList.contains('open');
+      for(const other of body.querySelectorAll('.deck.open')) other.classList.remove('open');
+      if(!was){ deck.classList.add('open'); cmpHide(); }
+      SFX.click();
+    });
+  }
+  /* anywhere else in the book closes it again */
+  body.onclick = ()=>{ for(const d of body.querySelectorAll('.deck.open')) d.classList.remove('open'); };
 }
 /* which bench section belongs to which spell, so the book can head a section
    with that spell's live numbers */
@@ -7163,7 +7410,8 @@ function openUpgrades(mode='wave', forceRar){
     ['Crit', (critChance()*100).toFixed(1)+'%'],
     ['Crit mult', critMultPct()+'%'],
     ['Armour', Math.round(armourValue())],
-    ['Sword hit', swordDamage().toFixed(1)],
+    [isCaster() ? 'Bolt hit' : isSlammer() ? 'One tooth' : 'Sword hit',
+     (isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : swordDamage()).toFixed(1)],
     ['Inc. melee', Math.round(incTotal('melee')*100)+'%'],
     ['Inc. spell', Math.round(incTotal('spell')*100)+'%'],
     ['More dmg', '×'+moreShown().toFixed(2)],
@@ -7319,7 +7567,7 @@ function updatePlayer(dt){
   /* Blademaster: holding the swing button spins the hero up into a whirl. It is a
      stance, not an attack — it replaces swinging, costs footing, and locks out
      the roll while it is up. */
-  p.whirl = p.blademaster>0 && mouse.down && p.stunT<=0 && p.dash.t<=0 && !p.dead;
+  p.whirl = p.blademaster>0 && !isSlammer() && mouse.down && p.stunT<=0 && p.dash.t<=0 && !p.dead;
   if(p.whirl){
     p.whirlAng += WHIRL_SPIN*dt;
     /* the legs keep working under the crouch, whether or not you are walking */
@@ -7398,9 +7646,12 @@ function updatePlayer(dt){
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
     SFX.dash(); addDust(p.x,p.y,5);
   }
-  if(mouse.down && !p.swing && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
-    if(isCaster()) castBolt(aimA); else startSwing(aimA);
+  if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
+    if(isCaster())      castBolt(aimA);
+    else if(isSlammer()) startSlam(aimA);
+    else                startSwing(aimA);
   }
+  updateSlam(dt);
   if(p.swing){
     const s = p.swing;
     s.t += dt;
@@ -7878,6 +8129,152 @@ function castBolt(aim){
     dmg: boltDamage(), r: boltRadius(),
     life:1.35, spin:rnd(TAU), seed:rnd(TAU) });
   SFX.zap();
+}
+/* ============================== THE GROUND SLAM ============================= */
+/* A mace hero does not swing. They drive the head into the floor and a FAULT
+   opens in front of them: lines of stone teeth tearing up out of the ground in
+   a fan, running outward from the impact. It is the boss's own slam turned
+   around — same spikes, same wave, pointed the other way.
+   Every tooth is physical damage, so it bleeds and it reads the same increases
+   a swing does. The whole fan is ONE attack: it drinks once, and no body may be
+   bitten more than SLAM_MAX_HITS times by it, so standing in the middle of it
+   is a reward and not an execution. */
+function slamArcCap(){
+  return (player && player.slam && player.slam.elem >= SLAM_ELEM_MAX) ? SLAM_ARC_FULL : SLAM_ARC_MAX;
+}
+function slamBase(){ return weapon.dmg + player.flatPhys + ((player.slam && player.slam.flat) || 0); }
+function slamDamage(more){ return calcDamage(slamBase(), 'melee', more); }
+/* one tooth, against one whole swing */
+function slamSpikeDamage(){ return slamDamage([SLAM_SHARE]); }
+/* how many lines of stone a fan of this width throws — the density never thins,
+   so widening it is always more teeth and never the same teeth spread out */
+function slamRays(arc){ return clamp(Math.round(arc/SLAM_RAY_GAP)+1, 3, SLAM_RAYS_MAX); }
+/* which element this slam is carrying, or null. The cycle only turns for a hero
+   who owns the legendary. */
+function slamElement(){
+  const p = player;
+  if(!p.slam || p.slam.elem <= 0) return null;
+  return SLAM_ELEMS[(p.slam.cycle||0) % SLAM_ELEMS.length];
+}
+function startSlam(aim){
+  const p = player;
+  p.combo = 0; p.comboTimer = 0;
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  retPulse = 1;
+  p.slamAct = { t:0, aim, fired:false, el: slamElement() };
+  p.slamAim = aim;
+  SFX.swing();
+}
+/* the floor breaks. Everything the fan is worth is decided here, once. */
+function fireSlam(aim, el){
+  const p = player;
+  const arc   = p.slamArc,   range = p.slamRange, speed = p.slamSpeed;
+  const rays  = slamRays(arc), rows = Math.max(2, Math.round(range/SLAM_STEP));
+  const dmg   = slamSpikeDamage();
+  /* ONE shared record for the whole fan: what it has bitten, what it has dealt,
+     and how many teeth are still standing. The last tooth to leave pays out the
+     lifesteal, so a slam drinks once however many teeth landed. */
+  const sl = { hits:new Map(), props:new Set(), dealt:0, left:0, el };
+  const full = arc >= TAU - 1e-6;
+  for(let row=0; row<rows; row++){
+    const rr = (row+1)/rows * range;
+    const wait = rr/Math.max(1, speed);
+    for(let i=0;i<rays;i++){
+      /* a full circle has no edges, so it is spaced round rather than across */
+      const off = full ? (i/rays)*TAU
+                       : (rays===1 ? 0 : (i/(rays-1) - 0.5)*arc) + rnd(-0.05, 0.05);
+      const a = aim + off + (full ? rnd(-0.05,0.05) : 0);
+      const x = p.x + Math.cos(a)*rr, y = p.y + Math.sin(a)*rr;
+      if(navBlockedAt(x, y)) continue;
+      pspikes.push({ x, y, a, dmg, wait, t:0, hit:new Set(), sl, el,
+        life:SPIKE_RISE+SPIKE_HOLD+SPIKE_SINK,
+        h: rnd(26, 40), w: rnd(7, 11.5), seed:rnd(TAU) });
+      sl.left++;
+    }
+  }
+  addRing(p.x, p.y, 12, Math.min(SLAM_SPEED_MAX, speed), range,
+          el ? SLAM_COL[el] : '#cfd6dd', 8, 0.34);
+  addShake(0.34);
+  addDust(p.x, p.y, 7, 'rgba(150,150,145,');
+  spawnBricks(p.x, p.y+6, el ? [SLAM_COL[el],'#8b8f8a','#2c3136'] : ['#3a4045','#2c3136','#8b8f8a'], 9, 170);
+  SFX.slam();
+  /* THE POSE OUTLIVES THE INPUT. The mace stays buried while the fault runs out
+     — snapping back upright with teeth still coming up read as two unrelated
+     things happening. It is a separate timer from `slamAct` on purpose: that one
+     gates the attack, and gating the attack for this long would throttle the
+     mace below its own swing rate. */
+  p.slamPose = Math.min(0.55, range/Math.max(1, speed)) + 0.14;
+  if(el) p.slam.cycle = ((p.slam.cycle||0) + 1) % SLAM_ELEMS.length;
+}
+function updateSlam(dt){
+  const p = player, a = p.slamAct;
+  if(p.slamPose > 0) p.slamPose -= dt;
+  if(!a) return;
+  a.t += dt;
+  if(!a.fired && a.t >= SLAM_WIND){ a.fired = true; fireSlam(a.aim, a.el); }
+  if(a.t >= SLAM_WIND + 0.22) p.slamAct = null;
+}
+/* the teeth. They bite on the way up, once per body each, and the fan as a whole
+   may only bite one body SLAM_MAX_HITS times. */
+function updatePSpikes(dt){
+  for(const sp of pspikes){
+    if(sp.wait > 0){ sp.wait -= dt; continue; }
+    sp.t += dt;
+    const sl = sp.sl;
+    if(sp.t >= SPIKE_RISE*0.35 && sp.t < SPIKE_RISE+SPIKE_HOLD){
+      for(const en of enemiesNear(sp.x, sp.y, 44)){
+        if(en.dead || en.state!=='active' || sp.hit.has(en)) continue;
+        if(dist(sp, en) > 20 + hitR(en)) continue;
+        const n = sl.hits.get(en) || 0;
+        if(n >= SLAM_MAX_HITS){ sp.hit.add(en); continue; }
+        sp.hit.add(en); sl.hits.set(en, n+1);
+        const before = en.hp;
+        const a2 = Math.atan2(en.y-player.y, en.x-player.x);
+        if(sp.el){
+          /* SLAM OF THE ELEMENTS: half the tooth is converted, and the element
+             it converts into brings its own ailment with it */
+          hitEnemy(en, sp.dmg*(1-SLAM_ELEM_SHARE), a2, 140*weapon.kb, 'slam', {spin:true});
+          const ed = sp.dmg*SLAM_ELEM_SHARE;
+          hitEnemy(en, ed, a2, 0, 'slam'+sp.el, {spin:true, quiet:false});
+          if(!en.dead && en.state==='active'){
+            if(sp.el==='fire')  burnEnemy(en, ed);
+            if(sp.el==='frost') chillEnemy(en, 1);
+            if(sp.el==='shock') shockEnemy(en, 1);
+          }
+        } else {
+          hitEnemy(en, sp.dmg, a2, 160*weapon.kb, 'slam', {spin:true});
+        }
+        sl.dealt += Math.max(0, before - en.hp);
+      }
+      /* IT TEARS UP THE SCENERY TOO — chests, crates, trees, the lot. One hit
+         per prop per SLAM, the same as one swing, so a wide fault opens every
+         crate it crosses rather than shredding the first one thirty times.
+         It does NOT deflect: a slam is the floor coming up, and nothing about
+         that turns an arrow aside. */
+      for(const pr of props){
+        if(pr.dead || pr.indestructible || sl.props.has(pr)) continue;
+        if(dist(sp, pr) > 22 + pr.r) continue;
+        sl.props.add(pr);
+        pr.hp--; pr.flash = 1;
+        addSparks(pr.x, pr.y-10, 3, '#e8eef2');
+        /* one crack per slam, not one per crate — a wide fault crosses a lot of
+           scenery and eight overlapping hits is a noise, not a sound */
+        if(!sl.propSfx){ sl.propSfx = 1; SFX.hit(); }
+        if(pr.hp <= 0) breakProp(pr);
+      }
+    }
+    if(sp.t >= sp.life) sp.dead = true;
+  }
+  if(pspikes.some(sp=>sp.dead)){
+    for(const sp of pspikes){
+      if(!sp.dead) continue;
+      const sl = sp.sl;
+      sl.left--;
+      /* the last tooth of the fan settles: the whole slam drinks, once */
+      if(sl.left <= 0 && sl.dealt > 0){ leechFrom(sl.dealt); sl.dealt = 0; }
+    }
+    pspikes = pspikes.filter(sp=>!sp.dead);
+  }
 }
 function startSwing(aim){
   const p = player;
@@ -10723,6 +11120,7 @@ function updateFx(dt){
   }
   hazards = hazards.filter(h=>h.life>0);
   updateSpikes(dt);
+  updatePSpikes(dt);
   mergeT -= dt;
   if(mergeT<=0){ mergeT = 1.2; mergeSweep(); }
   for(const s of sched) s.t -= dt;
@@ -13037,6 +13435,50 @@ function render(){
     ctx.beginPath(); ctx.ellipse(0, 2, w*1.15, w*0.4, 0, 0, TAU); ctx.fill();
     ctx.restore();
   }
+  /* THE HERO'S OWN TEETH. Same rock, but they carry the element the legendary
+     is cycling through — so a fire slam is a row of glowing coals coming up out
+     of the floor and a frost one is ice. That is the whole read on which
+     element is up this cast. */
+  for(const sp of pspikes){
+    if(sp.wait > 0) continue;
+    const h = spikeHeight(sp);
+    if(h < 1) continue;
+    const w = sp.w;
+    const el = sp.el, glow = el ? SLAM_COL[el] : null;
+    ctx.save(); ctx.translate(sp.x, sp.y);
+    ctx.fillStyle = 'rgba(15,20,25,0.26)';
+    ctx.beginPath(); ctx.ellipse(0, 1, w*1.35, w*0.52, 0, 0, TAU); ctx.fill();
+    if(glow){
+      ctx.fillStyle = `rgba(${prs(glow).join(',')},0.22)`;
+      ctx.beginPath(); ctx.ellipse(0, 1, w*2.2, w*0.9, 0, 0, TAU); ctx.fill();
+    }
+    ctx.fillStyle = el ? mixc('#8b8f8a', glow, 0.45) : '#9aa09b';
+    ctx.strokeStyle = 'rgba(25,30,35,0.65)'; ctx.lineWidth = 2; ctx.lineJoin='round';
+    ctx.beginPath();
+    ctx.moveTo(-w, 2);
+    ctx.lineTo(-w*0.55, -h*0.62);
+    ctx.lineTo(Math.sin(sp.seed)*w*0.25, -h);
+    ctx.lineTo(w*0.62, -h*0.55);
+    ctx.lineTo(w, 2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = el ? mixc('#c6ccc6', glow, 0.6) : '#b6bbb6';
+    ctx.beginPath();
+    ctx.moveTo(-w*0.2, 2); ctx.lineTo(-w*0.5, -h*0.6);
+    ctx.lineTo(Math.sin(sp.seed)*w*0.25, -h); ctx.lineTo(w*0.1, -h*0.4);
+    ctx.closePath(); ctx.fill();
+    if(glow){
+      /* a seam of the element running up the tooth */
+      ctx.strokeStyle = `rgba(${prs(glow).join(',')},${0.55+0.35*Math.sin(vtime*18+sp.seed)})`;
+      ctx.lineWidth = 1.8; ctx.lineCap='round';
+      ctx.beginPath();
+      ctx.moveTo(-w*0.15, 0); ctx.lineTo(w*0.12, -h*0.5);
+      ctx.lineTo(-w*0.05, -h*0.72); ctx.lineTo(Math.sin(sp.seed)*w*0.2, -h*0.95);
+      ctx.stroke(); ctx.lineCap='butt';
+    }
+    ctx.fillStyle = 'rgba(170,170,162,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, 2, w*1.15, w*0.4, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
   for(const pr of projectiles){
     if(!onScreen(pr, 90)) continue;
     const lc = LOB_CONF[pr.kind];
@@ -13583,10 +14025,18 @@ function drawHero(c){
   if(p.invuln>0 && Math.sin(vtime*30)>0) c.globalAlpha = 0.45;
   const sw = p.swing;
   const wh = p.whirl ? p.whirlAng : undefined;
+  /* THE SLAM POSE. 0 is the mace overhead, 1 is it buried in the floor — the
+     same ramp the bosses use, so the hero's slam reads as the thing they have
+     been dodging all run. It holds at 1 for a beat while the fault runs out. */
+  const sa = p.slamAct;
+  const slam = sa ? (sa.t < SLAM_WIND ? sa.t/SLAM_WIND : 1)
+             : (p.slamPose > 0 ? 1 : undefined);
   drawFigure(c, { x:p.x, y:p.y, s:1,
     /* facing rides the spin, so the minifig turns its back to you and round again */
-    face: wh!==undefined ? {x:Math.cos(wh), y:Math.sin(wh)} : p.face,
-    walk:p.walk, moving:p.moving,
+    face: wh!==undefined ? {x:Math.cos(wh), y:Math.sin(wh)}
+        : sa ? {x:Math.cos(sa.aim), y:Math.sin(sa.aim)}
+        : p.slamPose > 0 ? {x:Math.cos(p.slamAim), y:Math.sin(p.slamAim)} : p.face,
+    walk:p.walk, moving:p.moving, slam,
     flash:p.flash, blink:p.blink, colors:HERO_COLORS, style:'hero',
     hero:true, weapon: heldArt(), bladeAng: (wh===undefined && sw) ? sw.cur : undefined,
     whirlA: wh, elite:false, phase:0 });
@@ -15106,7 +15556,7 @@ let titleClock = 0;
 /* =============================== GAME FLOW =============================== */
 function resetRun(demo){
   seed = (Math.random()*1e9)|0;
-  enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[];
+  enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave';
   rerollsUsed = 0; screenRerolls = 0;
