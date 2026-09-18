@@ -222,6 +222,15 @@
   .diff.on{background:rgba(255,255,255,.14)}
   .diffblurb{margin:6px auto 0;max-width:520px;font-size:12px;color:#ffdada;font-weight:500;min-height:26px}
   .cheatrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  /* the roster, filed by the wave it starts turning up in */
+  #cheatSpawn{flex-direction:column;align-items:stretch;gap:10px}
+  .mobband{width:100%}
+  .mobbandhead{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;color:#ffd76e;
+    margin:0 0 5px;display:flex;align-items:center;gap:8px;opacity:.85}
+  .mobbandhead::after{content:'';flex:1;height:2px;border-radius:1px;
+    background:rgba(255,214,110,.18)}
+  .mobbandrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start}
+  .cheatbtn.mob{cursor:help}
   .cheatbtn{background:rgba(9,13,17,.45);border:1px solid rgba(255,255,255,.22);border-radius:10px;
     padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
   .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
@@ -524,7 +533,10 @@ const CX = W.w/2, CY = W.h/2;
 const MAX_ALIVE = 512;
 const CS = 40;
 const RING_MAX = 320;
-const REV_MAX = 260;
+/* the revenant's shockwave used to reach 260, which on a body that walks
+   straight at you was less an ability than a tax — 40% less, so stepping out is
+   a real answer to it */
+const REV_MAX = 156;
 /* Studs fuse into the next tier only when a real pile has formed, and a pile
    forms by studs settling next to each other over time. */
 const MERGE_NEAR  = 62;       /* how close two studs must be to count as one pile */
@@ -915,7 +927,75 @@ const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above thi
 /* how far the warden's mending reaches, and what it gives back a second */
 const WARDEN_R = 240;
 const WARDEN_HEAL = 0.055;     /* share of a body's OWN maximum, per second */
+/* MAGIC-TOUCHED IS BLUE. Purple is already the epic rarity band and the
+   necromancers' own colour, so a magic pack read as "something arcane" rather
+   than as the pack modifier it is. */
+/* HOW BIG A PACK IS, at wave 6 and at wave 40. Three was not a pack. */
+const MAGIC_PACK  = [6, 12];
+const ELITE_COURT = [4, 9];    /* minions ringing one elite */
+/* WHAT AN ELITE BRINGS WITH IT. A court of nine more of the same body is just a
+   bigger version of the thing that was wrong with three copies — the elite
+   brings the CHEAP bodies of the roster, so it reads as a champion with a
+   retinue and the elite itself stays the thing you have to get to. */
+const ELITE_MINIONS = ['imp','boneling','skeleton','archer','cryptbat','spitter'];
+function eliteMinion(type){
+  /* a golem or a lord leads its own kind of small thing where one exists */
+  const d = EDEF[type];
+  if(d && d.golem && GOLEM_CONF[d.golem]) return GOLEM_CONF[d.golem].mini;
+  return pick(ELITE_MINIONS.filter(k => {
+    const r = ROSTER.find(x => x.k === k);
+    return !r || r.at <= Math.max(1, wave.n);
+  }) || ELITE_MINIONS) || 'imp';
+}
+const MAGIC_COL  = '#3f8ae0';
+const MAGIC_RING = 'rgba(63,138,224,0.9)';
 const OVERSEER_MAX_STACKS = 3;
+/* NAMED BUFFS ON A MONSTER. This used to be one counter capped at three, which
+   meant every aura in the game fought over the same ceiling: a body standing in
+   an overseer's empowerment and a pyrolord's warding simply refused the second
+   one. They are a MAP now, keyed by what granted them. A body may carry
+   MOB_BUFF_UNIQUE DIFFERENT buffs, and each stacks to its own depth — so three
+   stacks of fire resistance is one of the nine, not three of them. */
+const MOB_BUFF_UNIQUE = 9;
+function buffCount(e){ return e.buffs ? Object.keys(e.buffs).length : 0; }
+function buffStacksOf(e, k){ return (e.buffs && e.buffs[k]) || 0; }
+/* returns true only when the buff actually went on, so the caller applies its
+   effect exactly as often as the count says it did */
+function addMobBuff(e, key, max){
+  if(!e || e.dead) return false;
+  if(!e.buffs) e.buffs = {};
+  const have = e.buffs[key] || 0;
+  if(have >= (max || 3)) return false;                        /* this one is full */
+  if(!have && buffCount(e) >= MOB_BUFF_UNIQUE) return false;  /* no slot left */
+  e.buffs[key] = have + 1;
+  return true;
+}
+/* THE ELEMENTAL LORDS WARD THEIR OWN. Each one hands everything around it
+   resistance to the element it is made of, so a pack led by a pyrolord is a
+   pack you do not burn down — and killing the lord is what unlocks it. */
+const LORD_WARD = { pyrolord:'fire', frostlord:'frost', stormlord:'shock' };
+const LORD_WARD_R    = 320;
+const LORD_WARD_STEP = 0.25;   /* resistance per stack */
+const LORD_WARD_MAX  = 3;      /* stacks, and all three are ONE of the nine */
+function lordWardTick(e, dt){
+  const el = LORD_WARD[e.type];
+  if(!el) return;
+  e.wardT = (e.wardT || 0) - dt;
+  if(e.wardT > 0) return;
+  e.wardT = 1.4;
+  const key = 'res_' + el;
+  let n = 0;
+  for(const e2 of enemiesNear(e.x, e.y, LORD_WARD_R + 60)){
+    if(e2 === e || e2.dead || e2.state !== 'active') continue;
+    if(dist(e2, e) > LORD_WARD_R) continue;
+    if(!e2.res) continue;
+    if(!addMobBuff(e2, key, LORD_WARD_MAX)) continue;
+    e2.res[el] = (e2.res[el] || 0) + LORD_WARD_STEP;
+    n++;
+    addSparks(e2.x, e2.y-18, 2, BRAND_COL[el] || '#ffd166');
+  }
+  if(n){ e.wardLit = 0.5; addRing(e.x, e.y, 16, 260, LORD_WARD_R, BRAND_COL[el]||'#ffd166', 4, 0.45); }
+}
 /* Ailment stacks are NOT capped. Every fifth one is spent breaking something and
    leaves a BRAND behind: a lasting mark that eats that element's resistance and
    stacks without limit, so the tenth fire that lands on you hurts more than the
@@ -939,6 +1019,31 @@ function burnList(){ return (player.burn && player.burn.list) || []; }
 function burnStacks(){ return burnList().length; }
 function burnDps(){ let d=0; for(const f of burnList()) d += f.dps; return d; }
 function burnLeft(){ let d=0; for(const f of burnList()) d += f.dps*f.t; return d; }
+/* POISON ON THE HERO. The blightspitter's pool was dealing plain hits every
+   tick, which is not what standing in poison is: the pool should put the rot IN
+   you and then the rot should do the work, so walking out of it stops it
+   spreading rather than stopping it entirely. Same shape as burning — a list of
+   independent doses, all biting at once, each running out on its own clock. */
+const PSN_DUR = 5;            /* one dose runs this long */
+function psnList(){ return (player.psn && player.psn.list) || []; }
+function psnStacks(){ return psnList().length; }
+function psnDps(){ let d=0; for(const f of psnList()) d += f.dps; return d; }
+function psnTime(){ let t=0; for(const f of psnList()) t = Math.max(t, f.t); return t; }
+const PSN_MAX_STACKS = 8;
+function poisonPlayer(dps, dur){
+  const p = player;
+  if(!p || p.dead || !(dps > 0)) return;
+  if(!p.psn) p.psn = { list:[], acc:0 };
+  /* a fresh dose replaces the weakest one once you are full, so standing in a
+     deeper pool still means something */
+  if(p.psn.list.length >= PSN_MAX_STACKS){
+    let w = 0;
+    for(let i=1;i<p.psn.list.length;i++) if(p.psn.list[i].dps < p.psn.list[w].dps) w = i;
+    if(dps <= p.psn.list[w].dps) return;
+    p.psn.list.splice(w, 1);
+  }
+  p.psn.list.push({ dps, t: dur || PSN_DUR });
+}
 function burnTime(){ let t=0; for(const f of burnList()) t = Math.max(t, f.t); return t; }
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
 /* Difficulty scales the monsters and the loot, not the rules. */
@@ -1701,6 +1806,7 @@ function newPlayer(){
     brand:{ fire:0, frost:0, shock:0 },
     brandT:{ fire:0, frost:0, shock:0 },
     chill:{ stacks:0, t:0 },
+    psn:{ list:[], acc:0 },
     shock:{ stacks:0, t:0 },
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
@@ -2358,7 +2464,9 @@ const EDEF = {
              col:{head:'#e8e4d8', torso:'#3f2a55', legs:'#2c1d3d', hands:'#c9b8e8', hair:'#2c1d3d'}, style:'hexer' },
   stalker: { hp:3,  speed:134, r:11, scale:0.8,  dmg:1, xp:3, studs:[3,5],
              col:{head:'#2b2f33', torso:'#23272b', legs:'#1b1f23', hands:'#3a3f44', hair:'#1b1f23'}, style:'stalker' },
-  jugg:    { hp:24, speed:40,  r:20, scale:1.8,  dmg:2, xp:14, studs:[10,18],
+  /* the jugg is a wall that walks: slow, huge and unmissable, so what it costs
+     to be caught by one has to be worth the walk */
+  jugg:    { hp:24, speed:40,  r:20, scale:1.8,  dmg:4, xp:14, studs:[10,18],
              col:{head:'#d19a6a', torso:'#b6532b', legs:'#6e3a1e', hands:'#8a4a26', hair:'#6e3a1e'}, style:'brute' },
   revenant:{ hp:30, speed:36,  r:19, scale:1.7,  dmg:2, xp:16, studs:[12,20],
              col:{head:'#cfd6dd', torso:'#6d6e68', legs:'#5c5e59', hands:'#cfd6dd', hair:'#4a4b47'}, style:'skel' },
@@ -2378,7 +2486,8 @@ const EDEF = {
              col:{head:'#eef0ee', torso:'#9a7d1e', legs:'#6b5714', hands:'#ffe95a', hair:'#6b5714'}, style:'hexer' },
   lobber:  { hp:7,  speed:52,  r:13, scale:0.95, dmg:1, xp:8, studs:[6,10],
              col:{head:'#eef0ee', torso:'#3d7a2b', legs:'#2f5e23', hands:'#8ac24a', hair:'#2f5e23'}, style:'skel' },
-  marksman:{ hp:6,  speed:70,  r:12, scale:0.9,  dmg:1, xp:8, studs:[6,10], fire:2.6,
+  /* a marksman is a sniper, and a sniper that plinks is just an archer */
+  marksman:{ hp:6,  speed:70,  r:12, scale:0.9,  dmg:3, xp:8, studs:[6,10], fire:2.6,
              col:{head:'#f6f2e4', torso:'#c9a83a', legs:'#9a8228', hands:'#f6f2e4', hair:'#8a7d4a'}, style:'skel' },
   /* THE BLIGHTSPITTER. Every other ranged monster asks you to dodge one thing
      once; this one asks you to give up GROUND. The gobbet it lobs barely hurts
@@ -2450,7 +2559,7 @@ const EDEF = {
              res:{fire:0.75, frost:-0.25, shock:0.15},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' },
   /* GOLEMS — slow siege units: they lumber in, charge, then plant a delayed AoE stomp */
-  stormgolem:{ hp:46, speed:36, r:20, scale:1.85, dmg:2, xp:32, studs:[22,34], golem:'storm', elem:'shock',
+  stormgolem:{ hp:46, speed:36, r:20, scale:1.85, dmg:4, xp:32, studs:[22,34], golem:'storm', elem:'shock',
              res:{shock:0.90, frost:-0.35, fire:0.20},
              col:{head:'#6e6848', torso:'#4a4636', legs:'#2a2820', hands:'#ffe95a', hair:'#38352a'}, style:'brute' },
   ministorm:{ hp:9,  speed:124, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'storm', elem:'shock',
@@ -2461,13 +2570,13 @@ const EDEF = {
      stone golem, you burn it. The other three are nearly immune to their own
      element and soft to the one that beats it, so which spell you are holding
      decides which golem is a problem. */
-  stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:2, xp:26, studs:[18,30], golem:'stone',
+  stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:4, xp:26, studs:[18,30], golem:'stone',
              armourMul:3.2, res:{fire:0.25, frost:0.25, shock:0.25},
              col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
-  icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'ice',
+  icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:3, xp:28, studs:[20,32], golem:'ice',
              res:{frost:0.90, fire:-0.35, shock:0.20},
              col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
-  firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'fire',
+  firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:3, xp:28, studs:[20,32], golem:'fire',
              res:{fire:0.90, frost:-0.35, shock:0.20},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' }
 };
@@ -2475,19 +2584,22 @@ const EDEF = {
    stomps; frost skips a boulder across the whole field and frost-burns the lane
    it travelled; ember lobs a small cluster of firebombs the way the bosses do. */
 const GOLEM_CONF = {
-  stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:300, chargeSpd:430, wind:1.0, dmg:2,
+  /* A GOLEM IS A SIEGE UNIT. Every one of these `dmg` values is what its KIT
+     hits for, and they were all 1 or 2 — so the slowest, most telegraphed
+     bodies in the game were also the cheapest to be hit by. */
+  stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:300, chargeSpd:430, wind:1.0, dmg:5,
           kit:'stomp', range:620, mini:'ministone',
           bricks:['#9aa0a0','#7b8184','#5f6467'], name:'STONE' },
-  ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:330, chargeSpd:400, wind:1.1, dmg:1,
+  ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:330, chargeSpd:400, wind:1.1, dmg:4,
           kit:'boulder', range:1000, mini:'miniice',
           bricks:['#cfeaff','#7fb9e0','#4d86ad'], name:'FROST' },
-  fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:285, chargeSpd:460, wind:0.95, dmg:2,
+  fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:285, chargeSpd:460, wind:0.95, dmg:4,
           kit:'bombs', range:640, mini:'minifire',
           bricks:['#ff9a3c','#8a3418','#4a1d0f'], name:'EMBER' },
   /* It does not throw anything at YOU. It plants coils of live lightning around
      where you are standing and walks away, and they stay lit for twelve seconds
      while they drift. The arena stops having safe floor in it. */
-  storm:{ ring:'#ffe95a', dust:'#fff3a0', stompR:300, chargeSpd:440, wind:1.0, dmg:2,
+  storm:{ ring:'#ffe95a', dust:'#fff3a0', stompR:300, chargeSpd:440, wind:1.0, dmg:5,
           kit:'coils', range:760, mini:'ministorm',
           bricks:['#ffe95a','#c9a213','#6b5714'], name:'STORM' }
 };
@@ -2517,7 +2629,12 @@ const SHOT_SHARE = { arrow:0.85, bolt:0.80, frostbolt:0.80, batbolt:0.50,
                      /* the gobbet itself is nearly harmless — the POOL is the
                         weapon, so the impact is priced to make you move, not to
                         punish you for being hit by it */
-                     venom:0.35 };
+                     venom:0.35,
+                     /* the golem and boss kits: these all used to land a flat 1
+                        or 2 whatever threw them, which is how a wave-50 golem
+                        came to hit for a third of a heart */
+                     molten:0.95, meteor:1.05, fireball:0.90, zorb:0.55,
+                     frostrock:1.15 };
 function shotPow(src, kind){
   return Math.max(1, Math.round(((src && src.dmg) || 1) * (SHOT_SHARE[kind] || 0.6) * 10) / 10);
 }
@@ -2678,14 +2795,18 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   let atkS = Math.max(0.58, 1 - (lvl-1)*0.03) * difficulty.atk;
   if(magic) atkS *= 0.7;
   const e = { type, x, y, r:d.r*(elite?1.15:1), scale:d.scale*(elite?1.12:1),
-    dmg: Math.max(1, Math.round((d.dmg + dmgB + (magic?1:0)) * difficulty.dmg)),
-    hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
-    maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
+    dmg: Math.max(1, Math.round((d.dmg + dmgB) * (elite?1.5:1) * difficulty.dmg)),
+    /* THE ELITE IS HARDER and the magic body is softer than they were: an elite
+       is now one champion rather than three copies, so it can afford to be a
+       real wall, while a magic pack is twice the bodies and each of them pays
+       for that with a smaller share of the modifier. */
+    hp:Math.ceil(d.hp*hpS*(elite?3.4:1)*(magic?1.18:1)),
+    maxHp:Math.ceil(d.hp*hpS*(elite?3.4:1)*(magic?1.18:1)),
     armour, suppress, mlvl: rank,
     /* a COPY, never the EDEF object itself — a wave modifier writes to this and
        would otherwise edit the species for the rest of the run */
     res: Object.assign({fire:0, frost:0, shock:0}, d.res || null),
-    speed:d.speed*spdS*(elite?0.95:1)*(magic?1.3:1),
+    speed:d.speed*spdS*(elite?0.95:1)*(magic?1.12:1),
     atkS, fire: d.fire ? d.fire*atkS : undefined, touchCd: 0.9*atkS,
     col:d.col, style:d.style, xp:d.xp, studs:{a:d.studs[0], b:d.studs[1]},
     face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
@@ -2774,7 +2895,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   let d = Math.max(0, dmg);
   const crit = !opts.noCrit && Math.random() < critChance();
   if(crit) d *= critMult();
-  if(e.magic) d *= 0.7;                       /* magic-touched: 30% less damage taken */
+  if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
   if(opts.noMit){
     /* a wound already paid armour when it was opened — charging it again on
@@ -3575,6 +3696,27 @@ function updateAilments(dt){
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40), vx:rnd(-14,14), vy:rnd(-80,-30),
         life:0.4, max:0.4, color: Math.random()<0.5?'#ff9a3c':'#ffd166'});
   } else p.burn.acc = 0;
+  /* the rot, exactly as the fire above: every dose bites at once, and the
+     number only pops once a whole heart has gone */
+  if(!p.psn) p.psn = { list:[], acc:0 };
+  if(p.psn.list.length){
+    let deal = 0;
+    for(const f of p.psn.list){
+      const step = Math.min(f.t, dt);
+      deal += f.dps * step;
+      f.t -= dt;
+    }
+    p.psn.list = p.psn.list.filter(f=>f.t > 0);
+    p.psn.acc += deal;
+    const show = p.psn.acc >= 1;
+    if(show) p.psn.acc -= 1;
+    if(deal > 0) ailmentDamage(deal, !show);
+    if(show) addDmg(p.x, p.y-44, '-1', '#8ac24a', 16);
+    if(Math.random() < 0.4)
+      particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40),
+        vx:rnd(-12,12), vy:rnd(-60,-20), life:0.45, max:0.45,
+        color: Math.random()<0.5 ? '#8ac24a' : '#5f9a2e'});
+  } else p.psn.acc = 0;
   if(p.chill.stacks > 0){
     p.chill.t -= dt;
     if(p.chill.t <= 0){ p.chill.stacks = Math.max(0, p.chill.stacks - 1); p.chill.t = p.chill.stacks>0 ? 2.2 : 0; }
@@ -4062,20 +4204,40 @@ function updateWave(dt){
                 wave.n>=6 && Math.random()<0.15);
           } else {
             const packable = wave.n>=6;
-            const packSize = wave.n>=30 ? 5 : wave.n>=20 ? 4 : 3;
+            /* A PACK IS A PACK. Three bodies read as "the spawner hiccuped";
+               nine to twelve read as a warband walking out of the trees, which
+               is what a pack modifier is supposed to feel like. */
+            const packSize = MAGIC_PACK[0] +
+              Math.round((MAGIC_PACK[1]-MAGIC_PACK[0]) * clamp((wave.n-6)/34, 0, 1));
             const roll = Math.random();
             /* golems are siege units — they only rarely head a magic or elite pack,
                and the odds climb slowly as the run goes on */
             const isGolem = type.endsWith('golem');
             const pk = difficulty.pack * (isGolem ? clamp(0.10 + (wave.n-10)*0.015, 0.10, 0.45) : 1);
             if(packable && roll < 0.09*pk){
-              for(let k=0;k<packSize;k++)
-                spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), false, true);
+              /* THE MAGIC GOES ON ALL OF THEM. It used to be three copies each
+                 carrying the full modifier; it is a whole band now, and the
+                 modifier is smaller per body to pay for the extra bodies. */
+              const n = packSize + irnd(0, 3);
+              for(let k=0;k<n;k++){
+                const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
+                spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
+              }
             } else if(packable && roll < 0.09*pk + 0.12*pk){
-              for(let k=0;k<packSize;k++)
-                spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), true, false);
+              /* AN ELITE IS ONE BODY WITH A COURT, not three of the same thing.
+                 Three identical elites was a damage spike with no shape to it;
+                 one hard body ringed by its own minions is something you have to
+                 fight your way into. */
+              spawnEnemy(type, pos.x, pos.y, true, false);
+              const court = ELITE_COURT[0] +
+                Math.round((ELITE_COURT[1]-ELITE_COURT[0]) * clamp((wave.n-6)/34, 0, 1));
+              const minion = eliteMinion(type);
+              for(let k=0;k<court;k++){
+                const a = k/court*TAU + rnd(-0.18, 0.18), rr = rnd(56, 96);
+                spawnEnemy(minion, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, false);
+              }
             } else {
               spawnEnemy(type, pos.x, pos.y,
                 (packable && Math.random() < 0.15*pk) || Math.random() < waveModElite());
@@ -5445,14 +5607,35 @@ function buildCheatRows(){
     });
 
   const spawn = document.getElementById('cheatSpawn');
-  const mobKeys = [...ROSTER.map(r=>r.k),
-                   'stonegolem','icegolem','firegolem','stormgolem'];
+  /* FILED BY WHEN THEY TURN UP. One flat wall of forty names told you nothing
+     about the shape of a run; in bands of five you can see the roster arriving.
+     Anything with no roster entry (the golems) goes in its own band at the end,
+     because golems are seeded into waves rather than bought from the budget. */
   const bossKeys = [...Object.keys(BOSSES), ...Object.keys(SUPERBOSSES)];
-  spawn.innerHTML =
-    mobKeys.map(k=>`<div class="cheatbtn" data-mob="${k}">${k}</div>`).join('') +
-    bossKeys.map(k=>`<div class="cheatbtn got" data-mob="boss" data-boss="${k}">${
-      (BOSSES[k]||SUPERBOSSES[k]).name}</div>`).join('');
-  for(const el of spawn.children){
+  const bands = [];
+  const rostered = ROSTER.slice().sort((a,b)=>a.at-b.at);
+  for(const r of rostered){
+    const lo = Math.max(1, Math.floor((r.at-1)/5)*5 + 1);
+    let band = bands.find(x=>x.lo===lo);
+    if(!band){ band = {lo, hi:lo+4, keys:[]}; bands.push(band); }
+    band.keys.push(r.k);
+  }
+  bands.sort((a,b)=>a.lo-b.lo);
+  bands.push({lo:0, hi:0, name:'GOLEMS &middot; seeded into waves, not bought',
+              keys:['stonegolem','icegolem','firegolem','stormgolem']});
+  bands.push({lo:0, hi:0, name:'BOSSES', keys:bossKeys.map(k=>'boss:'+k)});
+  spawn.innerHTML = bands.map(b=>
+    `<div class="mobband"><div class="mobbandhead">${
+       b.name || ('WAVE '+b.lo+'&ndash;'+b.hi)}</div><div class="mobbandrow">${
+       b.keys.map(k=>{
+         if(k.startsWith('boss:')){
+           const bk = k.slice(5);
+           return `<div class="cheatbtn got mob" data-mob="boss" data-boss="${bk}">${
+             esc((BOSSES[bk]||SUPERBOSSES[bk]).name)}</div>`;
+         }
+         return `<div class="cheatbtn mob" data-mob="${k}">${esc(k)}</div>`;
+       }).join('')}</div></div>`).join('');
+  for(const el of spawn.querySelectorAll('.cheatbtn.mob')){
     const put = (n, elite)=>{
       const p = player;
       for(let i=0;i<n;i++){
@@ -5465,6 +5648,10 @@ function buildCheatRows(){
     };
     el.addEventListener('click', ev=> put(1, ev.shiftKey));
     el.addEventListener('contextmenu', ev=>{ ev.preventDefault(); put(5, ev.shiftKey); });
+    /* the same now -> next panel the bricks use, filled with what this body IS */
+    const key = el.dataset.boss || el.dataset.mob;
+    el.addEventListener('mouseenter', ()=>{ try { mobTipShow(el, key); } catch(e){ cmpHide(); } });
+    el.addEventListener('mouseleave', cmpHide);
   }
 
   const misc = document.getElementById('cheatMisc');
@@ -6104,6 +6291,85 @@ function cmpPanel(){
   return cmpEl;
 }
 function cmpHide(){ if(cmpEl) cmpEl.classList.add('hidden'); }
+/* WHAT A MONSTER IS, in the panel the bricks already use. It reads the same
+   EDEF the spawner reads and puts it through the same wave curve, monster level
+   and difficulty, so the numbers are what you would actually meet at the wave
+   you are standing in — not the table's raw base. */
+function mobStatRows(key){
+  const isBoss = !!(BOSSES[key] || SUPERBOSSES[key]);
+  const rows = [];
+  const add = (g, k, v) => rows.push({ g, k, v });
+  if(isBoss){
+    const B = BOSSES[key] || SUPERBOSSES[key];
+    const st = Math.max(1, Math.floor(wave.n/5));
+    const bhp = Math.round((B.hp*st*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp * mobRankMul());
+    add('BOSS', 'Name', B.name);
+    add('BOSS', 'Health here', Math.round(bhp).toLocaleString());
+    add('BOSS', 'Contact damage',
+      Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1) * mobRankMul()) + '');
+    add('BOSS', 'Speed', Math.round(B.speed) + ' px/s');
+    add('BOSS', 'XP', Math.round(B.xp*(1+(st-1)*0.8)) + '');
+    return rows;
+  }
+  const d = EDEF[key];
+  if(!d) return rows;
+  const lvl = mobLevel(), rank = mobRank(), rankMul = mobRankMul(rank);
+  const hpS = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp * rankMul;
+  const dmgB = ((lvl-1)*0.55 + Math.pow(Math.max(0, lvl-8), 1.45)*0.14) * rankMul;
+  const armour = lvl * 1.1 * (key==='bastion' ? 1.8 : 1) * (d.armourMul || 1)
+    * (RANGED_SET.has(key) ? 0.45 : 1) * (d.golem ? 1.6 : 1) * rankMul;
+  const r = ROSTER.find(x=>x.k===key);
+  add('AT WAVE '+wave.n, 'Health', Math.round(Math.ceil(d.hp*hpS)).toLocaleString());
+  add('AT WAVE '+wave.n, 'Contact damage', Math.max(1, Math.round((d.dmg + dmgB) * difficulty.dmg)) + '');
+  add('AT WAVE '+wave.n, 'Armour', Math.round(armour) + '');
+  add('AT WAVE '+wave.n, 'Monster level', rank + (rank ? '  (\u00d7'+rankMul.toFixed(2)+')' : ''));
+  add('BASE', 'Base health', d.hp + '');
+  add('BASE', 'Base damage', d.dmg + '');
+  add('BASE', 'Move speed', Math.round(d.speed) + ' px/s');
+  if(d.fire) add('BASE', 'Attack every', d.fire.toFixed(1) + 's');
+  if(d.evade) add('BASE', 'Evades', Math.round(d.evade*100) + '% of hits');
+  if(d.shade) add('BASE', 'Shade', 'fades in and out of reach');
+  if(d.golem) add('BASE', 'Golem kit', GOLEM_CONF[d.golem] ? GOLEM_CONF[d.golem].kit : d.golem);
+  if(d.mini)  add('BASE', 'Mini', 'spawned by a '+d.mini+' golem');
+  if(d.elem)  add('BASE', 'Touch element', d.elem);
+  if(d.res) for(const el of ELEMENTS){
+    const v = d.res[el];
+    if(v) add('RESISTANCE', el, (v>0?'':'') + Math.round(v*100) + '%' + (v<0 ? '  (weak)' : ''));
+  }
+  if(r){
+    add('SPAWNING', 'First wave', r.at + '');
+    add('SPAWNING', 'Budget cost', r.cost + ' bricks');
+    add('SPAWNING', 'Weight', (r.flavour ?? 1).toFixed(2));
+  } else {
+    add('SPAWNING', 'From', 'seeded into waves, not bought');
+  }
+  add('LOOT', 'XP', d.xp + '');
+  add('LOOT', 'Studs', d.studs[0] + '\u2013' + d.studs[1]);
+  return rows;
+}
+function mobTipShow(anchor, key){
+  const el = cmpPanel();
+  const rows = mobStatRows(key);
+  const name = (BOSSES[key] || SUPERBOSSES[key] || {}).name || key;
+  let html = `<div class="cmphead">${esc(String(name).toUpperCase())}</div>`;
+  if(!rows.length) html += `<div class="cmpnone">nothing on file for this one</div>`;
+  let g = null;
+  for(const r of rows){
+    if(r.g !== g){ g = r.g; html += `<div class="cmpg">${esc(g)}</div>`; }
+    html += `<div class="cmprow"><span>${esc(r.k)}</span><b>${esc(r.v)}</b></div>`;
+  }
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+  const a = anchor.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let x = a.right + 14;
+  if(x + w > window.innerWidth - 8) x = a.left - w - 14;
+  if(x < 8) x = Math.max(8, window.innerWidth - w - 8);
+  let y = a.top - 8;
+  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  el.style.left = Math.round(x)+'px';
+  el.style.top  = Math.round(Math.max(8, y))+'px';
+}
 function cmpShow(u, c, anchor, title, avoid){
   const el = cmpPanel();
   const rows = previewPick(u, c);
@@ -7838,6 +8104,8 @@ function updateEnemy(e, dt){
   if(e.poison) poisonTick(e, dt);
   if(e.bleed)  bleedTick(e, dt);
   if(e.eburn || e.burnt) burnTickEnemy(e, dt);
+  /* a lord wards everything around it, whatever else it is doing */
+  if(LORD_WARD[e.type]) lordWardTick(e, dt);
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
   if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
   if(e.emberCd > 0) e.emberCd -= dt;
@@ -8008,11 +8276,15 @@ function updateEnemy(e, dt){
         const n = Math.max(0, Math.min(e.elite ? 2 : 1, PUMPKIN_LIVE_CAP - live));
         for(let i=0;i<n;i++){
           const dur = rnd(0.75,1.0);
-          /* aim at where you are heading, plus the fuse they will sit on */
-          const lead = leadPlayer(e.x, e.y, dur + 1.6, 0.85);
+          /* IT AIMS AT YOU. Leading by the whole three-second fuse meant it was
+             throwing at where you might be in three seconds' time, which is
+             indistinguishable from throwing at random — and the fuse already
+             gives you the time to walk off it, which is the actual mechanic.
+             It leads the FLIGHT only, and the scatter is half what it was. */
+          const lead = leadPlayer(e.x, e.y, dur + 0.45, 0.8);
           projectiles.push({kind:'pumpkin', sx:e.x, sy:e.y-26,
-            tx:clamp(lead.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-            ty:clamp(lead.y+rnd(-50,50), W.wall+50, W.h-W.wall-50),
+            tx:clamp(lead.x+rnd(-26,26), W.wall+50, W.w-W.wall-50),
+            ty:clamp(lead.y+rnd(-26,26), W.wall+50, W.h-W.wall-50),
             t:0, dur, spin:rnd(TAU), delay:i*0.22,
             fuse:3, r:fireRadius(e, 57) });
         }
@@ -8120,7 +8392,7 @@ function updateEnemy(e, dt){
           const a2 = Math.atan2(lead.y-(e.y-22), lead.x-e.x);
           projectiles.push({kind:'zorb', x:e.x, y:e.y-22, owner:'enemy',
             vx:Math.cos(a2)*ZORB_SPD, vy:Math.sin(a2)*ZORB_SPD,
-            life:5.4, ang:rnd(TAU), zapCd:0, seed:rnd(TAU)});
+            life:5.4, ang:rnd(TAU), zapCd:0, seed:rnd(TAU), dmg:shotPow(e,'zorb')});
           addRing(e.x, e.y, 12, 240, 80, '#ffe95a', 5, 0.45);
           SFX.thunder();
         }
@@ -8172,6 +8444,7 @@ function updateEnemy(e, dt){
         const shots = lord ? [-130, 0, 130] : [0];
         shots.forEach((off, i)=>{
           projectiles.push({kind:'fireball', x:e.x, y:e.y-16, sx:e.x, sy:e.y-16,
+            dmg:shotPow(e,'fireball'),
             tx:clamp(player.x+off+rnd(-30,30), W.wall+40, W.w-W.wall-40),
             ty:clamp(player.y+rnd(-40,40), W.wall+40, W.h-W.wall-40),
             t:0, dur:0.9, spin:rnd(TAU), delay:i*0.15, fr:fireRadius(e, 31)});
@@ -8317,8 +8590,8 @@ function updateEnemy(e, dt){
         for(const e2 of enemies){
           if(e2===e || e2.dead || e2.state!=='active' || e2.type==='boss') continue;
           if(dist(e2,e) < 300){
-            if((e2.buffStacks||0) >= OVERSEER_MAX_STACKS) continue;   /* three is the ceiling */
-            e2.buffStacks = (e2.buffStacks||0)+1;
+            if(!addMobBuff(e2, 'empower', OVERSEER_MAX_STACKS)) continue;
+            e2.buffStacks = buffStacksOf(e2, 'empower');
             const oldMax = e2.maxHp;
             e2.maxHp = Math.round(e2.maxHp*1.15);
             e2.hp += e2.maxHp - oldMax;
@@ -8364,7 +8637,11 @@ function updateEnemy(e, dt){
         explode(e.x, e.y, 85, 0, {hostile:true, brickCols:['#fe8a18','#3a3f44','#d3242b'], shake:0.45});
         spawnBricks(e.x, e.y, [e.col.head, e.col.torso], 8, 220);
         SFX.brick(5);
-        if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead) playerDamage(1, e);
+        /* THE BOMBER IS THE BOMB. Its entire existence is this one detonation
+           and it was paying a hardcoded 1 for it — a third of a heart after
+           armour, at any wave, for a monster that has to reach you to work. */
+        if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead)
+          playerDamage(Math.max(2, e.dmg*2.6), e);
         return;
       }
     } else {
@@ -8593,7 +8870,7 @@ function bossHellfire(b, dt, tier, enr){
     const a = rnd(TAU), rr = Math.sqrt(Math.random())*310;
     const tx = clamp(lead.x + Math.cos(a)*rr, W.wall+60, W.w-W.wall-60);
     const ty = clamp(lead.y + Math.sin(a)*rr, W.wall+60, W.h-W.wall-60);
-    projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
+    projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty, dmg:shotPow(b,'meteor'),
       t:0, dur:rnd(0.75,1.0), spin:rnd(TAU), delay:0, fr:fireRadius(b, 31)});
     if(Math.random()<0.14) SFX.fireball();
   }
@@ -8645,7 +8922,8 @@ function golemStomp(e, G){
     /* a ring of burning ground you have to path around */
     for(let i=0;i<7;i++){
       const a = i/7*TAU + rnd(-0.2,0.2);
-      hazards.push({kind:'fire', x:e.x+Math.cos(a)*G.stompR*0.62, y:e.y+Math.sin(a)*G.stompR*0.62,
+      hazards.push({kind:'fire', dmg:Math.max(1, Math.round((e.dmg||2)*0.6)),
+        x:e.x+Math.cos(a)*G.stompR*0.62, y:e.y+Math.sin(a)*G.stompR*0.62,
         r:fireRadius(e, 44), life:5, max:5});
     }
     SFX.fireball();
@@ -8720,7 +8998,7 @@ function golemThrow(e, G){
     const lead = leadPlayer(e.x, e.y, 0.95, 0.8);
     const pts = bombSpread(lead.x, lead.y, n, 130, 74);
     for(let i=0;i<n;i++){
-      projectiles.push({kind:'molten', sx:e.x, sy:e.y-24,
+      projectiles.push({kind:'molten', sx:e.x, sy:e.y-24, dmg:shotPow(e,'molten'),
         tx:clamp(pts[i].x, W.wall+50, W.w-W.wall-50),
         ty:clamp(pts[i].y, W.wall+50, W.h-W.wall-50),
         t:0, dur:rnd(0.8,1.0), spin:rnd(TAU), delay:i*0.14, fr:fireRadius(e, 36)});
@@ -8737,7 +9015,7 @@ function fireRadius(e, base){
   let m = 1;
   if(e){
     if(e.elite) m *= 1.35;
-    if(e.magic) m *= 1.15;
+    if(e.magic) m *= 1.06;
     if(e.type === 'boss') m *= e.super ? 1.6 : 1.3;
     else if(typeof e.type === 'string' && e.type.endsWith('lord')) m *= 1.25;
     m *= 1 + 0.08*(e.buffStacks||0);
@@ -9544,8 +9822,8 @@ function updateSuperBoss(b, dt, toP, dP){
       for(const e2 of enemies){
         if(e2===b || e2.dead || e2.state!=='active' || e2.type==='boss') continue;
         if(dist(e2,b) > 520) continue;
-        if((e2.buffStacks||0) >= OVERSEER_MAX_STACKS) continue;
-        e2.buffStacks = (e2.buffStacks||0)+1;
+        if(!addMobBuff(e2, 'empower', OVERSEER_MAX_STACKS)) continue;
+        e2.buffStacks = buffStacksOf(e2, 'empower');
         const oldMax = e2.maxHp;
         e2.maxHp = Math.round(e2.maxHp*1.18);
         e2.hp += e2.maxHp - oldMax;
@@ -9830,14 +10108,14 @@ function updateProjectiles(dt){
         }
         if(!player.dead && player.dash.t<=0 && player.invuln<=0 &&
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
-          playerDamage(1, pr, 'shock');
+          playerDamage(pr.dmg || 1, pr, 'shock');
       }
       if(!pr.dead && !player.dead &&
          sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged = true; perfectDodge(pr.x, pr.y); pr.dead = true; }
         } else if(player.invuln<=0){
-          playerDamage(2, pr, 'shock');
+          playerDamage((pr.dmg || 1)*1.6, pr, 'shock');
           /* the jolt itself, not a tick of a hazard — the per-element throttle
              must not swallow the handful of stacks that IS this attack */
           player.ailCd.shock = 0;
@@ -9866,7 +10144,7 @@ function updateProjectiles(dt){
           if(d < pr.r){
             if(player.dash.t>0){ perfectDodge(pr.x, pr.y); }
             else if(player.invuln<=0){
-              playerDamage(1, pr, 'frost');
+              playerDamage(pr.dmg || 1, pr, 'frost');
             }
           }
         }
@@ -10084,11 +10362,11 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, pr.r*0.8, 0,
             {hostile:true, brickCols:['#fe8a18','#ff9a3c','#3d7a2b'], shake:0.5});
           addRing(pr.x, pr.y, 20, 520, pr.r, '#ff9a3c', 11, 0.5);
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
           SFX.bomb();
           if(dist(pr,player) < pr.r && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else playerDamage(2, pr, 'fire');
+            else playerDamage((pr.dmg || 1)*1.5, pr, 'fire');
           }
         }
       }
@@ -10113,18 +10391,18 @@ function updateProjectiles(dt){
         if(pr.kind==='molten'){
           const fr = pr.fr || 66;
           explode(pr.x, pr.y, fr*0.6, 0, {hostile:true, shake:0.15});
-          hazards.push({kind:'lava', x:pr.x, y:pr.y, r:fr, life:6.5, max:6.5});
+          hazards.push({kind:'lava', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:6.5, max:6.5});
           SFX.boomSmall();
           continue;
         }
         if(pr.kind==='fireball'){
           const fr = pr.fr || 46;
           explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else if(player.invuln<=0) playerDamage(1, pr, 'fire');
+            else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
           }
           continue;
         }
@@ -10145,11 +10423,11 @@ function updateProjectiles(dt){
         if(pr.kind==='meteor'){
           const fr = pr.fr || 54;
           explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
           if(dist(pr,player)<fr*0.85 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else if(player.invuln<=0) playerDamage(1, pr, 'fire');
+            else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
           }
           continue;
         }
@@ -10248,13 +10526,15 @@ function updateFx(dt){
       h.tick -= dt;
       if(h.tick <= 0){
         h.tick = VENOM_TICK;
+        /* it does not HIT you, it POISONS you — so the rot keeps working after
+           you have stepped off it, and armour never touches it */
         if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.9)
-          playerDamage(Math.max(0.5, (h.dmg||1)*VENOM_SHARE), h, null);
+          poisonPlayer(Math.max(0.12, (h.dmg||1)*VENOM_SHARE*0.5), PSN_DUR);
       }
       continue;
     }
     if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.88)
-      playerDamage(1, h, 'fire');
+      playerDamage(h.dmg || 1, h, 'fire');
   }
   hazards = hazards.filter(h=>h.life>0);
   updateSpikes(dt);
@@ -10815,7 +11095,7 @@ function drawGolem(c, e){
 
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,1,33,10,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,1,34,10.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
@@ -10898,7 +11178,7 @@ function drawFigure(c, o){
   c.beginPath(); c.ellipse(0, 2, 15*s, 5.5*s, 0, 0, TAU); c.fill();
   if(o.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,2,19*s,7.5*s,0,0,TAU); c.stroke(); }
-  if(o.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
+  if(o.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,2,19*s,7.5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   if(o.lord){ c.setLineDash([3,3]); c.strokeStyle='rgba(220,200,255,0.6)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,2,20*s,8*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
@@ -11300,7 +11580,7 @@ function drawCryptBat(c, e){
   c.beginPath(); c.ellipse(e.x, e.y, 10*s, 4*s, 0, 0, TAU); c.fill();
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(e.x,e.y,13*s,5*s,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2;
     c.beginPath(); c.ellipse(e.x,e.y,13*s,5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.save(); c.translate(e.x, e.y - fz);
   /* wings */
@@ -13189,7 +13469,7 @@ function drawShade(c, e){
   }
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.2;
     c.beginPath(); c.ellipse(0,1,15,6,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.2;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.2;
     c.beginPath(); c.ellipse(0,1,16,6.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
@@ -13220,7 +13500,7 @@ function drawBatBoss(c, e){
   c.beginPath(); c.ellipse(e.x, e.y, 22*s - z*0.18, 8*s - z*0.05, 0, 0, TAU); c.fill();
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.4;
     c.beginPath(); c.ellipse(e.x,e.y,26*s,9.5*s,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([6,5]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.4;
+  if(e.magic){ c.setLineDash([6,5]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.4;
     c.beginPath(); c.ellipse(e.x,e.y,27*s,10*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   /* the violet haze it hunts inside */
   c.fillStyle = `rgba(181,143,214,${0.09 + 0.05*Math.sin(hov*3+ph) + hi*0.07})`;
@@ -13395,7 +13675,7 @@ function drawEnemy(c, e){
       const w5 = 22*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w5/2, e.y-46*e.scale, w5, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w5/2, e.y-46*e.scale, w5*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13406,7 +13686,7 @@ function drawEnemy(c, e){
       const w4 = 26*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w4/2, e.y-62*e.scale, w4, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w4/2, e.y-62*e.scale, w4*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13418,7 +13698,7 @@ function drawEnemy(c, e){
       const w3 = 34*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w3/2, e.y-88*e.scale, w3, 5);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w3/2, e.y-88*e.scale, w3*clamp(e.hp/e.maxHp,0,1), 5);
     }
     return;
@@ -13433,7 +13713,7 @@ function drawEnemy(c, e){
       const w2 = 26;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w2/2, e.y-40, w2, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w2/2, e.y-40, w2*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13548,7 +13828,7 @@ function drawEnemy(c, e){
     const w2 = 30*e.scale;
     c.fillStyle='rgba(15,20,25,0.6)';
     c.fillRect(e.x-w2/2, e.y-56*e.scale, w2, 5);
-    c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':(lord?'#dccdf5':'#ff5a4a'));
+    c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:(lord?'#dccdf5':'#ff5a4a'));
     c.fillRect(e.x-w2/2, e.y-56*e.scale, w2*clamp(e.hp/e.maxHp,0,1), 5);
   }
   if(e.buffStacks){
@@ -13560,7 +13840,8 @@ function drawEnemy(c, e){
     c.setLineDash([]);
     c.fillStyle = '#ffe95a';
     c.font = '700 10px Fredoka'; c.textAlign = 'center';
-    c.fillText('+'+e.buffStacks, e.x, e.y - 66*e.scale);
+    c.fillText('+'+e.buffStacks + (buffCount(e) > 1 ? '·'+buffCount(e) : ''),
+      e.x, e.y - 66*e.scale);
   }
 }
 
@@ -13975,6 +14256,116 @@ function renderCombatLog(){
 }
 
 /* =============================== HUD =============================== */
+/* WHERE THE WAVE BLOCK ENDS. The wave number, the modifier chips and the
+   bodies-left line share the top of the screen, and what they occupy depends on
+   whether the wave has modifiers and whether it is still on its break. One
+   function, so the boss block below can stack under it instead of through it. */
+function hudWaveBottom(){
+  if(wave.n <= 0) return 34;
+  if(waveMods.length) return wave.state === 'ready' ? 95 : 83;
+  return wave.state === 'ready' ? 70 : 58;
+}
+/* EVERY DEBUFF ON THE BOSS, on one line under its health bar. No names — a
+   symbol and a count, left to right, because on a boss you are reading this
+   mid-fight and a row of words is not something you can read mid-fight.
+   The glyphs are DRAWN, not typed: the game's font has no dingbats and a
+   missing one renders as a tofu box. */
+function bossDebuffIcon(c, kind, x, y, r){
+  c.save(); c.translate(x, y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  if(kind === 'poison'){
+    c.fillStyle = '#8ac24a';
+    c.beginPath(); c.moveTo(0, -r);
+    c.bezierCurveTo(r*0.9, -r*0.1, r*0.62, r*0.85, 0, r*0.85);
+    c.bezierCurveTo(-r*0.62, r*0.85, -r*0.9, -r*0.1, 0, -r);
+    c.fill();
+  } else if(kind === 'bleed'){
+    c.fillStyle = '#ff5a5a';
+    c.beginPath(); c.moveTo(0, -r);
+    c.bezierCurveTo(r*0.9, -r*0.1, r*0.62, r*0.85, 0, r*0.85);
+    c.bezierCurveTo(-r*0.62, r*0.85, -r*0.9, -r*0.1, 0, -r);
+    c.fill();
+  } else if(kind === 'burn'){
+    c.fillStyle = '#ff6a1a';
+    c.beginPath(); c.moveTo(0, r*0.9);
+    c.quadraticCurveTo(-r*0.95, r*0.1, 0, -r);
+    c.quadraticCurveTo(r*0.95, r*0.1, 0, r*0.9);
+    c.fill();
+    c.fillStyle = '#ffd166';
+    c.beginPath(); c.moveTo(0, r*0.85);
+    c.quadraticCurveTo(-r*0.42, r*0.2, 0, -r*0.35);
+    c.quadraticCurveTo(r*0.42, r*0.2, 0, r*0.85);
+    c.fill();
+  } else if(kind === 'burnt'){
+    c.fillStyle = '#5a2a12';
+    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.fill();
+    c.strokeStyle = '#ff8a3c'; c.lineWidth = 1.6;
+    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.stroke();
+  } else if(kind === 'chill'){
+    c.strokeStyle = '#bfe3ff'; c.lineWidth = 1.8;
+    for(let i=0;i<3;i++){
+      const a = i/3*Math.PI;
+      c.beginPath();
+      c.moveTo(-Math.cos(a)*r, -Math.sin(a)*r);
+      c.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+      c.stroke();
+    }
+  } else if(kind === 'frozen'){
+    c.fillStyle = 'rgba(223,242,255,0.9)';
+    roundRect(c, -r*0.8, -r*0.8, r*1.6, r*1.6, r*0.28); c.fill();
+    c.strokeStyle = '#7fb9e0'; c.lineWidth = 1.5;
+    roundRect(c, -r*0.8, -r*0.8, r*1.6, r*1.6, r*0.28); c.stroke();
+  } else if(kind === 'shock'){
+    c.fillStyle = '#ffe95a';
+    c.beginPath();
+    c.moveTo(r*0.25, -r); c.lineTo(-r*0.55, r*0.12); c.lineTo(-r*0.02, r*0.12);
+    c.lineTo(-r*0.3, r); c.lineTo(r*0.6, -r*0.18); c.lineTo(r*0.04, -r*0.18);
+    c.closePath(); c.fill();
+  }
+  c.restore();
+}
+function bossDebuffs(e){
+  const out = [];
+  const psn = (e.poison && e.poison.n) || 0;
+  if(psn > 0) out.push({ k:'poison', n:psn, col:'#8ac24a' });
+  const bl = bleedStacks(e);
+  if(bl > 0) out.push({ k:'bleed', n:bl, col:'#ff5a5a' });
+  const bn = burnStacksOn(e);
+  if(bn > 0) out.push({ k:'burn', n:bn, col:'#ff9a3c' });
+  if(e.burnt && e.burnt.t > 0) out.push({ k:'burnt', n:e.burnt.n, col:'#ff8a3c' });
+  const ch = chillStacksOn(e);
+  if(ch > 0) out.push({ k:'chill', n:ch, col:'#bfe3ff' });
+  const sh = shockStacksOn(e);
+  if(sh > 0) out.push({ k:'shock', n:sh, col:'#ffe95a' });
+  if((e.stunT||0) > 0) out.push({ k:'frozen', n:Math.ceil(e.stunT), col:'#dff2ff' });
+  return out;
+}
+function drawBossDebuffs(c, e, cx, y){
+  const list = bossDebuffs(e);
+  if(!list.length) return;
+  c.save();
+  c.font = '700 11px Fredoka';
+  c.textBaseline = 'middle';
+  const r = 6, gap = 7, pad = 6;
+  /* measure the whole row first so it can be centred under the bar */
+  const widths = list.map(d => r*2 + 3 + c.measureText('' + d.n).width + pad*2);
+  let total = 0; for(const w of widths) total += w;
+  total += gap*(list.length-1);
+  let x = cx - total/2;
+  for(let i=0;i<list.length;i++){
+    const d = list[i], w = widths[i];
+    c.fillStyle = 'rgba(12,16,20,0.66)';
+    roundRect(c, x, y, w, 18, 8); c.fill();
+    c.strokeStyle = d.col; c.lineWidth = 1.2; c.globalAlpha = 0.65;
+    roundRect(c, x, y, w, 18, 8); c.stroke();
+    c.globalAlpha = 1;
+    bossDebuffIcon(c, d.k, x + pad + r, y + 9, r);
+    c.fillStyle = d.col; c.textAlign = 'left';
+    c.fillText('' + d.n, x + pad + r*2 + 3, y + 9.5);
+    x += w + gap;
+  }
+  c.restore();
+}
 function heartPath(c,x,y,s){
   c.beginPath();
   c.moveTo(x, y+s*0.9);
@@ -14226,7 +14617,11 @@ function renderHUD(){
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
     const bname = boss.bname || 'BOSS';
-    const bw = Math.min(460, cw-80), bx2 = cw/2-bw/2, by2 = 74;
+    /* THE BOSS BLOCK STACKS UNDER THE WAVE BLOCK instead of through it. The
+       wave number, its modifier chips and the bodies-left line all live at the
+       top of the screen, and the boss traits were being drawn straight over
+       them — so the block starts from whatever the wave block actually used. */
+    const bw = Math.min(460, cw-80), bx2 = cw/2-bw/2, by2 = hudWaveBottom() + 46;
     ctx.font='700 15px "Titan One"'; ctx.textAlign='center';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     if(boss.traits && boss.traits.length){
@@ -14253,6 +14648,7 @@ function renderHUD(){
     roundRect(ctx,bx2+2,by2+2,Math.max(4,(bw-4)*clamp(boss.hp/boss.maxHp,0,1)),14,4); ctx.fill();
     ctx.strokeStyle='rgba(15,20,25,0.5)'; ctx.lineWidth=2;
     for(let i=1;i<10;i++){ ctx.beginPath(); ctx.moveTo(bx2+bw*i/10,by2+2); ctx.lineTo(bx2+bw*i/10,by2+16); ctx.stroke(); }
+    drawBossDebuffs(ctx, boss, cw/2, by2 + 24);
   }
   if(!everInput && runTime > 3.5){
     const a2 = 0.55+0.45*Math.sin(vtime*4);
@@ -14265,6 +14661,7 @@ function renderHUD(){
   /* active ailments, so you can see why you're slow / on fire / getting crit */
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
+  if(psnStacks()>0)   ails.push({c:'#8ac24a', t:'POISON ×'+psnStacks()+' · '+psnDps().toFixed(1)+'/s · '+Math.ceil(psnTime())+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
   for(const el of ELEMENTS)

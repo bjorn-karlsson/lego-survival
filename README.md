@@ -226,7 +226,8 @@ a **pool of blight** that bites every 0.55s for as long as you stand in it, for 
 It leads your movement a little, so walking in a straight line does not beat it, and a few
 of them working together can close a corridor and push you back into the pack. It is
 deliberately fragile and takes **20% more fire**: the answer is to kill it, not to out-heal
-it.
+it. The pool **poisons** rather than hitting — armour never touches it, and it goes on
+working after you step off, which is what makes giving up the ground actually cost you.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
@@ -569,11 +570,11 @@ feeds, and each drips its numbers in its own colour — green for the rot, red f
 
 | | Source | Effect |
 |---|---|---|
-| ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
-| 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
+| ⭐ **Elite** | rolled on spawn | ×3.4 health, ×1.5 damage, 12% bigger, 2× studs and XP, **every drop line eight times over** — and it arrives with a **court of 4–9 minions** ringed around it |
+| 🟦 **Magic-touched** | rolled on spawn | ×1.18 health, ×1.12 speed, **12% less damage taken** — and it comes as a **band of 6–15**, not three copies |
 | ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
 | ⚡ **Shock arcs** | your storm bolts, with `Conductor` | Lightning crawls the body's silhouette while shock holds on it, deepening with the stack count; at five it sparks off |
-| 🟢 **Blight pool** | the **blightspitter** | Ground it lobbed, not a hit it landed: bites every 0.55s for 5.5s while you stand in it, and does nothing at all once you step out |
+| ☣️ **Poison** | standing in a **blight pool** | The pool does not *hit* you, it **poisons** you: a dose every 0.55s, each running 5s, all biting at once, up to 8 deep. It ignores armour, and it keeps working after you have walked off — stepping out stops it *spreading*, not stops it. Listed with your other ailments |
 | 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself. He is the fattest body on the field that is not a golem or a boss (**95 base**, against a bastion's 46) and shrugs off chip damage: he deals no damage at all, so the health bar *is* the fight, and at 30 he popped before the aura ever mattered |
 | 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
 
@@ -612,7 +613,9 @@ offered at all.
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |
 | Curse stacks on you | 9 | Poison on a boss | 12 | Shock on a monster | 5 (+35%) |
-| Monster level | 40 | Storm shock chance | 100% | | |
+| Monster level | 40 | Storm shock chance | 100% | Poison on you | 8 doses |
+| Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
+| | | | | Magic band | 15 |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
 | | | Gas reach | 430 px | | |
@@ -758,6 +761,89 @@ already were. Earlier, not harder.
 The level shows beside the wave number in the HUD once it starts to bite, and on the
 character sheet with the arithmetic behind it.
 
+---
+
+## Monsters hit for what the wave says they do
+
+A whole class of monster abilities was landing a **hardcoded 1 or 2** whatever threw them —
+so a wave-50 golem's firebomb cost exactly what a wave-1 imp's did, and armour then ate two
+thirds of it. That is the *0.33* you kept seeing.
+
+Every thrown thing now **carries its thrower's damage**, worked out when it leaves the hand,
+the way the boss bricks already did. Measured on real projectiles, wave 1 against wave 40:
+
+| | wave 1 | wave 40 |
+|---|--:|--:|
+| Fire golem's bombs | 2.8 | **96.9** |
+| Ice golem's boulder | 3.5 | **117.3** |
+| Blight gobbet and its pool | 1.0 | **35.0** |
+| Bomber's detonation | 2.6 | **260** |
+
+The same applies to the storm golem's orbs and coils, to meteors, and to every fire and lava
+pool left behind — a pool now remembers what left it.
+
+Some monsters were also simply too cheap to be hit by:
+
+| | was | now | |
+|---|--:|--:|---|
+| **Bomber** | flat 1, forever | ×2.6 its own damage | its whole existence is that one detonation |
+| **Jugg** | 2 | **4** | a wall that walks should cost something to be caught by |
+| **Marksman** | 1 | **3** | a sniper that plinks is just an archer |
+| **Stone golem** kit | 2 | **5** | |
+| **Ice / Fire golem** kit | 1 / 2 | **4** | |
+| **Storm golem** kit | 2 | **5** | |
+| Golem **bodies** | 2 | **3–4** | contact damage, per golem |
+
+*(The marksman does spawn — counted: about **5 a wave at 28** and **12 at 48**. It was never a
+spawn problem; it did one damage and so never registered.)*
+
+The **revenant's** shockwave reaches **156** instead of 260 — 40% less, so stepping out is a
+real answer rather than a tax. The **pumpkin lord** aims at you now: it was leading your
+movement by the whole three-second fuse, which is indistinguishable from throwing at random.
+It leads the *flight* only, with half the scatter — the fuse is what gives you time to walk
+off it, and that is the actual mechanic.
+
+---
+
+## Nine buffs, not three
+
+A monster's buffs used to be **one counter capped at three**, so every aura in the game
+fought over the same ceiling: a body standing in an overseer's empowerment and a pyrolord's
+warding simply refused the second one.
+
+They are a **map** now, keyed by what granted them. A body may carry **nine different**
+buffs, and each stacks to its own depth — three stacks of fire resistance is **one** of the
+nine, not three of them.
+
+Which makes the **elemental lords** worth something they were not: a pyrolord, frostlord or
+stormlord **wards everything within 320** with resistance to its own element, 25% a stack,
+three deep. A pack led by a pyrolord is a pack you do not burn down — and killing the lord
+is what unlocks it.
+
+---
+
+## Packs are packs now
+
+Three bodies read as *the spawner hiccuped*. A pack should read as a warband walking out of
+the trees, so both kinds got rebuilt:
+
+**An elite is one champion with a court**, not three copies of the same thing. Three
+identical elites was a damage spike with no shape to it; one genuinely hard body ringed by
+**4 to 9 minions** — the cheap end of the roster, or a golem's own minis — is something you
+have to fight your way *into*. The elite itself is much harder to pay for it: **×3.4 health
+and ×1.5 damage**, up from ×2.2 and +1.
+
+**A magic pack is a band of 6 to 15**, scaling with the wave, and every one of them carries
+the modifier — it used to be three copies each carrying the full thing. Each body's share is
+smaller to pay for the extra bodies: **×1.18 health, ×1.12 speed, 12% less damage taken**,
+down from ×1.5, ×1.3 and 30%.
+
+Magic-touched is **blue** now rather than purple: purple is already the epic rarity band and
+the necromancers' own colour, so a magic pack read as *something arcane* instead of as the
+pack modifier it is.
+
+---
+
 ## Wave modifiers
 
 Every wave from **6** rolls a modifier, and another every twelve waves after that, up to
@@ -874,6 +960,33 @@ with that spell's live damage.
 **It pauses.** It was built not to, and that was simply wrong: reading nine sections of
 cards while a wave-40 pack walks into you is not a choice anyone makes twice. It takes its
 own state, so the world freezes and stays drawn behind it.
+
+### The boss bar — *what is it carrying?*
+
+The boss block stacks **under** the wave block now rather than being drawn through it: the
+wave number, its modifier chips and the bodies-left line all live at the top of the screen,
+and the boss's traits were being painted straight over them. One function reports where the
+wave block ends, and the boss block starts below whatever it actually used.
+
+Under the health bar, **every debuff on the boss on one line**, left to right — poison,
+bleed, burning, BURNT, chill, shock, frozen — as a **symbol and a count**, no names. On a
+boss you are reading this mid-fight, and a row of words is not something you can read
+mid-fight. The glyphs are drawn rather than typed: the game's font has no dingbats, and a
+missing one renders as a tofu box.
+
+### The bench's roster — <kbd>1</kbd><kbd>3</kbd><kbd>3</kbd><kbd>7</kbd>
+
+The monster list was one flat wall of forty names that told you nothing about the shape of a
+run. It is filed into **wave bands** — 1–5, 6–10, 11–15 and so on — with the golems and the
+bosses in their own bands at the end, because golems are seeded into waves rather than
+bought from the budget.
+
+**Hover any of them** and the same panel the bricks use fills with what that body *is*: its
+health, contact damage and armour **at the wave you are standing in**, its base numbers, its
+move speed and attack interval, its elemental resistances, the wave it starts turning up in,
+what it costs the wave budget, and what it pays out. The at-this-wave numbers run through
+the same wave curve, monster level and difficulty the spawner uses, so they are what you
+would actually meet rather than the table's raw base.
 
 ### The DPS tab — <kbd>L</kbd>, then the fourth tab
 
