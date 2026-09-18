@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`78 bricks` · `41 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
+`83 bricks` · `41 monsters` · `8 bosses` · `13 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -52,7 +52,7 @@ runs exactly the same in fallback type.
 You are a minifig in a field of studs. Waves of brick monsters walk at you and come apart
 when hit. Each run introduces the roster in a different order — banded by era, so the
 opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
-every level and every chest hands you a **brick** — one of 78 upgrades — and the bricks
+every level and every chest hands you a **brick** — one of 83 upgrades — and the bricks
 compound into a build. Waves open with a breather so you can heal and read what you took,
 and <kbd>F</kbd> skips it. Survive long enough and the ground is a carpet of studs, the
 screen is a storm of lightning, and a three-storey skeleton is throwing its own ribcage
@@ -138,12 +138,17 @@ readily a hit opens a wound — and every brick you own scales it from there.
 
 **What it hits for**
 
-| | base | swing | reach | crit | crit mult | bleed | spin |
+| | base | attack | reach | crit | crit mult | bleed | spin |
 |---|--:|--:|--:|--:|--:|--:|--:|
 | **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
-| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
-| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — |
+| **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
+| **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
+
+**Two of the four do not swing at all.** The staff casts a fireball; the mace opens a
+**ground slam**. Both trade the whole melee kit — reach, the spin combo, the whirl — for an
+attack of their own, and both are offered the sword's bricks no more than a staff is
+offered the axe's.
 
 **What it keeps you alive with**
 
@@ -178,6 +183,50 @@ The mace is the one that never leaves contact, so it carries the most of both.
 
 **The staff gets +8% to every resistance** instead. It stands in the fire it starts, and it
 is the one weapon that cannot answer a burning floor by walking out of it.
+
+### ⛰️ The ground slam — *what a mace does instead*
+
+A mace hero does not swing. They drive the head into the floor and a **fault** opens in
+front of them: lines of stone teeth tearing up out of the ground in a fan, running outward
+from the impact. It is the boss slam you have been dodging all run, pointed the other way.
+
+Every tooth is **physical** — it bleeds, it leeches, and it reads every increase a swing
+would. Each one is worth **62% of a full swing**, and **one body may be bitten by at most
+three teeth of the same slam**, so standing in the middle of a fault is a reward rather
+than an execution.
+
+| | opens at | ceiling |
+|---|--:|--:|
+| **Fault width** | 99° | **180°** — or a full **360°** ring |
+| **Fault reach** | 200 px | **430 px** |
+| **Fault speed** | 620 px/s | **1400 px/s** |
+
+Speed is a real stat, not decoration: a slow fault means the far teeth arrive *after* the
+pack has walked off them. And a wider fault throws **more** teeth rather than the same
+teeth further apart — the fan never thins as it opens.
+
+Four bricks and a legendary, offered to nobody else:
+
+| | |
+|---|---|
+| **Fault Hammer** | +FLAT damage to every tooth |
+| **Wider Fault** | the fan opens wider |
+| **Deep Fault** | increased range |
+| **Fault Line** | increased speed |
+| 🟧 **Slam of the Elements** | below |
+
+**🟧 SLAM OF THE ELEMENTS.** Every slam takes the next element in turn — 🔥 fire, ⚡
+lightning, ❄️ frost — and converts **half of every tooth** into it. The converted half pays
+the monster's resistance and leaves that element's ailment behind: **burning**, **shock**,
+**chill**. The physical half is untouched, so the slam still opens wounds while it does it.
+The stone comes up in that element's colour, with a seam of it running up each tooth, so
+which one is loaded is something you read off the floor rather than off a counter.
+
+**Taken twice, the fault closes into a ring.** The 180° ceiling lifts to a full **360°**
+and the stone comes up all around you.
+
+`Earthshaker` is its favourite, and it is not offered to a weapon that swings — the same
+way `Sword & Steel` is no longer offered to one that does not.
 
 ### 🩸 Lifesteal
 
@@ -575,7 +624,7 @@ them up and the tap opens again.
 
 ## The combination panel
 
-There are four weapons and twelve favourites, and the interesting question is never what
+There are four weapons and thirteen favourites, and the interesting question is never what
 either one does on its own — it is what the pair opens with. *What if I put Brickbane on a
 staff? What does a mace do to Sword & Steel?* The panel on the right-hand edge of the title
 screen answers it before you commit, and it answers it by **playing the combination**, not
@@ -752,6 +801,8 @@ offered at all.
 | Monster level | 40 | Storm shock chance | 100% | Poison on you | 8 doses |
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
+| Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
+| Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
 | | | Gas reach | 430 px | | |
@@ -1130,6 +1181,14 @@ three of a brick is three cards fanned behind one another with a `×3` badge, an
 read off the **live hero**, so a brick taken at common and again at epic shows what the pair
 of them are doing now. It is filed in the bench's own order, and a spell's section is headed
 with that spell's live damage.
+
+**Click a stack and it fans out.** The ghosts behind a deck tell you *how many* copies you
+own but never *which* ones — and two copies of the same brick are rarely the same card,
+because each was rolled at its own rarity. Opening one lays them out in the order they were
+taken, each drawn at the rarity it actually came in at, with its own numbers. A stack of
+three Fault Hammers opens into `+0.5`, `+3` and `+5`. Opening another deck closes the last;
+clicking anywhere else closes them all. A brick handed over by a favourite's starting kit
+has no pick behind it, so it says *starting kit* rather than inventing a tier.
 
 **It pauses.** It was built not to, and that was simply wrong: reading nine sections of
 cards while a wave-40 pack walks into you is not a choice anyone makes twice. It takes its
