@@ -803,6 +803,10 @@ function syncStats(){
   p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
   p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
   for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
+  /* the weapon's own thirst is part of the finished number, not of the pool the
+     bricks write into — same shape as suppression and mitigation */
+  p.leech       = Math.min(LEECH_MAX,        pool(0, p.leechFlat, 0, 1) + weaponLeech());
+  p.leechChance = Math.min(LEECH_CHANCE_MAX, pool(0, p.leechChanceFlat, 0, 1) + weaponLeechChance());
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -1058,6 +1062,14 @@ function poisonPlayer(dps, dur){
 }
 function burnTime(){ let t=0; for(const f of burnList()) t = Math.max(t, f.t); return t; }
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
+/* LIFESTEAL. Two numbers, both capped on the DERIVED value like everything else
+   here: how often a swing drinks, and how much of the damage it drinks. The
+   per-hit ceiling is the one that matters late — a share of a wave-50 hit is an
+   entire health bar, so no single swing may return more than this much of your
+   maximum however big the number on the screen was. */
+const LEECH_MAX        = 0.25;   /* share of the hit, at most */
+const LEECH_CHANCE_MAX = 0.60;   /* how often, at most */
+const LEECH_HIT_CAP    = 0.03;   /* of MAX hearts, per swing */
 /* Difficulty scales the monsters and the loot, not the rules. */
 const DIFFS = {
   easy:      { name:'EASY',      col:'#4b9b41', lvl:-2, hp:0.70, dmg:0.75, spd:0.88, atk:1.20,
@@ -1125,17 +1137,17 @@ const WEAPONS = {
     blurb:'Balanced. Every number in this game is written against it.',
     dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
     bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade',
-    lessTaken:0.40, suppress:0.25 },
+    lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15 },
   axe: { id:'axe', name:'AXE', col:'#e0a81a',
     blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
     dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
     bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe',
-    lessTaken:0.45, suppress:0.25 },
+    lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20 },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
     blurb:'Hits hardest and opens the worst wounds. Slow, and it rarely crits.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
     bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace',
-    lessTaken:0.50, suppress:0.25 },
+    lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10 },
   /* THE STAFF DOES NOT SWING. Its basic attack is a FIREBALL, so it trades the
      whole melee kit — reach, the spin combo, bleed — for elemental damage and
      the ailment that comes with it. It is the first caster weapon; frost and
@@ -1147,6 +1159,8 @@ const WEAPONS = {
     bleed:0, spin:1.00, kb:1.00, hold:'pstaff', throw:'blade',
     /* what carrying it is worth, as increases into the ordinary pools */
     incSpell:0.25, incElem:0.30, incAtk:0.20,
+    /* it stands in the fire it starts, so it is a little harder to burn */
+    res:0.08,
     boltSpd:520, boltR:46 }
 };
 /* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
@@ -1157,6 +1171,14 @@ const WEAPONS = {
    into the armour pool, so a mace's 50% is 50% of whatever armour left. */
 function weaponLessTaken(){ return 1 - ((weapon && weapon.lessTaken) || 0); }
 function weaponSuppress(){ return (weapon && weapon.suppress) || 0; }
+/* LIFESTEAL IS A MELEE STAT, and each weapon drinks differently: the axe takes
+   the most, the sword a little less, the mace least of all — it is the one that
+   already hits hardest and bleeds worst, so it pays for that somewhere. A staff
+   leeches nothing; it is never in the blood. */
+function weaponLeech(){       return (weapon && weapon.leech) || 0; }
+function weaponLeechChance(){ return (weapon && weapon.leechChance) || 0; }
+/* what carrying the weapon is worth against the elements */
+function weaponRes(){ return (weapon && weapon.res) || 0; }
 const WEAPON_KEYS = Object.keys(WEAPONS);
 let weapon = WEAPONS.sword;
 function setWeapon(id){
@@ -1220,6 +1242,10 @@ const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
    the combat log and meant the weapon's own bleed multiplier was applied to
    spells it has nothing to do with. */
 const MELEE_SOURCES = new Set(['sword','storm','vortex']);
+/* WHAT DRINKS. Lifesteal is the weapon's, not the build's: your own swing and
+   the whirl it becomes both report as 'sword', and nothing else does. A spell
+   that happens to land physical damage is still a spell. */
+const LEECH_SOURCES = new Set(['sword']);
 /* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
    An ordinary swing never opens one on its own: the chance starts at nothing and
    is a brick you buy. A CRITICAL swing opens one half the time for free, which
@@ -1792,6 +1818,7 @@ function newPlayer(){
        element reads, and inc.fire/frost/shock are the per-element ones. */
     flatElem:0, ember:0,
     resFlat:{ fire:0, frost:0, shock:0 },
+    leechFlat:0, leechChanceFlat:0,
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
@@ -2957,6 +2984,10 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
   d = Math.max(0.05, Math.round(d*100)/100);
+  /* the swing drinks off what ACTUALLY landed, after armour and resistance —
+     leeching off the number before mitigation would pay you for damage the
+     monster never took */
+  if(LEECH_SOURCES.has(source) && !opts.quiet) leechFrom(d);
   e.hp = Math.round((e.hp - d)*100)/100; e.flash = 1;
   const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
   e.kx += Math.cos(kdir)*kb*kbm;
@@ -2976,6 +3007,21 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   }
   logDealt(e, d, source, crit, suppressed);
   if(e.hp<=0) killEnemy(e, source);
+}
+/* LIFESTEAL. A chance, then a share, then the per-swing ceiling — and it is
+   silent when you are already full, so a healthy hero is not covered in green
+   numbers for nothing. */
+function leechFrom(d){
+  const p = player;
+  if(!p || p.dead || godMode) return;
+  if(!(p.leech > 0) || !(p.leechChance > 0)) return;
+  if(p.hp >= p.maxHp) return;
+  if(Math.random() >= p.leechChance) return;
+  const heal = Math.min(d * p.leech, p.maxHp * LEECH_HIT_CAP, p.maxHp - p.hp);
+  if(heal <= 0.005) return;
+  p.hp = Math.round((p.hp + heal)*100)/100;
+  addDmg(p.x, p.y - 58, '+'+fmtHp(heal), '#8ede4a', 14);
+  clogRun.leeched = (clogRun.leeched||0) + heal;
 }
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
    of the two rates, so re-gassing a monster is never a downgrade. */
@@ -3523,13 +3569,30 @@ function armourValue(){
 }
 function suppressChance(){ return clamp(player.suppress + weaponSuppress(), 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
+/* THE WORLD GETS COLDER. A hero who ignored resistance entirely was fine at
+   wave 50, because nothing ever asked them for it — so the game asks, three
+   times, and then stops asking. Each toll is a FLAT 30 points off every
+   resistance you have, permanently, and they stack: past wave 60 you are 90
+   down and picking resistance is no longer optional. It is deliberately a tax
+   on the stat rather than a buff to the monsters, so the answer is in the
+   reward pool and not in luck. */
+const RES_TAX_WAVES = [20, 40, 60];
+const RES_TAX_STEP  = 0.30;
+function resTaxSteps(n){
+  const w = (n === undefined) ? (wave ? wave.n : 0) : n;
+  let k = 0;
+  for(const t of RES_TAX_WAVES) if(w >= t) k++;
+  return k;
+}
+function resTax(n){ return resTaxSteps(n) * RES_TAX_STEP; }
 function elemTake(elem){
   /* FLAT POOL FIRST — your own resistance, the ward's, and the brands burned,
      frozen or shocked out of you, which are a flat penalty and not a multiplier.
      THEN the one LESS multiplier, a SUNDERED curse, over the whole pool.
      It only bites on resistance you actually HAVE: a curse strips what you
      carry, it cannot hand resistance to a hero already under water. */
-  const flat = (player.res[elem] || 0) + wardRes() - BRAND_STEP * (player.brand[elem] || 0);
+  const flat = (player.res[elem] || 0) + weaponRes() + wardRes()
+             - BRAND_STEP * (player.brand[elem] || 0) - resTax();
   const r = flat > 0 ? flat * (1 - player.curse.resist) : flat;
   return 1 - clamp(r, RES_FLOOR, RES_CAP);
 }
@@ -4116,6 +4179,15 @@ function shuffleArr(a){
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
+  /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
+     the numbers on your sheet have already changed when you read the banner. */
+  if(RES_TAX_WAVES.indexOf(n) >= 0){
+    const lost = Math.round(resTax(n)*100);
+    logEvent('   THE COLD CREEPS IN — all resistances '+lost+' lower, for good', '#7ecbff');
+    showBanner('THE COLD CREEPS IN', 'ALL RESISTANCES \u2212'+lost+'% — PERMANENTLY',
+      '#7ecbff', 2.6, 44);
+    SFX.roar(); addShake(0.4);
+  }
   for(const m of waveMods) logEvent('   '+m.name+' — '+m.tip, m.col);
   queueTrackForWave(n);
   /* the wave is BUILT now and spawns when the break runs out */
@@ -4635,6 +4707,22 @@ const UPGRADES = [
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% MORE XP — its own multiplier, so they compound`,
     apply:c=>{ player.xpMore *= (1+c.v); syncStats(); } },
+  /* LIFESTEAL, in two halves, because the two feel completely different: more
+     often is a steadier drip, more per swing is a bigger gulp. Neither is
+     offered to a caster — the staff is never in reach to drink. */
+  { id:'leech', name:'Vampiric Edge', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>!isCaster() && player.leech < LEECH_MAX,
+    calc:m=>({v:0.015+0.012*m}),
+    desc:c=>`Your swings leech +${(c.v*100).toFixed(1)}% of the damage they land `+
+      `(cap ${Math.round(LEECH_MAX*100)}%, and never more than `+
+      `${Math.round(LEECH_HIT_CAP*100)}% of your hearts in one swing)`,
+    apply:c=>{ player.leechFlat += c.v; syncStats(); } },
+  { id:'leechrate', name:'Thirsting Grip', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>!isCaster() && player.leechChance < LEECH_CHANCE_MAX,
+    calc:m=>({v:0.05+0.045*m}),
+    desc:c=>`+${Math.round(c.v*100)}% chance for a swing to leech at all `+
+      `(cap ${Math.round(LEECH_CHANCE_MAX*100)}%)`,
+    apply:c=>{ player.leechChanceFlat += c.v; syncStats(); } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.resFlat.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
@@ -5218,6 +5306,8 @@ function weaponTip(w){
       '<b class="up">LESS \u25b2</b>'));
     L.push(row('Spell suppression','+'+Math.round((w.suppress||0)*100)+'%',
       '<b class="up">\u25b2</b>'));
+    L.push(row('Lifesteal',       Math.round((w.leechChance||0)*100)+'% for '+
+      ((w.leech||0)*100).toFixed(1)+'%',                 d(w.leech, b.leech)));
   }
   L.push('');
   /* one attack a second, crits folded in — the honest single-number comparison.
@@ -5234,8 +5324,12 @@ function weaponTip(w){
   L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
   L.push('');
   if(w.cast){
+    L.push(row('All resistances', '+'+Math.round((w.res||0)*100)+'%',
+      '<b class="up">\u25b2</b>'));
+    L.push('');
     L.push('It buys its safety with RANGE, so it gets none');
-    L.push('of the mitigation the melee weapons carry.');
+    L.push('of the mitigation \u2014 or the lifesteal \u2014 that');
+    L.push('the melee weapons carry.');
     L.push('It REPLACES the swing: no reach, no bleed,');
     L.push('no spin combo. Physical bricks are not offered');
     L.push('to you; the elemental ones are.');
@@ -5481,6 +5575,7 @@ const BENCH_SECTIONS = [
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
+  { name:'LIFESTEAL',       ids:['leech','leechrate'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
@@ -6153,6 +6248,16 @@ const STAT_PROBES = [
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'LESS damage taken from everything, just for carrying a melee weapon — a staff buys its safety with range instead' },
   { g:'DEFENCE', k:'Regeneration',  get:()=> cursedRegen(),            fmt:v=>v.toFixed(3)+'/s' },
+  { g:'DEFENCE', k:'Lifesteal chance', get:()=> (player.leechChance||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'how often one of your own swings drinks. The staff never does — lifesteal is a melee stat' },
+  { g:'DEFENCE', k:'Lifesteal share',  get:()=> (player.leech||0)*100, fmt:v=>v.toFixed(1)+'%', zero:true,
+    why:'how much of the damage a drinking swing ACTUALLY LANDED comes back as hearts, capped at '+
+        Math.round(LEECH_HIT_CAP*100)+'% of your maximum per swing' },
+  { g:'DEFENCE', k:'Lifesteal a swing', get:()=> (player.leechChance||0)*(player.leech||0)*100,
+    fmt:v=>v.toFixed(2)+'%', zero:true,
+    why:'chance times share — the average share of every swing that comes back, which is the number to compare builds on' },
+  { g:'DEFENCE', k:'Elemental toll', get:()=> resTax()*100, fmt:v=>'\u2212'+Math.round(v)+'%', zero:true, hi:false,
+    why:'the world\u2019s own tax on resistance, 30 points at wave 20, 40 and 60. It is flat and permanent — the only answer is to carry more resistance' },
   { g:'DEFENCE', k:'Fire res',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Frost res',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Lightning res', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
@@ -14006,13 +14111,13 @@ let clogLines = [[], [], []];         /* one scrollback per tab */
 let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
 let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
 let clogKills = {};                   /* run kill counts by monster */
-let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
+let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
 let clogAilAcc = 0;
 let clogTabRects = [];                /* filled in by the renderer, read by the mouse */
 function clogReset(){
   clogLines = [[], [], []];
   clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {}; clogDps = {};
-  clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
+  clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
   clogAilAcc = 0;
 }
 function clogToggle(){
@@ -14302,6 +14407,10 @@ function renderCombatLog(){
     ctx.fillStyle = '#c9d2ce';
     ctx.fillText('total '+clogRun.taken.toFixed(1), x+116, y);
     ctx.fillText('evaded '+clogRun.evaded, x+212, y);
+    if(clogRun.leeched > 0){
+      ctx.fillStyle = '#8ede4a';
+      ctx.fillText('leeched '+clogRun.leeched.toFixed(1), x+296, y);
+    }
     y += 16;
     y = clogBreakdown(ctx, 'HURT BY', clogFrom, clogRun.taken, x+12, y, '#ff8a6a', w-30);
   } else if(clogView===CLOG_DPS){

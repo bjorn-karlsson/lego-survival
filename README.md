@@ -14,9 +14,23 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`66 bricks` · `41 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
+`78 bricks` · `41 monsters` · `8 bosses` · `11 builds` · `50 waves` · `1 file`
 
 </div>
+
+---
+
+## Contents
+
+**Start here** — [Play it](#play-it) · [The loop](#the-loop) · [What's in the box](#whats-in-the-box) · [Controls](#controls)
+
+**The kit** — [Weapons](#weapons) · [Elements & ailments](#elements--ailments)
+
+**Your build** — [The damage model](#the-damage-model-is-path-of-exiles) · [Rarity](#rarity) · [The combination panel](#the-combination-panel) · [Reading your own build](#reading-your-own-build)
+
+**The world** — [Monsters](#monsters) · [Bosses](#the-boss-ladder) · [Drops](#drops) · [Difficulty](#difficulty) · [The world gets colder](#the-world-gets-colder)
+
+**Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
 ---
 
@@ -38,7 +52,7 @@ runs exactly the same in fallback type.
 You are a minifig in a field of studs. Waves of brick monsters walk at you and come apart
 when hit. Each run introduces the roster in a different order — banded by era, so the
 opening wave is a coin-toss between four monsters and never a wave-30 horror. Every wave,
-every level and every chest hands you a **brick** — one of 66 upgrades — and the bricks
+every level and every chest hands you a **brick** — one of 78 upgrades — and the bricks
 compound into a build. Waves open with a breather so you can heal and read what you took,
 and <kbd>F</kbd> skips it. Survive long enough and the ground is a carpet of studs, the
 screen is a storm of lightning, and a three-storey skeleton is throwing its own ribcage
@@ -75,30 +89,117 @@ with](#the-combination-panel).
 
 ### 🗡️ Pick a weapon
 
+`SWORD` · `AXE` · `MACE` · `STAFF`
+
+Your weapon is a **table row**, not a special case in the code — base damage, swing time,
+reach, crit, bleed, and what it is worth defensively. The art follows it: you hold what you
+picked, you swing it, and your spells throw it.
+
+The **staff does not swing at all**. It casts fireballs, and it trades the whole melee kit
+for the elemental one.
+
+Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
+comparison against the sword.
+
+### 🩸 Elements & ailments
+
+Fire, frost and lightning all stack, on you and on them, and **the fifth stack breaks
+something** — you freeze, they turn BURNT, everything you own hits a shocked body harder.
+
+Curses, poison and bleed run alongside on their own pools. See
+[**Elements & ailments**](#elements--ailments).
+
+</td><td width="33%" valign="top">
+
+### 👑 Bosses every five waves
+
+Five named bosses rotate through waves 5, 15, 25…
+
+Every **tenth** wave is an ULTRA: `OMEGA BRICKTHANE`, `MEGA BONE BARON`, `ULTRA LAVABRICK`
+— each with its own signature (nova, bone spiral, meteor), a health bar across the top of
+the screen, and a guaranteed chest.
+
+**Wave 50 is the grand raid**, and every boss in the game wakes up at once.
+
+In a hurry? **Hold F mid-fight** to call the next wave down early and fight both at once.
+
+</td></tr>
+</table>
+
+![The MEGA BONE BARON](docs/boss.jpg)
+
+---
+
+## Weapons
+
 Your weapon is a **table row**, not a special case in the code. It sets the physical side
 of the hero — base damage, swing time, reach, how often and how hard it crits, and how
 readily a hit opens a wound — and every brick you own scales it from there.
 
-| | base | swing | reach | crit | crit mult | bleed | spin | less taken | suppress |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 | **40%** | **25%** |
-| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 | **45%** | **25%** |
-| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 | **50%** | **25%** |
-| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — | — | — |
+**What it hits for**
+
+| | base | swing | reach | crit | crit mult | bleed | spin |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
+| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
+| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
+| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — |
+
+**What it keeps you alive with**
+
+| | less damage taken | spell suppression | lifesteal | resistance |
+|---|--:|--:|--:|--:|
+| **SWORD** | 40% | 25% | 15% of swings, for 6.0% | — |
+| **AXE** | 45% | 25% | **20% of swings, for 9.0%** | — |
+| **MACE** | **60%** | **30%** | 10% of swings, for 3.5% | — |
+| **STAFF** | — | — | — | **+8% to all three** |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
-is slow and crits rarely. The axe is **double-bitted** — a crescent to either side of the
-haft, edges facing opposite ways — and the hero shoulders it on a lean rather than dead
-upright, because straight up buries the inner bit behind the minifig's head.
+is slow and crits rarely.
+
+The axe is **double-bitted** — a crescent to either side of the haft, edges facing opposite
+ways — and the hero shoulders it on a lean rather than dead upright, because straight up
+buries the inner bit behind the minifig's head.
 
 **Melee is armoured by the fact that it has to be there.** A staff never has to stand where
 the monsters are; a sword does, and the numbers were written as if it did not. So the three
-melee rows carry their own defence: **40 / 45 / 50% less damage taken** and **+25% spell
-suppression**, the mirror of the cast speed the staff gets for standing back. The mitigation
-is a LESS multiplier applied *last* — after armour, after suppression — so it takes its share
-of whatever got through rather than competing with armour for the same pool, and it reaches
-poison, bleed and burn as readily as it reaches a hit.
+melee rows carry their own defence, the mirror of the cast speed the staff gets for standing
+back:
+
+- **Less damage taken** — 40 / 45 / **60%**. It is a LESS multiplier applied *last*, after
+  armour and after suppression, so it takes its share of whatever got through rather than
+  competing with armour for the same pool. It reaches poison, bleed and burn as readily as
+  it reaches a hit.
+- **Spell suppression** — +25%, or **+30%** on a mace, on top of whatever you have bought.
+- **Lifesteal** — see below.
+
+The mace is the one that never leaves contact, so it carries the most of both.
+
+**The staff gets +8% to every resistance** instead. It stands in the fire it starts, and it
+is the one weapon that cannot answer a burning floor by walking out of it.
+
+### 🩸 Lifesteal
+
+Every swing has a **chance** to drink a **share** of the physical damage it just landed. Both
+halves are stats, both can be bought, and the axe drinks most:
+
+| | chance to drink | share of the hit | average per swing |
+|---|--:|--:|--:|
+| **AXE** | 20% | 9.0% | **1.80%** |
+| **SWORD** | 15% | 6.0% | 0.90% |
+| **MACE** | 10% | 3.5% | 0.35% |
+
+- **Vampiric Edge** raises the share, to a ceiling of **25%**.
+- **Thirsting Grip** raises the chance, to a ceiling of **60%**.
+
+It leeches off what **actually landed** — after armour, after resistance — so a swing that
+barely got through barely heals. Only your own swing and the whirl it becomes drink; a spell
+that happens to deal physical damage does not, and neither does a bleed tick.
+
+And no single swing may return more than **3% of your maximum hearts**, which is the cap
+that matters: a share of a wave-50 crit is otherwise an entire health bar. A staff never
+drinks at all.
 
 **The staff does not swing at all.** It is the first *caster* weapon: its basic attack is a
 **fireball** that bursts for 46 and sets what it touches alight. It gives up the entire melee
@@ -195,7 +296,9 @@ orbits the same. Each weapon names a *held* art and a *thrown* art, so the staff
 its own stone-headed shaft while still throwing swords until its own spellwork exists.
 Hover a weapon on the title screen for the full comparison against the sword.
 
-### 🩸 Elements & ailments
+---
+
+## Elements & ailments
 
 Fire, frost and lightning each stack. **The fifth stack breaks something**: burning
 becomes a pool of damage over time, chill freezes you solid, shock leaves every hit
@@ -256,25 +359,6 @@ each rank also **doubles how much rot a body can hold** — 9 → 18 → 36 on a
 → 48 on a boss. Any kill sets it off, not just one the gas made: shoot a poisoned monster
 and the corpse still bursts.
 
-</td><td width="33%" valign="top">
-
-### 👑 Bosses every five waves
-
-Five named bosses rotate through waves 5, 15, 25…
-
-Every **tenth** wave is an ULTRA: `OMEGA BRICKTHANE`, `MEGA BONE BARON`, `ULTRA LAVABRICK`
-— each with its own signature (nova, bone spiral, meteor), a health bar across the top of
-the screen, and a guaranteed chest.
-
-**Wave 50 is the grand raid**, and every boss in the game wakes up at once.
-
-In a hurry? **Hold F mid-fight** to call the next wave down early and fight both at once.
-
-</td></tr>
-</table>
-
-![The MEGA BONE BARON](docs/boss.jpg)
-
 ---
 
 ## The damage model is Path of Exile's
@@ -285,11 +369,14 @@ Every stat in the game runs through one pool, in one order, every time:
 (base + all flat added) × (1 + sum of every increase) × each MORE multiplier, one at a time
 ```
 
-That means a MORE multiplier you picked up at wave 12 keeps multiplying the flat health
-you add at wave 40, and taking twenty-seven bricks in reverse order produces byte-identical
-stats. Increases are additive with each other; MOREs never are. Cooldowns use the mirror of
-it — `max(floor, base / (1 + increased))` — so attack speed has a real ceiling instead of an
-asymptote.
+Three consequences, and they are the whole reason the model is worth having:
+
+- A MORE multiplier you picked up at wave 12 keeps multiplying the flat health you add at
+  wave 40. **Order never matters** — twenty-seven bricks taken in reverse produce
+  byte-identical stats.
+- Increases are **additive** with each other. MOREs never are.
+- Cooldowns use the mirror of it — `max(floor, base / (1 + increased))` — so attack speed
+  has a real ceiling instead of an asymptote.
 
 Every **FLAT damage** brick in the game reads off one shared ladder, so a common is never
 a rare wearing a different colour:
@@ -306,12 +393,16 @@ disappointment every time:
 |---|--:|--:|--:|--:|--:|
 | Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
 
-It is checked rather than asserted. The audit takes twenty-seven bricks three times over,
-in forward, reverse and shuffled order, and compares all **85** stats the game exposes:
-every one must come out byte-identical. It then proves +100% and +200% increased land on
-×2 and ×3 (never ×4), that two ×2 MOREs land on ×4, and that every ceiling sits on the
-result rather than the pool. Three deliberately broken builds — a compounding increase, a
-capped flat pool, an increase smuggled into a MORE — are each caught by it.
+**It is checked rather than asserted.** The audit takes twenty-seven bricks three times
+over — forward, reverse and shuffled — and compares all **85** stats the game exposes. Every
+one must come out byte-identical. It then proves that:
+
+- +100% and +200% increased land on ×2 and ×3, never ×4
+- two ×2 MOREs land on ×4
+- every ceiling sits on the *result* rather than on the pool
+
+Three deliberately broken builds — a compounding increase, a capped flat pool, an increase
+smuggled into a MORE — are each caught by it.
 
 Bladestorm counts in **swords**, so an epic roll is +40 of them, and the ceiling is on
 swords in the air — **150** — rather than on ranks.
@@ -534,9 +625,17 @@ and that is what the panel promises.
 
 ## Every buff and debuff
 
-Four separate systems, and they never touch each other's pools: prizes you pick up,
-ailments that stack on you, curses that are hexed onto you, and the marks you put on a
-monster. Everything below is read off the code, not off memory.
+Four separate systems, and they never touch each other's pools:
+
+- **prizes** you pick up
+- **ailments** that stack on you
+- **curses** that are hexed onto you
+- **marks** you put on a monster, and buffs the monsters carry themselves
+
+Everything below is read off the code, not off memory.
+
+<details>
+<summary><b>Open the full tables</b> — six of them, every effect and every stack limit</summary>
 
 ### 🎁 What you pick up
 
@@ -627,12 +726,17 @@ ULTRA — never the same one twice, and printed on its health bar.
 | **LEGION** | brings ×1.6 + 1 of its court |
 | **THORNED** | standing next to it costs you 25% of its hit |
 
+</details>
+
 ---
 
 ## Every cap
 
 Nothing in the game is unbounded. A brick that would push past its ceiling stops being
 offered at all.
+
+<details>
+<summary><b>Open the ceiling table</b> — every number that stops</summary>
 
 | Defence | | Spells | | Prizes | |
 |---|--:|---|--:|---|--:|
@@ -654,6 +758,8 @@ offered at all.
 | | | Bombs | 8 | | |
 | | | Blast radius | 110 px | | |
 | | | Cluster ranks | 2 | | |
+
+</details>
 
 ### The damage ceiling
 
@@ -760,7 +866,14 @@ legendary rate of Hard for the privilege.
 
 ---
 
-## Monsters have a level
+## Monsters
+
+Six things happen to a monster between wave 1 and wave 50, and they compound: it gains a
+**level**, it hits for what its own row says it hits for, it can carry up to **nine** named
+buffs, it arrives in a **pack**, the whole **wave** gets a modifier, and it **resists** what
+it is made of.
+
+### They have a level
 
 The wave curve is a **polynomial**, and a polynomial flattens in relative terms. By wave 50,
 ten more waves bought the roster about a third more health — which, against a hero whose own
@@ -795,7 +908,7 @@ character sheet with the arithmetic behind it.
 
 ---
 
-## Monsters hit for what the wave says they do
+### They hit for what their own row says
 
 A whole class of monster abilities was landing a **hardcoded 1 or 2** whatever threw them —
 so a wave-50 golem's firebomb cost exactly what a wave-1 imp's did, and armour then ate two
@@ -837,7 +950,7 @@ off it, and that is the actual mechanic.
 
 ---
 
-## Nine buffs, not three
+### Nine buffs, not three
 
 A monster's buffs used to be **one counter capped at three**, so every aura in the game
 fought over the same ceiling: a body standing in an overseer's empowerment and a pyrolord's
@@ -854,7 +967,7 @@ is what unlocks it.
 
 ---
 
-## Packs are packs now
+### Packs are packs
 
 Three bodies read as *the spawner hiccuped*. A pack should read as a warband walking out of
 the trees, so both kinds got rebuilt:
@@ -876,7 +989,7 @@ pack modifier it is.
 
 ---
 
-## Wave modifiers
+### Wave modifiers
 
 Every wave from **6** rolls a modifier, and another every twelve waves after that, up to
 four. They are rolled **once**, when the wave is composed, and held for its whole life — so
@@ -907,7 +1020,7 @@ rest of the run. A test asserts the species comes back clean afterwards.
 
 ---
 
-## Monsters resist what they are made of
+### They resist what they are made of
 
 The hero has had elemental resistance since the first commit and monsters never did, which
 meant a fire golem was exactly as flammable as a skeleton — every golem was a reskin as far
@@ -928,6 +1041,35 @@ holding decides which golem is a problem.
 Stone is the exception on purpose: it is rock, so it is **armour** — and armour only ever
 touches *attacks*. You cannot out-swing a stone golem; you burn it. Resistance caps at
 **90%** even under `RESISTANT`, so max resistance is a wall rather than immunity.
+
+---
+
+## The world gets colder
+
+A hero who ignored resistance entirely used to be perfectly fine at wave 50, because
+nothing ever asked them for it. So the game asks — three times, and then never again:
+
+| | | Your resistances |
+|---|---|---|
+| **Wave 20** | ❄️ *the cold creeps in* | **−30** |
+| **Wave 40** | ❄️ *and again* | **−60** total |
+| **Wave 60** | ❄️ *and once more* | **−90** total |
+
+It is a **flat** toll, it is **permanent**, and it lands on the wave that charges it before
+a single body walks in — your character sheet has already changed when the banner appears.
+Past wave 60 nothing more is taken.
+
+Three points matter about the shape of it:
+
+- It is a tax on **your stat**, not a buff to the monsters. Every point you lose is a point
+  a `Flameguard Plates` or an `Elementalist Bricks` puts straight back, so the answer is in
+  the reward pool rather than in luck.
+- Resistance caps at **80%**, so the ceiling never moves — what moves is how far below it
+  you start. A hero at the cap is at **50%** after wave 20 and **−10%** after wave 60.
+- Negative resistance is a *weakness*, and it multiplies damage **up**. Ignore it all the
+  way to wave 60 and a fireball lands for nearly twice what it used to.
+
+The **Elemental toll** row on the character sheet shows exactly what has been taken.
 
 ---
 
