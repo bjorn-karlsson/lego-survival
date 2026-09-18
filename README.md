@@ -828,7 +828,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
-| **Skill points** | **26** | Tree cost | 84 | Studs → points | 14 |
+| **Skill points** | **34** | Tree cost | 246 | Studs → points | 20 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -1154,20 +1154,32 @@ you have already beaten.
 ![The skill tree](docs/tree.png)
 
 **TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
-weapons — and they share nothing. The **layout is identical**; what changes is **where you
-start**. A sword opens into WARFARE and PRECISION, a staff into ELEMENTS and ARCANA, and
-reaching the far side of the wheel costs points you could have spent on power. That is the
-whole reason to play all four.
+weapons — and **they share nothing**. Points earned on a staff are a staff's; switch to the
+axe and you find the axe's own tree exactly as you left it, and switching back finds the
+staff's. The **map is identical**; what changes is **which door you walk in through**, and
+the four doors are on four different sides of it.
+
+**It is a map, not a wheel.** Twenty-five clusters of nodes scattered across it, joined by
+long corridors of cheap travel nodes that run north, east, south and west and all the way
+around the outside. **The rim is the weak end on purpose** — what is near your door is small
+stuff, the prizes sit inward, and the points you spend walking to one are the real price of
+it. Go deep for a single keystone, or stay shallow and take four cheap clusters.
+
+The same prize costs different weapons wildly different amounts. Glass Bricks is 12 points
+out of the sword's door and 16 out of the mace's; the Mire's keystone is 7 for the axe and
+22 for the staff. **A far corner belongs to somebody. The dead centre belongs to nobody** —
+it is a 15-point walk from all four doors, which is what makes it the thing you give the
+whole run up for.
 
 **One currency you can see: skill points.** They come from two places, and both are
 *derived* — nothing is stored as a counter:
 
 | | |
 |---|--:|
-| `floor(studs banked ÷ 600)`, capped | **14** |
-| first time clearing wave 10, 20, 30, 40, 50 *with this weapon* | 5 |
+| `floor(studs banked ÷ 600)`, capped | **20** |
+| first time clearing wave 10, 20, 30, 40, 50, 60, 70 *with this weapon* | 7 |
 | first time smashing each of the 8 bosses *with this weapon* | 8 |
-| **the ceiling on everything** | **26** |
+| **the ceiling on everything** | **34** |
 
 **The wave you CLEARED, not the one you died on.** Dying to the wave-30 boss is a wave-29
 run and the screen says so.
@@ -1177,21 +1189,25 @@ collects about 15× what a death at wave 15 does; banked raw, the early runs thi
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 84 points and you can never hold more than 26.** That is the whole design:
-at most 31% of it, ever, so the tree is a set of builds rather than a ladder you finish.
+**The tree costs 246 points and you can never hold more than 34.** That is the whole design:
+at most **14%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+225 nodes — 74 small ones in clusters, 9 notables, 8 keystones, and 130 steps of corridor
+between them. A travel node is a point you *spend*, not a point you get.
 
 **You cannot drop points wherever you like.** A node has to *touch* something you already
-hold, and everything you hold has to trace back to your weapon's door. The inner ring is a
-circle you can walk around and ring three links sideways, so there is always more than one
-route — each one costs.
+hold, and everything you hold has to trace back to your weapon's door. Every corridor is
+walkable from **both** ends and the map is full of loops: knock out any single cluster and
+the middle is still reachable from all four doors. There is always more than one route —
+each one costs something different.
 
 **Refund is a mode, not a button that eats your tree.** Turn it on and click nodes back one
 at a time, free; a node holding up a branch is refused until you unwind the branch. `CLEAR
 ALL` is there when you want it.
 
-Eight spokes — WARFARE, PRECISION, SWIFTNESS, AFFLICTION, VITALITY, ARMOUR, ELEMENTS,
-ARCANA — each with five small nodes, a notable, and a **keystone that carries a real
-downside**:
+Eight colours of ground — WARFARE, PRECISION, SWIFTNESS, AFFLICTION, VITALITY, ARMOUR,
+ELEMENTS, ARCANA — and a gold CORE at the middle. Clusters wear the colour of the ground
+they stand on, so the regions read from across the map even before you have taken anything.
+Nine notables sit at the centre of a cluster, and eight **keystones carry a real downside**:
 
 | | |
 |---|---|
@@ -1209,7 +1225,7 @@ people still open Path of Exile's tree after ten years.
 
 **Hover anything to read it.** Every node lists exactly what it gives, good and bad, and a
 node whose stat does nothing for the weapon you are on says so rather than selling it to
-you. A running total of everything you have allocated sits beside the wheel — the panel and
+you. A running total of everything you have allocated sits beside the map — the panel and
 the hero are read off the same `mods`, so they cannot disagree.
 
 **It does not touch the test bench.** The tree is applied only when a real run starts, so
@@ -1232,18 +1248,28 @@ Four invariants, and they are the whole reason the save stays alive through futu
    game lives on the derived value rather than on the pool, the tree is bound by every cap —
    *including caps that do not exist yet*.
 
-A corrupt save resets rather than throwing, and a save claiming nodes it never earned is
-refunded instead of honoured.
+A corrupt save resets rather than throwing, and a save claiming nodes it never earned — or
+one it cannot reach from its door — is refunded instead of honoured. That is also why the
+map could be rebuilt from scratch without a line of migration code: every old node ID is
+simply unknown now, so **every existing save got all of its points back to re-spend**.
 
-**And the budget is a test, not a promise.** `meta.js` walks the greediest legal 26 points
-out of the sword's own door and fails the build if it beats **×1.80 total power** — damage
-*times* hearts. Damage alone is the wrong measure: a glass build buys damage by selling
-hearts, and a damage-only budget waves it through while punishing an honest one. The product
-cannot be gamed, because a node with no downside raises both halves.
+An older save from before the tree was split by weapon used to be poured into *all four*
+weapons, which made the tree look shared when it never was. It now lands on the one weapon
+that was selected when it was written, and nowhere else.
 
-Measured: a straight build is **×1.63 damage, ×1.62 power**; the Glass Bricks build is
+**And the budget is a test, not a promise.** `meta.js` walks real routes out of the sword's
+own door, spends **exactly** the 34-point ceiling on them — a budget checked on a half-spent
+tree is a budget nobody is ever held to — and fails the build if it beats **×1.80 total
+power**, damage *times* hearts. Damage alone is the wrong measure: a glass build buys damage
+by selling hearts, and a damage-only budget waves it through while punishing an honest one.
+The product cannot be gamed, because a node with no downside raises both halves.
+
+Measured: a straight build is **×1.60 damage, ×1.60 power**; the Glass Bricks build is
 **×2.08 damage but only ×1.48 power** — more damage, less total, which is exactly the trade
 it advertises. The audit caught the tree at ×1.97 on its very first run.
+
+The ceiling went from 26 to 34 and the power did **not** move, because the tree grew faster
+than the ceiling did: the extra points go into corridor. That is the corridor doing its job.
 
 ---
 

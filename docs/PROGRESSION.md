@@ -3,7 +3,9 @@
 *Status: **BUILT** — phases 1 to 3. What shipped differs from the design below in four
 places, all decided by the author; the differences are listed under
 [What changed on the way in](#what-changed-on-the-way-in). The design text is kept as it was
-written so the reasoning survives.*
+written so the reasoning survives. Two rounds of playtesting have since changed it again —
+see [Second pass](#second-pass--what-playtesting-changed) and
+[Third pass](#third-pass--the-wheel-became-a-map).*
 
 ---
 
@@ -430,3 +432,72 @@ writer, the wording and the formatting together. The hero, the hover card and th
 stat panel are all read off the same list, so they cannot drift — and a stat that does
 nothing for the weapon you are on is dropped from the panel and labelled in the tooltip
 rather than silently sold to you.
+
+---
+
+## Third pass — the wheel became a map
+
+The wheel was legible and dull. Eight spokes radiating from a hub is a *menu* drawn in a
+circle: every route is the same length, every weapon's journey is a rotation of every other
+weapon's, and the only decision is which spoke. The second round of playtesting asked for
+the thing Path of Exile actually does — **mess**.
+
+### The four doors were not far enough apart
+
+They sat between adjacent spokes, which put them within a couple of nodes of each other. A
+weapon's identity in a shared tree is *distance*, and there was none. The doors now sit on
+four sides of the map, ~640 units from the middle and nowhere near one another.
+
+The test for this is not "the doors are far apart" — that is a fact about coordinates. It is
+**the price list**: the cheapest route from every door to every prize, for all four weapons.
+Those four vectors have to be different, every far corner has to cost somebody at least 6
+points more than it costs somebody else, and the dead centre has to cost everybody about the
+same. A corner belongs to a weapon; the middle belongs to nobody.
+
+### Clusters and corridors, instead of rings
+
+Twenty-five clusters — a little ring of minor nodes you can walk around, sometimes with a
+notable or a keystone in the middle of it — joined by seventy corridors of cheap travel
+nodes. The corridors are what makes the tree cost something: **130 of the 225 nodes are
+corridor**, so the ceiling rose from 26 to 34 and the power it buys did not move at all.
+
+Three things fall out of that shape and none of them had to be built:
+
+- **Only every other node of a cluster touches its middle**, so you always walk part of a
+  cluster to earn the thing at its centre, and which side you come in on decides what you
+  pick up on the way.
+- **`req` is the adjacency, both ways.** A corridor is walkable from either end, which is
+  what makes there be more than one route to anywhere. The four doors are the exception —
+  nothing leads *to* a door.
+- **No single cluster is a choke point.** Knock any one of them out and the middle of the
+  map is still reachable from all four doors. That is an assertion, and it fails against a
+  build with only one way in.
+
+### The nudge
+
+A corridor drawn straight through the middle of a cluster reads as a node belonging to it,
+and clicking for one and getting the other is the kind of bug nobody reports. Rather than
+hand-tuning every corridor, a **relaxation pass** shoves travel nodes off whatever they
+landed on — a little, and never more than 46 units from where the corridor put them. The
+next cluster anyone adds cannot quietly bury one.
+
+`meta.js` asserts no two nodes overlap at all; with the relaxation disabled it reports nine
+collisions, one of them a dead-centre hit.
+
+### The leak that was not a leak
+
+Playtesting reported the tree being "shared" between weapons. The live flow was already
+correct — a staff run moved only the staff's record, and points placed on the mace were
+still there after a trip through the axe. The leak was in the **version-1 migration**: a save
+from before the tree was split by weapon was copied into *all four* weapon records.
+
+It now lands on the one weapon that was selected when it was written (`bb_weapon`), and
+nowhere else. Nothing earned after the fix can cross between weapons, and nothing ever
+could — only the one-time import could.
+
+### The rebuild cost no migration code
+
+Every node ID from the wheel is gone. Because the save stores node IDs and derives
+everything else (invariants 1–3), every existing save simply dropped its unknown nodes and
+handed back all of its points to re-spend. There is no migration code for this, and there
+was never going to need to be.

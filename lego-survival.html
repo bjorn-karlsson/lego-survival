@@ -335,6 +335,7 @@
   .sheet.tree{width:98vw;max-width:none;height:97vh;max-height:97vh;margin:1.5vh 0}
   #treeBody{flex-direction:row !important;gap:20px;align-items:stretch;overflow:hidden}
   .treewrap{flex:1 1 auto;line-height:0;min-width:0;display:flex;align-items:center;
+    background:rgba(6,9,13,.84);border:2px solid rgba(255,255,255,.09);border-radius:14px;
     justify-content:center}
   .treewrap svg{display:block;width:100%;height:100%;max-height:100%}
   .treeside{flex:0 0 330px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;
@@ -363,6 +364,10 @@
   .tstats h4{font-family:'Titan One';font-size:10.5px;letter-spacing:2px;color:#ffd76e;
     margin:0 0 7px}
   .tbtn.on{background:#ff8a6a;color:#2a0f08;box-shadow:0 3px 0 #a8442b}
+  .tpts{background:rgba(9,13,17,.62);border:2px solid rgba(255,215,110,.34);
+    border-radius:10px;padding:9px 11px;font-size:12px;color:#dfe8e0;letter-spacing:.4px}
+  .tpts b{font-family:'Titan One';font-size:26px;color:#ffd76e;vertical-align:-3px;margin-right:4px}
+  .tpts i{display:block;font-style:normal;color:#9fb0a4;font-size:10.5px;margin-top:3px}
   .tbar{background:rgba(9,13,17,.46);border:2px solid rgba(255,255,255,.12);
     border-radius:11px;padding:10px 13px;font-size:12px;color:#dfe8e0;line-height:1.6}
   .tbar b{color:#ffd76e}
@@ -5369,11 +5374,11 @@ const META_VER = 2;
    compresses that to about 4x and explains itself in one line. */
 const META_BANK_K        = 4;
 const META_STUD_PER_POINT = 600;
-const META_STUD_POINT_MAX = 14;   /* studs alone can never carry the whole tree */
-const META_POINT_MAX      = 26;   /* THE HARD CEILING */
+const META_STUD_POINT_MAX = 20;   /* studs alone can never carry the whole tree */
+const META_POINT_MAX      = 34;   /* THE HARD CEILING */
 /* first time only, and per weapon — grinding a wave you have already beaten
    with that weapon pays nothing */
-const META_WAVE_POINTS   = [10, 20, 30, 40, 50];
+const META_WAVE_POINTS   = [10, 20, 30, 40, 50, 60, 70];
 
 /* ---- WHAT A NODE CAN GIVE YOU. One registry: the writer, the wording and the
    formatting all live together, so the tooltip, the stat panel and the hero can
@@ -5459,9 +5464,15 @@ function metaModGood(m){
   return !(typeof v === 'number' && v < 0);
 }
 
-/* ---- THE WHEEL. Eight spokes, five small rings, a notable and a keystone at
-   the end of each. Four START nodes sit between the spokes, one per weapon —
-   the same layout every time, entered from a different place. ---- */
+/* ---- THE TREE. NOT a wheel. A MAP: clusters of nodes scattered across it and
+   joined by long chains of cheap travel nodes, with four doors set far apart on
+   the rim. Every direction is walkable — north, east, south, west, and around
+   the outside — and none of the routes is short.
+
+   THE RIM IS THE WEAK END ON PURPOSE. What is near your door is small stuff;
+   the keystones sit inward, and the points you spend walking to one are the
+   real price of it. That is the whole trade: go deep for one prize, or stay
+   shallow and take four cheap ones. ---- */
 const META_SPOKES = [
   { id:'war',   name:'WARFARE',   col:'#ff8a4a' },
   { id:'prec',  name:'PRECISION', col:'#ffd166' },
@@ -5471,100 +5482,264 @@ const META_SPOKES = [
   { id:'arm',   name:'ARMOUR',    col:'#9fb0bd' },
   { id:'elem',  name:'ELEMENTS',  col:'#c95bd0' },
   { id:'arc',   name:'ARCANA',    col:'#9b45d6' },
+  { id:'core',  name:'THE CORE',  col:'#ffd76e' },
 ];
-/* which two spokes each weapon opens into. A sword starts where the physical
-   damage is; a staff starts on the other side of the wheel entirely. */
+/* four doors, one per weapon, on four sides of the map and nowhere near each
+   other. A sword and a staff are walking in from opposite ends of the world. */
 const META_STARTS = [
-  { id:'st_sword', weap:'sword', name:'THE SWORD', between:['war','prec'] },
-  { id:'st_axe',   weap:'axe',   name:'THE AXE',   between:['swift','aff'] },
-  { id:'st_mace',  weap:'mace',  name:'THE MACE',  between:['vit','arm'] },
-  { id:'st_staff', weap:'staff', name:'THE STAFF', between:['elem','arc'] },
+  { id:'st_sword', weap:'sword', name:'THE SWORD', x:700,  y:60   },
+  { id:'st_axe',   weap:'axe',   name:'THE AXE',   x:1340, y:700  },
+  { id:'st_mace',  weap:'mace',  name:'THE MACE',  x:700,  y:1340 },
+  { id:'st_staff', weap:'staff', name:'THE STAFF', x:60,   y:700  },
 ];
-/* ring 1..5 of every spoke, in order. [name, stat, value] */
-const META_SPOKE_NODES = {
-  war:  [['Whetstone','incMelee',0.03], ['Heft','flatPhys',0.3], ['Quickhand','incAtk',0.04],
-         ['Brutality','incMelee',0.05], ['Warlust','incAll',0.04]],
-  prec: [['Keen Edge','incCrit',0.06], ['Cruelty','critMult',0.10], ['Longsword','reach',8],
-         ['Precision','incCrit',0.08], ['Executioner','critMult',0.16]],
-  swift:[['Nimble','speed',0.04], ['Magnetic','magnet',0.10], ['Tumbler','roll',0.08],
-         ['Fleet','speed',0.05], ['Prospector','studs',0.08]],
-  aff:  [['Serrated','bleedChance',0.06], ['Rot','incDot',0.05], ['Virulent','poisonDot',0.25],
-         ['Gutting','bleedShare',0.04], ['Festering','incDot',0.07]],
-  vit:  [['Sturdy','hearts',0.3], ['Mending','regen',0.012], ['Sealed','allRes',0.03],
-         ['Hale','hearts',0.5], ['Recovery','incRegen',0.12]],
-  arm:  [['Plated','armour',3], ['Riveted','incArmour',0.06], ['Warded','suppress',0.04],
-         ['Bulwark','armour',7], ['Tempered','incArmour',0.09]],
-  elem: [['Kindling','incElem',0.03], ['Charged','flatElem',0.3], ['Prismatic','incElem',0.04],
-         ['Pyromancy','incFire',0.08], ['Conduction','incShock',0.08]],
-  arc:  [['Attuned','incSpell',0.03], ['Cadence','incCast',0.04], ['Resonant','incSpell',0.05],
-         ['Widening','boltR',0.10], ['Harmonic','incSpell',0.06]],
+/* every cluster is a little ring of minor nodes you can walk around, sometimes
+   with a NOTABLE or a KEYSTONE sitting in the middle of it. Which side you come
+   in on decides what you pick up on the way. [name, stat, value] */
+const META_CLUSTERS = [
+  /* ---- THE RIM. Two clusters outside every door. Cheap, small, and the first
+     thing anyone takes — which is exactly why none of it is worth much. ---- */
+  { id:'blade',  sp:'war',  x:420,  y:220,  name:'BLADEWORK',     r:60, at:0,
+    minors:[['Whetstone','incMelee',0.03],['Heft','flatPhys',0.3],['Grip','incAtk',0.03]] },
+  { id:'keen',   sp:'prec', x:990,  y:230,  name:'THE KEEN EYE',  r:60, at:0,
+    minors:[['Keen Edge','incCrit',0.05],['Cruelty','critMult',0.10],['Steady Hand','incCrit',0.04]] },
+  { id:'fleet',  sp:'swift',x:1230, y:440,  name:'FLEETFOOT',     r:60, at:0,
+    minors:[['Nimble','speed',0.04],['Tumbler','roll',0.08],['Magnetic','magnet',0.10]] },
+  { id:'serrate',sp:'aff',  x:1250, y:880,  name:'SERRATION',     r:60, at:0,
+    minors:[['Serrated','bleedChance',0.06],['Gutting','bleedShare',0.04],['Rot','incDot',0.05]] },
+  { id:'hide',   sp:'vit',  x:990,  y:1180, name:'THICK HIDE',    r:60, at:0,
+    minors:[['Sturdy','hearts',0.3],['Mending','regen',0.012],['Padded','heartDrop',0.10]] },
+  { id:'plate',  sp:'arm',  x:450,  y:1200, name:'PLATING',       r:60, at:0,
+    minors:[['Plated','armour',3],['Riveted','incArmour',0.06],['Warded','suppress',0.04]] },
+  { id:'kindle', sp:'elem', x:170,  y:940,  name:'KINDLING',      r:60, at:0,
+    minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.3],['Smoulder','incFire',0.05]] },
+  { id:'attune', sp:'arc',  x:150,  y:460,  name:'ATTUNEMENT',    r:60, at:0,
+    minors:[['Attuned','incSpell',0.03],['Cadence','incCast',0.04],['Echo','incSpell',0.03]] },
+  /* ---- THE FAR CORNERS. Past the rim, between two doors, off everybody's way
+     in. Small stuff and ONE odd prize each — a detour you take because of what
+     is at the end of it, never because you were passing. ---- */
+  { id:'scrap',  sp:'swift',x:1150, y:150,  name:'THE SCRAPHEAP', r:64, at:10,
+    minors:[['Prospector','studs',0.08],['Scavenging','heartDrop',0.12],['Deep Pockets','magnet',0.12]],
+    notable:{ name:'Quartermaster', at:30, mods:[['reroll',1]] } },
+  { id:'mire',   sp:'aff',  x:1300, y:1180, name:'THE MIRE',      r:64, at:10,
+    minors:[['Virulent','poisonDot',0.25],['Festering','incDot',0.06],['Weeping','bleedShare',0.03]],
+    keystone:{ name:'Slow Death', at:30, note:'everything lingering doubles; nothing lands hard',
+               mods:[['incDot',0.60],['incAll',-0.25]] } },
+  { id:'cairn',  sp:'arm',  x:230,  y:1230, name:'THE CAIRN',     r:64, at:10,
+    minors:[['Bulwark','armour',7],['Sealed','allRes',0.03],['Anchored','incArmour',0.07]],
+    keystone:{ name:'Ironclad Oath', at:30, note:'a wall that cannot run',
+               mods:[['incArmour',0.50],['allRes',0.10],['speed',-0.20]] } },
+  { id:'spire',  sp:'elem', x:150,  y:200,  name:'THE SPIRE',     r:64, at:10,
+    minors:[['Pyromancy','incFire',0.08],['Conduction','incShock',0.08],['Widening','boltR',0.10]],
+    keystone:{ name:'Slow Burn', at:30, note:'the world stays warm for ten more waves, and teaches you less',
+               mods:[['tollDelay',10],['xp',-0.30]] } },
+  /* ---- THE MIDDLE RING. Eight clusters, one notable each. This is where a
+     run's identity actually gets decided, and it is a walk from every door. --- */
+  { id:'fury',   sp:'war',  x:700,  y:310,  name:'FURY',          r:58, at:20,
+    minors:[['Brutality','incMelee',0.05],['Overhead','incAtk',0.04],['Warlust','incAll',0.03]],
+    notable:{ name:'Warmonger', at:25, mods:[['incMelee',0.10],['incAtk',0.04]] } },
+  { id:'mark',   sp:'prec', x:975,  y:425,  name:'THE MARK',      r:58, at:20,
+    minors:[['Precision','incCrit',0.07],['Executioner','critMult',0.14],['Longsword','reach',8]],
+    notable:{ name:'Assassin', at:25, mods:[['incCrit',0.15],['critMult',0.20]] } },
+  { id:'wound',  sp:'aff',  x:1090, y:700,  name:'OPEN WOUNDS',   r:58, at:20,
+    minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Lingering','incDot',0.05]],
+    notable:{ name:'Plaguebearer', at:25, mods:[['incDot',0.12],['poisonDot',0.4]] } },
+  { id:'stride', sp:'swift',x:975,  y:975,  name:'THE LONG STRIDE',r:58, at:20,
+    minors:[['Fleet','speed',0.05],['Vaulting','roll',0.10],['Lightfoot','speed',0.04]],
+    notable:{ name:'Outrider', at:25, mods:[['speed',0.07],['roll',0.15]] } },
+  { id:'guard',  sp:'vit',  x:700,  y:1090, name:'THE WATCH',     r:58, at:20,
+    minors:[['Hale','hearts',0.5],['Recovery','incRegen',0.12],['Stoic','hearts',0.4]],
+    notable:{ name:'Warden', at:30, mods:[['hearts',1],['regen',0.02]] } },
+  { id:'forge',  sp:'arm',  x:425,  y:975,  name:'THE FORGE',     r:58, at:20,
+    minors:[['Tempered','incArmour',0.09],['Banded','armour',5],['Braced','suppress',0.04]],
+    notable:{ name:'Stonecutter', at:30, mods:[['incArmour',0.12],['suppress',0.04]] } },
+  { id:'flux',   sp:'elem', x:310,  y:700,  name:'FLUX',          r:58, at:20,
+    minors:[['Prismatic','incElem',0.04],['Rimebite','incFrost',0.08],['Arcing','shockChance',0.05]],
+    notable:{ name:'Emberwright', at:25, mods:[['ember',1],['incFire',0.06]] } },
+  { id:'chant',  sp:'arc',  x:425,  y:425,  name:'THE CHANT',     r:58, at:20,
+    minors:[['Resonant','incSpell',0.05],['Metronome','incCast',0.05],['Harmonic','incSpell',0.04]],
+    notable:{ name:'Archivist', at:25, mods:[['spellCap',1],['incCast',0.04]] } },
+  /* ---- THE INNER FOUR. A keystone apiece, and every one of them costs you
+     something. Nobody gets two of these without giving up the rest. ---- */
+  { id:'zeal',   sp:'war',  x:700,  y:500,  name:'ZEALOTRY',      r:56, at:25, a0:-135, lab:-90,
+    minors:[['Reckless','incAll',0.04],['Abandon','incAtk',0.05]],
+    keystone:{ name:'Glass Bricks', at:25, note:'everything you own hits far harder, and you die to anything',
+               mods:[['incAll',0.35],['moreHp',-0.30]] } },
+  { id:'pierce', sp:'prec', x:900,  y:700,  name:'THE POINT',     r:56, at:25, a0:-45, lab:-52,
+    minors:[['Unerring','incCrit',0.06],['Savagery','critMult',0.12]],
+    keystone:{ name:'Perfect Strike', at:30, note:'every swing is a critical, and nothing else is',
+               mods:[['incCrit',1.50],['critMult',-0.50]] } },
+  { id:'blood',  sp:'vit',  x:700,  y:900,  name:'THE RED THIRST',r:56, at:30, a0:45, lab:90,
+    minors:[['Draining','leechRate',0.08],['Sanguine','leech',0.02]],
+    keystone:{ name:'Bloodthirst', at:35, note:'you take it back by hitting, or not at all',
+               mods:[['leechRate',0.20],['leech',0.06],['noRegen',null]] } },
+  { id:'vault',  sp:'arc',  x:500,  y:700,  name:'THE VAULT',     r:56, at:25, a0:135, lab:128,
+    minors:[['Curator','xp',0.08],['Hoarding','studs',0.10]],
+    keystone:{ name:'Scavenger', at:25, note:'every chest is worth double, and you take what you are given',
+               mods:[['chestCards',2],['noReroll',null]] } },
+  /* ---- DEAD CENTRE. The furthest point from every door on the map. ---- */
+  { id:'crux',   sp:'core', x:700,  y:700,  name:'THE CROSSROADS',r:95, at:30,
+    minors:[['Toughened','hearts',0.4],['Sharpened','incAll',0.03],['Hastened','incAtk',0.03],
+            ['Shielded','allRes',0.03],['Focused','incCast',0.03],['Cunning','incCrit',0.05]],
+    keystone:{ name:'Hoarder', at:30, note:'the run pays double into the tree, and hits softer',
+               mods:[['bankMul',2],['incAll',-0.20]] } },
+];
+/* what a step of corridor is worth, by the colour of the ground it crosses.
+   Almost nothing — a travel node is a point you SPEND, not a point you get. */
+const META_TRAVEL = {
+  war:  ['Grit',    'incMelee', 0.010],
+  prec: ['Focus',   'incCrit',  0.015],
+  swift:['Pace',    'speed',    0.008],
+  aff:  ['Taint',   'incDot',   0.012],
+  vit:  ['Vigour',  'hearts',   0.08 ],
+  arm:  ['Guard',   'armour',   1    ],
+  elem: ['Spark',   'incElem',  0.010],
+  arc:  ['Insight', 'incSpell', 0.010],
+  core: ['Resolve', 'incAll',   0.008],
 };
-/* the notable and the keystone at the end of each spoke */
-const META_TIPS = {
-  war:  { n:{ name:'Warmonger',  at:25, mods:[['incMelee',0.10],['incAtk',0.04]] },
-          k:{ name:'Glass Bricks', at:25, note:'everything you own hits far harder, and you die to anything',
-              mods:[['incAll',0.35],['moreHp',-0.30]] } },
-  prec: { n:{ name:'Assassin',   at:25, mods:[['incCrit',0.15],['critMult',0.20]] },
-          k:{ name:'Perfect Strike', at:30, note:'every swing is a critical, and nothing else is',
-              mods:[['incCrit',1.50],['critMult',-0.50]] } },
-  swift:{ n:{ name:'Quartermaster', at:30, mods:[['reroll',1]] },
-          k:{ name:'Hoarder',    at:30, note:'the run pays double into the tree, and hits softer',
-              mods:[['bankMul',2],['incAll',-0.20]] } },
-  aff:  { n:{ name:'Plaguebearer', at:25, mods:[['incDot',0.12],['poisonDot',0.4]] },
-          k:{ name:'Slow Death',  at:30, note:'everything lingering doubles; nothing lands hard',
-              mods:[['incDot',0.60],['incAll',-0.25]] } },
-  vit:  { n:{ name:'Warden',     at:30, mods:[['hearts',1],['regen',0.02]] },
-          k:{ name:'Bloodthirst', at:35, note:'you take it back by hitting, or not at all',
-              mods:[['leechRate',0.20],['leech',0.06],['noRegen',null]] } },
-  arm:  { n:{ name:'Stonecutter', at:30, mods:[['incArmour',0.12],['suppress',0.04]] },
-          k:{ name:'Ironclad Oath', at:30, note:'a wall that cannot run',
-              mods:[['incArmour',0.50],['allRes',0.10],['speed',-0.20]] } },
-  elem: { n:{ name:'Emberwright', at:25, mods:[['ember',1],['incFire',0.06]] },
-          k:{ name:'Slow Burn',  at:30, note:'the world stays warm for ten more waves, and teaches you less',
-              mods:[['tollDelay',10],['xp',-0.30]] } },
-  arc:  { n:{ name:'Archivist',  at:25, mods:[['spellCap',1],['incCast',0.04]] },
-          k:{ name:'Scavenger',  at:25, note:'every chest is worth double, and you take what you are given',
-              mods:[['chestCards',2],['noReroll',null]] } },
-};
-const META_COST = { 0:0, 1:1, 2:1, 3:1, 4:1, 5:1, 6:2, 7:3 };
-const META_RING_AT = { 1:0, 2:10, 3:20, 4:30, 5:35 };
+/* [from, to, how many travel nodes, how far the corridor bows sideways].
+   The bow is what stops this looking like a diagram. */
+const META_LINKS = [
+  /* out of the four doors */
+  ['st_sword','blade',2,0],   ['st_sword','keen',2,0],
+  ['st_axe','fleet',2,0],     ['st_axe','serrate',2,0],
+  ['st_mace','hide',2,0],     ['st_mace','plate',2,0],
+  ['st_staff','kindle',2,0],  ['st_staff','attune',2,0],
+  /* ...and the long way round to your own far corner */
+  ['st_sword','scrap',3,-40], ['st_axe','mire',3,-40],
+  ['st_mace','cairn',3,-40],  ['st_staff','spire',3,-40],
+  /* ALL THE WAY AROUND THE OUTSIDE. Slow, cheap, and it passes every door. */
+  ['blade','keen',4,-80],     ['keen','scrap',1,0],      ['scrap','fleet',2,-30],
+  ['fleet','serrate',3,-50],  ['serrate','mire',2,0],    ['mire','hide',2,-40],
+  ['hide','plate',4,-80],     ['plate','cairn',1,0],     ['cairn','kindle',2,30],
+  ['kindle','attune',3,50],   ['attune','spire',2,0],    ['spire','blade',2,-30],
+  /* the rim reaching inward — sixteen separate ways off the outside */
+  ['blade','fury',2,20],      ['blade','chant',1,0],     ['keen','mark',1,0],
+  ['keen','fury',2,-20],      ['scrap','mark',2,25],     ['fleet','mark',1,0],
+  ['fleet','wound',2,20],     ['serrate','wound',1,0],   ['mire','stride',2,25],
+  ['hide','stride',1,0],      ['hide','guard',2,-20],    ['plate','guard',2,20],
+  ['plate','forge',1,0],      ['cairn','forge',2,-25],   ['kindle','flux',2,-20],
+  ['attune','flux',2,20],     ['attune','chant',2,-20],  ['spire','chant',2,25],
+  /* the middle ring, joined all the way round */
+  ['fury','mark',2,-30],      ['mark','wound',2,-30],    ['wound','stride',2,-30],
+  ['stride','guard',2,-30],   ['guard','forge',2,-30],   ['forge','flux',2,-30],
+  ['flux','chant',2,-30],     ['chant','fury',2,-30],
+  /* down to the inner four — two ways into each */
+  ['fury','zeal',1,0],        ['mark','zeal',2,20],      ['mark','pierce',2,-20],
+  ['wound','pierce',1,0],     ['stride','pierce',2,20],  ['stride','blood',2,-20],
+  ['guard','blood',1,0],      ['forge','blood',2,20],    ['forge','vault',2,-20],
+  ['flux','vault',1,0],       ['chant','vault',2,20],    ['chant','zeal',2,-20],
+  /* the inner four to each other, and to the middle of the world */
+  ['zeal','pierce',1,-25],    ['pierce','blood',1,-25],
+  ['blood','vault',1,-25],    ['vault','zeal',1,-25],
+  ['zeal','crux',1,0],        ['pierce','crux',1,0],
+  ['blood','crux',1,0],       ['vault','crux',1,0],
+];
 const META_NODES = [];
 const META_BY_ID = {};
+const META_CLUSTER_BY_ID = {};
+const META_NODE_R = { start:30, keystone:26, notable:22, minor:16, travel:10 };
 (function buildTree(){
-  const N = META_SPOKES.length;
+  const edges = [];
+  const add = (a,b)=>{ if(a && b && a !== b) edges.push([a,b]); };
+  const push = n=>{ META_NODES.push(n); META_BY_ID[n.id] = n; return n; };
   for(const st of META_STARTS)
-    META_NODES.push({ id:st.id, kind:'start', weap:st.weap, name:st.name, ring:0,
-                      spoke:st.between[0], between:st.between, mods:[], req:[] });
-  META_SPOKES.forEach((sp, si)=>{
-    const rows = META_SPOKE_NODES[sp.id] || [];
-    rows.forEach((row, ri)=>{
-      const ring = ri+1;
-      const id = sp.id+ring;
-      const req = [];
-      if(ring === 1){
-        /* the inner ring is a CIRCLE you can walk around, entered from whichever
-           start opens onto it — so a staff can reach WARFARE, it just pays */
-        for(const st of META_STARTS) if(st.between.indexOf(sp.id) >= 0) req.push(st.id);
-        req.push(META_SPOKES[(si+N-1)%N].id+'1', META_SPOKES[(si+1)%N].id+'1');
-      } else {
-        req.push(sp.id+(ring-1));
-        /* ...and ring three links sideways too, so there is more than one way out */
-        if(ring === 3) req.push(META_SPOKES[(si+N-1)%N].id+'3', META_SPOKES[(si+1)%N].id+'3');
-      }
-      META_NODES.push({ id, spoke:sp.id, ring, name:row[0], at:META_RING_AT[ring],
-                        mods:[[row[1], row[2]]], req });
+    push({ id:st.id, kind:'start', weap:st.weap, name:st.name, spoke:'core', cl:null,
+           x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
+  for(const c of META_CLUSTERS){
+    META_CLUSTER_BY_ID[c.id] = c;
+    const r = c.r || 58, a0 = ((c.a0 === undefined ? -90 : c.a0) * Math.PI) / 180;
+    c.nodes = [];
+    c.minors.forEach((row, i)=>{
+      const a = a0 + (i / c.minors.length) * TAU;
+      c.nodes.push(push({ id:c.id+'_'+i, kind:'minor', spoke:c.sp, cl:c.id, name:row[0],
+        x:Math.round(c.x + Math.cos(a)*r), y:Math.round(c.y + Math.sin(a)*r),
+        at:c.at||0, cost:1, mods:[[row[1], row[2]]], req:[] }).id);
     });
-    const t = META_TIPS[sp.id];
-    if(t){
-      META_NODES.push({ id:sp.id+'N', spoke:sp.id, ring:6, name:t.n.name, at:t.n.at,
-                        kind:'notable', mods:t.n.mods, req:[sp.id+'5'] });
-      META_NODES.push({ id:sp.id+'K', spoke:sp.id, ring:7, name:t.k.name, at:t.k.at,
-                        kind:'keystone', note:t.k.note, mods:t.k.mods, req:[sp.id+'N'] });
+    /* the ring of a cluster closes, so you can come in either side of it */
+    if(c.nodes.length > 2) for(let i=0;i<c.nodes.length;i++) add(c.nodes[i], c.nodes[(i+1)%c.nodes.length]);
+    else if(c.nodes.length === 2) add(c.nodes[0], c.nodes[1]);
+    const mid = c.keystone || c.notable;
+    if(mid){
+      const n = push({ id:c.id+'_C', kind: c.keystone ? 'keystone' : 'notable',
+        spoke:c.sp, cl:c.id, name:mid.name, note:mid.note, x:c.x, y:c.y,
+        at: mid.at || c.at || 0, cost: c.keystone ? 3 : 2, mods:mid.mods, req:[] });
+      c.centre = n.id;
+      /* only every OTHER node of the ring touches the middle: whatever is in
+         there, you walk part of its cluster to get at it */
+      for(let i=0;i<c.nodes.length;i+=2) add(c.nodes[i], n.id);
     }
+  }
+  /* where a corridor attaches: the node of each cluster nearest the other end,
+     so the long way round genuinely arrives on the far side */
+  const endOf = id=>{
+    const c = META_CLUSTER_BY_ID[id];
+    if(c) return { x:c.x, y:c.y, sp:c.sp, pick:(tx,ty)=>{
+      let best = null, bd = Infinity;
+      for(const nid of c.nodes){
+        const n = META_BY_ID[nid], d = (n.x-tx)*(n.x-tx) + (n.y-ty)*(n.y-ty);
+        if(d < bd){ bd = d; best = nid; }
+      }
+      return best; } };
+    const n = META_BY_ID[id];
+    return { x:n.x, y:n.y, sp:null, pick:()=>id };
+  };
+  META_LINKS.forEach((L, li)=>{
+    const A = endOf(L[0]), B = endOf(L[1]);
+    const an = META_BY_ID[A.pick(B.x, B.y)], bn = META_BY_ID[B.pick(A.x, A.y)];
+    if(!an || !bn) return;
+    const cnt = L[2] || 1, bow = L[3] || 0;
+    const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy) || 1;
+    const px = -dy/len, py = dx/len;
+    const sa = A.sp || B.sp || 'core', sb = B.sp || A.sp || 'core';
+    let prev = an.id;
+    for(let i=0;i<cnt;i++){
+      const t = (i+1)/(cnt+1);
+      const off = Math.sin(t*Math.PI)*bow + (((li+i)%3) - 1)*7;
+      const sp = t < 0.5 ? sa : sb, use = META_TRAVEL[sp] || META_TRAVEL.core;
+      const n = push({ id:'t'+li+'_'+i, kind:'travel', spoke:sp, cl:null, name:use[0],
+        x:Math.round(an.x + dx*t + px*off), y:Math.round(an.y + dy*t + py*off),
+        at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
+      add(prev, n.id); prev = n.id;
+    }
+    add(prev, bn.id);
   });
-  for(const n of META_NODES) META_BY_ID[n.id] = n;
+  /* NUDGE. A corridor laid straight through the middle of a cluster reads as a
+     node belonging to it, and it does not. Shove the travel nodes off whatever
+     they landed on — a little, and never far enough to change which way the
+     corridor goes. Doing it here rather than by hand means the next cluster
+     anyone adds cannot quietly bury one. */
+  (function relax(){
+    const R = n=> META_NODE_R[n.kind] || 14;
+    const home = {};
+    for(const n of META_NODES) if(n.kind === 'travel') home[n.id] = [n.x, n.y];
+    for(let pass=0; pass<24; pass++) for(const n of META_NODES){
+      if(n.kind !== 'travel') continue;
+      let mx = 0, my = 0;
+      for(const o of META_NODES){
+        if(o === n) continue;
+        const dx = n.x-o.x, dy = n.y-o.y, need = R(n)+R(o)+14, d = Math.hypot(dx, dy);
+        if(d >= need) continue;
+        const a = d < 0.01 ? ((n.x*7 + n.y*13) % 628)/100 : Math.atan2(dy, dx);
+        mx += Math.cos(a)*(need-d)*0.5; my += Math.sin(a)*(need-d)*0.5;
+      }
+      if(!mx && !my) continue;
+      n.x = Math.round(n.x + mx); n.y = Math.round(n.y + my);
+      const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
+      if(od > 46){ n.x = Math.round(h[0] + ox/od*46); n.y = Math.round(h[1] + oy/od*46); }
+    }
+  })();
+  /* REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a corridor can be
+     walked from either end, and why there is more than one route anywhere. The
+     four doors are the exception: nothing leads TO a door, you are already in
+     one of them. */
+  for(const e of edges){
+    const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]];
+    if(!A || !B) continue;
+    if(A.kind !== 'start' && A.req.indexOf(e[1]) < 0) A.req.push(e[1]);
+    if(B.kind !== 'start' && B.req.indexOf(e[0]) < 0) B.req.push(e[0]);
+  }
 })();
-function metaCost(n){ return META_COST[n.ring] || 1; }
+function metaCost(n){ return n && n.cost !== undefined ? n.cost : 1; }
 function metaTotalCost(){ let t=0; for(const n of META_NODES) t += metaCost(n); return t; }
 /* a node whose every mod does nothing for this weapon — still walkable, but the
    panel says so rather than selling you something you cannot use */
@@ -5606,17 +5781,21 @@ function metaParse(raw){
   let o = null;
   try { o = JSON.parse(raw); } catch(e){ return null; }
   if(!o || typeof o !== 'object') return null;
+  /* A VERSION-1 SAVE HAD ONE RECORD PER DIFFICULTY AND NO WEAPONS, and there is
+     exactly one weapon it can honestly have belonged to: the one that was
+     selected when it was written. Copying it into all four is what made the
+     tree look shared, and it was never true — a staff's points are a staff's. */
+  let lastWeap = null;
+  try { lastWeap = localStorage.getItem('bb_weapon'); } catch(e){}
+  if(WEAPON_KEYS.indexOf(lastWeap) < 0) lastWeap = WEAPON_KEYS[0];
   const out = { v:META_VER, on: o.on !== false };
   for(const d of Object.keys(DIFFS)){
     out[d] = {};
-    const dr = o[d];
-    for(const w of WEAPON_KEYS){
-      /* a version-1 save had ONE record per difficulty and no weapons. It is
-         read into the weapon that save's own best-per-weapon says it was, and
-         otherwise into every weapon — the studs were earned either way. */
-      const legacy = (dr && !dr[w] && (dr.nodes || dr.studsEarned !== undefined)) ? dr : null;
-      out[d][w] = metaParseOne((dr && dr[w]) || legacy);
-    }
+    const dr = (o[d] && typeof o[d] === 'object') ? o[d] : null;
+    const legacy = (dr && !WEAPON_KEYS.some(w=>dr[w])
+                    && (dr.nodes || dr.studsEarned !== undefined)) ? dr : null;
+    for(const w of WEAPON_KEYS)
+      out[d][w] = metaParseOne((dr && dr[w]) || (w === lastWeap ? legacy : null));
   }
   return out;
 }
@@ -5685,7 +5864,8 @@ function metaConnected(id, m, extra){
 }
 function metaCanBuy(n, m){
   m = m || metaCur();
-  if(!n || metaHas(n.id, m) || metaLocked(n, m)) return false;
+  if(!n || n.kind === 'start') return false;   /* you are standing in it already */
+  if(metaHas(n.id, m) || metaLocked(n, m)) return false;
   if(metaPointsLeft(m) < metaCost(n)) return false;
   return metaConnected(n.id, m, [metaStartId()]);
 }
@@ -5822,28 +6002,30 @@ function metaBossKill(key){
   if(m.bosses.indexOf(key) >= 0) return false;
   m.bosses.push(key); metaSave(); return true;
 }
-/* ---- the screen. An SVG wheel: eight spokes, four starts, the whole thing
-   always VISIBLE because a tree you cannot see is a list. ---- */
-const TREE_R = 430, TREE_RING = [86, 140, 190, 240, 290, 340, 388, 430];
-let treeOn = false, treePick = null, treeRefund = false, treeHover = null;
-function metaNodeAngle(n){
-  const N = META_SPOKES.length;
-  if(n.kind === 'start'){
-    const a = META_SPOKES.findIndex(x=>x.id === n.between[0]);
-    return ((a + 0.5) / N) * TAU - Math.PI/2;
+/* ---- the screen. An SVG map of the whole thing, always VISIBLE, because a
+   tree you cannot see is a shopping list with extra steps. ---- */
+const TREE_VIEW = (function(){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for(const n of META_NODES){
+    if(n.x < x0) x0 = n.x; if(n.x > x1) x1 = n.x;
+    if(n.y < y0) y0 = n.y; if(n.y > y1) y1 = n.y;
   }
-  return (META_SPOKES.findIndex(x=>x.id === n.spoke) / N) * TAU - Math.PI/2;
-}
-function metaNodeXY(n){
-  const a = metaNodeAngle(n), r = TREE_RING[n.ring];
-  return { x: TREE_R + Math.cos(a)*r, y: TREE_R + Math.sin(a)*r, a };
-}
+  const PAD = 84;
+  return { x:x0-PAD, y:y0-PAD, w:(x1-x0)+PAD*2, h:(y1-y0)+PAD*2,
+           cx:(x0+x1)/2, cy:(y0+y1)/2 };
+})();
+let treeOn = false, treePick = null, treeRefund = false, treeHover = null;
+function metaNodeXY(n){ return { x:n.x, y:n.y }; }
 function metaSpokeCol(id){
   const sp = META_SPOKES.find(x=>x.id===id);
   return sp ? sp.col : '#9fb0bd';
 }
-function metaNodeRadius(n){
-  return n.kind === 'start' ? 20 : n.ring === 7 ? 17 : n.ring === 6 ? 14 : 10;
+function metaNodeRadius(n){ return META_NODE_R[n.kind] || 14; }
+function metaKindName(n){
+  return n.kind === 'start' ? 'STARTING POINT'
+       : n.kind === 'keystone' ? 'KEYSTONE'
+       : n.kind === 'notable' ? 'NOTABLE'
+       : n.kind === 'travel' ? 'PATH' : 'MINOR';
 }
 /* the card that follows the cursor — name, what it gives, what it costs */
 function metaTipHtml(n, m){
@@ -5854,9 +6036,7 @@ function metaTipHtml(n, m){
     return `<li class="${metaModGood(mod)?'good':'bad'}${dud?' dud':''}">${esc(metaModText(mod))}`+
            `${dud?' <em>— nothing for a '+esc(wk)+'</em>':''}</li>`;
   }).join('');
-  const kind = n.kind === 'start' ? 'STARTING POINT'
-             : n.ring === 7 ? 'KEYSTONE' : n.ring === 6 ? 'NOTABLE' : 'ring '+n.ring;
-  const sp = META_SPOKES.find(x=>x.id===n.spoke);
+  const cl = META_CLUSTER_BY_ID[n.cl];
   let foot;
   if(n.kind === 'start') foot = n.id === metaStartId() ? 'where this weapon begins'
                                                        : 'another weapon starts here';
@@ -5871,7 +6051,7 @@ function metaTipHtml(n, m){
     (n.note ? `<p class="tnote">${esc(n.note)}</p>` : '')+
     (lines ? `<ul>${lines}</ul>` : '')+
     `<div class="tmeta">${metaCost(n)} point${metaCost(n)===1?'':'s'}`+
-    (sp && n.kind!=='start' ? ` · ${sp.name}` : '')+` · ${kind}</div>`+
+    (cl ? ` · ${esc(cl.name)}` : '')+` · ${metaKindName(n)}</div>`+
     `<div class="tmeta tfoot">${foot}</div>`;
 }
 function renderTree(){
@@ -5888,42 +6068,26 @@ function renderTree(){
     `the tree costs ${metaTotalCost()}, the ceiling is ${META_POINT_MAX}`;
 
   const parts = [];
-  const PAD = 96;
-  parts.push(`<svg id="treeSvg" viewBox="${-PAD} ${-PAD} ${TREE_R*2+PAD*2} ${TREE_R*2+PAD*2}">`);
-  for(const r of TREE_RING)
-    parts.push(`<circle cx="${TREE_R}" cy="${TREE_R}" r="${r}" fill="none" `+
-               `stroke="rgba(255,255,255,.05)" stroke-width="1"/>`);
-  /* EVERY EDGE IS DRAWN, so you can see what you would have to path through */
+  parts.push(`<svg id="treeSvg" viewBox="${TREE_VIEW.x} ${TREE_VIEW.y} ${TREE_VIEW.w} ${TREE_VIEW.h}">`);
+  /* a faint blot behind each cluster, so a GROUP of nodes reads as one thing */
+  for(const c of META_CLUSTERS)
+    parts.push(`<circle cx="${c.x}" cy="${c.y}" r="${(c.r||58)+30}" fill="${metaSpokeCol(c.sp)}" `+
+               `opacity="0.055"/>`);
+  /* EVERY EDGE IS DRAWN, so you can see the whole walk before you pay for it */
   for(const n of META_NODES){
-    const to = metaNodeXY(n);
     for(const rid of n.req){
       const r = META_BY_ID[rid];
       if(!r) continue;
-      if(r.kind !== 'start' && r.id > n.id) continue;      /* draw each edge once */
+      if(r.kind !== 'start' && r.id > n.id) continue;       /* draw each edge once */
       if(r.kind === 'start' && r.id !== startId) continue;  /* other weapons' doors stay shut */
-      const fr = metaNodeXY(r);
       const live = metaHas(n.id, m) && (metaHas(rid, m) || rid === startId);
-      parts.push(`<line x1="${fr.x}" y1="${fr.y}" x2="${to.x}" y2="${to.y}" `+
-        `stroke="${live ? metaSpokeCol(n.spoke) : 'rgba(255,255,255,.10)'}" `+
-        `stroke-width="${live?4:2}" opacity="${live?0.85:1}"/>`);
+      parts.push(`<line x1="${r.x}" y1="${r.y}" x2="${n.x}" y2="${n.y}" `+
+        `stroke="${live ? metaSpokeCol(n.spoke) : 'rgba(255,255,255,.20)'}" `+
+        `stroke-width="${live?7:3.5}" stroke-linecap="round" opacity="${live?0.9:1}"/>`);
     }
   }
-  for(const sp of META_SPOKES){
-    const si = META_SPOKES.findIndex(x=>x.id===sp.id);
-    const a = (si / META_SPOKES.length) * TAU - Math.PI/2;
-    const lx = TREE_R + Math.cos(a)*(TREE_RING[7]+40), ly = TREE_R + Math.sin(a)*(TREE_RING[7]+40);
-    parts.push(`<text x="${lx}" y="${ly}" fill="${sp.col}" font-size="15" font-family="Titan One"`+
-      ` text-anchor="${Math.cos(a) > 0.3 ? 'start' : Math.cos(a) < -0.3 ? 'end' : 'middle'}"`+
-      ` dy="${Math.sin(a) > 0.3 ? 16 : Math.sin(a) < -0.3 ? -8 : 5}">${sp.name}</text>`);
-  }
-  parts.push(`<circle cx="${TREE_R}" cy="${TREE_R}" r="40" fill="rgba(9,13,17,.72)" `+
-             `stroke="rgba(255,255,255,.18)" stroke-width="2"/>`);
-  parts.push(`<text x="${TREE_R}" y="${TREE_R+2}" fill="#ffd76e" font-size="26" `+
-             `font-family="Titan One" text-anchor="middle">${left}</text>`);
-  parts.push(`<text x="${TREE_R}" y="${TREE_R+20}" fill="#9fb0a4" font-size="10" `+
-             `font-family="Fredoka" text-anchor="middle">TO PLACE</text>`);
   for(const n of META_NODES){
-    const pos = metaNodeXY(n), col = metaSpokeCol(n.spoke);
+    const col = metaSpokeCol(n.spoke);
     const isStart = n.kind === 'start';
     const mine = isStart && n.id === startId;
     if(isStart && !mine) continue;                 /* one door, yours */
@@ -5931,33 +6095,55 @@ function renderTree(){
     const lock = !isStart && metaLocked(n, m);
     const can  = !isStart && metaCanBuy(n, m);
     const rr = metaNodeRadius(n);
-    const fill = has ? (isStart ? '#ffd76e' : col) : lock ? 'rgba(20,26,31,.85)' : 'rgba(30,38,45,.95)';
+    const fill = has ? (isStart ? '#ffd76e' : col) : 'rgba(16,21,26,.95)';
     const refundable = treeRefund && has && !isStart && metaCanRefund(n.id, m);
-    const stroke = refundable ? '#ff8a6a' : has ? '#fff' : can ? col : 'rgba(255,255,255,.16)';
+    /* an unowned node still wears the colour of the ground it stands on, faintly
+       — that is how eight regions read as eight regions from across the map */
+    const stroke = refundable ? '#ff8a6a' : has ? '#fff' : can ? col : col;
+    const sop = has || can ? 1 : lock ? 0.3 : 0.45;
     parts.push(`<g class="tnode${lock?' locked':''}" data-node="${n.id}">`+
-      `<circle cx="${pos.x}" cy="${pos.y}" r="${rr+9}" fill="transparent"/>`+
-      `<circle cx="${pos.x}" cy="${pos.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
-      `stroke-width="${refundable?4:has?3:2}" opacity="${lock?0.45:1}"/>`+
-      (isStart ? `<text x="${pos.x}" y="${pos.y+5}" text-anchor="middle" font-size="14" `+
+      `<circle cx="${n.x}" cy="${n.y}" r="${rr+16}" fill="transparent"/>`+
+      `<circle cx="${n.x}" cy="${n.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
+      `stroke-width="${refundable?6:has?5:3}" stroke-opacity="${sop}" `+
+      `opacity="${lock?0.55:1}"/>`+
+      (isStart ? `<text x="${n.x}" y="${n.y+7}" text-anchor="middle" font-size="20" `+
                  `fill="#20160a" font-family="Titan One">✦</text>`
-       : n.ring >= 6 ? `<text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="11" `+
-                 `fill="${has?'#12181d':col}" font-family="Titan One">`+
-                 `${n.ring===7?'★':'◆'}</text>` : '')+
+       : n.kind === 'keystone' || n.kind === 'notable'
+         ? `<text x="${n.x}" y="${n.y+6}" text-anchor="middle" font-size="17" `+
+           `fill="${has?'#12181d':col}" font-family="Titan One">`+
+           `${n.kind==='keystone'?'★':'◆'}</text>` : '')+
       `</g>`);
+  }
+  /* cluster names, pushed outward from the middle of the map */
+  for(const c of META_CLUSTERS){
+    /* pushed away from the middle of the map, unless the cluster asks for a
+       direction of its own — the inner ones would otherwise sit on the corridor
+       you came in along, which is the one thing on screen you are looking at */
+    const dx = c.x - TREE_VIEW.cx, dy = c.y - TREE_VIEW.cy, d = Math.hypot(dx, dy);
+    const off = (c.r||58) + 48;
+    const a = c.lab !== undefined ? c.lab*Math.PI/180 : d < 1 ? -Math.PI/2 : Math.atan2(dy, dx);
+    const u = Math.cos(a), v = Math.sin(a);
+    const lx = c.x + u*off, ly = c.y + v*off;
+    parts.push(`<text x="${Math.round(lx)}" y="${Math.round(ly)}" fill="${metaSpokeCol(c.sp)}" `+
+      `font-size="21" font-family="Titan One" opacity="0.92"`+
+      ` stroke="rgba(4,7,10,.92)" stroke-width="5" paint-order="stroke"`+
+      ` text-anchor="${u > 0.3 ? 'start' : u < -0.3 ? 'end' : 'middle'}"`+
+      ` dy="${v > 0.3 ? 20 : v < -0.3 ? -6 : 7}">${esc(c.name)}</text>`);
   }
   parts.push('</svg>');
 
   const stats = metaStatLines(m);
   const nextStuds = metaStudsToNext(m);
   const side = `
+    <div class="tpts"><b>${left}</b> to place <i>${spent} of ${earned} spent</i></div>
     <div class="tinfo" id="treeInfo">${treePick && META_BY_ID[treePick]
       ? metaTipHtml(META_BY_ID[treePick], m)
       : `<h4>${esc(weapon.name)} · ${esc(difficulty.name)}</h4>
          <p>Hover a node to read it, click to take it. You can only take what
          TOUCHES something you already hold, so where you start decides what is
-         cheap and what is a journey.</p>
+         cheap and what is a long walk.</p>
          <div class="tmeta">Every weapon has its own tree on every difficulty — twelve
-         in all, one layout, four doors.</div>`}</div>
+         in all, one map, four doors set far apart.</div>`}</div>
     <div class="tbar"><b>${m.studsEarned}</b> studs banked
       <i>${nextStuds === null ? 'studs give no more points — the rest come from firsts'
                               : nextStuds+' to the next point'}</i></div>
@@ -16430,10 +16616,12 @@ function renderRunEnd(res, prevBest){
            `<i>${metaPointsEarned(m)} earned, ceiling ${META_POINT_MAX}</i></div>`);
   /* NAME SOMETHING YOU COULD ACTUALLY GO AND TAKE — not a door you already
      stand in, and not a node on the far side of a tree you have not walked to */
-  const want = META_NODES.filter(n=>
+  /* a corridor node is not a reward — name the nearest thing worth walking to */
+  const reach = META_NODES.filter(n=>
       n.kind !== 'start' && !metaHas(n.id, m) && !metaLocked(n, m)
       && metaConnected(n.id, m, [metaStartId()]))
-    .sort((a,b)=> metaCost(a)-metaCost(b))[0];
+    .sort((a,b)=> metaCost(a)-metaCost(b));
+  const want = reach.find(n=>n.kind !== 'travel') || reach[0];
   if(want){
     const short = metaCost(want) - metaPointsLeft(m);
     const gives = want.mods.map(mod=>metaModText(mod)).join(' \u00b7 ');
