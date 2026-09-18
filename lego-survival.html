@@ -1100,7 +1100,12 @@ const SLAM_WIND       = 0.16;   /* the head coming down, before the floor breaks
 const SLAM_RAY_GAP    = 0.27;   /* radians between one line of stone and the next */
 const SLAM_RAYS_MAX   = 26;
 const SLAM_STEP       = 52;     /* pixels between one row of teeth and the next */
-const SLAM_SHARE      = 0.62;   /* one tooth, against one full swing */
+/* ONE THIRD OF WHAT IT WAS. At 0.62 a tooth, a body held in the middle of the
+   fault took 1.86 swings a slam AND every other body in the fan took the same —
+   an AoE basic attack out-damaging the single-target one it replaced. The tooth
+   is a third of that now: three of them land 0.63 of a swing on one body, so the
+   mace trades single-target for coverage instead of getting both. */
+const SLAM_SHARE      = 0.207;  /* one tooth, against one full swing */
 const SLAM_MAX_HITS   = 3;      /* how many teeth of ONE slam may bite one body */
 const SLAM_ELEM_SHARE = 0.5;    /* how much of the tooth the legendary converts */
 const SLAM_ELEMS      = ['fire', 'shock', 'frost'];
@@ -7048,8 +7053,12 @@ function renderCharSheet(){
       `${player.moreAll > MORE_DMG_CAP + 1e-9 ? ` (the pool holds ×${player.moreAll.toFixed(2)}, `+
         `stopped at the ×${MORE_DMG_CAP.toFixed(2)} ceiling)` : ''}.\n`+
       `An ability's own more multiplier, and the spin swing's 40%, sit on top of it.`),
-    sRow('Sword hit', light.toFixed(2),
-      `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
+    isSlammer()
+      ? sRow('One tooth', slamSpikeDamage().toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.slam.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
+          `× ${moreShown().toFixed(2)} × ${SLAM_SHARE} share`)
+      : sRow(isCaster() ? 'Bolt hit' : 'Sword hit', light.toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
   ]);
 
   const loot = sBlock('LOOT & XP', [
@@ -7369,7 +7378,8 @@ function openUpgrades(mode='wave', forceRar){
     ['Crit', (critChance()*100).toFixed(1)+'%'],
     ['Crit mult', critMultPct()+'%'],
     ['Armour', Math.round(armourValue())],
-    ['Sword hit', swordDamage().toFixed(1)],
+    [isCaster() ? 'Bolt hit' : isSlammer() ? 'One tooth' : 'Sword hit',
+     (isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : swordDamage()).toFixed(1)],
     ['Inc. melee', Math.round(incTotal('melee')*100)+'%'],
     ['Inc. spell', Math.round(incTotal('spell')*100)+'%'],
     ['More dmg', '×'+moreShown().toFixed(2)],
@@ -8132,7 +8142,7 @@ function fireSlam(aim, el){
   /* ONE shared record for the whole fan: what it has bitten, what it has dealt,
      and how many teeth are still standing. The last tooth to leave pays out the
      lifesteal, so a slam drinks once however many teeth landed. */
-  const sl = { hits:new Map(), dealt:0, left:0, el };
+  const sl = { hits:new Map(), props:new Set(), dealt:0, left:0, el };
   const full = arc >= TAU - 1e-6;
   for(let row=0; row<rows; row++){
     const rr = (row+1)/rows * range;
@@ -8178,11 +8188,11 @@ function updatePSpikes(dt){
   for(const sp of pspikes){
     if(sp.wait > 0){ sp.wait -= dt; continue; }
     sp.t += dt;
+    const sl = sp.sl;
     if(sp.t >= SPIKE_RISE*0.35 && sp.t < SPIKE_RISE+SPIKE_HOLD){
       for(const en of enemiesNear(sp.x, sp.y, 44)){
         if(en.dead || en.state!=='active' || sp.hit.has(en)) continue;
         if(dist(sp, en) > 20 + hitR(en)) continue;
-        const sl = sp.sl;
         const n = sl.hits.get(en) || 0;
         if(n >= SLAM_MAX_HITS){ sp.hit.add(en); continue; }
         sp.hit.add(en); sl.hits.set(en, n+1);
@@ -8203,6 +8213,22 @@ function updatePSpikes(dt){
           hitEnemy(en, sp.dmg, a2, 160*weapon.kb, 'slam', {spin:true});
         }
         sl.dealt += Math.max(0, before - en.hp);
+      }
+      /* IT TEARS UP THE SCENERY TOO — chests, crates, trees, the lot. One hit
+         per prop per SLAM, the same as one swing, so a wide fault opens every
+         crate it crosses rather than shredding the first one thirty times.
+         It does NOT deflect: a slam is the floor coming up, and nothing about
+         that turns an arrow aside. */
+      for(const pr of props){
+        if(pr.dead || pr.indestructible || sl.props.has(pr)) continue;
+        if(dist(sp, pr) > 22 + pr.r) continue;
+        sl.props.add(pr);
+        pr.hp--; pr.flash = 1;
+        addSparks(pr.x, pr.y-10, 3, '#e8eef2');
+        /* one crack per slam, not one per crate — a wide fault crosses a lot of
+           scenery and eight overlapping hits is a noise, not a sound */
+        if(!sl.propSfx){ sl.propSfx = 1; SFX.hit(); }
+        if(pr.hp <= 0) breakProp(pr);
       }
     }
     if(sp.t >= sp.life) sp.dead = true;

@@ -191,9 +191,27 @@ front of them: lines of stone teeth tearing up out of the ground in a fan, runni
 from the impact. It is the boss slam you have been dodging all run, pointed the other way.
 
 Every tooth is **physical** — it bleeds, it leeches, and it reads every increase a swing
-would. Each one is worth **62% of a full swing**, and **one body may be bitten by at most
-three teeth of the same slam**, so standing in the middle of a fault is a reward rather
-than an execution.
+would. It **takes the scenery with it** too: chests, crates and trees inside the fault take
+one hit per slam, the same as one swing would, so a wide fault opens every crate it crosses.
+It does **not** deflect — a slam is the floor coming up, and nothing about that turns an
+arrow aside.
+
+**What it is worth.** Each tooth is **20.7% of a full swing**, and **one body may be bitten
+by at most three teeth of the same slam** — so a body held dead centre in the fault takes
+**0.62 of one sword swing** per slam, and everything else in the fan takes the same. It
+opened at three times that, which made an AoE basic attack out-damage the single-target one
+it replaced; at a third, the mace trades single-target for coverage instead of getting both.
+
+Read off a fresh hero with no favourite, which is what the character sheet's
+**Sustained DPS** row shows you:
+
+| | single target | |
+|---|--:|---|
+| **SWORD** | **5.38** /s | one body, kept in reach |
+| **AXE** | **5.69** /s | one body, kept in reach |
+| **MACE** | **2.67** /s | one body held in the fault — *and everything else in it* |
+
+Half a sword's single target, spread across everything in a 99° fan. That is the trade.
 
 | | opens at | ceiling |
 |---|--:|--:|
