@@ -79,16 +79,26 @@ Your weapon is a **table row**, not a special case in the code. It sets the phys
 of the hero — base damage, swing time, reach, how often and how hard it crits, and how
 readily a hit opens a wound — and every brick you own scales it from there.
 
-| | base | swing | reach | crit | crit mult | bleed | spin |
-|---|--:|--:|--:|--:|--:|--:|--:|
-| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 |
-| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
-| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 |
-| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — |
+| | base | swing | reach | crit | crit mult | bleed | spin | less taken | suppress |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| **SWORD** | 1.00 | 0.34s | 56 | 5% | ×1.50 | ×1.0 | ×1.40 | **40%** | **25%** |
+| **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 | **45%** | **25%** |
+| **MACE** | **1.70** | 0.54s | 52 | 3% | ×1.20 | **×1.90** | ×1.30 | **50%** | **25%** |
+| **STAFF** | 1.70 | 0.68s | — | 6% | ×1.60 | — | — | — | — |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
-is slow and crits rarely.
+is slow and crits rarely. The axe is **double-bitted** — a crescent to either side of the
+haft, edges facing opposite ways — and the hero shoulders it on a lean rather than dead
+upright, because straight up buries the inner bit behind the minifig's head.
+
+**Melee is armoured by the fact that it has to be there.** A staff never has to stand where
+the monsters are; a sword does, and the numbers were written as if it did not. So the three
+melee rows carry their own defence: **40 / 45 / 50% less damage taken** and **+25% spell
+suppression**, the mirror of the cast speed the staff gets for standing back. The mitigation
+is a LESS multiplier applied *last* — after armour, after suppression — so it takes its share
+of whatever got through rather than competing with armour for the same pool, and it reaches
+poison, bleed and burn as readily as it reaches a hit.
 
 **The staff does not swing at all.** It is the first *caster* weapon: its basic attack is a
 **fireball** that bursts for 46 and sets what it touches alight. It gives up the entire melee
@@ -313,6 +323,12 @@ aura — is drawn as a **true circle**. The boss whirlwind goes further: only th
 of the blade itself hits, not the disc it sweeps, so standing inside the circle between
 passes is genuinely safe.
 
+**And a telegraph you cannot read in time is not a telegraph.** The whirlwind braces for a
+full **2.4 seconds** before the blade moves, and it *casts* in the last beat of that — the
+roar, the shake and the ring go out while the mace is still cocked, so what you hear is the
+thing starting rather than the thing already having hit you. Not one frame of the spin is
+live before the cast has landed.
+
 **Increased damage over time** is one pool too, not one per ailment. `Rotbrick` sits in the
 DAMAGE section of the bench, not under any spell, and every lingering damage you inflict
 reads it — Brickbane's poison is simply the first thing that qualifies.
@@ -350,6 +366,22 @@ Five tiers. Measured across 400,000 rolls per cell on the default difficulty:
 A legendary roll is all-or-nothing: it is spent on a legendary-gated brick or nothing at
 all, and no lesser roll can ever reach one. A live **fortune brick** is rarity find as well
 as a stud multiplier — up to +25% toward the good tiers.
+
+### What a roll is allowed to hand you
+
+**One card leans on your favourite, not all three.** Weighting every slot meant a
+favourite's own bricks crowded the whole screen — pick `Elemental Arts` and all three
+filled with elemental increases, so a new spell almost never got a look in. The first card
+drawn is the weighted one at ×3.2; the other two are drawn flat. Two-or-more favourite
+cards on a screen fell from 40% of rolls to 18%, and spells got their slot back.
+
+**A new spell wears a blue `NEW` ribbon**, tilted across the top corner, so a card that
+costs you a slot never looks like a card that deepens what you already cast.
+
+**A chest cannot hand you a spell at all.** It is a reward for exploring, not a way to
+reroll your build: chests draw from the pool with every spell-granting brick filtered out,
+so what they give you always deepens something you already own. Level-ups and wave rewards
+still offer the spells themselves.
 
 ---
 
