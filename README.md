@@ -32,6 +32,8 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 **Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
+**Design** — [Meta-progression](docs/PROGRESSION.md) *(designed, not built)*
+
 ---
 
 ## Play it
