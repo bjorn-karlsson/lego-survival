@@ -143,6 +143,18 @@
     letter-spacing:1.5px;border-radius:6px;padding:2px 8px;font-family:'Fredoka'}
   .card .stack{position:absolute;top:-12px;right:26px;background:#1b2a34;color:#fff;font-size:12px;font-weight:700;
     border-radius:9px;padding:3px 8px;box-shadow:0 3px 0 #000}
+  /* NEW SPELL — a ribbon across the top-left corner, tilted, so it reads before
+     the card does. Blue on purpose: nothing else on a card is blue, so it never
+     competes with a rarity band. */
+  /* it sits BELOW the rarity tag, which owns the very top-left corner — a
+     ribbon through that tag is a ribbon you have to read around */
+  .card .newtag{position:absolute;top:30px;left:-14px;z-index:9;
+    background:linear-gradient(180deg,#4aa3ff,#1f6fd0);color:#fff;
+    font-family:'Titan One';font-size:10px;letter-spacing:2.4px;
+    padding:3px 14px;border-radius:3px;transform:rotate(-24deg);
+    box-shadow:0 3px 10px rgba(0,0,0,.55);border-top:1px solid rgba(255,255,255,.45);
+    border-bottom:1px solid rgba(0,0,0,.3);pointer-events:none}
+  .card.mini .newtag{font-size:8px;padding:2px 10px;top:22px;left:-10px;letter-spacing:1.6px}
   /* the test bench shows the real reward cards at half size — hovering one
      lifts it back to full scale so the whole description is readable */
   #cheatUps{display:flex;flex-direction:column;gap:8px;padding:6px 4px 16px}
@@ -222,6 +234,15 @@
   .diff.on{background:rgba(255,255,255,.14)}
   .diffblurb{margin:6px auto 0;max-width:520px;font-size:12px;color:#ffdada;font-weight:500;min-height:26px}
   .cheatrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  /* the roster, filed by the wave it starts turning up in */
+  #cheatSpawn{flex-direction:column;align-items:stretch;gap:10px}
+  .mobband{width:100%}
+  .mobbandhead{font-family:'Titan One';font-size:9.5px;letter-spacing:2px;color:#ffd76e;
+    margin:0 0 5px;display:flex;align-items:center;gap:8px;opacity:.85}
+  .mobbandhead::after{content:'';flex:1;height:2px;border-radius:1px;
+    background:rgba(255,214,110,.18)}
+  .mobbandrow{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start}
+  .cheatbtn.mob{cursor:help}
   .cheatbtn{background:rgba(9,13,17,.45);border:1px solid rgba(255,255,255,.22);border-radius:10px;
     padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
   .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
@@ -524,7 +545,10 @@ const CX = W.w/2, CY = W.h/2;
 const MAX_ALIVE = 512;
 const CS = 40;
 const RING_MAX = 320;
-const REV_MAX = 260;
+/* the revenant's shockwave used to reach 260, which on a body that walks
+   straight at you was less an ability than a tax — 40% less, so stepping out is
+   a real answer to it */
+const REV_MAX = 156;
 /* Studs fuse into the next tier only when a real pile has formed, and a pile
    forms by studs settling next to each other over time. */
 const MERGE_NEAR  = 62;       /* how close two studs must be to count as one pile */
@@ -779,6 +803,10 @@ function syncStats(){
   p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
   p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
   for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
+  /* the weapon's own thirst is part of the finished number, not of the pool the
+     bricks write into — same shape as suppression and mitigation */
+  p.leech       = Math.min(LEECH_MAX,        pool(0, p.leechFlat, 0, 1) + weaponLeech());
+  p.leechChance = Math.min(LEECH_CHANCE_MAX, pool(0, p.leechChanceFlat, 0, 1) + weaponLeechChance());
 }
 /* Max hearts, and the healing that comes with them. The heal is whatever the
    POOL actually granted, so a +7 card on a doubled hero heals the 14 it gave. */
@@ -915,7 +943,75 @@ const VORTEX_MAX_SPIN = 7;     /* rad/s ceiling for the blade rows — above thi
 /* how far the warden's mending reaches, and what it gives back a second */
 const WARDEN_R = 240;
 const WARDEN_HEAL = 0.055;     /* share of a body's OWN maximum, per second */
+/* MAGIC-TOUCHED IS BLUE. Purple is already the epic rarity band and the
+   necromancers' own colour, so a magic pack read as "something arcane" rather
+   than as the pack modifier it is. */
+/* HOW BIG A PACK IS, at wave 6 and at wave 40. Three was not a pack. */
+const MAGIC_PACK  = [6, 12];
+const ELITE_COURT = [4, 9];    /* minions ringing one elite */
+/* WHAT AN ELITE BRINGS WITH IT. A court of nine more of the same body is just a
+   bigger version of the thing that was wrong with three copies — the elite
+   brings the CHEAP bodies of the roster, so it reads as a champion with a
+   retinue and the elite itself stays the thing you have to get to. */
+const ELITE_MINIONS = ['imp','boneling','skeleton','archer','cryptbat','spitter'];
+function eliteMinion(type){
+  /* a golem or a lord leads its own kind of small thing where one exists */
+  const d = EDEF[type];
+  if(d && d.golem && GOLEM_CONF[d.golem]) return GOLEM_CONF[d.golem].mini;
+  return pick(ELITE_MINIONS.filter(k => {
+    const r = ROSTER.find(x => x.k === k);
+    return !r || r.at <= Math.max(1, wave.n);
+  }) || ELITE_MINIONS) || 'imp';
+}
+const MAGIC_COL  = '#3f8ae0';
+const MAGIC_RING = 'rgba(63,138,224,0.9)';
 const OVERSEER_MAX_STACKS = 3;
+/* NAMED BUFFS ON A MONSTER. This used to be one counter capped at three, which
+   meant every aura in the game fought over the same ceiling: a body standing in
+   an overseer's empowerment and a pyrolord's warding simply refused the second
+   one. They are a MAP now, keyed by what granted them. A body may carry
+   MOB_BUFF_UNIQUE DIFFERENT buffs, and each stacks to its own depth — so three
+   stacks of fire resistance is one of the nine, not three of them. */
+const MOB_BUFF_UNIQUE = 9;
+function buffCount(e){ return e.buffs ? Object.keys(e.buffs).length : 0; }
+function buffStacksOf(e, k){ return (e.buffs && e.buffs[k]) || 0; }
+/* returns true only when the buff actually went on, so the caller applies its
+   effect exactly as often as the count says it did */
+function addMobBuff(e, key, max){
+  if(!e || e.dead) return false;
+  if(!e.buffs) e.buffs = {};
+  const have = e.buffs[key] || 0;
+  if(have >= (max || 3)) return false;                        /* this one is full */
+  if(!have && buffCount(e) >= MOB_BUFF_UNIQUE) return false;  /* no slot left */
+  e.buffs[key] = have + 1;
+  return true;
+}
+/* THE ELEMENTAL LORDS WARD THEIR OWN. Each one hands everything around it
+   resistance to the element it is made of, so a pack led by a pyrolord is a
+   pack you do not burn down — and killing the lord is what unlocks it. */
+const LORD_WARD = { pyrolord:'fire', frostlord:'frost', stormlord:'shock' };
+const LORD_WARD_R    = 320;
+const LORD_WARD_STEP = 0.25;   /* resistance per stack */
+const LORD_WARD_MAX  = 3;      /* stacks, and all three are ONE of the nine */
+function lordWardTick(e, dt){
+  const el = LORD_WARD[e.type];
+  if(!el) return;
+  e.wardT = (e.wardT || 0) - dt;
+  if(e.wardT > 0) return;
+  e.wardT = 1.4;
+  const key = 'res_' + el;
+  let n = 0;
+  for(const e2 of enemiesNear(e.x, e.y, LORD_WARD_R + 60)){
+    if(e2 === e || e2.dead || e2.state !== 'active') continue;
+    if(dist(e2, e) > LORD_WARD_R) continue;
+    if(!e2.res) continue;
+    if(!addMobBuff(e2, key, LORD_WARD_MAX)) continue;
+    e2.res[el] = (e2.res[el] || 0) + LORD_WARD_STEP;
+    n++;
+    addSparks(e2.x, e2.y-18, 2, BRAND_COL[el] || '#ffd166');
+  }
+  if(n){ e.wardLit = 0.5; addRing(e.x, e.y, 16, 260, LORD_WARD_R, BRAND_COL[el]||'#ffd166', 4, 0.45); }
+}
 /* Ailment stacks are NOT capped. Every fifth one is spent breaking something and
    leaves a BRAND behind: a lasting mark that eats that element's resistance and
    stacks without limit, so the tenth fire that lands on you hurts more than the
@@ -939,8 +1035,41 @@ function burnList(){ return (player.burn && player.burn.list) || []; }
 function burnStacks(){ return burnList().length; }
 function burnDps(){ let d=0; for(const f of burnList()) d += f.dps; return d; }
 function burnLeft(){ let d=0; for(const f of burnList()) d += f.dps*f.t; return d; }
+/* POISON ON THE HERO. The blightspitter's pool was dealing plain hits every
+   tick, which is not what standing in poison is: the pool should put the rot IN
+   you and then the rot should do the work, so walking out of it stops it
+   spreading rather than stopping it entirely. Same shape as burning — a list of
+   independent doses, all biting at once, each running out on its own clock. */
+const PSN_DUR = 5;            /* one dose runs this long */
+function psnList(){ return (player.psn && player.psn.list) || []; }
+function psnStacks(){ return psnList().length; }
+function psnDps(){ let d=0; for(const f of psnList()) d += f.dps; return d; }
+function psnTime(){ let t=0; for(const f of psnList()) t = Math.max(t, f.t); return t; }
+const PSN_MAX_STACKS = 8;
+function poisonPlayer(dps, dur){
+  const p = player;
+  if(!p || p.dead || !(dps > 0)) return;
+  if(!p.psn) p.psn = { list:[], acc:0 };
+  /* a fresh dose replaces the weakest one once you are full, so standing in a
+     deeper pool still means something */
+  if(p.psn.list.length >= PSN_MAX_STACKS){
+    let w = 0;
+    for(let i=1;i<p.psn.list.length;i++) if(p.psn.list[i].dps < p.psn.list[w].dps) w = i;
+    if(dps <= p.psn.list[w].dps) return;
+    p.psn.list.splice(w, 1);
+  }
+  p.psn.list.push({ dps, t: dur || PSN_DUR });
+}
 function burnTime(){ let t=0; for(const f of burnList()) t = Math.max(t, f.t); return t; }
 const RES_CAP = 0.8;          /* resistances stop here so nothing is immune */
+/* LIFESTEAL. Two numbers, both capped on the DERIVED value like everything else
+   here: how often a swing drinks, and how much of the damage it drinks. The
+   per-hit ceiling is the one that matters late — a share of a wave-50 hit is an
+   entire health bar, so no single swing may return more than this much of your
+   maximum however big the number on the screen was. */
+const LEECH_MAX        = 0.25;   /* share of the hit, at most */
+const LEECH_CHANCE_MAX = 0.60;   /* how often, at most */
+const LEECH_HIT_CAP    = 0.03;   /* of MAX hearts, per swing */
 /* Difficulty scales the monsters and the loot, not the rules. */
 const DIFFS = {
   easy:      { name:'EASY',      col:'#4b9b41', lvl:-2, hp:0.70, dmg:0.75, spd:0.88, atk:1.20,
@@ -1007,15 +1136,18 @@ const WEAPONS = {
   sword: { id:'sword', name:'SWORD', col:'#cfd6dd',
     blurb:'Balanced. Every number in this game is written against it.',
     dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
-    bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade' },
+    bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade',
+    lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15 },
   axe: { id:'axe', name:'AXE', col:'#e0a81a',
     blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
     dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
-    bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe' },
+    bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe',
+    lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20 },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
     blurb:'Hits hardest and opens the worst wounds. Slow, and it rarely crits.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
-    bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace' },
+    bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace',
+    lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10 },
   /* THE STAFF DOES NOT SWING. Its basic attack is a FIREBALL, so it trades the
      whole melee kit — reach, the spin combo, bleed — for elemental damage and
      the ailment that comes with it. It is the first caster weapon; frost and
@@ -1027,8 +1159,26 @@ const WEAPONS = {
     bleed:0, spin:1.00, kb:1.00, hold:'pstaff', throw:'blade',
     /* what carrying it is worth, as increases into the ordinary pools */
     incSpell:0.25, incElem:0.30, incAtk:0.20,
+    /* it stands in the fire it starts, so it is a little harder to burn */
+    res:0.08,
     boltSpd:520, boltR:46 }
 };
+/* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
+   with RANGE — it never has to be where the monsters are. A melee hero has no
+   such option, so the three of them carry it as mitigation instead: a LESS
+   multiplier on everything that reaches you, and a share of spell suppression.
+   `lessTaken` is a LESS, the mirror of a MORE — it multiplies, it never adds
+   into the armour pool, so a mace's 50% is 50% of whatever armour left. */
+function weaponLessTaken(){ return 1 - ((weapon && weapon.lessTaken) || 0); }
+function weaponSuppress(){ return (weapon && weapon.suppress) || 0; }
+/* LIFESTEAL IS A MELEE STAT, and each weapon drinks differently: the axe takes
+   the most, the sword a little less, the mace least of all — it is the one that
+   already hits hardest and bleeds worst, so it pays for that somewhere. A staff
+   leeches nothing; it is never in the blood. */
+function weaponLeech(){       return (weapon && weapon.leech) || 0; }
+function weaponLeechChance(){ return (weapon && weapon.leechChance) || 0; }
+/* what carrying the weapon is worth against the elements */
+function weaponRes(){ return (weapon && weapon.res) || 0; }
 const WEAPON_KEYS = Object.keys(WEAPONS);
 let weapon = WEAPONS.sword;
 function setWeapon(id){
@@ -1092,6 +1242,10 @@ const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
    the combat log and meant the weapon's own bleed multiplier was applied to
    spells it has nothing to do with. */
 const MELEE_SOURCES = new Set(['sword','storm','vortex']);
+/* WHAT DRINKS. Lifesteal is the weapon's, not the build's: your own swing and
+   the whirl it becomes both report as 'sword', and nothing else does. A spell
+   that happens to land physical damage is still a spell. */
+const LEECH_SOURCES = new Set(['sword']);
 /* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
    An ordinary swing never opens one on its own: the chance starts at nothing and
    is a brick you buy. A CRITICAL swing opens one half the time for free, which
@@ -1664,6 +1818,7 @@ function newPlayer(){
        element reads, and inc.fire/frost/shock are the per-element ones. */
     flatElem:0, ember:0,
     resFlat:{ fire:0, frost:0, shock:0 },
+    leechFlat:0, leechChanceFlat:0,
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
@@ -1701,6 +1856,7 @@ function newPlayer(){
     brand:{ fire:0, frost:0, shock:0 },
     brandT:{ fire:0, frost:0, shock:0 },
     chill:{ stacks:0, t:0 },
+    psn:{ list:[], acc:0 },
     shock:{ stacks:0, t:0 },
     res:{ fire:0, frost:0, shock:0 },
     curse:{ resist:0, haste:0, armor:0, regen:0, t:0 },
@@ -2358,7 +2514,9 @@ const EDEF = {
              col:{head:'#e8e4d8', torso:'#3f2a55', legs:'#2c1d3d', hands:'#c9b8e8', hair:'#2c1d3d'}, style:'hexer' },
   stalker: { hp:3,  speed:134, r:11, scale:0.8,  dmg:1, xp:3, studs:[3,5],
              col:{head:'#2b2f33', torso:'#23272b', legs:'#1b1f23', hands:'#3a3f44', hair:'#1b1f23'}, style:'stalker' },
-  jugg:    { hp:24, speed:40,  r:20, scale:1.8,  dmg:2, xp:14, studs:[10,18],
+  /* the jugg is a wall that walks: slow, huge and unmissable, so what it costs
+     to be caught by one has to be worth the walk */
+  jugg:    { hp:24, speed:40,  r:20, scale:1.8,  dmg:4, xp:14, studs:[10,18],
              col:{head:'#d19a6a', torso:'#b6532b', legs:'#6e3a1e', hands:'#8a4a26', hair:'#6e3a1e'}, style:'brute' },
   revenant:{ hp:30, speed:36,  r:19, scale:1.7,  dmg:2, xp:16, studs:[12,20],
              col:{head:'#cfd6dd', torso:'#6d6e68', legs:'#5c5e59', hands:'#cfd6dd', hair:'#4a4b47'}, style:'skel' },
@@ -2378,7 +2536,8 @@ const EDEF = {
              col:{head:'#eef0ee', torso:'#9a7d1e', legs:'#6b5714', hands:'#ffe95a', hair:'#6b5714'}, style:'hexer' },
   lobber:  { hp:7,  speed:52,  r:13, scale:0.95, dmg:1, xp:8, studs:[6,10],
              col:{head:'#eef0ee', torso:'#3d7a2b', legs:'#2f5e23', hands:'#8ac24a', hair:'#2f5e23'}, style:'skel' },
-  marksman:{ hp:6,  speed:70,  r:12, scale:0.9,  dmg:1, xp:8, studs:[6,10], fire:2.6,
+  /* a marksman is a sniper, and a sniper that plinks is just an archer */
+  marksman:{ hp:6,  speed:70,  r:12, scale:0.9,  dmg:3, xp:8, studs:[6,10], fire:2.6,
              col:{head:'#f6f2e4', torso:'#c9a83a', legs:'#9a8228', hands:'#f6f2e4', hair:'#8a7d4a'}, style:'skel' },
   /* THE BLIGHTSPITTER. Every other ranged monster asks you to dodge one thing
      once; this one asks you to give up GROUND. The gobbet it lobs barely hurts
@@ -2450,7 +2609,7 @@ const EDEF = {
              res:{fire:0.75, frost:-0.25, shock:0.15},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' },
   /* GOLEMS — slow siege units: they lumber in, charge, then plant a delayed AoE stomp */
-  stormgolem:{ hp:46, speed:36, r:20, scale:1.85, dmg:2, xp:32, studs:[22,34], golem:'storm', elem:'shock',
+  stormgolem:{ hp:46, speed:36, r:20, scale:1.85, dmg:4, xp:32, studs:[22,34], golem:'storm', elem:'shock',
              res:{shock:0.90, frost:-0.35, fire:0.20},
              col:{head:'#6e6848', torso:'#4a4636', legs:'#2a2820', hands:'#ffe95a', hair:'#38352a'}, style:'brute' },
   ministorm:{ hp:9,  speed:124, r:10, scale:0.82, dmg:1, xp:6, studs:[4,9], mini:'storm', elem:'shock',
@@ -2461,13 +2620,13 @@ const EDEF = {
      stone golem, you burn it. The other three are nearly immune to their own
      element and soft to the one that beats it, so which spell you are holding
      decides which golem is a problem. */
-  stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:2, xp:26, studs:[18,30], golem:'stone',
+  stonegolem:{ hp:52, speed:33, r:21, scale:1.9, dmg:4, xp:26, studs:[18,30], golem:'stone',
              armourMul:3.2, res:{fire:0.25, frost:0.25, shock:0.25},
              col:{head:'#9aa0a0', torso:'#7b8184', legs:'#5f6467', hands:'#8b9194', hair:'#5f6467'}, style:'brute' },
-  icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'ice',
+  icegolem: { hp:44, speed:37, r:20, scale:1.8, dmg:3, xp:28, studs:[20,32], golem:'ice',
              res:{frost:0.90, fire:-0.35, shock:0.20},
              col:{head:'#cfeaff', torso:'#7fb9e0', legs:'#4d86ad', hands:'#e6f6ff', hair:'#4d86ad'}, style:'brute' },
-  firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:2, xp:28, studs:[20,32], golem:'fire',
+  firegolem:{ hp:40, speed:41, r:20, scale:1.8, dmg:3, xp:28, studs:[20,32], golem:'fire',
              res:{fire:0.90, frost:-0.35, shock:0.20},
              col:{head:'#ff9a3c', torso:'#8a3418', legs:'#4a1d0f', hands:'#ffc07a', hair:'#4a1d0f'}, style:'brute' }
 };
@@ -2475,19 +2634,22 @@ const EDEF = {
    stomps; frost skips a boulder across the whole field and frost-burns the lane
    it travelled; ember lobs a small cluster of firebombs the way the bosses do. */
 const GOLEM_CONF = {
-  stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:300, chargeSpd:430, wind:1.0, dmg:2,
+  /* A GOLEM IS A SIEGE UNIT. Every one of these `dmg` values is what its KIT
+     hits for, and they were all 1 or 2 — so the slowest, most telegraphed
+     bodies in the game were also the cheapest to be hit by. */
+  stone:{ ring:'#c9cec9', dust:'#b8bdb9', stompR:300, chargeSpd:430, wind:1.0, dmg:5,
           kit:'stomp', range:620, mini:'ministone',
           bricks:['#9aa0a0','#7b8184','#5f6467'], name:'STONE' },
-  ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:330, chargeSpd:400, wind:1.1, dmg:1,
+  ice:  { ring:'#bfe3ff', dust:'#dff2ff', stompR:330, chargeSpd:400, wind:1.1, dmg:4,
           kit:'boulder', range:1000, mini:'miniice',
           bricks:['#cfeaff','#7fb9e0','#4d86ad'], name:'FROST' },
-  fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:285, chargeSpd:460, wind:0.95, dmg:2,
+  fire: { ring:'#ff8a3c', dust:'#ffb066', stompR:285, chargeSpd:460, wind:0.95, dmg:4,
           kit:'bombs', range:640, mini:'minifire',
           bricks:['#ff9a3c','#8a3418','#4a1d0f'], name:'EMBER' },
   /* It does not throw anything at YOU. It plants coils of live lightning around
      where you are standing and walks away, and they stay lit for twelve seconds
      while they drift. The arena stops having safe floor in it. */
-  storm:{ ring:'#ffe95a', dust:'#fff3a0', stompR:300, chargeSpd:440, wind:1.0, dmg:2,
+  storm:{ ring:'#ffe95a', dust:'#fff3a0', stompR:300, chargeSpd:440, wind:1.0, dmg:5,
           kit:'coils', range:760, mini:'ministorm',
           bricks:['#ffe95a','#c9a213','#6b5714'], name:'STORM' }
 };
@@ -2517,7 +2679,12 @@ const SHOT_SHARE = { arrow:0.85, bolt:0.80, frostbolt:0.80, batbolt:0.50,
                      /* the gobbet itself is nearly harmless — the POOL is the
                         weapon, so the impact is priced to make you move, not to
                         punish you for being hit by it */
-                     venom:0.35 };
+                     venom:0.35,
+                     /* the golem and boss kits: these all used to land a flat 1
+                        or 2 whatever threw them, which is how a wave-50 golem
+                        came to hit for a third of a heart */
+                     molten:0.95, meteor:1.05, fireball:0.90, zorb:0.55,
+                     frostrock:1.15 };
 function shotPow(src, kind){
   return Math.max(1, Math.round(((src && src.dmg) || 1) * (SHOT_SHARE[kind] || 0.6) * 10) / 10);
 }
@@ -2678,14 +2845,18 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   let atkS = Math.max(0.58, 1 - (lvl-1)*0.03) * difficulty.atk;
   if(magic) atkS *= 0.7;
   const e = { type, x, y, r:d.r*(elite?1.15:1), scale:d.scale*(elite?1.12:1),
-    dmg: Math.max(1, Math.round((d.dmg + dmgB + (magic?1:0)) * difficulty.dmg)),
-    hp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
-    maxHp:Math.ceil(d.hp*hpS*(elite?2.2:1)*(magic?1.5:1)),
+    dmg: Math.max(1, Math.round((d.dmg + dmgB) * (elite?1.5:1) * difficulty.dmg)),
+    /* THE ELITE IS HARDER and the magic body is softer than they were: an elite
+       is now one champion rather than three copies, so it can afford to be a
+       real wall, while a magic pack is twice the bodies and each of them pays
+       for that with a smaller share of the modifier. */
+    hp:Math.ceil(d.hp*hpS*(elite?3.4:1)*(magic?1.18:1)),
+    maxHp:Math.ceil(d.hp*hpS*(elite?3.4:1)*(magic?1.18:1)),
     armour, suppress, mlvl: rank,
     /* a COPY, never the EDEF object itself — a wave modifier writes to this and
        would otherwise edit the species for the rest of the run */
     res: Object.assign({fire:0, frost:0, shock:0}, d.res || null),
-    speed:d.speed*spdS*(elite?0.95:1)*(magic?1.3:1),
+    speed:d.speed*spdS*(elite?0.95:1)*(magic?1.12:1),
     atkS, fire: d.fire ? d.fire*atkS : undefined, touchCd: 0.9*atkS,
     col:d.col, style:d.style, xp:d.xp, studs:{a:d.studs[0], b:d.studs[1]},
     face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
@@ -2774,7 +2945,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   let d = Math.max(0, dmg);
   const crit = !opts.noCrit && Math.random() < critChance();
   if(crit) d *= critMult();
-  if(e.magic) d *= 0.7;                       /* magic-touched: 30% less damage taken */
+  if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
   if(opts.noMit){
     /* a wound already paid armour when it was opened — charging it again on
@@ -2813,6 +2984,10 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
   d = Math.max(0.05, Math.round(d*100)/100);
+  /* the swing drinks off what ACTUALLY landed, after armour and resistance —
+     leeching off the number before mitigation would pay you for damage the
+     monster never took */
+  if(LEECH_SOURCES.has(source) && !opts.quiet) leechFrom(d);
   e.hp = Math.round((e.hp - d)*100)/100; e.flash = 1;
   const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
   e.kx += Math.cos(kdir)*kb*kbm;
@@ -2832,6 +3007,21 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   }
   logDealt(e, d, source, crit, suppressed);
   if(e.hp<=0) killEnemy(e, source);
+}
+/* LIFESTEAL. A chance, then a share, then the per-swing ceiling — and it is
+   silent when you are already full, so a healthy hero is not covered in green
+   numbers for nothing. */
+function leechFrom(d){
+  const p = player;
+  if(!p || p.dead || godMode) return;
+  if(!(p.leech > 0) || !(p.leechChance > 0)) return;
+  if(p.hp >= p.maxHp) return;
+  if(Math.random() >= p.leechChance) return;
+  const heal = Math.min(d * p.leech, p.maxHp * LEECH_HIT_CAP, p.maxHp - p.hp);
+  if(heal <= 0.005) return;
+  p.hp = Math.round((p.hp + heal)*100)/100;
+  addDmg(p.x, p.y - 58, '+'+fmtHp(heal), '#8ede4a', 14);
+  clogRun.leeched = (clogRun.leeched||0) + heal;
 }
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
    of the two rates, so re-gassing a monster is never a downgrade. */
@@ -3377,15 +3567,32 @@ function armourValue(){
   return Math.min(ARMOUR_VALUE_MAX, Math.max(0,
     (player.armour + wardArmour()) * (1 + player.incArmour) * (1 - player.curse.armor)));
 }
-function suppressChance(){ return clamp(player.suppress, 0, 1); }
+function suppressChance(){ return clamp(player.suppress + weaponSuppress(), 0, 1); }
 /* How much of an elemental effect actually lands, after resistance. */
+/* THE WORLD GETS COLDER. A hero who ignored resistance entirely was fine at
+   wave 50, because nothing ever asked them for it — so the game asks, three
+   times, and then stops asking. Each toll is a FLAT 30 points off every
+   resistance you have, permanently, and they stack: past wave 60 you are 90
+   down and picking resistance is no longer optional. It is deliberately a tax
+   on the stat rather than a buff to the monsters, so the answer is in the
+   reward pool and not in luck. */
+const RES_TAX_WAVES = [20, 40, 60];
+const RES_TAX_STEP  = 0.30;
+function resTaxSteps(n){
+  const w = (n === undefined) ? (wave ? wave.n : 0) : n;
+  let k = 0;
+  for(const t of RES_TAX_WAVES) if(w >= t) k++;
+  return k;
+}
+function resTax(n){ return resTaxSteps(n) * RES_TAX_STEP; }
 function elemTake(elem){
   /* FLAT POOL FIRST — your own resistance, the ward's, and the brands burned,
      frozen or shocked out of you, which are a flat penalty and not a multiplier.
      THEN the one LESS multiplier, a SUNDERED curse, over the whole pool.
      It only bites on resistance you actually HAVE: a curse strips what you
      carry, it cannot hand resistance to a hero already under water. */
-  const flat = (player.res[elem] || 0) + wardRes() - BRAND_STEP * (player.brand[elem] || 0);
+  const flat = (player.res[elem] || 0) + weaponRes() + wardRes()
+             - BRAND_STEP * (player.brand[elem] || 0) - resTax();
   const r = flat > 0 ? flat * (1 - player.curse.resist) : flat;
   return 1 - clamp(r, RES_FLOOR, RES_CAP);
 }
@@ -3522,6 +3729,9 @@ function applyAilment(elem, src, stacks){
 function ailmentDamage(n, quiet){
   const p = player;
   if(godMode || p.dead || state!=='play') return;
+  /* the weapon's mitigation reaches what is already eating you too — an
+     ailment is damage taken like any other */
+  n = n * weaponLessTaken();
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
   p.flash = 1; redFlash = Math.max(redFlash, 0.35);
@@ -3575,6 +3785,27 @@ function updateAilments(dt){
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40), vx:rnd(-14,14), vy:rnd(-80,-30),
         life:0.4, max:0.4, color: Math.random()<0.5?'#ff9a3c':'#ffd166'});
   } else p.burn.acc = 0;
+  /* the rot, exactly as the fire above: every dose bites at once, and the
+     number only pops once a whole heart has gone */
+  if(!p.psn) p.psn = { list:[], acc:0 };
+  if(p.psn.list.length){
+    let deal = 0;
+    for(const f of p.psn.list){
+      const step = Math.min(f.t, dt);
+      deal += f.dps * step;
+      f.t -= dt;
+    }
+    p.psn.list = p.psn.list.filter(f=>f.t > 0);
+    p.psn.acc += deal;
+    const show = p.psn.acc >= 1;
+    if(show) p.psn.acc -= 1;
+    if(deal > 0) ailmentDamage(deal, !show);
+    if(show) addDmg(p.x, p.y-44, '-1', '#8ac24a', 16);
+    if(Math.random() < 0.4)
+      particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40),
+        vx:rnd(-12,12), vy:rnd(-60,-20), life:0.45, max:0.45,
+        color: Math.random()<0.5 ? '#8ac24a' : '#5f9a2e'});
+  } else p.psn.acc = 0;
   if(p.chill.stacks > 0){
     p.chill.t -= dt;
     if(p.chill.t <= 0){ p.chill.stacks = Math.max(0, p.chill.stacks - 1); p.chill.t = p.chill.stacks>0 ? 2.2 : 0; }
@@ -3619,6 +3850,10 @@ function playerDamage(n, src, elem, spell){
   } else {
     d *= (1 - armourDR(armourValue(), d));
   }
+  /* LAST, after armour and after suppression: what you are holding. It is a
+     LESS multiplier, so it takes its share of whatever got through rather than
+     competing with armour for the same pool. */
+  d *= weaponLessTaken();
   n = Math.max(0.05, Math.round(d*100)/100);
   logTaken(n, src, elem, supp, scrit);
   if(elem) applyAilment(elem, src);
@@ -3944,6 +4179,15 @@ function shuffleArr(a){
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
+  /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
+     the numbers on your sheet have already changed when you read the banner. */
+  if(RES_TAX_WAVES.indexOf(n) >= 0){
+    const lost = Math.round(resTax(n)*100);
+    logEvent('   THE COLD CREEPS IN — all resistances '+lost+' lower, for good', '#7ecbff');
+    showBanner('THE COLD CREEPS IN', 'ALL RESISTANCES \u2212'+lost+'% — PERMANENTLY',
+      '#7ecbff', 2.6, 44);
+    SFX.roar(); addShake(0.4);
+  }
   for(const m of waveMods) logEvent('   '+m.name+' — '+m.tip, m.col);
   queueTrackForWave(n);
   /* the wave is BUILT now and spawns when the break runs out */
@@ -4062,20 +4306,40 @@ function updateWave(dt){
                 wave.n>=6 && Math.random()<0.15);
           } else {
             const packable = wave.n>=6;
-            const packSize = wave.n>=30 ? 5 : wave.n>=20 ? 4 : 3;
+            /* A PACK IS A PACK. Three bodies read as "the spawner hiccuped";
+               nine to twelve read as a warband walking out of the trees, which
+               is what a pack modifier is supposed to feel like. */
+            const packSize = MAGIC_PACK[0] +
+              Math.round((MAGIC_PACK[1]-MAGIC_PACK[0]) * clamp((wave.n-6)/34, 0, 1));
             const roll = Math.random();
             /* golems are siege units — they only rarely head a magic or elite pack,
                and the odds climb slowly as the run goes on */
             const isGolem = type.endsWith('golem');
             const pk = difficulty.pack * (isGolem ? clamp(0.10 + (wave.n-10)*0.015, 0.10, 0.45) : 1);
             if(packable && roll < 0.09*pk){
-              for(let k=0;k<packSize;k++)
-                spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), false, true);
+              /* THE MAGIC GOES ON ALL OF THEM. It used to be three copies each
+                 carrying the full modifier; it is a whole band now, and the
+                 modifier is smaller per body to pay for the extra bodies. */
+              const n = packSize + irnd(0, 3);
+              for(let k=0;k<n;k++){
+                const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
+                spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
+              }
             } else if(packable && roll < 0.09*pk + 0.12*pk){
-              for(let k=0;k<packSize;k++)
-                spawnEnemy(type, clamp(pos.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+rnd(-50,50), W.wall+50, W.h-W.wall-50), true, false);
+              /* AN ELITE IS ONE BODY WITH A COURT, not three of the same thing.
+                 Three identical elites was a damage spike with no shape to it;
+                 one hard body ringed by its own minions is something you have to
+                 fight your way into. */
+              spawnEnemy(type, pos.x, pos.y, true, false);
+              const court = ELITE_COURT[0] +
+                Math.round((ELITE_COURT[1]-ELITE_COURT[0]) * clamp((wave.n-6)/34, 0, 1));
+              const minion = eliteMinion(type);
+              for(let k=0;k<court;k++){
+                const a = k/court*TAU + rnd(-0.18, 0.18), rr = rnd(56, 96);
+                spawnEnemy(minion, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, false);
+              }
             } else {
               spawnEnemy(type, pos.x, pos.y,
                 (packable && Math.random() < 0.15*pk) || Math.random() < waveModElite());
@@ -4443,6 +4707,22 @@ const UPGRADES = [
     calc:m=>({v:0.15+0.10*m}),
     desc:c=>`${Math.round(c.v*100)}% MORE XP — its own multiplier, so they compound`,
     apply:c=>{ player.xpMore *= (1+c.v); syncStats(); } },
+  /* LIFESTEAL, in two halves, because the two feel completely different: more
+     often is a steadier drip, more per swing is a bigger gulp. Neither is
+     offered to a caster — the staff is never in reach to drink. */
+  { id:'leech', name:'Vampiric Edge', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>!isCaster() && player.leech < LEECH_MAX,
+    calc:m=>({v:0.015+0.012*m}),
+    desc:c=>`Your swings leech +${(c.v*100).toFixed(1)}% of the damage they land `+
+      `(cap ${Math.round(LEECH_MAX*100)}%, and never more than `+
+      `${Math.round(LEECH_HIT_CAP*100)}% of your hearts in one swing)`,
+    apply:c=>{ player.leechFlat += c.v; syncStats(); } },
+  { id:'leechrate', name:'Thirsting Grip', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>!isCaster() && player.leechChance < LEECH_CHANCE_MAX,
+    calc:m=>({v:0.05+0.045*m}),
+    desc:c=>`+${Math.round(c.v*100)}% chance for a swing to leech at all `+
+      `(cap ${Math.round(LEECH_CHANCE_MAX*100)}%)`,
+    apply:c=>{ player.leechChanceFlat += c.v; syncStats(); } },
   { id:'resfire', name:'Flameguard Plates', icon:'flame', cls:'DEFENSE', minRar:'rare',
     req:()=>player.resFlat.fire < RES_CAP,
     calc:m=>({v:0.04+0.035*m}),
@@ -4824,6 +5104,15 @@ const UPGRADES = [
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
 const FAV_WEIGHT = 3.2;
+/* WHICH BRICK HANDS YOU A SPELL YOU DO NOT HAVE. The reward screen needs this to
+   mark the card, and the chest needs it to refuse one — those are the only two
+   places that care, so it lives here rather than as a flag on each brick. */
+const SPELL_GRANT = { orbit:'orbit', blaster:'blaster', chain:'chain', storm:'storm',
+                      vortex:'vortex', bombplus:'bomb', freeze:'freeze', bane:'bane' };
+function grantsNewSpell(u){
+  const k = SPELL_GRANT[u && u.id];
+  return !!k && !spellHas(k);
+}
 /* WHAT YOU START WITH. Picking a favourite used to do one thing — weight its
    bricks into the reward pool — so the first five minutes of every run were
    identical. Each one now also opens with its own kit: the spell already in
@@ -5012,6 +5301,13 @@ function weaponTip(w){
     L.push(row('Bleed chance',    '\u00d7'+w.bleed.toFixed(2),        d(w.bleed, b.bleed)));
     L.push(row('Spin swing',      '\u00d7'+w.spin.toFixed(2),         d(w.spin, b.spin)));
     L.push(row('Knockback',       '\u00d7'+w.kb.toFixed(2),           d(w.kb, b.kb)));
+    L.push('');
+    L.push(row('Damage taken',    '\u2212'+Math.round((w.lessTaken||0)*100)+'%',
+      '<b class="up">LESS \u25b2</b>'));
+    L.push(row('Spell suppression','+'+Math.round((w.suppress||0)*100)+'%',
+      '<b class="up">\u25b2</b>'));
+    L.push(row('Lifesteal',       Math.round((w.leechChance||0)*100)+'% for '+
+      ((w.leech||0)*100).toFixed(1)+'%',                 d(w.leech, b.leech)));
   }
   L.push('');
   /* one attack a second, crits folded in — the honest single-number comparison.
@@ -5028,6 +5324,12 @@ function weaponTip(w){
   L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
   L.push('');
   if(w.cast){
+    L.push(row('All resistances', '+'+Math.round((w.res||0)*100)+'%',
+      '<b class="up">\u25b2</b>'));
+    L.push('');
+    L.push('It buys its safety with RANGE, so it gets none');
+    L.push('of the mitigation \u2014 or the lifesteal \u2014 that');
+    L.push('the melee weapons carry.');
     L.push('It REPLACES the swing: no reach, no bleed,');
     L.push('no spin combo. Physical bricks are not offered');
     L.push('to you; the elemental ones are.');
@@ -5273,6 +5575,7 @@ const BENCH_SECTIONS = [
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
   { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
+  { name:'LIFESTEAL',       ids:['leech','leechrate'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
@@ -5445,14 +5748,35 @@ function buildCheatRows(){
     });
 
   const spawn = document.getElementById('cheatSpawn');
-  const mobKeys = [...ROSTER.map(r=>r.k),
-                   'stonegolem','icegolem','firegolem','stormgolem'];
+  /* FILED BY WHEN THEY TURN UP. One flat wall of forty names told you nothing
+     about the shape of a run; in bands of five you can see the roster arriving.
+     Anything with no roster entry (the golems) goes in its own band at the end,
+     because golems are seeded into waves rather than bought from the budget. */
   const bossKeys = [...Object.keys(BOSSES), ...Object.keys(SUPERBOSSES)];
-  spawn.innerHTML =
-    mobKeys.map(k=>`<div class="cheatbtn" data-mob="${k}">${k}</div>`).join('') +
-    bossKeys.map(k=>`<div class="cheatbtn got" data-mob="boss" data-boss="${k}">${
-      (BOSSES[k]||SUPERBOSSES[k]).name}</div>`).join('');
-  for(const el of spawn.children){
+  const bands = [];
+  const rostered = ROSTER.slice().sort((a,b)=>a.at-b.at);
+  for(const r of rostered){
+    const lo = Math.max(1, Math.floor((r.at-1)/5)*5 + 1);
+    let band = bands.find(x=>x.lo===lo);
+    if(!band){ band = {lo, hi:lo+4, keys:[]}; bands.push(band); }
+    band.keys.push(r.k);
+  }
+  bands.sort((a,b)=>a.lo-b.lo);
+  bands.push({lo:0, hi:0, name:'GOLEMS &middot; seeded into waves, not bought',
+              keys:['stonegolem','icegolem','firegolem','stormgolem']});
+  bands.push({lo:0, hi:0, name:'BOSSES', keys:bossKeys.map(k=>'boss:'+k)});
+  spawn.innerHTML = bands.map(b=>
+    `<div class="mobband"><div class="mobbandhead">${
+       b.name || ('WAVE '+b.lo+'&ndash;'+b.hi)}</div><div class="mobbandrow">${
+       b.keys.map(k=>{
+         if(k.startsWith('boss:')){
+           const bk = k.slice(5);
+           return `<div class="cheatbtn got mob" data-mob="boss" data-boss="${bk}">${
+             esc((BOSSES[bk]||SUPERBOSSES[bk]).name)}</div>`;
+         }
+         return `<div class="cheatbtn mob" data-mob="${k}">${esc(k)}</div>`;
+       }).join('')}</div></div>`).join('');
+  for(const el of spawn.querySelectorAll('.cheatbtn.mob')){
     const put = (n, elite)=>{
       const p = player;
       for(let i=0;i<n;i++){
@@ -5465,6 +5789,10 @@ function buildCheatRows(){
     };
     el.addEventListener('click', ev=> put(1, ev.shiftKey));
     el.addEventListener('contextmenu', ev=>{ ev.preventDefault(); put(5, ev.shiftKey); });
+    /* the same now -> next panel the bricks use, filled with what this body IS */
+    const key = el.dataset.boss || el.dataset.mob;
+    el.addEventListener('mouseenter', ()=>{ try { mobTipShow(el, key); } catch(e){ cmpHide(); } });
+    el.addEventListener('mouseleave', cmpHide);
   }
 
   const misc = document.getElementById('cheatMisc');
@@ -5531,9 +5859,19 @@ function pickChoices(mode){
     try { return !u.req || !!u.req(); } catch(e){ return false; }
   });
   const want = mode==='boss' ? 4 : mode==='chest' ? 1 : 3;
+  /* A CHEST IS A REWARD FOR EXPLORING, not a way to reroll your build. It
+     deepens what you already cast rather than handing you a spell you then have
+     to find room and bricks for. */
+  const draw = mode==='chest' ? pool.filter(u=>!grantsNewSpell(u)) : pool;
   choices = [];
-  const take = (from)=>{
+  /* ONE CARD LEANS ON THE FAVOURITE, NOT ALL THREE. Weighting every draw meant
+     a favourite's own bricks crowded the whole screen — pick Elemental Arts and
+     all three slots filled with elemental increases, so a new spell almost never
+     got a look in. The first card drawn is the weighted one; the rest are flat. */
+  let favUsed = false;
+  const take = (from, forceFlat)=>{
     if(!from.length) return null;
+    const weighted = !forceFlat && !favUsed;
     /* roll the rarity FIRST, then draw only from what that tier is allowed to offer */
     let rar = forcedRarity || rollRarity(mode);
     let cands = from.filter(u=>rarAllows(u, rar));
@@ -5551,16 +5889,20 @@ function pickChoices(mode){
       }
       if(!cands.length) return null;
     }
-    /* favourite bricks are drawn heavier, never guaranteed */
+    /* favourite bricks are drawn heavier on the ONE weighted slot, never guaranteed */
+    const wOf = u => (weighted && favSet.has(u.id)) ? FAV_WEIGHT : 1;
     let total = 0;
-    for(const u of cands) total += favSet.has(u.id) ? FAV_WEIGHT : 1;
+    for(const u of cands) total += wOf(u);
     let r = Math.random()*total, t = cands[cands.length-1];
     for(const u of cands){
-      r -= favSet.has(u.id) ? FAV_WEIGHT : 1;
+      r -= wOf(u);
       if(r < 0){ t = u; break; }
     }
+    if(weighted && favSet.has(t.id)) favUsed = true;
     const pi = pool.indexOf(t);
     if(pi >= 0) pool.splice(pi, 1);
+    /* the chest draws from a filtered copy, so it has to be told too */
+    if(draw !== pool){ const di = draw.indexOf(t); if(di >= 0) draw.splice(di, 1); }
     choices.push({ t, rar, c: t.calc(RARITY[rar].mult) });
     return t;
   };
@@ -5571,7 +5913,7 @@ function pickChoices(mode){
     take(pool.filter(u=>u.cls==='OFFENSE' || u.cls==='SPELL'));
     take(pool.filter(u=>u.cls==='DEFENSE'));
   }
-  while(choices.length < want && pool.length) take(pool);
+  while(choices.length < want && draw.length) take(draw);
   /* don't let the guaranteed pair always sit in the same slots */
   for(let i=choices.length-1;i>0;i--){
     const j = (Math.random()*(i+1))|0;
@@ -5902,7 +6244,20 @@ const STAT_PROBES = [
   { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
   { g:'DEFENCE', k:'Suppression',   get:()=> suppressChance()*100,     fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Weapon mitigation', get:()=> ((weapon && weapon.lessTaken)||0)*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'LESS damage taken from everything, just for carrying a melee weapon — a staff buys its safety with range instead' },
   { g:'DEFENCE', k:'Regeneration',  get:()=> cursedRegen(),            fmt:v=>v.toFixed(3)+'/s' },
+  { g:'DEFENCE', k:'Lifesteal chance', get:()=> (player.leechChance||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'how often one of your own swings drinks. The staff never does — lifesteal is a melee stat' },
+  { g:'DEFENCE', k:'Lifesteal share',  get:()=> (player.leech||0)*100, fmt:v=>v.toFixed(1)+'%', zero:true,
+    why:'how much of the damage a drinking swing ACTUALLY LANDED comes back as hearts, capped at '+
+        Math.round(LEECH_HIT_CAP*100)+'% of your maximum per swing' },
+  { g:'DEFENCE', k:'Lifesteal a swing', get:()=> (player.leechChance||0)*(player.leech||0)*100,
+    fmt:v=>v.toFixed(2)+'%', zero:true,
+    why:'chance times share — the average share of every swing that comes back, which is the number to compare builds on' },
+  { g:'DEFENCE', k:'Elemental toll', get:()=> resTax()*100, fmt:v=>'\u2212'+Math.round(v)+'%', zero:true, hi:false,
+    why:'the world\u2019s own tax on resistance, 30 points at wave 20, 40 and 60. It is flat and permanent — the only answer is to carry more resistance' },
   { g:'DEFENCE', k:'Fire res',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Frost res',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Lightning res', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
@@ -6104,6 +6459,85 @@ function cmpPanel(){
   return cmpEl;
 }
 function cmpHide(){ if(cmpEl) cmpEl.classList.add('hidden'); }
+/* WHAT A MONSTER IS, in the panel the bricks already use. It reads the same
+   EDEF the spawner reads and puts it through the same wave curve, monster level
+   and difficulty, so the numbers are what you would actually meet at the wave
+   you are standing in — not the table's raw base. */
+function mobStatRows(key){
+  const isBoss = !!(BOSSES[key] || SUPERBOSSES[key]);
+  const rows = [];
+  const add = (g, k, v) => rows.push({ g, k, v });
+  if(isBoss){
+    const B = BOSSES[key] || SUPERBOSSES[key];
+    const st = Math.max(1, Math.floor(wave.n/5));
+    const bhp = Math.round((B.hp*st*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp * mobRankMul());
+    add('BOSS', 'Name', B.name);
+    add('BOSS', 'Health here', Math.round(bhp).toLocaleString());
+    add('BOSS', 'Contact damage',
+      Math.round((B.dmg*(1 + st*1.5) + Math.pow(st,1.55)*9) * (B.dmgMul||1) * mobRankMul()) + '');
+    add('BOSS', 'Speed', Math.round(B.speed) + ' px/s');
+    add('BOSS', 'XP', Math.round(B.xp*(1+(st-1)*0.8)) + '');
+    return rows;
+  }
+  const d = EDEF[key];
+  if(!d) return rows;
+  const lvl = mobLevel(), rank = mobRank(), rankMul = mobRankMul(rank);
+  const hpS = (1 + (lvl-1)*0.30 + Math.pow(Math.max(0,lvl-5),1.6)*0.05) * difficulty.hp * rankMul;
+  const dmgB = ((lvl-1)*0.55 + Math.pow(Math.max(0, lvl-8), 1.45)*0.14) * rankMul;
+  const armour = lvl * 1.1 * (key==='bastion' ? 1.8 : 1) * (d.armourMul || 1)
+    * (RANGED_SET.has(key) ? 0.45 : 1) * (d.golem ? 1.6 : 1) * rankMul;
+  const r = ROSTER.find(x=>x.k===key);
+  add('AT WAVE '+wave.n, 'Health', Math.round(Math.ceil(d.hp*hpS)).toLocaleString());
+  add('AT WAVE '+wave.n, 'Contact damage', Math.max(1, Math.round((d.dmg + dmgB) * difficulty.dmg)) + '');
+  add('AT WAVE '+wave.n, 'Armour', Math.round(armour) + '');
+  add('AT WAVE '+wave.n, 'Monster level', rank + (rank ? '  (\u00d7'+rankMul.toFixed(2)+')' : ''));
+  add('BASE', 'Base health', d.hp + '');
+  add('BASE', 'Base damage', d.dmg + '');
+  add('BASE', 'Move speed', Math.round(d.speed) + ' px/s');
+  if(d.fire) add('BASE', 'Attack every', d.fire.toFixed(1) + 's');
+  if(d.evade) add('BASE', 'Evades', Math.round(d.evade*100) + '% of hits');
+  if(d.shade) add('BASE', 'Shade', 'fades in and out of reach');
+  if(d.golem) add('BASE', 'Golem kit', GOLEM_CONF[d.golem] ? GOLEM_CONF[d.golem].kit : d.golem);
+  if(d.mini)  add('BASE', 'Mini', 'spawned by a '+d.mini+' golem');
+  if(d.elem)  add('BASE', 'Touch element', d.elem);
+  if(d.res) for(const el of ELEMENTS){
+    const v = d.res[el];
+    if(v) add('RESISTANCE', el, (v>0?'':'') + Math.round(v*100) + '%' + (v<0 ? '  (weak)' : ''));
+  }
+  if(r){
+    add('SPAWNING', 'First wave', r.at + '');
+    add('SPAWNING', 'Budget cost', r.cost + ' bricks');
+    add('SPAWNING', 'Weight', (r.flavour ?? 1).toFixed(2));
+  } else {
+    add('SPAWNING', 'From', 'seeded into waves, not bought');
+  }
+  add('LOOT', 'XP', d.xp + '');
+  add('LOOT', 'Studs', d.studs[0] + '\u2013' + d.studs[1]);
+  return rows;
+}
+function mobTipShow(anchor, key){
+  const el = cmpPanel();
+  const rows = mobStatRows(key);
+  const name = (BOSSES[key] || SUPERBOSSES[key] || {}).name || key;
+  let html = `<div class="cmphead">${esc(String(name).toUpperCase())}</div>`;
+  if(!rows.length) html += `<div class="cmpnone">nothing on file for this one</div>`;
+  let g = null;
+  for(const r of rows){
+    if(r.g !== g){ g = r.g; html += `<div class="cmpg">${esc(g)}</div>`; }
+    html += `<div class="cmprow"><span>${esc(r.k)}</span><b>${esc(r.v)}</b></div>`;
+  }
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+  const a = anchor.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let x = a.right + 14;
+  if(x + w > window.innerWidth - 8) x = a.left - w - 14;
+  if(x < 8) x = Math.max(8, window.innerWidth - w - 8);
+  let y = a.top - 8;
+  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  el.style.left = Math.round(x)+'px';
+  el.style.top  = Math.round(Math.max(8, y))+'px';
+}
 function cmpShow(u, c, anchor, title, avoid){
   const el = cmpPanel();
   const rows = previewPick(u, c);
@@ -6165,7 +6599,11 @@ function renderCards(){
     el.className = 'card';
     const owned = taken[card.t.id]||0;
     const stacks = owned ? `<div class="stack">x${owned}</div>` : '';
-    el.innerHTML = `${stacks}<div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
+    /* a card that hands you a SPELL you do not have is a different kind of
+       decision from one that deepens something you already cast — it should not
+       take reading the text to notice which */
+    const isNew = grantsNewSpell(card.t) ? `<div class="newtag">NEW</div>` : '';
+    el.innerHTML = `${stacks}${isNew}<div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
       <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">${ICONS[card.t.icon]}</svg>
       <h3>${card.t.name}</h3><p>${card.t.desc(card.c, owned)}</p>
@@ -7838,6 +8276,8 @@ function updateEnemy(e, dt){
   if(e.poison) poisonTick(e, dt);
   if(e.bleed)  bleedTick(e, dt);
   if(e.eburn || e.burnt) burnTickEnemy(e, dt);
+  /* a lord wards everything around it, whatever else it is doing */
+  if(LORD_WARD[e.type]) lordWardTick(e, dt);
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
   if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
   if(e.emberCd > 0) e.emberCd -= dt;
@@ -8008,11 +8448,15 @@ function updateEnemy(e, dt){
         const n = Math.max(0, Math.min(e.elite ? 2 : 1, PUMPKIN_LIVE_CAP - live));
         for(let i=0;i<n;i++){
           const dur = rnd(0.75,1.0);
-          /* aim at where you are heading, plus the fuse they will sit on */
-          const lead = leadPlayer(e.x, e.y, dur + 1.6, 0.85);
+          /* IT AIMS AT YOU. Leading by the whole three-second fuse meant it was
+             throwing at where you might be in three seconds' time, which is
+             indistinguishable from throwing at random — and the fuse already
+             gives you the time to walk off it, which is the actual mechanic.
+             It leads the FLIGHT only, and the scatter is half what it was. */
+          const lead = leadPlayer(e.x, e.y, dur + 0.45, 0.8);
           projectiles.push({kind:'pumpkin', sx:e.x, sy:e.y-26,
-            tx:clamp(lead.x+rnd(-50,50), W.wall+50, W.w-W.wall-50),
-            ty:clamp(lead.y+rnd(-50,50), W.wall+50, W.h-W.wall-50),
+            tx:clamp(lead.x+rnd(-26,26), W.wall+50, W.w-W.wall-50),
+            ty:clamp(lead.y+rnd(-26,26), W.wall+50, W.h-W.wall-50),
             t:0, dur, spin:rnd(TAU), delay:i*0.22,
             fuse:3, r:fireRadius(e, 57) });
         }
@@ -8120,7 +8564,7 @@ function updateEnemy(e, dt){
           const a2 = Math.atan2(lead.y-(e.y-22), lead.x-e.x);
           projectiles.push({kind:'zorb', x:e.x, y:e.y-22, owner:'enemy',
             vx:Math.cos(a2)*ZORB_SPD, vy:Math.sin(a2)*ZORB_SPD,
-            life:5.4, ang:rnd(TAU), zapCd:0, seed:rnd(TAU)});
+            life:5.4, ang:rnd(TAU), zapCd:0, seed:rnd(TAU), dmg:shotPow(e,'zorb')});
           addRing(e.x, e.y, 12, 240, 80, '#ffe95a', 5, 0.45);
           SFX.thunder();
         }
@@ -8172,6 +8616,7 @@ function updateEnemy(e, dt){
         const shots = lord ? [-130, 0, 130] : [0];
         shots.forEach((off, i)=>{
           projectiles.push({kind:'fireball', x:e.x, y:e.y-16, sx:e.x, sy:e.y-16,
+            dmg:shotPow(e,'fireball'),
             tx:clamp(player.x+off+rnd(-30,30), W.wall+40, W.w-W.wall-40),
             ty:clamp(player.y+rnd(-40,40), W.wall+40, W.h-W.wall-40),
             t:0, dur:0.9, spin:rnd(TAU), delay:i*0.15, fr:fireRadius(e, 31)});
@@ -8317,8 +8762,8 @@ function updateEnemy(e, dt){
         for(const e2 of enemies){
           if(e2===e || e2.dead || e2.state!=='active' || e2.type==='boss') continue;
           if(dist(e2,e) < 300){
-            if((e2.buffStacks||0) >= OVERSEER_MAX_STACKS) continue;   /* three is the ceiling */
-            e2.buffStacks = (e2.buffStacks||0)+1;
+            if(!addMobBuff(e2, 'empower', OVERSEER_MAX_STACKS)) continue;
+            e2.buffStacks = buffStacksOf(e2, 'empower');
             const oldMax = e2.maxHp;
             e2.maxHp = Math.round(e2.maxHp*1.15);
             e2.hp += e2.maxHp - oldMax;
@@ -8364,7 +8809,11 @@ function updateEnemy(e, dt){
         explode(e.x, e.y, 85, 0, {hostile:true, brickCols:['#fe8a18','#3a3f44','#d3242b'], shake:0.45});
         spawnBricks(e.x, e.y, [e.col.head, e.col.torso], 8, 220);
         SFX.brick(5);
-        if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead) playerDamage(1, e);
+        /* THE BOMBER IS THE BOMB. Its entire existence is this one detonation
+           and it was paying a hardcoded 1 for it — a third of a heart after
+           armour, at any wave, for a monster that has to reach you to work. */
+        if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead)
+          playerDamage(Math.max(2, e.dmg*2.6), e);
         return;
       }
     } else {
@@ -8593,7 +9042,7 @@ function bossHellfire(b, dt, tier, enr){
     const a = rnd(TAU), rr = Math.sqrt(Math.random())*310;
     const tx = clamp(lead.x + Math.cos(a)*rr, W.wall+60, W.w-W.wall-60);
     const ty = clamp(lead.y + Math.sin(a)*rr, W.wall+60, W.h-W.wall-60);
-    projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty,
+    projectiles.push({kind:'meteor', sx:tx-80, sy:ty-760, tx, ty, dmg:shotPow(b,'meteor'),
       t:0, dur:rnd(0.75,1.0), spin:rnd(TAU), delay:0, fr:fireRadius(b, 31)});
     if(Math.random()<0.14) SFX.fireball();
   }
@@ -8645,7 +9094,8 @@ function golemStomp(e, G){
     /* a ring of burning ground you have to path around */
     for(let i=0;i<7;i++){
       const a = i/7*TAU + rnd(-0.2,0.2);
-      hazards.push({kind:'fire', x:e.x+Math.cos(a)*G.stompR*0.62, y:e.y+Math.sin(a)*G.stompR*0.62,
+      hazards.push({kind:'fire', dmg:Math.max(1, Math.round((e.dmg||2)*0.6)),
+        x:e.x+Math.cos(a)*G.stompR*0.62, y:e.y+Math.sin(a)*G.stompR*0.62,
         r:fireRadius(e, 44), life:5, max:5});
     }
     SFX.fireball();
@@ -8720,7 +9170,7 @@ function golemThrow(e, G){
     const lead = leadPlayer(e.x, e.y, 0.95, 0.8);
     const pts = bombSpread(lead.x, lead.y, n, 130, 74);
     for(let i=0;i<n;i++){
-      projectiles.push({kind:'molten', sx:e.x, sy:e.y-24,
+      projectiles.push({kind:'molten', sx:e.x, sy:e.y-24, dmg:shotPow(e,'molten'),
         tx:clamp(pts[i].x, W.wall+50, W.w-W.wall-50),
         ty:clamp(pts[i].y, W.wall+50, W.h-W.wall-50),
         t:0, dur:rnd(0.8,1.0), spin:rnd(TAU), delay:i*0.14, fr:fireRadius(e, 36)});
@@ -8737,7 +9187,7 @@ function fireRadius(e, base){
   let m = 1;
   if(e){
     if(e.elite) m *= 1.35;
-    if(e.magic) m *= 1.15;
+    if(e.magic) m *= 1.06;
     if(e.type === 'boss') m *= e.super ? 1.6 : 1.3;
     else if(typeof e.type === 'string' && e.type.endsWith('lord')) m *= 1.25;
     m *= 1 + 0.08*(e.buffStacks||0);
@@ -8773,7 +9223,12 @@ function bossRingHit(b){
 /* THE MACE SPIN. A boss with a mace should use it: it plants itself, winds up,
    then whirls on the spot with the whole thing extended, walking slowly at you
    the entire time. Anything the head passes through gets hit. */
-const MACE_WIND = 0.55, MACE_SPIN_T = 4.2, MACE_SPIN_RATE = 11, MACE_TICK = 0.4;
+/* THE WIND-UP IS THE WHOLE TELL. Half a second was not a warning, it was a
+   formality — the boss was already spinning and already hitting before you had
+   read that it had started. It braces for two and a half seconds now, with the
+   reach painted on the floor the whole time, and NOTHING it does in that window
+   can hurt you: the cast lands first, the spin second. */
+const MACE_WIND = 2.4, MACE_SPIN_T = 4.2, MACE_SPIN_RATE = 11, MACE_TICK = 0.4;
 /* A whirling boss used to creep at under half speed, which made the whole
    attack something you walked away from. It now charges at two and a half
    times its normal speed for the whole spin — the spin IS the chase. */
@@ -8792,6 +9247,14 @@ function maceSpin(b, dt, tier, enr, toP){
     /* braced, mace back, the reach painted on the ground by the renderer */
     b.moving = false;
     b.whirlA = -1.2; b.whirlPrev = undefined;
+    /* the CAST, once, on the last beat of the wind — the roar and the ring go
+       out before a single frame of the spin can land, so what you hear is the
+       thing starting rather than the thing already having hit you */
+    if(!b.maceCast && b.modeT > MACE_WIND - 0.45){
+      b.maceCast = 1;
+      addRing(b.x, b.y, 24, 420, maceReach(b), '#ffd166', 9, 0.55);
+      addShake(0.25); SFX.roar();
+    }
     return false;
   }
   b.whirlA = (b.whirlA||0) + MACE_SPIN_RATE*dt;
@@ -8833,7 +9296,7 @@ function maceSpin(b, dt, tier, enr, toP){
       life:0.22, max:0.22, color:'#ffd166'});
   }
   if(b.modeT >= MACE_WIND + MACE_SPIN_T*(enr?1.35:1)){
-    b.whirlA = undefined; b.whirlPrev = undefined;
+    b.whirlA = undefined; b.whirlPrev = undefined; b.maceCast = 0;
     addShake(0.3); SFX.slam();
     return true;
   }
@@ -8893,7 +9356,7 @@ function updateBoss(b, dt, toP, dP){
         else if(b.cycle===1 && dP>170 && dP<560){ b.mode='dashWind'; b.lockA=toP; }
         else if(b.cycle===2 && dP<=190){ b.mode='slamWind'; }
         else if(b.cycle===3){ b.mode='novaWind'; }
-        else if(b.cycle===4){ b.mode='maceWind'; }
+        else if(b.cycle===4){ b.mode='maceWind'; b.maceCast=0; }
         else { b.mode='volleyWind'; }
         b.modeT=0;
         if(b.mode!=='chase'){ if(b.mode==='summonWind'||b.mode==='novaWind') SFX.roar(); else SFX.grunt(); }
@@ -9223,7 +9686,7 @@ function updateBoss(b, dt, toP, dP){
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='fanWind'; SFX.fireball(); }
         else if(b.cycle===3){ b.mode='volleyWind'; SFX.grunt(); }
-        else if(b.cycle===4){ b.mode='maceWind'; SFX.grunt(); }
+        else if(b.cycle===4){ b.mode='maceWind'; b.maceCast=0; SFX.grunt(); }
         else { b.mode='hellWind'; SFX.roar(); showBanner('HELLFIRE!','', '#ff6a3a', 1.1, 34); }
         b.modeT=0;
       }
@@ -9311,7 +9774,7 @@ function updateBoss(b, dt, toP, dP){
         if(b.cycle===0){ b.mode='rainWind'; SFX.roar(); showBanner('HELLFIRE!','FIRE FROM THE SKY', '#ff6a3a', 1.2, 34); }
         else if(b.cycle===1){ b.mode='slamWind'; SFX.grunt(); }
         else if(b.cycle===2){ b.mode='emberWind'; SFX.fireball(); }
-        else if(b.cycle===3){ b.mode='maceWind'; SFX.grunt(); }
+        else if(b.cycle===3){ b.mode='maceWind'; b.maceCast=0; SFX.grunt(); }
         else { b.mode='volleyWind'; SFX.grunt(); }
         b.modeT=0;
       }
@@ -9544,8 +10007,8 @@ function updateSuperBoss(b, dt, toP, dP){
       for(const e2 of enemies){
         if(e2===b || e2.dead || e2.state!=='active' || e2.type==='boss') continue;
         if(dist(e2,b) > 520) continue;
-        if((e2.buffStacks||0) >= OVERSEER_MAX_STACKS) continue;
-        e2.buffStacks = (e2.buffStacks||0)+1;
+        if(!addMobBuff(e2, 'empower', OVERSEER_MAX_STACKS)) continue;
+        e2.buffStacks = buffStacksOf(e2, 'empower');
         const oldMax = e2.maxHp;
         e2.maxHp = Math.round(e2.maxHp*1.18);
         e2.hp += e2.maxHp - oldMax;
@@ -9830,14 +10293,14 @@ function updateProjectiles(dt){
         }
         if(!player.dead && player.dash.t<=0 && player.invuln<=0 &&
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
-          playerDamage(1, pr, 'shock');
+          playerDamage(pr.dmg || 1, pr, 'shock');
       }
       if(!pr.dead && !player.dead &&
          sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
         if(player.dash.t>0){
           if(!pr.dodged){ pr.dodged = true; perfectDodge(pr.x, pr.y); pr.dead = true; }
         } else if(player.invuln<=0){
-          playerDamage(2, pr, 'shock');
+          playerDamage((pr.dmg || 1)*1.6, pr, 'shock');
           /* the jolt itself, not a tick of a hazard — the per-element throttle
              must not swallow the handful of stacks that IS this attack */
           player.ailCd.shock = 0;
@@ -9866,7 +10329,7 @@ function updateProjectiles(dt){
           if(d < pr.r){
             if(player.dash.t>0){ perfectDodge(pr.x, pr.y); }
             else if(player.invuln<=0){
-              playerDamage(1, pr, 'frost');
+              playerDamage(pr.dmg || 1, pr, 'frost');
             }
           }
         }
@@ -10084,11 +10547,11 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, pr.r*0.8, 0,
             {hostile:true, brickCols:['#fe8a18','#ff9a3c','#3d7a2b'], shake:0.5});
           addRing(pr.x, pr.y, 20, 520, pr.r, '#ff9a3c', 11, 0.5);
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
           SFX.bomb();
           if(dist(pr,player) < pr.r && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else playerDamage(2, pr, 'fire');
+            else playerDamage((pr.dmg || 1)*1.5, pr, 'fire');
           }
         }
       }
@@ -10113,18 +10576,18 @@ function updateProjectiles(dt){
         if(pr.kind==='molten'){
           const fr = pr.fr || 66;
           explode(pr.x, pr.y, fr*0.6, 0, {hostile:true, shake:0.15});
-          hazards.push({kind:'lava', x:pr.x, y:pr.y, r:fr, life:6.5, max:6.5});
+          hazards.push({kind:'lava', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:6.5, max:6.5});
           SFX.boomSmall();
           continue;
         }
         if(pr.kind==='fireball'){
           const fr = pr.fr || 46;
           explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else if(player.invuln<=0) playerDamage(1, pr, 'fire');
+            else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
           }
           continue;
         }
@@ -10145,11 +10608,11 @@ function updateProjectiles(dt){
         if(pr.kind==='meteor'){
           const fr = pr.fr || 54;
           explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
-          hazards.push({kind:'fire', x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
+          hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
           if(dist(pr,player)<fr*0.85 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
-            else if(player.invuln<=0) playerDamage(1, pr, 'fire');
+            else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
           }
           continue;
         }
@@ -10248,13 +10711,15 @@ function updateFx(dt){
       h.tick -= dt;
       if(h.tick <= 0){
         h.tick = VENOM_TICK;
+        /* it does not HIT you, it POISONS you — so the rot keeps working after
+           you have stepped off it, and armour never touches it */
         if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.9)
-          playerDamage(Math.max(0.5, (h.dmg||1)*VENOM_SHARE), h, null);
+          poisonPlayer(Math.max(0.12, (h.dmg||1)*VENOM_SHARE*0.5), PSN_DUR);
       }
       continue;
     }
     if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.88)
-      playerDamage(1, h, 'fire');
+      playerDamage(h.dmg || 1, h, 'fire');
   }
   hazards = hazards.filter(h=>h.life>0);
   updateSpikes(dt);
@@ -10815,7 +11280,7 @@ function drawGolem(c, e){
 
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,1,33,10,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,1,34,10.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
@@ -10898,7 +11363,7 @@ function drawFigure(c, o){
   c.beginPath(); c.ellipse(0, 2, 15*s, 5.5*s, 0, 0, TAU); c.fill();
   if(o.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,2,19*s,7.5*s,0,0,TAU); c.stroke(); }
-  if(o.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.5;
+  if(o.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.5;
     c.beginPath(); c.ellipse(0,2,19*s,7.5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   if(o.lord){ c.setLineDash([3,3]); c.strokeStyle='rgba(220,200,255,0.6)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(0,2,20*s,8*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
@@ -11021,6 +11486,10 @@ function drawFigure(c, o){
      read like it had been dropped; carried straight up it reads like it is
      about to be used. Only the hero does this — a boss mid-swing must not. */
   const IDLE_UP = -Math.PI/2;
+  /* the hero's axe rests shouldered on a lean rather than dead upright — with a
+     bit to either side of the haft, straight up buries the inner one behind the
+     minifig's head */
+  const AXE_LEAN = 0.5;
   const heldAng = (o.hero && o.whirlA === undefined) ? IDLE_UP
                 : (o.whirlA !== undefined ? o.whirlA : null);
   if(o.weapon==='sword' && o.bladeAng===undefined){
@@ -11034,7 +11503,10 @@ function drawFigure(c, o){
      swing arc draws the weapon during a swing instead of it appearing twice */
   if(o.weapon==='axe' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(heldAng !== null ? heldAng : aR+0.6);
+    /* TWO BITS NEED ROOM. Straight up, the inner bit lands square behind the
+       minifig's head and the axe reads as single-bitted; shouldered on a lean
+       it clears the skull and both edges show. */
+    c.rotate(heldAng !== null ? heldAng + (heldAng===IDLE_UP ? AXE_LEAN : 0) : aR+0.6);
     drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
@@ -11300,7 +11772,7 @@ function drawCryptBat(c, e){
   c.beginPath(); c.ellipse(e.x, e.y, 10*s, 4*s, 0, 0, TAU); c.fill();
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2;
     c.beginPath(); c.ellipse(e.x,e.y,13*s,5*s,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2;
     c.beginPath(); c.ellipse(e.x,e.y,13*s,5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.save(); c.translate(e.x, e.y - fz);
   /* wings */
@@ -11386,9 +11858,9 @@ function drawGreatsword(c, s){
   c.fillStyle = '#d3242b';
   c.beginPath(); c.arc(-13.5*s, 0, 3.6*s, 0, TAU); c.fill(); c.stroke();
 }
-/* An axe: a haft with a broad crescent head biting forward and a short back
-   spike. Drawn along +x from the grip, like everything else here, so a whirl or
-   a throw is just a rotation. */
+/* An axe: a haft carrying two broad crescent bits, one to each side, their
+   edges facing opposite ways. Drawn along +x from the grip, like everything
+   else here, so a whirl or a throw is just a rotation. */
 function drawAxe(c, s, bright){
   c.lineJoin = 'round';
 
@@ -11397,38 +11869,42 @@ function drawAxe(c, s, bright){
   /* THE HEAD IS MOUNTED ACROSS THE HAFT, not along it. An axe bit sits at right
      angles to the shaft with its edge running parallel to it — a head pointing
      the same way the handle does is a mace on a stick, which is exactly what
-     this looked like. Haft along +x, head standing off to one side.
-     WHICH SIDE MATTERS. Held, the hero carries the haft straight up (a -90°
-     turn), which maps local +y to world +x — so the bit has to sit on the +y
-     side of the haft for the axe to face EAST in the hand instead of back over
-     the shoulder. Everything below the haft is mirrored for that reason. */
+     this looked like. Haft along +x, bits standing off to either side.
+     DOUBLE-BIT: one bit on each side of the haft, edges facing opposite ways,
+     so the axe cuts on the backswing as well as the swing. The two are the same
+     shape mirrored about the haft, which keeps the head balanced on the shaft
+     however the weapon is turned. */
   c.strokeStyle = dark; c.lineWidth = 2;
   c.fillStyle = PAL.brown;
   c.fillRect(-9*s, -2.4*s, 43*s, 4.8*s);
   c.strokeRect(-9*s, -2.4*s, 43*s, 4.8*s);
 
-  // Axe head — flipped 180 degrees
-  c.fillStyle = steel;
-  c.beginPath();
-  c.moveTo(20*s, 2*s);                                  /* root, toe side */
-  c.lineTo(15*s, 12*s);                                 /* the beard, hooking back */
-  c.quadraticCurveTo(24*s, 22*s, 36*s, 19*s);           /* THE EDGE, along the haft */
-  c.quadraticCurveTo(34*s, 9*s, 31*s, 2*s);             /* heel back down to the haft */
-  c.closePath(); c.fill(); c.stroke();
-  /* the bevel, traced just inside the edge */
-  c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
-  c.beginPath();
-  c.moveTo(17*s, 13*s);
-  c.quadraticCurveTo(25*s, 19.5*s, 34*s, 17*s);
-  c.stroke();
+  /* one bit; d flips it to the other side of the haft */
+  const bit = (d)=>{
+    c.strokeStyle = dark; c.lineWidth = 2;
+    c.fillStyle = steel;
+    c.beginPath();
+    c.moveTo(20*s, 2*s*d);                                    /* root, toe side */
+    c.lineTo(15*s, 12*s*d);                                   /* the beard, hooking back */
+    c.quadraticCurveTo(24*s, 22*s*d, 36*s, 19*s*d);           /* THE EDGE, along the haft */
+    c.quadraticCurveTo(34*s, 9*s*d, 31*s, 2*s*d);             /* heel back down to the haft */
+    c.closePath(); c.fill(); c.stroke();
+    /* the bevel, traced just inside the edge */
+    c.strokeStyle = bright ? '#dcdcdc' : '#f4f8fa'; c.lineWidth = 2.2;
+    c.beginPath();
+    c.moveTo(17*s, 13*s*d);
+    c.quadraticCurveTo(25*s, 19.5*s*d, 34*s, 17*s*d);
+    c.stroke();
+  };
+  bit(1); bit(-1);
 
-  // Eye
+  /* Eye — centred now that there is a bit hanging off either side */
   c.strokeStyle = dark;
   c.lineWidth = 2;
   c.fillStyle = bright ? '#c8ced4' : '#9ba19d';
   c.beginPath();
-  c.moveTo(21*s, 5.5*s);  c.lineTo(30*s, 5.5*s);
-  c.lineTo(30*s, -3.4*s); c.lineTo(21*s, -3.4*s);
+  c.moveTo(21*s, 4.5*s);  c.lineTo(30*s, 4.5*s);
+  c.lineTo(30*s, -4.5*s); c.lineTo(21*s, -4.5*s);
   c.closePath(); c.fill(); c.stroke();
   /* butt cap, so the grip end reads as a grip */
   c.fillStyle = PAL.gold;
@@ -13189,7 +13665,7 @@ function drawShade(c, e){
   }
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.8)'; c.lineWidth=2.2;
     c.beginPath(); c.ellipse(0,1,15,6,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.2;
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.2;
     c.beginPath(); c.ellipse(0,1,16,6.5,0,0,TAU); c.stroke(); c.setLineDash([]); }
   c.restore();
 }
@@ -13220,7 +13696,7 @@ function drawBatBoss(c, e){
   c.beginPath(); c.ellipse(e.x, e.y, 22*s - z*0.18, 8*s - z*0.05, 0, 0, TAU); c.fill();
   if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.4;
     c.beginPath(); c.ellipse(e.x,e.y,26*s,9.5*s,0,0,TAU); c.stroke(); }
-  if(e.magic){ c.setLineDash([6,5]); c.strokeStyle='rgba(155,69,214,0.85)'; c.lineWidth=2.4;
+  if(e.magic){ c.setLineDash([6,5]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.4;
     c.beginPath(); c.ellipse(e.x,e.y,27*s,10*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
   /* the violet haze it hunts inside */
   c.fillStyle = `rgba(181,143,214,${0.09 + 0.05*Math.sin(hov*3+ph) + hi*0.07})`;
@@ -13395,7 +13871,7 @@ function drawEnemy(c, e){
       const w5 = 22*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w5/2, e.y-46*e.scale, w5, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w5/2, e.y-46*e.scale, w5*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13406,7 +13882,7 @@ function drawEnemy(c, e){
       const w4 = 26*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w4/2, e.y-62*e.scale, w4, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w4/2, e.y-62*e.scale, w4*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13418,7 +13894,7 @@ function drawEnemy(c, e){
       const w3 = 34*e.scale;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w3/2, e.y-88*e.scale, w3, 5);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w3/2, e.y-88*e.scale, w3*clamp(e.hp/e.maxHp,0,1), 5);
     }
     return;
@@ -13433,7 +13909,7 @@ function drawEnemy(c, e){
       const w2 = 26;
       c.fillStyle='rgba(15,20,25,0.6)';
       c.fillRect(e.x-w2/2, e.y-40, w2, 4);
-      c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':'#ff5a4a');
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
       c.fillRect(e.x-w2/2, e.y-40, w2*clamp(e.hp/e.maxHp,0,1), 4);
     }
     return;
@@ -13548,7 +14024,7 @@ function drawEnemy(c, e){
     const w2 = 30*e.scale;
     c.fillStyle='rgba(15,20,25,0.6)';
     c.fillRect(e.x-w2/2, e.y-56*e.scale, w2, 5);
-    c.fillStyle = e.elite?'#ffb900':(e.magic?'#9b45d6':(lord?'#dccdf5':'#ff5a4a'));
+    c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:(lord?'#dccdf5':'#ff5a4a'));
     c.fillRect(e.x-w2/2, e.y-56*e.scale, w2*clamp(e.hp/e.maxHp,0,1), 5);
   }
   if(e.buffStacks){
@@ -13560,7 +14036,8 @@ function drawEnemy(c, e){
     c.setLineDash([]);
     c.fillStyle = '#ffe95a';
     c.font = '700 10px Fredoka'; c.textAlign = 'center';
-    c.fillText('+'+e.buffStacks, e.x, e.y - 66*e.scale);
+    c.fillText('+'+e.buffStacks + (buffCount(e) > 1 ? '·'+buffCount(e) : ''),
+      e.x, e.y - 66*e.scale);
   }
 }
 
@@ -13634,13 +14111,13 @@ let clogLines = [[], [], []];         /* one scrollback per tab */
 let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
 let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
 let clogKills = {};                   /* run kill counts by monster */
-let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
+let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
 let clogAilAcc = 0;
 let clogTabRects = [];                /* filled in by the renderer, read by the mouse */
 function clogReset(){
   clogLines = [[], [], []];
   clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {}; clogDps = {};
-  clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0 };
+  clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
   clogAilAcc = 0;
 }
 function clogToggle(){
@@ -13930,6 +14407,10 @@ function renderCombatLog(){
     ctx.fillStyle = '#c9d2ce';
     ctx.fillText('total '+clogRun.taken.toFixed(1), x+116, y);
     ctx.fillText('evaded '+clogRun.evaded, x+212, y);
+    if(clogRun.leeched > 0){
+      ctx.fillStyle = '#8ede4a';
+      ctx.fillText('leeched '+clogRun.leeched.toFixed(1), x+296, y);
+    }
     y += 16;
     y = clogBreakdown(ctx, 'HURT BY', clogFrom, clogRun.taken, x+12, y, '#ff8a6a', w-30);
   } else if(clogView===CLOG_DPS){
@@ -13975,6 +14456,116 @@ function renderCombatLog(){
 }
 
 /* =============================== HUD =============================== */
+/* WHERE THE WAVE BLOCK ENDS. The wave number, the modifier chips and the
+   bodies-left line share the top of the screen, and what they occupy depends on
+   whether the wave has modifiers and whether it is still on its break. One
+   function, so the boss block below can stack under it instead of through it. */
+function hudWaveBottom(){
+  if(wave.n <= 0) return 34;
+  if(waveMods.length) return wave.state === 'ready' ? 95 : 83;
+  return wave.state === 'ready' ? 70 : 58;
+}
+/* EVERY DEBUFF ON THE BOSS, on one line under its health bar. No names — a
+   symbol and a count, left to right, because on a boss you are reading this
+   mid-fight and a row of words is not something you can read mid-fight.
+   The glyphs are DRAWN, not typed: the game's font has no dingbats and a
+   missing one renders as a tofu box. */
+function bossDebuffIcon(c, kind, x, y, r){
+  c.save(); c.translate(x, y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  if(kind === 'poison'){
+    c.fillStyle = '#8ac24a';
+    c.beginPath(); c.moveTo(0, -r);
+    c.bezierCurveTo(r*0.9, -r*0.1, r*0.62, r*0.85, 0, r*0.85);
+    c.bezierCurveTo(-r*0.62, r*0.85, -r*0.9, -r*0.1, 0, -r);
+    c.fill();
+  } else if(kind === 'bleed'){
+    c.fillStyle = '#ff5a5a';
+    c.beginPath(); c.moveTo(0, -r);
+    c.bezierCurveTo(r*0.9, -r*0.1, r*0.62, r*0.85, 0, r*0.85);
+    c.bezierCurveTo(-r*0.62, r*0.85, -r*0.9, -r*0.1, 0, -r);
+    c.fill();
+  } else if(kind === 'burn'){
+    c.fillStyle = '#ff6a1a';
+    c.beginPath(); c.moveTo(0, r*0.9);
+    c.quadraticCurveTo(-r*0.95, r*0.1, 0, -r);
+    c.quadraticCurveTo(r*0.95, r*0.1, 0, r*0.9);
+    c.fill();
+    c.fillStyle = '#ffd166';
+    c.beginPath(); c.moveTo(0, r*0.85);
+    c.quadraticCurveTo(-r*0.42, r*0.2, 0, -r*0.35);
+    c.quadraticCurveTo(r*0.42, r*0.2, 0, r*0.85);
+    c.fill();
+  } else if(kind === 'burnt'){
+    c.fillStyle = '#5a2a12';
+    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.fill();
+    c.strokeStyle = '#ff8a3c'; c.lineWidth = 1.6;
+    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.stroke();
+  } else if(kind === 'chill'){
+    c.strokeStyle = '#bfe3ff'; c.lineWidth = 1.8;
+    for(let i=0;i<3;i++){
+      const a = i/3*Math.PI;
+      c.beginPath();
+      c.moveTo(-Math.cos(a)*r, -Math.sin(a)*r);
+      c.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+      c.stroke();
+    }
+  } else if(kind === 'frozen'){
+    c.fillStyle = 'rgba(223,242,255,0.9)';
+    roundRect(c, -r*0.8, -r*0.8, r*1.6, r*1.6, r*0.28); c.fill();
+    c.strokeStyle = '#7fb9e0'; c.lineWidth = 1.5;
+    roundRect(c, -r*0.8, -r*0.8, r*1.6, r*1.6, r*0.28); c.stroke();
+  } else if(kind === 'shock'){
+    c.fillStyle = '#ffe95a';
+    c.beginPath();
+    c.moveTo(r*0.25, -r); c.lineTo(-r*0.55, r*0.12); c.lineTo(-r*0.02, r*0.12);
+    c.lineTo(-r*0.3, r); c.lineTo(r*0.6, -r*0.18); c.lineTo(r*0.04, -r*0.18);
+    c.closePath(); c.fill();
+  }
+  c.restore();
+}
+function bossDebuffs(e){
+  const out = [];
+  const psn = (e.poison && e.poison.n) || 0;
+  if(psn > 0) out.push({ k:'poison', n:psn, col:'#8ac24a' });
+  const bl = bleedStacks(e);
+  if(bl > 0) out.push({ k:'bleed', n:bl, col:'#ff5a5a' });
+  const bn = burnStacksOn(e);
+  if(bn > 0) out.push({ k:'burn', n:bn, col:'#ff9a3c' });
+  if(e.burnt && e.burnt.t > 0) out.push({ k:'burnt', n:e.burnt.n, col:'#ff8a3c' });
+  const ch = chillStacksOn(e);
+  if(ch > 0) out.push({ k:'chill', n:ch, col:'#bfe3ff' });
+  const sh = shockStacksOn(e);
+  if(sh > 0) out.push({ k:'shock', n:sh, col:'#ffe95a' });
+  if((e.stunT||0) > 0) out.push({ k:'frozen', n:Math.ceil(e.stunT), col:'#dff2ff' });
+  return out;
+}
+function drawBossDebuffs(c, e, cx, y){
+  const list = bossDebuffs(e);
+  if(!list.length) return;
+  c.save();
+  c.font = '700 11px Fredoka';
+  c.textBaseline = 'middle';
+  const r = 6, gap = 7, pad = 6;
+  /* measure the whole row first so it can be centred under the bar */
+  const widths = list.map(d => r*2 + 3 + c.measureText('' + d.n).width + pad*2);
+  let total = 0; for(const w of widths) total += w;
+  total += gap*(list.length-1);
+  let x = cx - total/2;
+  for(let i=0;i<list.length;i++){
+    const d = list[i], w = widths[i];
+    c.fillStyle = 'rgba(12,16,20,0.66)';
+    roundRect(c, x, y, w, 18, 8); c.fill();
+    c.strokeStyle = d.col; c.lineWidth = 1.2; c.globalAlpha = 0.65;
+    roundRect(c, x, y, w, 18, 8); c.stroke();
+    c.globalAlpha = 1;
+    bossDebuffIcon(c, d.k, x + pad + r, y + 9, r);
+    c.fillStyle = d.col; c.textAlign = 'left';
+    c.fillText('' + d.n, x + pad + r*2 + 3, y + 9.5);
+    x += w + gap;
+  }
+  c.restore();
+}
 function heartPath(c,x,y,s){
   c.beginPath();
   c.moveTo(x, y+s*0.9);
@@ -14226,7 +14817,11 @@ function renderHUD(){
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
     const bname = boss.bname || 'BOSS';
-    const bw = Math.min(460, cw-80), bx2 = cw/2-bw/2, by2 = 74;
+    /* THE BOSS BLOCK STACKS UNDER THE WAVE BLOCK instead of through it. The
+       wave number, its modifier chips and the bodies-left line all live at the
+       top of the screen, and the boss traits were being drawn straight over
+       them — so the block starts from whatever the wave block actually used. */
+    const bw = Math.min(460, cw-80), bx2 = cw/2-bw/2, by2 = hudWaveBottom() + 46;
     ctx.font='700 15px "Titan One"'; ctx.textAlign='center';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     if(boss.traits && boss.traits.length){
@@ -14253,6 +14848,7 @@ function renderHUD(){
     roundRect(ctx,bx2+2,by2+2,Math.max(4,(bw-4)*clamp(boss.hp/boss.maxHp,0,1)),14,4); ctx.fill();
     ctx.strokeStyle='rgba(15,20,25,0.5)'; ctx.lineWidth=2;
     for(let i=1;i<10;i++){ ctx.beginPath(); ctx.moveTo(bx2+bw*i/10,by2+2); ctx.lineTo(bx2+bw*i/10,by2+16); ctx.stroke(); }
+    drawBossDebuffs(ctx, boss, cw/2, by2 + 24);
   }
   if(!everInput && runTime > 3.5){
     const a2 = 0.55+0.45*Math.sin(vtime*4);
@@ -14265,6 +14861,7 @@ function renderHUD(){
   /* active ailments, so you can see why you're slow / on fire / getting crit */
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
+  if(psnStacks()>0)   ails.push({c:'#8ac24a', t:'POISON ×'+psnStacks()+' · '+psnDps().toFixed(1)+'/s · '+Math.ceil(psnTime())+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
   for(const el of ELEMENTS)
