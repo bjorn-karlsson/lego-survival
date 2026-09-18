@@ -107,17 +107,34 @@ elemental), `Pyromancy` (increased fire), `Wildfire` (a wider burst), and the le
 **`Ember Scatter`**.
 
 **Ember Scatter** is the fireball's payoff. Hitting a body that is **already burning**
-knocks **2 embers** off it — **5** once upgraded — and each one flies to the nearest *other*
-monster and sets that alight too, for 45% of the hit that threw it. With nothing else
-standing they **loop back** into the body that threw them, so it is never dead weight
-against a boss on its own. It also deepens the well: fire piles **10 stacks** instead of
-five, **20** upgraded, so BURNT comes round rarer but the burn underneath it is four times
-the size.
+knocks **2 embers** off it — **5** once upgraded — and each one sets another monster alight
+for 45% of the hit that threw it. With nothing in reach they **loop back** into the body
+that threw them, so it is never dead weight against a boss on its own. It also deepens the
+well: fire piles **10 stacks** instead of five, **20** upgraded, so BURNT comes round rarer
+but the burn underneath it is four times the size.
+
+**An ember goes looking for something that is not on fire.** Nearest-first meant a chain
+reaction fed itself: in a packed crowd every ember piled onto whatever was closest, which
+was almost always a body already alight. The preference is one comparison, expressed in
+**pixels of detour an ember will fly**:
+
+| | cost |
+|---|--:|
+| distance to the body | 1 px per px |
+| the body is **already burning** | **+460** — so an unburnt body most of the way across the seek radius still beats a burning one at your feet |
+| each ember **already sent** to that body this volley | **+240** — so a volley of five lights five bodies, not five-times-one |
+| further than **520 px** | not considered at all — an ember never crosses the map for fresh meat |
+
+A burning body is still a target when it is the only thing standing, so an ember is never
+wasted; and the mid-flight retarget asks the same question, so an ember that outlives its
+mark does not fall back to nearest-only halfway there.
+
+They no longer leave in an even fan, either. Evenly spaced spokes plus a nudge read as a
+machine part firing; embers now come off in **any direction, at any speed between 28% and
+95%**, and hang in the air for **different lengths of time** before they start hunting.
 
 A chain travels **3 bodies deep** and one body can only throw embers every 0.25s, so a
-packed crowd lights up and then settles rather than running away — measured at a peak of 92
-embers across fourteen bodies, every one of them alight, back to zero in about three
-seconds.
+packed crowd lights up and then settles rather than running away.
 
 **`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
 **chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
@@ -174,8 +191,42 @@ Fire, frost and lightning each stack. **The fifth stack breaks something**: burn
 becomes a pool of damage over time, chill freezes you solid, shock leaves every hit
 against you critting.
 
+**All three go the other way too.** Fire burns a monster, frost chills it, and lightning
+now **SHOCKS** it: a shocked body takes **+7% damage per stack, five deep — +35% from
+everything you own**, not just from lightning. It is **drawn**, too — arcs crawl the
+silhouette rather than pips sitting beside it, so a shocked body reads as shocked from
+across the field while it is moving, and the fifth stack sparks off it. It is a multiplier on the *body*, so it sits
+outside the hero's own damage ceiling and it makes every other source in your build land
+harder. That is what the storm brick is for now.
+
+Each element also has **its own increase**: `Pyromancy` (fire), `Cryomancy` (frost) and
+`Conduction` (lightning), alongside the global `Elemental Focus`. Each is offered only to a
+hero who owns the thing it is for, so a fire caster is never handed a lightning card it
+cannot use. They **add into the elemental pool**; they never multiply it.
+
 Imp masters lay **curses** on top — SUNDERED, LEADEN, BRITTLE, WITHERED — that strip
 resistance, slow your swing, thin your armour and choke your regeneration.
+
+**The Storm Brick is LIGHTNING.** It used to be a plain spell hit, which meant a caster's
+whole elemental tree did nothing for the one spell visibly made of lightning. It reads the
+**flat elemental** pool the way the fireball does, and both the **spell** and **elemental**
+increases apply — so `Elemental Focus`, `Conduction`, `Orb Mastery` and `Ember Core` all
+move it, while `Pyromancy` correctly does not. `Conductor` buys its chance to shock.
+
+Its interval is a flat **2.00s** and it has no rate brick of its own any more — that slot
+is `Conductor`. The way to make the storm come round faster is to **own more bricks**: the
+stagger between them is no longer a fixed 0.2s but **the interval divided by the bank**, so
+five bricks fire 0.40s apart, for ever. A bank used to empty itself in the first second of
+every two and then stand idle; it reads as a rhythm now rather than a volley.
+
+**The blightspitter** is the monster side of the same idea. Every other ranged monster asks
+you to dodge one thing once; this one asks you to give up **ground**. The gobbet it lobs is
+nearly harmless — priced at 35% of its damage, and then cut again by armour — but it leaves
+a **pool of blight** that bites every 0.55s for as long as you stand in it, for 5.5 seconds.
+It leads your movement a little, so walking in a straight line does not beat it, and a few
+of them working together can close a corridor and push you back into the pack. It is
+deliberately fragile and takes **20% more fire**: the answer is to kill it, not to out-heal
+it.
 
 **Brickbane** turns it around: a wedge of poison gas that hits once and then keeps eating
 whatever it touched. Poison **stacks nine deep on a monster and twelve on a boss** — count
@@ -507,7 +558,8 @@ read straight off the stack count, and they expire together.
 |---|---|---|
 | ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
 | 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
-| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed** |
+| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed**. **Five stacks freeze it solid** |
+| ⚡ **Shocked** | Any storm bolt that rolls `Conductor` | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
 | 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
 
 Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
@@ -520,6 +572,8 @@ feeds, and each drips its numbers in its own colour — green for the rot, red f
 | ⭐ **Elite** | rolled on spawn | ×2.2 health, 12% bigger, 2× studs and XP, and it rolls **every drop line eight times over** |
 | 🟪 **Magic-touched** | rolled on spawn | ×1.5 health, ×1.3 speed, +1 damage, and **30% less damage taken** |
 | ✨ **EMPOWERED** | an **overseer's** call, or the MEGA BONE BARON's | +15% health, +10 armour, +8% spell suppression, +1 damage and **+25% elemental power**, per stack. Caps at **3** |
+| ⚡ **Shock arcs** | your storm bolts, with `Conductor` | Lightning crawls the body's silhouette while shock holds on it, deepening with the stack count; at five it sparks off |
+| 🟢 **Blight pool** | the **blightspitter** | Ground it lobbed, not a hit it landed: bites every 0.55s for 5.5s while you stand in it, and does nothing at all once you step out |
 | 💚 **Warden's aura** | the **greenwarden** | Regenerates **5.5% of their own maximum per second** to everything within 240 — but never to itself. He is the fattest body on the field that is not a golem or a boss (**95 base**, against a bastion's 46) and shrugs off chip damage: he deals no damage at all, so the health bar *is* the fight, and at 30 he popped before the aura ever mattered |
 | 🦴 **Blessed** | the MEGA BONE BARON, on itself | +18% armour, +12% damage, faster swings and +5% suppression, and it can do it again |
 
@@ -557,7 +611,8 @@ offered at all.
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |
-| Curse stacks on you | 9 | Poison on a boss | 12 | | |
+| Curse stacks on you | 9 | Poison on a boss | 12 | Shock on a monster | 5 (+35%) |
+| Monster level | 40 | Storm shock chance | 100% | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
 | | | Gas reach | 430 px | | |
@@ -598,11 +653,16 @@ much tempo the hero buys:
 | | floor | | floor |
 |---|--:|---|--:|
 | Brick Blaster | 1.20s | Block Freeze | 3.50s |
-| Storm Brick | 1.00s | Bomb Volley | 2.00s |
+| Storm Brick | 1.00s\* | Bomb Volley | 2.00s |
 | Bladestorm | 2.00s | Brickbane | 1.10s |
 | Blade Vortex | 3.00s | Guardian ring | 7.5 rad/s |
 
 Runic Tempo stops being offered once every ability you actually own sits on its floor.
+
+\* The storm brick's **base** is a flat 2.00s and it has no rate brick of its own — only
+the global cast speed and a caster weapon can move it, and only down to 1.00s. Owning more
+bricks is what makes the storm come round faster, because the stagger is the interval
+divided by the bank.
 
 A **favourite** lifts the cap of its own spell by one, so a Storm Brick run reaches six
 hovering bricks and a Bomb Volley run nine bombs. The spell its kit hands you counts as
@@ -665,6 +725,178 @@ legendary rate of Hard for the privilege.
 
 ---
 
+## Monsters have a level
+
+The wave curve is a **polynomial**, and a polynomial flattens in relative terms. By wave 50,
+ten more waves bought the roster about a third more health — which, against a hero whose own
+damage now has a ceiling, read as no change at all. Wave 50 and wave 60 felt the same
+because proportionally they nearly were.
+
+A monster now carries a **LEVEL**, separate from the wave it spawned in, and it **compounds**:
+
+| | monster level | health, damage and armour |
+|---|--:|--:|
+| before wave 10 | **0** | ×1.00 — the opening waves are untouched |
+| wave 10 | 1 | ×1.11 |
+| wave 20 | 3 | ×1.37 |
+| wave 30 | 6 | ×1.87 |
+| wave 40 | 8 | ×2.30 |
+| wave 50 | 11 | ×3.15 |
+| wave 60 | 13 | ×3.88 |
+
+One level every four waves past wave 10, **+11% each**, multiplied on **top** of the wave
+curve rather than added into it — and capped at level 40, so a very long run is a fight
+rather than a wall. Measured end to end, a wave-60 brute has **×1.78 the health and ×1.75
+the damage** of a wave-50 one, where before levels existed it was ×1.30 and ×1.28.
+
+Levels start at wave 10 rather than 20, and the cadence went from one every three waves to
+one every four *at the same time*, deliberately. Rank is `(wave − start) / every`, so
+pulling the start down lifts **every** later wave as well — the two changes together put the
+first level ten waves earlier while landing waves 50 and 60 within a hair of where they
+already were. Earlier, not harder.
+
+The level shows beside the wave number in the HUD once it starts to bite, and on the
+character sheet with the arithmetic behind it.
+
+## Wave modifiers
+
+Every wave from **6** rolls a modifier, and another every twelve waves after that, up to
+four. They are rolled **once**, when the wave is composed, and held for its whole life — so
+a wave has an identity you can read off the banner and plan around rather than a difficulty
+that drifts under you. They sit under the wave number in the HUD until it is cleared, each
+in its own colour, and they go in the combat log too.
+
+| | |
+|---|---|
+| **HARDY** | monsters have 30% more health |
+| **BRUTAL** | monsters deal 25% more damage |
+| **SWIFT** | monsters move 18% faster |
+| **FRENZIED** | monsters attack 25% faster |
+| **PLATED** | monsters have double armour |
+| **WARDED** | monsters suppress 30% of spell damage |
+| **RESISTANT** | monsters gain 35% resistance to every element |
+| **SLIPPERY** | monsters evade 12% of your hits |
+| **HORDE** | 40% more monsters, each with 15% less health |
+| **OPULENT** | monsters are tougher, and pay double |
+| **WARBAND** | one monster in six is an elite |
+
+Each one is a plain multiplier applied **at spawn**, after the wave curve, the monster level
+and the difficulty — so a modifier multiplies the finished number rather than a base that
+has not been built yet, and nothing reaches into a body that is already standing. A body
+gets a **copy** of its species' resistance table for exactly this reason: `RESISTANT` writes
+to it, and writing to the shared definition would have made the modifier permanent for the
+rest of the run. A test asserts the species comes back clean afterwards.
+
+---
+
+## Monsters resist what they are made of
+
+The hero has had elemental resistance since the first commit and monsters never did, which
+meant a fire golem was exactly as flammable as a skeleton — every golem was a reskin as far
+as your build was concerned.
+
+| | resists | weak to | |
+|---|---|---|---|
+| **Fire golem** | fire **90%** | frost **−35%** | shock 20% |
+| **Ice golem** | frost **90%** | fire **−35%** | shock 20% |
+| **Storm golem** | lightning **90%** | frost **−35%** | fire 20% |
+| **Stone golem** | 25% of everything | — | and **×3.2 armour** |
+| Lords · mages | 75% · 45% of their own element | the opposite one | |
+
+A **negative** resistance is a weakness and multiplies *up*, so a fire golem takes **135**
+from a 100-damage frost hit and **10** from the same hit in fire. Which spell you are
+holding decides which golem is a problem.
+
+Stone is the exception on purpose: it is rock, so it is **armour** — and armour only ever
+touches *attacks*. You cannot out-swing a stone golem; you burn it. Resistance caps at
+**90%** even under `RESISTANT`, so max resistance is a wall rather than immunity.
+
+---
+
+## Reading your own build
+
+Three screens answer three different questions, and all three are driven from **one list of
+stat probes** so they can never drift apart.
+
+### The reward comparison — *what would this brick do?*
+
+Hovering a reward, or any card on the test bench, applies it to a **copy** of the hero,
+reads all 111 probes again, and lists only what actually moved, as `now → next`. Because
+the probes include every spell's damage, one *"+18% increased spell damage"* card shows its
+effect on the blaster, the storm brick and the bombs on separate lines.
+
+Every probe carries **one sentence saying what the stat is** — the same sentence, from the
+same table, in all three screens below.
+
+On the title screen that sentence used to be a `title=` attribute, which was the same as
+not having one: a native tooltip needs about a second of *stationary* hover on an 18px row
+before the browser draws anything, so in practice nothing ever appeared. It is a real
+hover panel now — it shows the moment the pointer lands, it is styled like the rest of the
+screen, and the test asserts the tooltip's **computed box is visible and on screen**
+rather than merely that the attribute exists.
+
+**A spell upgrade is never offered for a spell you do not own.** `Storm Edge` carried two
+`req:` keys on the same object literal — JavaScript keeps the last one, and the one that
+lost was the one checking you owned a Bladestorm — so a sword hero was offered upgrades to
+a spell they had never picked up. `gate2.js` now walks every spell tree against a hero who
+owns nothing and fails on anything that answers yes; the brick that *grants* the spell is
+the only thing allowed through.
+
+A brick that moved **no** probe used to show an empty panel, which is how `Rotbrick` came to
+say nothing at all on a build that was bleeding and burning: every bleed probe was a
+**share** of the hit, and none of them read the damage-over-time pool. There are real
+numbers now — `One wound`, `Damage per wound`, `Fully opened`, and a whole `BURNING` group —
+so an increased-damage-over-time card shows its effect on poison, bleed **and** fire at
+once. Four legendaries (`Tidal Orbit`, `Crackling Storm`, `Returning Blades`,
+`Absolute Zero`) were silent for the same reason and now have probes of their own. A test
+walks every brick on every weapon and fails if any of them moves nothing.
+
+The **fireball left `ELEMENTAL`**. Elemental is the *global* tree — the pools every
+elemental source reads — and filing the staff's own attack under it made a card that
+widened the burst look like a card that changed the whole build. `FIREBALL` and `BURNING`
+are their own groups.
+
+### The character sheet — <kbd>C</kbd> — *what am I right now?*
+
+The hand-written blocks at the top carry the deep explanations. Underneath them,
+**EVERY STAT** is generated straight from the probe list, grouped, with each row's
+explanation on hover — so a probe added for the comparison reaches this screen the same day
+rather than months later. A test asserts all 111 appear.
+
+### The spellbook — <kbd>P</kbd> — *what am I carrying?*
+
+Every brick the run holds, drawn as the bench card it came from and **dealt into stacks**:
+three of a brick is three cards fanned behind one another with a `×3` badge, and the text is
+read off the **live hero**, so a brick taken at common and again at epic shows what the pair
+of them are doing now. It is filed in the bench's own order, and a spell's section is headed
+with that spell's live damage.
+
+**It pauses.** It was built not to, and that was simply wrong: reading nine sections of
+cards while a wave-40 pack walks into you is not a choice anyone makes twice. It takes its
+own state, so the world freezes and stays drawn behind it.
+
+### The DPS tab — <kbd>L</kbd>, then the fourth tab
+
+The run totals answer *"what did the most damage all run"*, which flatters whatever you
+picked first and buries a spell that only came online at wave 30. The **DPS** tab answers
+the balance question instead: what is each ability doing *right now*.
+
+One bucket a second per damage source, sixty of them, rolled forward as the clock moves —
+so a source that has gone quiet ages out of its own accord instead of sitting at its old
+number for ever. Each row is the source, its rate over the window, a share bar against the
+best one, its percentage, and a **sixty-second sparkline**. Bleed, burning and poison are
+their own sources, so you can see exactly what an ailment build is really doing.
+
+The window is only as long as the run has been going, or a spell picked up ten seconds ago
+would read as a sixth of what it is actually doing; the header says `(filling)` until it has
+a full minute. Every bucket index goes through one wrap helper: JavaScript's `%` keeps the
+sign of its left operand, so a plain `x % 60` on anything negative indexes off the end of
+the array and silently writes a *property* rather than a slot — a roll that looks like it
+cleared thirty buckets and cleared two. Sources past the ninth fold into one `+N more` row rather than being dropped,
+so the rows still add up to the total printed above.
+
+---
+
 ## Controls
 
 | | |
@@ -675,9 +907,10 @@ legendary rate of Hard for the privilege.
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles taken / dealt / events |
+| <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
+| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
-| <kbd>P</kbd> or <kbd>Esc</kbd> | pause |
+| <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
 
 ---
