@@ -196,11 +196,11 @@ one hit per slam, the same as one swing would, so a wide fault opens every crate
 It does **not** deflect — a slam is the floor coming up, and nothing about that turns an
 arrow aside.
 
-**What it is worth.** Each tooth is **20.7% of a full swing**, and **one body may be bitten
+**What it is worth.** Each tooth is **30.7% of a full swing**, and **one body may be bitten
 by at most three teeth of the same slam** — so a body held dead centre in the fault takes
-**0.62 of one sword swing** per slam, and everything else in the fan takes the same. It
-opened at three times that, which made an AoE basic attack out-damage the single-target one
-it replaced; at a third, the mace trades single-target for coverage instead of getting both.
+**0.92 of one sword swing** per slam, and everything else in the fan takes the same. It
+opened at twice that, which made an AoE basic attack out-damage the single-target one it
+replaced; at this share the mace trades single-target for coverage instead of getting both.
 
 Read off a fresh hero with no favourite, which is what the character sheet's
 **Sustained DPS** row shows you:
@@ -209,9 +209,10 @@ Read off a fresh hero with no favourite, which is what the character sheet's
 |---|--:|---|
 | **SWORD** | **5.38** /s | one body, kept in reach |
 | **AXE** | **5.69** /s | one body, kept in reach |
-| **MACE** | **2.67** /s | one body held in the fault — *and everything else in it* |
+| **MACE** | **3.96** /s | one body held in the fault — *and everything else in it* |
 
-Half a sword's single target, spread across everything in a 99° fan. That is the trade.
+About three-quarters of a sword's single target, spread across everything in a 99° fan.
+That is the trade.
 
 | | opens at | ceiling |
 |---|--:|--:|
@@ -546,19 +547,24 @@ still offer the spells themselves.
 ## The boss ladder
 
 A boss every fifth wave, an ULTRA every tenth, and the grand raid at fifty. Spawned for
-real and read off the live build:
+real and read off the live body — and since a boss rolls its own **traits**, every row is
+the mean of twenty of them, which is what you actually meet rather than one run's dice:
 
-| Wave | | Boss | Health | Armour | Hit | Spell suppression |
-|--:|---|---|--:|--:|--:|--:|
-| 5 | boss | VON BRICKTHANE | 510 | 49 | 6 | 15% |
-| 10 | **ULTRA** | OMEGA BRICKTHANE | 3,318 | 185 | 22 | 30% |
-| 15 | boss | LORD LAVABRICK | 1,908 | 183 | 27 | 15% |
-| 20 | **ULTRA** | MEGA BONE BARON | 6,999 | 780 | 57 | **62%** |
-| 25 | boss | THE DREAD ROOST | 3,766 | 429 | 60 | 15% |
-| 30 | **ULTRA** | ULTRA LAVABRICK | 8,544 | 685 | 77 | 30% |
-| 35 | boss | THE BONE BARON | 4,147 | 787 | 96 | **45%** |
-| 40 | **ULTRA** | OMEGA BRICKTHANE | 12,367 | 1,070 | 112 | 30% |
-| 50 | **RAID** | every boss at once | — | — | — | — |
+| Wave | | Boss | Mob lv | Health | Armour | Hit | Spell suppression |
+|--:|---|---|--:|--:|--:|--:|--:|
+| 5 | boss | VON BRICKTHANE | 1 | 541 | 49 | 6 | 17% |
+| 10 | **ULTRA** | OMEGA BRICKTHANE | 2 | 4,640 | 224 | 30 | 39% |
+| 15 | boss | LORD LAVABRICK | 3 | 2,051 | 209 | 29 | 21% |
+| 20 | **ULTRA** | MEGA BONE BARON | 4 | 12,219 | 944 | 98 | **68%** |
+| 25 | boss | THE DREAD ROOST | 5 | 4,275 | 489 | 62 | 23% |
+| 30 | **ULTRA** | ULTRA LAVABRICK | 7 | 19,071 | 829 | 174 | 44% |
+| 35 | boss | THE BONE BARON | 9 | 4,334 | 952 | 99 | 51% |
+| 40 | **ULTRA** | OMEGA BRICKTHANE | 12 | 47,809 | 1,370 | 461 | 39% |
+| 50 | **RAID** | every boss at once | 22 | — | — | — | — |
+
+The **Mob lv** column is the compounding monster level from
+[They have a level](#they-have-a-level) — it is most of why the wave-40 ULTRA is four times
+the wave-30 one.
 
 Spell suppression is the boss's own — a chance to halve any spell that lands on it. The
 skeletons have the most of it, which is what the bones were always for. The **MEGA BONE
@@ -816,7 +822,7 @@ offered at all.
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |
 | Curse stacks on you | 9 | Poison on a boss | 12 | Shock on a monster | 5 (+35%) |
-| Monster level | 40 | Storm shock chance | 100% | Poison on you | 8 doses |
+| Monster level | **100** | Storm shock chance | 100% | Poison on you | 8 doses |
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
@@ -949,28 +955,47 @@ ten more waves bought the roster about a third more health — which, against a 
 damage now has a ceiling, read as no change at all. Wave 50 and wave 60 felt the same
 because proportionally they nearly were.
 
-A monster now carries a **LEVEL**, separate from the wave it spawned in, and it **compounds**:
+A monster now carries a **LEVEL**, separate from the wave it spawned in. Each level is
+**+11%** health, damage and armour, and it **compounds** — multiplied on **top** of the wave
+curve rather than added into it.
+
+**The cadence has bands.** One rate for the whole run could only be wrong at one end or the
+other: slow enough to leave the opening alone meant the late game flattened again, fast
+enough to keep the late game climbing put a level on wave 6.
+
+| from | a level every | |
+|--:|--:|---|
+| **wave 5** | 4 waves | the first level lands *on* wave 5 |
+| **wave 20** | 3 waves | |
+| **wave 30** | 2 waves | |
+| **wave 40** | **every wave** | and it never stops |
+
+Each band counts only the waves inside it, so the schedule is **continuous**: crossing a
+boundary never jumps the rank or takes one away.
 
 | | monster level | health, damage and armour |
 |---|--:|--:|
-| before wave 10 | **0** | ×1.00 — the opening waves are untouched |
-| wave 10 | 1 | ×1.11 |
-| wave 20 | 3 | ×1.37 |
-| wave 30 | 6 | ×1.87 |
-| wave 40 | 8 | ×2.30 |
-| wave 50 | 11 | ×3.15 |
-| wave 60 | 13 | ×3.88 |
+| before wave 5 | **0** | ×1.00 — the opening is untouched |
+| wave 5 | 1 | ×1.11 |
+| wave 13 | 3 | ×1.37 |
+| wave 20 | 4 | ×1.52 |
+| wave 30 | 7 | ×2.08 |
+| wave 40 | 12 | ×3.50 |
+| **wave 50** | **22** | **×9.93** |
+| **wave 60** | **32** | **×28.21** |
+| wave 100 | 72 | ×1,833 |
+| wave 128+ | **100** (the ceiling) | ×34,064 |
 
-One level every four waves past wave 10, **+11% each**, multiplied on **top** of the wave
-curve rather than added into it — and capped at level 40, so a very long run is a fight
-rather than a wall. Measured end to end, a wave-60 brute has **×1.78 the health and ×1.75
-the damage** of a wave-50 one, where before levels existed it was ×1.30 and ×1.28.
+The ceiling is level **100**, reached at wave 128 — past that a very long run stops getting
+harder rather than becoming a wall.
 
-Levels start at wave 10 rather than 20, and the cadence went from one every three waves to
-one every four *at the same time*, deliberately. Rank is `(wave − start) / every`, so
-pulling the start down lifts **every** later wave as well — the two changes together put the
-first level ten waves earlier while landing waves 50 and 60 within a hair of where they
-already were. Earlier, not harder.
+Measured end to end on a real body, a wave-60 brute now has **×3.69 the health and ×3.65
+the damage** of a wave-50 one. Before levels existed at all it was ×1.30 and ×1.28, and
+under the single-cadence schedule it was ×1.78 and ×1.75.
+
+**This is a large late-game change, on purpose.** Wave 50 went from ×3.15 to ×9.93 and wave
+60 from ×3.88 to ×28.21 — roughly **3× and 7× tougher** than the schedule it replaced. The
+first twenty waves barely move; everything past forty climbs every single wave.
 
 The level shows beside the wave number in the HUD once it starts to bite, and on the
 character sheet with the arithmetic behind it.
@@ -988,10 +1013,14 @@ the way the boss bricks already did. Measured on real projectiles, wave 1 agains
 
 | | wave 1 | wave 40 |
 |---|--:|--:|
-| Fire golem's bombs | 2.8 | **96.9** |
-| Ice golem's boulder | 3.5 | **117.3** |
-| Blight gobbet and its pool | 1.0 | **35.0** |
-| Bomber's detonation | 2.6 | **260** |
+| Fire golem's bombs | 2.8 | **147** |
+| Ice golem's boulder | 3.5 | **178** |
+| Blight gobbet and its pool | 1.0 | **53** |
+| Bomber's detonation | 2.6 | **395** |
+
+*(The wave-40 column carries the monster level, which is a flat multiplier on health, damage
+and armour alike. When the level cadence was rebanded, wave 40 went from level 8 to level 12
+— ×1.52 — and every number in that column moved with it.)*
 
 The same applies to the storm golem's orbs and coils, to meteors, and to every fire and lava
 pool left behind — a pool now remembers what left it.

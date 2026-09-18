@@ -1100,12 +1100,12 @@ const SLAM_WIND       = 0.16;   /* the head coming down, before the floor breaks
 const SLAM_RAY_GAP    = 0.27;   /* radians between one line of stone and the next */
 const SLAM_RAYS_MAX   = 26;
 const SLAM_STEP       = 52;     /* pixels between one row of teeth and the next */
-/* ONE THIRD OF WHAT IT WAS. At 0.62 a tooth, a body held in the middle of the
+/* HALF OF WHAT IT WAS. At 0.62 a tooth, a body held in the middle of the
    fault took 1.86 swings a slam AND every other body in the fan took the same —
    an AoE basic attack out-damaging the single-target one it replaced. The tooth
-   is a third of that now: three of them land 0.63 of a swing on one body, so the
-   mace trades single-target for coverage instead of getting both. */
-const SLAM_SHARE      = 0.207;  /* one tooth, against one full swing */
+   is roughly half of that now: three of them land 0.92 of a swing on one body,
+   so the mace trades single-target for coverage instead of getting both. */
+const SLAM_SHARE      = 0.307;  /* one tooth, against one full swing */
 const SLAM_MAX_HITS   = 3;      /* how many teeth of ONE slam may bite one body */
 const SLAM_ELEM_SHARE = 0.5;    /* how much of the tooth the legendary converts */
 const SLAM_ELEMS      = ['fire', 'shock', 'frost'];
@@ -1140,19 +1140,43 @@ function mobLevel(){ return Math.max(1, wave.n + difficulty.lvl); }
    and from there every level is MOB_LEVEL_STEP more of everything than the one
    below it, MULTIPLIED on top of the wave curve rather than added into it. That
    is the difference between a curve that levels off and one that does not. */
-/* WHERE THE LEVELS START, and how fast they come. Moving the start earlier
-   without also slowing the cadence would have inflated the far end too: rank is
-   (wave - FROM)/EVERY, so pulling FROM down lifts EVERY late wave as well. 10
-   and 4 puts the first level at wave 10 instead of 20 while landing wave 50 and
-   wave 60 within a hair of where they already were — earlier, not harder. */
-const MOB_LEVEL_FROM  = 10;    /* no level at all before this wave */
-const MOB_LEVEL_EVERY = 4;     /* waves per level after it */
+/* WHERE THE LEVELS START, AND HOW FAST THEY COME. One cadence for the whole run
+   could only be wrong at one end or the other: slow enough to leave the opening
+   alone meant the late game flattened again, fast enough to keep the late game
+   climbing meant wave 6 had a level on it.
+   So the cadence has BANDS. Levels start at wave 5 and come slowly; every ten
+   waves from twenty they come faster, until past forty every single wave is
+   another level. Each band only counts the waves inside it, so the schedule is
+   continuous — crossing a boundary never jumps the rank or takes one away. */
+const MOB_LEVEL_BANDS = [
+  { from: 5,  every: 4 },   /* the first level lands ON wave 5 */
+  { from: 20, every: 3 },
+  { from: 30, every: 2 },
+  { from: 40, every: 1 },
+];
+const MOB_LEVEL_FROM  = MOB_LEVEL_BANDS[0].from;   /* no level at all before this wave */
 const MOB_LEVEL_STEP  = 0.11;  /* compounding, per level */
-const MOB_LEVEL_MAX   = 40;    /* a ceiling, so a 200-wave run is not a wall */
+const MOB_LEVEL_MAX   = 100;   /* a ceiling, so a 200-wave run is not a wall */
 function mobRank(w){
   const n = (w === undefined ? wave.n : w);
   if(n < MOB_LEVEL_FROM) return 0;
-  return Math.min(MOB_LEVEL_MAX, Math.floor((n - MOB_LEVEL_FROM) / MOB_LEVEL_EVERY) + 1);
+  let r = 1;                  /* the wave the levels start on IS level one */
+  for(let i=0;i<MOB_LEVEL_BANDS.length;i++){
+    const b = MOB_LEVEL_BANDS[i];
+    if(n < b.from) break;
+    /* only the waves that fall INSIDE this band, so the bands compose */
+    const next = MOB_LEVEL_BANDS[i+1];
+    const end = next ? Math.min(n, next.from) : n;
+    r += Math.floor((end - b.from) / b.every);
+  }
+  return Math.min(MOB_LEVEL_MAX, r);
+}
+/* the cadence in force at a given wave, for the sheet and the bench */
+function mobLevelEvery(w){
+  const n = (w === undefined ? wave.n : w);
+  let e = MOB_LEVEL_BANDS[0].every;
+  for(const b of MOB_LEVEL_BANDS) if(n >= b.from) e = b.every;
+  return e;
 }
 /* what one level is worth. ONE number, read by health, damage and armour alike,
    so a level always means the same thing wherever it is applied. */
@@ -7131,16 +7155,24 @@ function renderCharSheet(){
   const run = sBlock('THIS RUN', [
     sRow('Level', String(p.level), `${Math.floor(p.xp)} / ${p.xpNext} XP`),
     sRow('Wave', String(wave.n), best>0 ? `personal best: wave ${best}` : ''),
-    sRow('Monster level', String(mobRank()),
-      mobRank()>0 ? `everything spawns with ×${mobRankMul().toFixed(2)} health, damage and armour`
-                  : `starts at wave ${MOB_LEVEL_FROM}, then one level every ${MOB_LEVEL_EVERY} waves`,
+    sRow('Monster level', String(mobRank())+(mobRank()>=MOB_LEVEL_MAX ? ' (max)' : ''),
+      mobRank()>0 ? `×${mobRankMul().toFixed(2)} health, damage and armour · `+
+                    (mobLevelEvery()===1 ? 'a level every wave now'
+                                         : `one level every ${mobLevelEvery()} waves now`)
+                  : `starts at wave ${MOB_LEVEL_FROM}, then one level every ${mobLevelEvery(MOB_LEVEL_FROM)} waves`,
       `A monster's LEVEL is separate from the wave it spawned in.\n\n`+
       `The wave curve is a polynomial, and a polynomial flattens: by wave 50,\n`+
       `ten more waves bought the roster about a third more health, which against\n`+
       `a capped hero read as no change at all.\n\n`+
       `A level COMPOUNDS instead — ${Math.round(MOB_LEVEL_STEP*100)}% more health, damage and armour each,\n`+
       `multiplied on top of the wave curve rather than added into it.\n`+
-      `Nothing before wave ${MOB_LEVEL_FROM} carries one, so the early game is untouched.`),
+      `Nothing before wave ${MOB_LEVEL_FROM} carries one, so the opening is untouched.\n\n`+
+      `THEY COME FASTER AS THE RUN GOES ON:\n`+
+      MOB_LEVEL_BANDS.map((b,i)=>{
+        const next = MOB_LEVEL_BANDS[i+1];
+        return `  wave ${b.from}${next?'\u2013'+(next.from-1):'+'}: `+
+               (b.every===1 ? 'a level EVERY WAVE' : `one level every ${b.every} waves`);
+      }).join('\n')+`\n\nThe ceiling is level ${MOB_LEVEL_MAX}.`),
     sRow('Monsters smashed', String(p.kills), ''),
     sRow('Time alive', `${mm}:${String(ss).padStart(2,'0')}`, ''),
     sRow('Favourite', favourite.id==='none' ? 'none' : favourite.name,
