@@ -374,3 +374,59 @@ safe by construction. **Flags are not pools.** `tollDelay`, `rerollBonus`, `ches
 `bankMul` are switches nothing rebuilds and nothing caps, so `metaClampFlags()` bounds them
 by hand where the tree is applied — the one place the architecture needed help rather than
 trust.
+
+
+---
+
+## Second pass — what playtesting changed
+
+Four things came back from actually playing it, and one of them was a bug.
+
+**The wave you died on is not the wave you cleared.** Dying to the wave-30 boss was banked
+as a wave-30 run and paid a wave-30 point. A run now banks `wavesCleared()` — a counter set
+where a wave actually completes — and the screen reads *"CLEARED 29 · died on 30"*.
+
+**A tree you can drop points anywhere in is a shopping list.** Nodes now carry `req` edges
+and a node has to *touch* something you already hold, with everything you hold tracing back
+to your door. The inner ring is a circle you can walk around and ring three links sideways,
+so there is always more than one route out — each with a different price.
+
+**Respec became a mode.** Turning it on lets you click nodes back one at a time, free; a
+node holding up a branch is refused until the branch is unwound. `CLEAR ALL` survives as its
+own button. *(The first version of this shipped with the button relabelled and the old
+handler still wired underneath, so "REFUND MODE" silently wiped the whole tree. The driven
+UI test caught it.)*
+
+**One tree per WEAPON, per difficulty — twelve.** The layout is identical and the four
+weapons enter it at four different doors: a sword between WARFARE and PRECISION, a staff
+between ELEMENTS and ARCANA. Points are earned by the weapon that earned them. This is what
+makes all four worth playing, and it came from the author, not the design.
+
+The tree grew to **8 spokes × (5 small + notable + keystone) + 4 doors = 60 nodes, 84
+points**, against the same ceiling of 26 — so the most anyone can hold fell from 48% to
+**31%**.
+
+### The budget measure was wrong
+
+The first audit compared **damage**. That quietly rewarded exactly the wrong thing: a glass
+build buys damage by selling hearts, so a damage-only ceiling waves it through while
+punishing an honest build that took none of the downside.
+
+It now measures **total power — damage × hearts**, which cannot be gamed, because a node
+with no downside raises both halves. Measured:
+
+| | damage | total power |
+|---|--:|--:|
+| straight 19-point build | ×1.63 | **×1.62** |
+| Glass Bricks 20-point build | ×2.08 | **×1.48** |
+
+More damage, *less* total — which is exactly the trade Glass Bricks advertises, and the
+number that proves it is now an assertion.
+
+### One source of truth for every node
+
+Nodes are declarative: each one carries `mods`, and a `META_STATS` registry holds the
+writer, the wording and the formatting together. The hero, the hover card and the running
+stat panel are all read off the same list, so they cannot drift — and a stat that does
+nothing for the weapon you are on is dropped from the panel and labelled in the tooltip
+rather than silently sold to you.

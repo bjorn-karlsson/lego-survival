@@ -828,7 +828,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
-| **Skill points** | **26** | Tree cost | 54 | Studs → points | 14 |
+| **Skill points** | **26** | Tree cost | 84 | Studs → points | 14 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -1153,31 +1153,51 @@ you have already beaten.
 
 ![The skill tree](docs/tree.png)
 
+**TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
+weapons — and they share nothing. The **layout is identical**; what changes is **where you
+start**. A sword opens into WARFARE and PRECISION, a staff into ELEMENTS and ARCANA, and
+reaching the far side of the wheel costs points you could have spent on power. That is the
+whole reason to play all four.
+
 **One currency you can see: skill points.** They come from two places, and both are
 *derived* — nothing is stored as a counter:
 
 | | |
 |---|--:|
 | `floor(studs banked ÷ 600)`, capped | **14** |
-| first time reaching wave 10, 20, 30, 40, 50 | 5 |
-| first time smashing each of the 8 bosses | 8 |
-| first wave-20 run with each of the 4 weapons | 4 |
+| first time clearing wave 10, 20, 30, 40, 50 *with this weapon* | 5 |
+| first time smashing each of the 8 bosses *with this weapon* | 8 |
 | **the ceiling on everything** | **26** |
+
+**The wave you CLEARED, not the one you died on.** Dying to the wave-30 boss is a wave-29
+run and the screen says so.
 
 **You bank the square root of what you picked up** — `floor(4 × √studs)`. A full clear
 collects about 15× what a death at wave 15 does; banked raw, the early runs this exists to
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 54 points and you can never hold more than 26.** That is the whole design:
-at most 48% of it, ever, so the tree is a set of builds rather than a ladder you finish.
-**Respec is free and instant.** Six spokes — WARFARE, ELEMENTS, ARMOUR, VITALITY, SWIFTNESS,
-ARCANA — each with four small nodes, a notable, and a **keystone that carries a real
+**The tree costs 84 points and you can never hold more than 26.** That is the whole design:
+at most 31% of it, ever, so the tree is a set of builds rather than a ladder you finish.
+
+**You cannot drop points wherever you like.** A node has to *touch* something you already
+hold, and everything you hold has to trace back to your weapon's door. The inner ring is a
+circle you can walk around and ring three links sideways, so there is always more than one
+route — each one costs.
+
+**Refund is a mode, not a button that eats your tree.** Turn it on and click nodes back one
+at a time, free; a node holding up a branch is refused until you unwind the branch. `CLEAR
+ALL` is there when you want it.
+
+Eight spokes — WARFARE, PRECISION, SWIFTNESS, AFFLICTION, VITALITY, ARMOUR, ELEMENTS,
+ARCANA — each with five small nodes, a notable, and a **keystone that carries a real
 downside**:
 
 | | |
 |---|---|
 | **Glass Bricks** | +35% increased damage — and **30% less maximum hearts** |
+| **Perfect Strike** | +150% increased critical chance — and **half the critical multiplier** |
+| **Slow Death** | +60% increased damage over time — and **25% less increased damage** |
 | **Slow Burn** | every elemental toll lands 10 waves later — and **30% less XP** |
 | **Ironclad Oath** | +50% armour and +10% all resistance — and **20% less move speed** |
 | **Bloodthirst** | +20% lifesteal chance and +6% share — and **no regeneration at all** |
@@ -1187,8 +1207,10 @@ downside**:
 A tree of pure upgrades is a ratchet; a tree of trade-offs is a set of builds. That is why
 people still open Path of Exile's tree after ten years.
 
-**Progress is per difficulty.** A tree earned on Easy is not a tree earned on Nightmare —
-three independent saves, and the difficulty picker switches which one you are spending.
+**Hover anything to read it.** Every node lists exactly what it gives, good and bad, and a
+node whose stat does nothing for the weapon you are on says so rather than selling it to
+you. A running total of everything you have allocated sits beside the wheel — the panel and
+the hero are read off the same `mods`, so they cannot disagree.
 
 **It does not touch the test bench.** The tree is applied only when a real run starts, so
 every preview and throwaway hero reads the raw numbers. A switch on the tree screen turns it
@@ -1213,10 +1235,15 @@ Four invariants, and they are the whole reason the save stays alive through futu
 A corrupt save resets rather than throwing, and a save claiming nodes it never earned is
 refunded instead of honoured.
 
-**And the budget is a test, not a promise.** `meta.js` stands up the greediest legal 26
-points of pure offence and fails the build if it beats ×1.80 damage. It measures **×1.77**;
-`Sword & Steel` alone is worth about ×1.70, which is what *"about one extra favourite"* was
-meant to mean. It caught the tree being ×1.97 on its first run.
+**And the budget is a test, not a promise.** `meta.js` walks the greediest legal 26 points
+out of the sword's own door and fails the build if it beats **×1.80 total power** — damage
+*times* hearts. Damage alone is the wrong measure: a glass build buys damage by selling
+hearts, and a damage-only budget waves it through while punishing an honest one. The product
+cannot be gamed, because a node with no downside raises both halves.
+
+Measured: a straight build is **×1.63 damage, ×1.62 power**; the Glass Bricks build is
+**×2.08 damage but only ×1.48 power** — more damage, less total, which is exactly the trade
+it advertises. The audit caught the tree at ×1.97 on its very first run.
 
 ---
 
