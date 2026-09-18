@@ -330,6 +330,51 @@
     font-family:'Titan One';font-size:12px;color:#20160a;background:#ffd76e;
     box-shadow:0 3px 9px rgba(0,0,0,.5)}
   .booknone{font-size:12px;color:#a9b8ad;padding:6px 2px}
+  /* ---- the skill tree: an SVG wheel in the same chrome as the other sheets ---- */
+  .sheet.tree{width:min(1000px,96vw);max-height:92vh;margin:1vh 0}
+  #treeBody{flex-direction:row !important;gap:18px;align-items:flex-start}
+  .treewrap{flex:0 0 auto;line-height:0}
+  .treewrap svg{display:block}
+  .treeside{flex:1 1 260px;min-width:250px;display:flex;flex-direction:column;gap:10px}
+  .tnode{cursor:pointer}
+  .tnode.locked{cursor:not-allowed}
+  .tinfo{background:rgba(9,13,17,.46);border:2px solid rgba(255,255,255,.12);
+    border-radius:11px;padding:11px 13px;min-height:132px}
+  .tinfo h4{font-family:'Titan One';font-size:13px;margin:0 0 5px;color:#ffd76e;letter-spacing:.6px}
+  .tinfo p{font-size:12px;line-height:1.45;color:#dfe8e0;margin:0 0 7px}
+  .tinfo .tmeta{font-size:10.5px;color:#9fb0a4;letter-spacing:.4px}
+  .tinfo .tlock{color:#ff8a6a}
+  .tbar{background:rgba(9,13,17,.46);border:2px solid rgba(255,255,255,.12);
+    border-radius:11px;padding:10px 13px;font-size:12px;color:#dfe8e0;line-height:1.6}
+  .tbar b{color:#ffd76e}
+  .tbar i{display:block;font-style:normal;color:#9fb0a4;font-size:10.5px;margin-top:3px}
+  .tbtn{font-family:'Titan One';font-size:11px;letter-spacing:1.4px;padding:7px 14px;
+    border-radius:9px;border:none;cursor:pointer;background:#ffb900;color:#20160a;
+    box-shadow:0 3px 0 #a87a00;margin-right:8px}
+  .tbtn.gray{background:#46525c;color:#e8eef2;box-shadow:0 3px 0 #2b343b}
+  #treeNote{font-size:11px;color:#9fb0a4}
+  #treeBtn{margin-top:9px;font-size:14px;padding:9px 20px}
+  /* ---- what you earned, on the death screen ---- */
+  #runEnd{display:flex;flex-direction:column;gap:5px;margin:2px 0 14px;
+    font-family:'Fredoka';text-align:left}
+  .rebest{font-family:'Titan One';font-size:15px;letter-spacing:1px;color:#f2f3f2;
+    margin-bottom:4px;text-align:center}
+  .rebest b{color:#ffd76e;font-size:20px}
+  .rebest em{font-style:normal;color:#9fdc7e;font-size:11px;letter-spacing:.6px}
+  .rebest span{color:#8ea092;font-size:11px;letter-spacing:.6px}
+  .rerow{display:flex;align-items:baseline;gap:8px;font-size:12px;color:#cfe0d4;
+    background:rgba(9,13,17,.34);border-radius:8px;padding:5px 10px}
+  .rerow span{flex:0 0 108px;color:#8ea092;font-size:10.5px;letter-spacing:1px;text-transform:uppercase}
+  .rerow b{color:#fff}
+  .rerow i{margin-left:auto;font-style:normal;color:#8ea092;font-size:10.5px}
+  .rerow.first{background:rgba(255,214,110,.14);border:1px solid rgba(255,214,110,.35)}
+  .rerow.first span{color:#ffd76e}
+  .rewant{font-size:11.5px;color:#cfe0d4;background:rgba(9,13,17,.34);
+    border-radius:8px;padding:7px 10px;line-height:1.5}
+  .rewant b{color:#ffd76e}
+  .rewant em{font-style:normal;color:#9fdc7e}
+  .rewant span{color:#8ea092}
+  .renone{font-size:11.5px;color:#8ea092;padding:4px 2px;text-align:center}
   .bookspell{display:flex;align-items:center;gap:9px;font-size:12px;color:#cfe0d4;
     background:rgba(255,255,255,.05);border-radius:9px;padding:6px 10px;margin:0 0 8px}
   .bookspell svg{width:18px;height:18px;flex:0 0 18px}
@@ -407,6 +452,7 @@
     <div id="favRow"></div>
     <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
+    <button id="treeBtn" class="btn gray">SKILL TREE — <b id="treePts">0</b> POINTS</button>
     <div class="ctl">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
       <span><kbd>LMB</kbd> <b>swing</b></span>
@@ -500,10 +546,27 @@
   </div>
 </div>
 
+<div id="treeScreen" class="overlay hidden">
+  <div class="sheet tree">
+    <div class="sheethead">
+      <h2>SKILL TREE</h2>
+      <div class="sheetsub" id="treeSub"></div>
+    </div>
+    <div class="sheetbody" id="treeBody"></div>
+    <div class="sheetfoot">
+      <button id="respecBtn" class="tbtn">RESPEC — FREE</button>
+      <button id="treeOffBtn" class="tbtn gray"></button>
+      <button id="treeCloseBtn" class="tbtn gray">CLOSE</button>
+      <span id="treeNote"></span>
+    </div>
+  </div>
+</div>
+
 <div id="overScreen" class="overlay hidden">
   <div class="plate panelbox">
     <div class="studrow"><span></span><span></span><span></span><span></span></div>
     <h2>YOU GOT BRICKED!</h2>
+    <div id="runEnd"></div>
     <div class="statgrid">
       <div class="stat"><b id="stWave">1</b><span>WAVES</span></div>
       <div class="stat"><b id="stKill">0</b><span>SMASHED</span></div>
@@ -815,7 +878,7 @@ function syncStats(){
   p.reach       = Math.min(REACH_MAX,     pool(0, p.reachFlat, 0, 1));
   p.suppress    = Math.min(1,             pool(0, p.suppressFlat, 0, 1));
   p.critMultPct = Math.min(CRIT_MULT_CAP, pool(weapon.critMult, p.critMultFlat, 0, 1));
-  p.regenRate   = Math.min(REGEN_MAX,     pool(0, p.regenFlat, i.regen, 1));
+  p.regenRate   = p.noRegen ? 0 : Math.min(REGEN_MAX, pool(0, p.regenFlat, i.regen, 1));
   p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
   p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
   for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
@@ -1117,13 +1180,13 @@ const LEECH_CHANCE_MAX = 0.60;   /* how often, at most */
 const LEECH_HIT_CAP    = 0.03;   /* of MAX hearts, per swing */
 /* Difficulty scales the monsters and the loot, not the rules. */
 const DIFFS = {
-  easy:      { name:'EASY',      col:'#4b9b41', lvl:-2, hp:0.70, dmg:0.75, spd:0.88, atk:1.20,
+  easy:      { id:'easy', name:'EASY',      col:'#4b9b41', lvl:-2, hp:0.70, dmg:0.75, spd:0.88, atk:1.20,
                count:0.80, pack:0.6, rar:0.85,
                blurb:'Fewer, slower, softer monsters. Rewards roll a touch worse.' },
-  hard:      { name:'HARD',      col:'#ffb900', lvl:0,  hp:1.00, dmg:1.00, spd:1.00, atk:1.00,
+  hard:      { id:'hard', name:'HARD',      col:'#ffb900', lvl:0,  hp:1.00, dmg:1.00, spd:1.00, atk:1.00,
                count:1.00, pack:1.0, rar:1.00,
                blurb:'The game as built. Every number is the baseline.' },
-  nightmare: { name:'NIGHTMARE', col:'#d3242b', lvl:4,  hp:1.85, dmg:1.55, spd:1.16, atk:0.78,
+  nightmare: { id:'nightmare', name:'NIGHTMARE', col:'#d3242b', lvl:4,  hp:1.85, dmg:1.55, spd:1.16, atk:0.78,
                count:1.45, pack:1.9, rar:1.25,
                blurb:'Monsters arrive earlier, in packs, and hit far harder. Rewards roll better.' }
 };
@@ -1754,6 +1817,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
+  if(e.code==='Escape' && treeOn) toggleTree();
   if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
@@ -1827,6 +1891,7 @@ function rebuildWithout(id){
   for(const k of Object.keys(p)) delete p[k];
   Object.assign(p, blank, carry);
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
+  applyMetaTree(p);                     /* the tree is not a brick either... */
   applyFavPerks();                      /* nor is the favourite's starting kit */
   taken = {}; buildLog = [];
   for(const e of keep){
@@ -1904,6 +1969,11 @@ function newPlayer(){
     /* the ground slam's own pools; every one of them has a ceiling in syncStats */
     slam:{ flat:0, arcFlat:0, rangeInc:0, spdInc:0, elem:0, cycle:0 },
     slamAct:null, slamPose:0, slamAim:0,
+    /* WHAT THE META TREE WRITES. Every one of these is a POOL or a flag, never a
+       finished number — the tree obeys the same rule the bricks do, so every
+       ceiling in the game binds it, including ceilings that do not exist yet. */
+    tollDelay:0, noRegen:false, rerollBonus:0, chestCards:1, noReroll:false,
+    bankMul:1, studsTotal:0,
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
@@ -3404,11 +3474,15 @@ function killEnemy(e, source){
   addShake(e.type==='boss'?0.55:0.16);
   let amount = irnd(e.studs.a, e.studs.b);
   amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort);
+  /* BANK WHAT YOU COLLECTED, NOT WHAT YOU ARE HOLDING. player.studs is spent on
+     rerolls; banking that would charge you twice for rerolling. */
+  player.studsTotal += amount;
   spawnStuds(e.x, e.y, amount);
   if(e.type==='boss') bossSpoils(e);
   else mobSpoils(e);
   gainXp(e.xp * (e.elite?2:1) * fort * MOB_XP_SCALE, true);
   if(e.type==='boss'){
+    if(metaBossKill(e.bkey)) logEvent('FIRST KILL — '+(e.bname||e.bkey)+' · +1 skill point', '#ffd76e');
     tScale = 0.25;
     for(let i=0;i<3;i++) spawnStuds(e.x+rnd(-40,40), e.y+rnd(-40,40), 12);
     showBanner(e.super ? 'SUPER BOSS DOWN!' : 'BOSS SMASHED!', 'claim your reward...', '#ffb900', 2.4);
@@ -3666,7 +3740,10 @@ function suppressChance(){ return clamp(player.suppress + weaponSuppress(), 0, 1
 const RES_TAX_WAVES = [20, 40, 60];
 const RES_TAX_STEP  = 0.30;
 function resTaxSteps(n){
-  const w = (n === undefined) ? (wave ? wave.n : 0) : n;
+  let w = (n === undefined) ? (wave ? wave.n : 0) : n;
+  /* SLOW BURN pushes every toll back, so a build can buy its way past the one
+     thing that most reliably ends a run — and pays for it in experience. */
+  w -= (player && player.tollDelay) || 0;
   let k = 0;
   for(const t of RES_TAX_WAVES) if(w >= t) k++;
   return k;
@@ -5231,6 +5308,443 @@ const UPGRADES = [
     apply:c=>{ player.vortex.totem = Math.min(TOTEM_MAX, (player.vortex.totem||0) + 1);
       player.vortex.totemCd = 0; } }
 ];
+/* ========================= THE SKILL TREE ==========================
+   WHY IT EXISTS. You die at wave 15 and nothing happened: the run was the whole
+   reward and the run is gone. Everything here makes the wave you died on worth
+   something, and makes PUSHING YOUR BEST worth more than grinding a wave you
+   have already beaten.
+
+   FOUR INVARIANTS, and they are the whole reason this survives future changes:
+
+   1. The save stores NODE IDS, never the stats they grant. The effect is rebuilt
+      from the live table every load, so rebalancing a node is free — no
+      migration, no stale saves, no "my old character has the old numbers".
+   2. Points SPENT are derived by summing the live table, never stored. Change a
+      cost and every existing save re-derives correctly. A node that no longer
+      exists contributes nothing, so a DELETED NODE SELF-REFUNDS with no
+      migration code at all.
+   3. Points EARNED are derived from the ACHIEVEMENTS, never from a counter.
+      Change "a point every 10 waves" to "every 5" later and everyone's existing
+      progress re-grants correctly and retroactively. A counter can never be
+      fixed; a derived value is always right.
+   4. Nodes write into THE SAME POOLS THE BRICKS WRITE INTO, before the run
+      starts, exactly as a favourite's kit does. Because every ceiling in this
+      game lives on the derived value rather than on the pool, the tree is bound
+      by every cap — including caps that do not exist yet.
+
+   AND YOU CAN NEVER HOLD ALL OF IT. The tree costs far more than the ceiling on
+   points, on purpose: the tree is a set of builds you reshape, not a ladder you
+   finish. Respec is free and instant. */
+const META_KEY = 'bb_meta';
+const META_VER = 1;
+/* A full clear collects roughly 15x what a death at wave 15 does. Banked raw,
+   the early runs this exists to reward would feel WORSE. The square root
+   compresses that to about 4x and explains itself in one line. */
+const META_BANK_K        = 4;
+const META_STUD_PER_POINT = 600;
+const META_STUD_POINT_MAX = 14;   /* studs alone can never carry the whole tree */
+const META_POINT_MAX      = 26;   /* THE HARD CEILING — the tree costs 54 */
+/* first time only. Grinding a wave you have already beaten pays nothing. */
+const META_WAVE_POINTS   = [10, 20, 30, 40, 50];
+const META_WEAPON_WAVE   = 20;    /* ...with each weapon, once each */
+
+/* ---- the node table. `ring` 1-4 are the small nodes, 5 the notable, 6 the
+   keystone; `spoke` is which arm of the wheel it sits on. `at` is the best wave
+   you must have reached ON THIS DIFFICULTY before it can be bought — the whole
+   tree is always VISIBLE, which is the point of a tree. ---- */
+const META_SPOKES = [
+  { id:'war',  name:'WARFARE',   col:'#ff8a4a' },
+  { id:'elem', name:'ELEMENTS',  col:'#9b45d6' },
+  { id:'arm',  name:'ARMOUR',    col:'#9fb0bd' },
+  { id:'vit',  name:'VITALITY',  col:'#7ed47e' },
+  { id:'swift',name:'SWIFTNESS', col:'#7ecbff' },
+  { id:'arc',  name:'ARCANA',    col:'#ffd166' },
+];
+const META_COST = { 1:1, 2:1, 3:1, 4:1, 5:2, 6:3 };
+const META_NODES = [
+  /* WARFARE */
+  { id:'war1', spoke:'war', ring:1, at:0,  name:'Whetstone',   desc:'+3% increased physical damage',
+    apply(p){ p.incMelee += 0.03; } },
+  { id:'war2', spoke:'war', ring:2, at:10, name:'Heft',        desc:'+0.3 flat physical damage',
+    apply(p){ p.flatPhys += 0.3; } },
+  { id:'war3', spoke:'war', ring:3, at:20, name:'Quickhand',   desc:'+4% increased attack speed',
+    apply(p){ p.inc.atk += 0.04; } },
+  { id:'war4', spoke:'war', ring:4, at:30, name:'Brutality',   desc:'+6% increased physical damage',
+    apply(p){ p.incMelee += 0.06; } },
+  { id:'warN', spoke:'war', ring:5, at:25, name:'Deep Cuts',   desc:'+8% bleed chance and +4% of the hit bleeds',
+    apply(p){ p.bleedChanceFlat += 0.08; p.bleedShareFlat += 0.04; } },
+  { id:'warK', spoke:'war', ring:6, at:25, name:'Glass Bricks',
+    desc:'+35% increased damage with everything — and 30% LESS maximum hearts',
+    apply(p){ p.incAll += 0.35; p.hpMore *= 0.70; } },
+  /* ELEMENTS */
+  { id:'ele1', spoke:'elem', ring:1, at:0,  name:'Kindling',   desc:'+3% increased elemental damage',
+    apply(p){ p.inc.elem += 0.03; } },
+  { id:'ele2', spoke:'elem', ring:2, at:10, name:'Charged',    desc:'+0.3 flat elemental damage',
+    apply(p){ p.flatElem += 0.3; } },
+  { id:'ele3', spoke:'elem', ring:3, at:20, name:'Prismatic',  desc:'+4% increased fire, frost AND lightning',
+    apply(p){ p.inc.fire += 0.04; p.inc.frost += 0.04; p.inc.shock += 0.04; } },
+  { id:'ele4', spoke:'elem', ring:4, at:30, name:'Conflagrant',desc:'+6% increased elemental damage',
+    apply(p){ p.inc.elem += 0.06; } },
+  { id:'eleN', spoke:'elem', ring:5, at:25, name:'Emberwright',desc:'Ember Scatter starts the run at rank 1',
+    apply(p){ p.ember = Math.max(p.ember||0, 1); } },
+  { id:'eleK', spoke:'elem', ring:6, at:30, name:'Slow Burn',
+    desc:'Every elemental toll lands 10 waves later — and you gain 30% LESS experience',
+    apply(p){ p.tollDelay += 10; p.xpMore *= 0.70; } },
+  /* ARMOUR */
+  { id:'arm1', spoke:'arm', ring:1, at:0,  name:'Plated',      desc:'+3 flat armour',
+    apply(p){ p.armourFlat += 3; } },
+  { id:'arm2', spoke:'arm', ring:2, at:10, name:'Riveted',     desc:'+6% increased armour',
+    apply(p){ p.incArmour += 0.06; } },
+  { id:'arm3', spoke:'arm', ring:3, at:20, name:'Warded',      desc:'+4% spell suppression',
+    apply(p){ p.suppressFlat += 0.04; } },
+  { id:'arm4', spoke:'arm', ring:4, at:30, name:'Bulwark',     desc:'+8 flat armour',
+    apply(p){ p.armourFlat += 8; } },
+  { id:'armN', spoke:'arm', ring:5, at:30, name:'Stonecutter', desc:'+10% increased armour and +4% suppression',
+    apply(p){ p.incArmour += 0.10; p.suppressFlat += 0.04; } },
+  { id:'armK', spoke:'arm', ring:6, at:30, name:'Ironclad Oath',
+    desc:'+50% increased armour and +10% to every resistance — and 20% LESS move speed',
+    apply(p){ p.incArmour += 0.50; for(const el of ELEMENTS) p.resFlat[el] += 0.10;
+              p.inc.speed -= 0.20; } },
+  /* VITALITY */
+  { id:'vit1', spoke:'vit', ring:1, at:0,  name:'Sealed',      desc:'+3% to every resistance',
+    apply(p){ for(const el of ELEMENTS) p.resFlat[el] += 0.03; } },
+  { id:'vit2', spoke:'vit', ring:2, at:10, name:'Sturdy',      desc:'+0.3 maximum hearts',
+    apply(p){ p.hpFlat += 0.3; } },
+  { id:'vit3', spoke:'vit', ring:3, at:20, name:'Mending',     desc:'+0.015 hearts a second regenerated',
+    apply(p){ p.regenFlat += 0.015; } },
+  { id:'vit4', spoke:'vit', ring:4, at:30, name:'Tempered',    desc:'+5% to every resistance',
+    apply(p){ for(const el of ELEMENTS) p.resFlat[el] += 0.05; } },
+  { id:'vitN', spoke:'vit', ring:5, at:30, name:'Warden',      desc:'+1 maximum heart and +0.02 regeneration',
+    apply(p){ p.hpFlat += 1; p.regenFlat += 0.02; } },
+  { id:'vitK', spoke:'vit', ring:6, at:35, name:'Bloodthirst',
+    desc:'+20% lifesteal chance and +6% lifesteal share — and you do not regenerate AT ALL',
+    apply(p){ p.leechChanceFlat += 0.20; p.leechFlat += 0.06; p.noRegen = true; } },
+  /* SWIFTNESS */
+  { id:'swi1', spoke:'swift', ring:1, at:0,  name:'Nimble',    desc:'+4% move speed',
+    apply(p){ p.inc.speed += 0.04; } },
+  { id:'swi2', spoke:'swift', ring:2, at:10, name:'Magnetic',  desc:'+8% pickup range',
+    apply(p){ p.inc.magnet += 0.08; } },
+  { id:'swi3', spoke:'swift', ring:3, at:20, name:'Prospector',desc:'+6% studs from every source',
+    apply(p){ p.inc.studs += 0.06; } },
+  { id:'swi4', spoke:'swift', ring:4, at:30, name:'Fleet',     desc:'+6% move speed',
+    apply(p){ p.inc.speed += 0.06; } },
+  { id:'swiN', spoke:'swift', ring:5, at:30, name:'Quartermaster', desc:'One more reroll on every reward screen',
+    apply(p){ p.rerollBonus += 1; } },
+  { id:'swiK', spoke:'swift', ring:6, at:30, name:'Hoarder',
+    desc:'DOUBLE the studs you bank at the end of a run — and 20% LESS increased damage',
+    apply(p){ p.bankMul *= 2; p.incAll -= 0.20; } },
+  /* ARCANA */
+  { id:'arc1', spoke:'arc', ring:1, at:0,  name:'Attuned',     desc:'+3% increased spell damage',
+    apply(p){ p.incSpell += 0.03; } },
+  { id:'arc2', spoke:'arc', ring:2, at:10, name:'Cadence',     desc:'+4% increased cast speed',
+    apply(p){ p.inc.cast += 0.04; } },
+  { id:'arc3', spoke:'arc', ring:3, at:20, name:'Lingering',   desc:'+5% increased damage over time',
+    apply(p){ p.inc.dot += 0.05; } },
+  { id:'arc4', spoke:'arc', ring:4, at:30, name:'Resonant',    desc:'+6% increased spell damage',
+    apply(p){ p.incSpell += 0.06; } },
+  { id:'arcN', spoke:'arc', ring:5, at:25, name:'Archivist',   desc:'+1 to the stack cap of every spell that has one',
+    apply(p){ p.capUp.orbit += 1; p.capUp.blaster += 1; p.capUp.chain += 1; p.capUp.bomb += 1; } },
+  { id:'arcK', spoke:'arc', ring:6, at:25, name:'Scavenger',
+    desc:'Every chest offers TWO cards instead of one — and you can never reroll a reward',
+    apply(p){ p.chestCards = 2; p.noReroll = true; } },
+];
+const META_BY_ID = {}; for(const n of META_NODES) META_BY_ID[n.id] = n;
+function metaCost(n){ return META_COST[n.ring] || 1; }
+function metaTotalCost(){ let t=0; for(const n of META_NODES) t += metaCost(n); return t; }
+
+/* ---- the save. One key, one record per difficulty: a tree earned on EASY is
+   not a tree earned on NIGHTMARE, so they do not share. ---- */
+function blankMeta(){ return { best:{ wave:0, byWeapon:{} }, bosses:[], studsEarned:0, nodes:[] }; }
+let META = null;
+const metaInt = (v, lo, hi)=> (typeof v === 'number' && isFinite(v)) ? clamp(Math.floor(v), lo, hi) : lo;
+/* VALIDATE OR RESET. A corrupt save must start you empty, never throw. */
+function metaParse(raw){
+  let o = null;
+  try { o = JSON.parse(raw); } catch(e){ return null; }
+  if(!o || typeof o !== 'object') return null;
+  const out = { v:META_VER, on: o.on !== false };
+  for(const d of Object.keys(DIFFS)){
+    const r = o[d], b = blankMeta();
+    if(r && typeof r === 'object'){
+      b.studsEarned = metaInt(r.studsEarned, 0, 1e12);
+      if(r.best && typeof r.best === 'object'){
+        b.best.wave = metaInt(r.best.wave, 0, 99999);
+        if(r.best.byWeapon && typeof r.best.byWeapon === 'object')
+          for(const k of WEAPON_KEYS)
+            if(r.best.byWeapon[k] !== undefined) b.best.byWeapon[k] = metaInt(r.best.byWeapon[k], 0, 99999);
+      }
+      if(Array.isArray(r.bosses))
+        for(const k of r.bosses) if(typeof k === 'string' && b.bosses.indexOf(k) < 0) b.bosses.push(k);
+      /* an unknown node id is simply dropped, and because SPENT is derived its
+         points come back on their own */
+      if(Array.isArray(r.nodes))
+        for(const k of r.nodes) if(META_BY_ID[k] && b.nodes.indexOf(k) < 0) b.nodes.push(k);
+    }
+    out[d] = b;
+  }
+  return out;
+}
+function metaLoad(){
+  let raw = null;
+  try { raw = localStorage.getItem(META_KEY); } catch(e){}
+  META = (raw && metaParse(raw)) || { v:META_VER, on:true,
+    easy:blankMeta(), hard:blankMeta(), nightmare:blankMeta() };
+  metaTrim();
+}
+function metaSave(){ try { localStorage.setItem(META_KEY, JSON.stringify(META)); } catch(e){} }
+function metaCur(){ if(!META) metaLoad(); return META[(difficulty && difficulty.id) || 'hard']; }
+
+/* ---- points, all DERIVED ---- */
+function metaStudPoints(m){
+  return Math.min(META_STUD_POINT_MAX, Math.floor((m.studsEarned||0) / META_STUD_PER_POINT));
+}
+function metaMilestonePoints(m){
+  let n = 0;
+  for(const w of META_WAVE_POINTS) if((m.best.wave||0) >= w) n++;
+  n += (m.bosses||[]).length;
+  for(const k of WEAPON_KEYS) if((m.best.byWeapon[k]||0) >= META_WEAPON_WAVE) n++;
+  return n;
+}
+function metaPointsEarned(m){
+  m = m || metaCur();
+  return Math.min(META_POINT_MAX, metaStudPoints(m) + metaMilestonePoints(m));
+}
+function metaPointsSpent(m){
+  m = m || metaCur();
+  let t = 0;
+  for(const id of m.nodes){ const n = META_BY_ID[id]; if(n) t += metaCost(n); }
+  return t;
+}
+function metaPointsLeft(m){ m = m || metaCur(); return metaPointsEarned(m) - metaPointsSpent(m); }
+/* studs still to collect before the next point, for the progress bar */
+function metaStudsToNext(m){
+  m = m || metaCur();
+  if(metaStudPoints(m) >= META_STUD_POINT_MAX) return null;
+  return META_STUD_PER_POINT - ((m.studsEarned||0) % META_STUD_PER_POINT);
+}
+/* A COST RISE CAN LEAVE A SAVE OVERSPENT. Refund the most recently taken nodes
+   until it balances, rather than silently letting the hero keep them. */
+function metaTrim(){
+  for(const d of Object.keys(DIFFS)){
+    const m = META[d];
+    let guard = 0;
+    while(metaPointsSpent(m) > metaPointsEarned(m) && m.nodes.length && guard++ < 500) m.nodes.pop();
+  }
+}
+function metaLocked(n, m){
+  m = m || metaCur();
+  return (m.best.wave||0) < (n.at||0);
+}
+function metaHas(id, m){ m = m || metaCur(); return m.nodes.indexOf(id) >= 0; }
+function metaCanBuy(n, m){
+  m = m || metaCur();
+  return !metaHas(n.id, m) && !metaLocked(n, m) && metaPointsLeft(m) >= metaCost(n);
+}
+function metaBuy(id){
+  const m = metaCur(), n = META_BY_ID[id];
+  if(!n || !metaCanBuy(n, m)) return false;
+  m.nodes.push(id); metaSave(); return true;
+}
+/* RESPEC IS FREE AND INSTANT. Regret orbs are a monetisation artifact, not a
+   design one — and free respec is what turns a tree you cannot finish into a
+   set of builds rather than a wall. */
+function metaRespec(){ const m = metaCur(); m.nodes = []; metaSave(); }
+function metaToggle(){ if(!META) metaLoad(); META.on = !META.on; metaSave(); return META.on; }
+
+/* ---- what it does to a hero. Same shape, same pools, same call site as the
+   favourite's kit — and NEVER on the title screen's demo hero or the bench's
+   throwaway ones, so a balance reading is never contaminated by a save. ---- */
+function applyMetaTree(p){
+  if(!META) metaLoad();
+  if(!META.on) return;
+  const m = metaCur();
+  for(const id of m.nodes){
+    const n = META_BY_ID[id];
+    if(!n || metaLocked(n, m)) continue;
+    try { n.apply(p); } catch(e){}
+  }
+  metaClampFlags(p);
+}
+/* Pools are bound by the ceilings on the numbers they feed. THESE ARE NOT
+   POOLS — they are switches and multipliers nothing rebuilds and nothing caps,
+   so the one hole in invariant 4 is closed by hand, here, rather than trusting
+   every future node to be reasonable. */
+const META_FLAG_CAP = { tollDelay:30, rerollBonus:3, chestCards:3, bankMul:4 };
+function metaClampFlags(p){
+  p.tollDelay   = clamp(p.tollDelay||0,   0, META_FLAG_CAP.tollDelay);
+  p.rerollBonus = clamp(p.rerollBonus||0, 0, META_FLAG_CAP.rerollBonus);
+  p.chestCards  = clamp(p.chestCards||1,  1, META_FLAG_CAP.chestCards);
+  p.bankMul     = clamp(p.bankMul||1,     1, META_FLAG_CAP.bankMul);
+}
+/* ---- what a finished run is worth ---- */
+function metaBank(){
+  if(!META) metaLoad();
+  const m = metaCur(), p = player;
+  const before = { pts: metaPointsEarned(m), nodes: m.nodes.length };
+  const collected = Math.max(0, Math.round(p.studsTotal||0));
+  const banked = Math.floor(META_BANK_K * Math.sqrt(collected) * (p.bankMul||1));
+  m.studsEarned += banked;
+  const firsts = [];
+  if(wave.n > (m.best.wave||0)){
+    for(const w of META_WAVE_POINTS)
+      if(wave.n >= w && (m.best.wave||0) < w) firsts.push('wave '+w);
+    m.best.wave = wave.n;
+  }
+  const wk = weapon && weapon.id;
+  if(wk && wave.n > (m.best.byWeapon[wk]||0)){
+    if(wave.n >= META_WEAPON_WAVE && (m.best.byWeapon[wk]||0) < META_WEAPON_WAVE)
+      firsts.push('wave '+META_WEAPON_WAVE+' with a '+weapon.name.toLowerCase());
+    m.best.byWeapon[wk] = wave.n;
+  }
+  metaSave();
+  return { banked, collected, firsts,
+           gained: metaPointsEarned(m) - before.pts,
+           total: m.studsEarned, left: metaPointsLeft(m) };
+}
+/* a boss smashed for the first time is a point, once, for ever */
+function metaBossKill(key){
+  if(!key) return false;
+  if(!META) metaLoad();
+  const m = metaCur();
+  if(m.bosses.indexOf(key) >= 0) return false;
+  m.bosses.push(key); metaSave(); return true;
+}
+/* ---- the screen. An SVG wheel: one spoke per theme, rings running outward,
+   the whole thing always VISIBLE because a tree you cannot see is a list. ---- */
+const TREE_R = 300, TREE_RING = [0, 62, 108, 154, 200, 246, 292];
+let treeOn = false, treePick = null;
+function metaNodeXY(n){
+  const si = META_SPOKES.findIndex(sp=>sp.id === n.spoke);
+  const a = (si / META_SPOKES.length) * TAU - Math.PI/2;
+  const r = TREE_RING[n.ring];
+  return { x: TREE_R + Math.cos(a)*r, y: TREE_R + Math.sin(a)*r, a };
+}
+function metaSpokeCol(id){
+  const sp = META_SPOKES.find(x=>x.id===id);
+  return sp ? sp.col : '#9fb0bd';
+}
+function renderTree(){
+  const body = document.getElementById('treeBody');
+  if(!body) return;
+  if(!META) metaLoad();
+  const m = metaCur();
+  const left = metaPointsLeft(m), earned = metaPointsEarned(m), spent = metaPointsSpent(m);
+
+  document.getElementById('treeSub').textContent =
+    `${difficulty.name} · ${spent} of ${earned} points spent · ${left} to place · `+
+    `best wave ${m.best.wave||0} · the tree costs ${metaTotalCost()} and the ceiling is ${META_POINT_MAX}`;
+
+  /* the wheel */
+  const parts = [];
+  /* the viewBox is PADDED so the spoke labels, which sit outside the last ring,
+     are not clipped by the edge of the drawing */
+  const PAD = 92;
+  parts.push(`<svg viewBox="${-PAD} ${-PAD} ${TREE_R*2+PAD*2} ${TREE_R*2+PAD*2}" `+
+             `width="540" height="540">`);
+  for(const r of TREE_RING.slice(1))
+    parts.push(`<circle cx="${TREE_R}" cy="${TREE_R}" r="${r}" fill="none" `+
+               `stroke="rgba(255,255,255,.06)" stroke-width="1"/>`);
+  /* a spoke line per theme, lit as far as you have bought along it */
+  for(const sp of META_SPOKES){
+    const own = META_NODES.filter(n=>n.spoke===sp.id && metaHas(n.id, m));
+    const far = own.length ? Math.max(...own.map(n=>TREE_RING[n.ring])) : 0;
+    const si = META_SPOKES.findIndex(x=>x.id===sp.id);
+    const a = (si / META_SPOKES.length) * TAU - Math.PI/2;
+    const ex = TREE_R + Math.cos(a)*TREE_RING[6], ey = TREE_R + Math.sin(a)*TREE_RING[6];
+    parts.push(`<line x1="${TREE_R}" y1="${TREE_R}" x2="${ex}" y2="${ey}" `+
+               `stroke="rgba(255,255,255,.10)" stroke-width="3"/>`);
+    if(far > 0)
+      parts.push(`<line x1="${TREE_R}" y1="${TREE_R}" x2="${TREE_R+Math.cos(a)*far}" `+
+                 `y2="${TREE_R+Math.sin(a)*far}" stroke="${sp.col}" stroke-width="4" opacity=".75"/>`);
+    /* clear of the keystone that sits at the end of the spoke, or the node is
+       drawn straight over the name */
+    const lx = TREE_R + Math.cos(a)*(TREE_RING[6]+34), ly = TREE_R + Math.sin(a)*(TREE_RING[6]+34);
+    parts.push(`<text x="${lx}" y="${ly}" fill="${sp.col}" font-size="11" font-family="Titan One"`+
+      ` text-anchor="${Math.cos(a) > 0.3 ? 'start' : Math.cos(a) < -0.3 ? 'end' : 'middle'}"`+
+      ` dy="${Math.sin(a) > 0.3 ? 14 : Math.sin(a) < -0.3 ? -6 : 4}">${sp.name}</text>`);
+  }
+  parts.push(`<circle cx="${TREE_R}" cy="${TREE_R}" r="26" fill="rgba(9,13,17,.7)" `+
+             `stroke="rgba(255,255,255,.18)" stroke-width="2"/>`);
+  parts.push(`<text x="${TREE_R}" y="${TREE_R+5}" fill="#ffd76e" font-size="15" `+
+             `font-family="Titan One" text-anchor="middle">${left}</text>`);
+  for(const n of META_NODES){
+    const pos = metaNodeXY(n), col = metaSpokeCol(n.spoke);
+    const has = metaHas(n.id, m), lock = metaLocked(n, m), can = metaCanBuy(n, m);
+    const rr = n.ring >= 6 ? 17 : n.ring === 5 ? 14 : 10;
+    const fill = has ? col : lock ? 'rgba(20,26,31,.85)' : 'rgba(30,38,45,.95)';
+    const stroke = has ? '#fff' : can ? col : 'rgba(255,255,255,.16)';
+    const cls = 'tnode' + (lock ? ' locked' : '');
+    parts.push(`<g class="${cls}" data-node="${n.id}">`+
+      `<circle cx="${pos.x}" cy="${pos.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
+      `stroke-width="${has?3:2}" opacity="${lock?0.45:1}"/>`+
+      (n.ring >= 5 ? `<text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="11" `+
+                     `fill="${has?'#12181d':col}" font-family="Titan One">`+
+                     `${n.ring>=6?'★':'◆'}</text>` : '')+
+      `</g>`);
+  }
+  parts.push('</svg>');
+
+  const pick = treePick && META_BY_ID[treePick];
+  const nextStuds = metaStudsToNext(m);
+  const side = `
+    <div class="tinfo">${pick ? `
+      <h4>${esc(pick.name)}</h4>
+      <p>${esc(pick.desc)}</p>
+      <div class="tmeta">${metaCost(pick)} point${metaCost(pick)===1?'':'s'} ·
+        ${META_SPOKES.find(x=>x.id===pick.spoke).name} ·
+        ${pick.ring>=6?'KEYSTONE':pick.ring===5?'NOTABLE':'ring '+pick.ring}</div>
+      ${metaLocked(pick, m) ? `<div class="tmeta tlock">locked — reach wave ${pick.at} on ${difficulty.name}</div>`
+        : metaHas(pick.id, m) ? `<div class="tmeta">taken · respec to move it</div>`
+        : metaCanBuy(pick, m) ? `<div class="tmeta">click again to take it</div>`
+        : `<div class="tmeta tlock">${metaCost(pick)-left} more point${metaCost(pick)-left===1?'':'s'}</div>`}`
+      : `<h4>PICK A NODE</h4><p>Click one to read it, click it again to take it.
+         Every keystone carries a real downside — that is what makes it a build.</p>
+         <div class="tmeta">The tree costs ${metaTotalCost()} points and you can never hold
+         more than ${META_POINT_MAX}. Respec is free.</div>`}
+    </div>
+    <div class="tbar">
+      <b>${m.studsEarned}</b> studs banked
+      <i>${nextStuds === null ? 'studs give no more points — the rest come from firsts'
+                              : nextStuds+' to the next point'}</i>
+    </div>
+    <div class="tbar">
+      <b>${metaMilestonePoints(m)}</b> points from firsts
+      <i>waves ${META_WAVE_POINTS.join(', ')} · each boss once ·
+         wave ${META_WEAPON_WAVE} with each weapon</i>
+    </div>
+    <div class="tbar">
+      <b>${(m.bosses||[]).length}</b> bosses smashed for the first time
+      <i>${(m.bosses||[]).length ? esc((m.bosses||[]).join(', ')) : 'none yet'}</i>
+    </div>`;
+  body.innerHTML = `<div class="treewrap">${parts.join('')}</div><div class="treeside">${side}</div>`;
+
+  for(const g of body.querySelectorAll('.tnode')){
+    g.addEventListener('click', ()=>{
+      const id = g.dataset.node;
+      if(treePick === id && metaCanBuy(META_BY_ID[id], metaCur())){
+        metaBuy(id); SFX.pick();
+      } else { treePick = id; SFX.click(); }
+      renderTree(); refreshTreeBtn();
+    });
+  }
+  const off = document.getElementById('treeOffBtn');
+  if(off) off.textContent = META.on ? 'APPLIED TO RUNS' : 'NOT APPLIED';
+  const note = document.getElementById('treeNote');
+  if(note) note.textContent = META.on
+    ? 'the tree is applied when a run starts — never to the test bench’s preview heroes'
+    : 'switched off: runs are played on the raw numbers';
+}
+function refreshTreeBtn(){
+  const b = document.getElementById('treePts');
+  if(b){ if(!META) metaLoad(); b.textContent = metaPointsLeft(); }
+}
+function toggleTree(){
+  const el = document.getElementById('treeScreen');
+  if(!el) return;
+  treeOn = !treeOn;
+  if(treeOn){ treePick = null; renderTree(); el.classList.remove('hidden'); }
+  else el.classList.add('hidden');
+}
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
 const FAV_WEIGHT = 3.2;
@@ -5394,6 +5908,10 @@ function setDifficulty(id){
   }
   const blurb = document.getElementById('diffBlurb');
   if(blurb) blurb.textContent = difficulty.blurb;
+  /* a tree earned on EASY is not a tree earned on NIGHTMARE — switching the
+     difficulty switches which save you are spending */
+  refreshTreeBtn();
+  if(treeOn) renderTree();
 }
 /* What a weapon is worth, read against the sword. Every line is the raw number
    and then how it differs from the baseline, because "1.70 base" means nothing
@@ -6011,7 +6529,7 @@ function pickChoices(mode){
   const pool = UPGRADES.filter(u=>{
     try { return !u.req || !!u.req(); } catch(e){ return false; }
   });
-  const want = mode==='boss' ? 4 : mode==='chest' ? 1 : 3;
+  const want = mode==='boss' ? 4 : mode==='chest' ? ((player && player.chestCards) || 1) : 3;
   /* A CHEST IS A REWARD FOR EXPLORING, not a way to reroll your build. It
      deepens what you already cast rather than handing you a spell you then have
      to find room and bricks for. */
@@ -6796,7 +7314,7 @@ function renderCards(){
   if(chest) return;   /* no reroll UI on chest rewards — the single card is the pick */
   const btn = document.getElementById('rerollBtn');
   const cost = rerollCost();
-  const left = 2 - screenRerolls;
+  const left = player.noReroll ? 0 : (2 + (player.rerollBonus||0)) - screenRerolls;
   btn.disabled = player.studs < cost || left <= 0;
   document.getElementById('rerollCost').textContent =
     left <= 0 ? 'no rerolls left for this reward'
@@ -15565,7 +16083,7 @@ function resetRun(demo){
   navBuild();
   player = newPlayer();
   syncStats();
-  if(!demo) applyFavPerks();
+  if(!demo){ applyMetaTree(player); applyFavPerks(); }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0 };
   waveMods = [];
   rollRoster();
@@ -15607,11 +16125,55 @@ function showGameOver(){
   document.getElementById('stLvl').textContent = player.level;
   const m = Math.floor(runTime/60), s = Math.floor(runTime%60);
   document.getElementById('stTime').textContent = m+':'+String(s).padStart(2,'0');
+  /* THE RUN IS BANKED BEFORE THE SCREEN IS DRAWN, so what you read is the truth
+     and not a promise. Read `prevBest` first — metaBank moves it. */
+  const cur = metaCur();
+  const prevBest = cur.best.wave || 0;
+  const res = (META && META.on) ? metaBank() : null;
+  renderRunEnd(res, prevBest);
   document.getElementById('overScreen').classList.remove('hidden');
   try{
     const best = Math.max(wave.n, +(localStorage.getItem('bb_best')||0));
     localStorage.setItem('bb_best', best);
   }catch(e){}
+}
+/* WHAT YOU EARNED, not just what happened. A death screen that only reports the
+   run is why dying felt like nothing: it has to show progress toward the NEXT
+   thing, name what is newly within reach, and shout about anything that was a
+   FIRST. When nothing new happened it says so rather than inventing a reward —
+   a screen that celebrates every run teaches you to ignore it. */
+function renderRunEnd(res, prevBest){
+  const el = document.getElementById('runEnd');
+  if(!el) return;
+  if(!res){ el.innerHTML = '<div class="renone">The skill tree is switched off for this run.</div>'; return; }
+  const m = metaCur();
+  const L = [];
+  L.push(`<div class="rebest">WAVE <b>${wave.n}</b>`+
+    (wave.n > prevBest ? ` <em>a new best \u2014 was ${prevBest}</em>`
+                       : ` <span>best ${prevBest}</span>`)+`</div>`);
+  L.push(`<div class="rerow"><span>studs banked</span><b>+${res.banked}</b>`+
+         `<i>${res.total} total on ${difficulty.name}</i></div>`);
+  for(const f of res.firsts)
+    L.push(`<div class="rerow first"><span>FIRST</span><b>${esc(f)}</b><i>+1 skill point</i></div>`);
+  if(res.gained > 0)
+    L.push(`<div class="rerow first"><span>skill points</span><b>+${res.gained}</b>`+
+           `<i>${res.left} unspent</i></div>`);
+  const next = metaStudsToNext(m);
+  if(next !== null)
+    L.push(`<div class="rerow"><span>next point</span><b>${next} studs away</b>`+
+           `<i>${metaPointsEarned(m)} earned, ceiling ${META_POINT_MAX}</i></div>`);
+  /* name the nearest thing you could actually go and take */
+  const want = META_NODES.filter(n=>!metaHas(n.id, m) && !metaLocked(n, m))
+    .sort((a,b)=> metaCost(a)-metaCost(b))[0];
+  if(want){
+    const short = metaCost(want) - metaPointsLeft(m);
+    L.push(`<div class="rewant"><b>${esc(want.name)}</b> \u2014 ${esc(want.desc)}<br>`+
+      (short <= 0 ? `<em>you can take it now</em>`
+                  : `<span>${short} more point${short===1?'':'s'}</span>`)+`</div>`);
+  }
+  if(!res.firsts.length && res.gained === 0)
+    L.push(`<div class="renone">Nothing new this run \u2014 the wave to beat is ${prevBest+1}.</div>`);
+  el.innerHTML = L.join('');
 }
 function togglePause(){
   if(state==='play'){ state='pause'; cv.style.cursor='default';
@@ -15638,6 +16200,12 @@ function showBest(){
   document.getElementById('bestLine').textContent = best>0 ? `Personal best: wave ${best}` : '';
 }
 document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('treeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
+document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
+document.getElementById('respecBtn').addEventListener('click', ()=>{
+  SFX.click(); metaRespec(); treePick = null; renderTree(); refreshTreeBtn(); });
+document.getElementById('treeOffBtn').addEventListener('click', ()=>{
+  SFX.click(); metaToggle(); renderTree(); refreshTreeBtn(); });
 document.getElementById('retryBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('overScreen').classList.add('hidden'); startGame(); });
 document.getElementById('titleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
@@ -15713,10 +16281,12 @@ function frame(now){
   try { render(); } catch(err){ console.warn('render:', err); }
   if(state==='title'){ try { renderTitle(); } catch(err){ console.warn('title:', err); } }
 }
+metaLoad();          /* before the first hero, so nothing is stood up half-built */
 resetRun(true);
 buildFavRow();
 buildDiffRow();
 buildWeaponRow();
+refreshTreeBtn();
 showBest();
 fitTitle();
 requestAnimationFrame(frame);

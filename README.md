@@ -32,7 +32,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 **Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
-**Design** — [Meta-progression](docs/PROGRESSION.md) *(designed, not built)*
+**Between runs** — [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
 
 ---
 
@@ -828,6 +828,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
+| **Skill points** | **26** | Tree cost | 54 | Studs → points | 14 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -1141,6 +1142,81 @@ holding decides which golem is a problem.
 Stone is the exception on purpose: it is rock, so it is **armour** — and armour only ever
 touches *attacks*. You cannot out-swing a stone golem; you burn it. Resistance caps at
 **90%** even under `RESISTANT`, so max resistance is a wall rather than immunity.
+
+---
+
+## The skill tree
+
+You used to die at wave 15 and nothing happened: the run was the whole reward and the run
+was gone. Now every run banks, and **pushing your best** is worth more than grinding a wave
+you have already beaten.
+
+![The skill tree](docs/tree.png)
+
+**One currency you can see: skill points.** They come from two places, and both are
+*derived* — nothing is stored as a counter:
+
+| | |
+|---|--:|
+| `floor(studs banked ÷ 600)`, capped | **14** |
+| first time reaching wave 10, 20, 30, 40, 50 | 5 |
+| first time smashing each of the 8 bosses | 8 |
+| first wave-20 run with each of the 4 weapons | 4 |
+| **the ceiling on everything** | **26** |
+
+**You bank the square root of what you picked up** — `floor(4 × √studs)`. A full clear
+collects about 15× what a death at wave 15 does; banked raw, the early runs this exists to
+reward would feel *worse*. The square root compresses that to about 4×. It banks what you
+**collected**, not what you are holding, so rerolling never costs you twice.
+
+**The tree costs 54 points and you can never hold more than 26.** That is the whole design:
+at most 48% of it, ever, so the tree is a set of builds rather than a ladder you finish.
+**Respec is free and instant.** Six spokes — WARFARE, ELEMENTS, ARMOUR, VITALITY, SWIFTNESS,
+ARCANA — each with four small nodes, a notable, and a **keystone that carries a real
+downside**:
+
+| | |
+|---|---|
+| **Glass Bricks** | +35% increased damage — and **30% less maximum hearts** |
+| **Slow Burn** | every elemental toll lands 10 waves later — and **30% less XP** |
+| **Ironclad Oath** | +50% armour and +10% all resistance — and **20% less move speed** |
+| **Bloodthirst** | +20% lifesteal chance and +6% share — and **no regeneration at all** |
+| **Hoarder** | **double** the studs you bank — and 20% less increased damage |
+| **Scavenger** | chests offer **two** cards — and you can never reroll |
+
+A tree of pure upgrades is a ratchet; a tree of trade-offs is a set of builds. That is why
+people still open Path of Exile's tree after ten years.
+
+**Progress is per difficulty.** A tree earned on Easy is not a tree earned on Nightmare —
+three independent saves, and the difficulty picker switches which one you are spending.
+
+**It does not touch the test bench.** The tree is applied only when a real run starts, so
+every preview and throwaway hero reads the raw numbers. A switch on the tree screen turns it
+off for real runs too.
+
+### Why it survives being rebalanced
+
+Four invariants, and they are the whole reason the save stays alive through future changes:
+
+1. **The save stores node IDs, never the stats they grant.** The effect is rebuilt from the
+   live table every load, so rebalancing a node is free — no migration, no stale saves.
+2. **Points spent are derived**, by summing the live table. Change a cost and every save
+   re-derives. A node that no longer exists costs nothing, so **a deleted node self-refunds**
+   with no migration code at all.
+3. **Points earned are derived from the achievements**, never from a counter. Change *"a
+   point every 10 waves"* to *"every 5"* and everyone's existing progress re-grants
+   retroactively. A counter can never be fixed; a derived value is always right.
+4. **Nodes write into the same pools the bricks write into.** Because every ceiling in this
+   game lives on the derived value rather than on the pool, the tree is bound by every cap —
+   *including caps that do not exist yet*.
+
+A corrupt save resets rather than throwing, and a save claiming nodes it never earned is
+refunded instead of honoured.
+
+**And the budget is a test, not a promise.** `meta.js` stands up the greediest legal 26
+points of pure offence and fails the build if it beats ×1.80 damage. It measures **×1.77**;
+`Sword & Steel` alone is worth about ×1.70, which is what *"about one extra favourite"* was
+meant to mean. It caught the tree being ×1.97 on its first run.
 
 ---
 

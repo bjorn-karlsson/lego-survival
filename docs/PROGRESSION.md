@@ -1,7 +1,9 @@
 # Meta-progression — design
 
-*Status: design, not built. Numbers here are measured off the live game unless marked
-"proposed".*
+*Status: **BUILT** — phases 1 to 3. What shipped differs from the design below in four
+places, all decided by the author; the differences are listed under
+[What changed on the way in](#what-changed-on-the-way-in). The design text is kept as it was
+written so the reasoning survives.*
 
 ---
 
@@ -325,3 +327,50 @@ Each phase is shippable on its own.
    of deriving everything — but worth playing with.
 4. **How visible should the tree be on run one?** Showing a locked 40-node tree to a new
    player is either a promise or a wall. *Leaning: show ring 1 only until the first death.*
+
+
+---
+
+## What changed on the way in
+
+Built across phases 1–3. Four decisions moved:
+
+**1. Progress is PER DIFFICULTY, not shared.** A tree earned on Easy is not a tree earned on
+Nightmare — `bb_meta` holds three independent records and switching the difficulty on the
+title screen switches which one you are spending. The design leaned the other way; the
+author's call was that they are different games.
+
+**2. One visible currency, not two.** Marks were folded into **skill points**. Points come
+from two sources — `floor(studsEarned / 600)`, capped at 14, plus one for each first-time
+achievement — and the total is capped at **26**. Studs are the progress bar toward the next
+point rather than a second thing to spend.
+
+**3. The tree cannot be finished, ever.** It costs **54 points** and the ceiling is **26**,
+so the most you can ever hold is 48% of it. This is the change that makes the tree a set of
+builds rather than a ladder, and it is asserted in `meta.js` rather than left to drift.
+Respec is free and instant.
+
+**4. The whole tree is visible from the first run**, locked nodes included. A tree you
+cannot see is a list.
+
+The test bench does **not** carry the tree: `applyMetaTree()` runs only when a real run
+starts, so every preview and throwaway hero reads the raw numbers. A switch on the tree
+screen turns it off for real runs too, for clean balance readings.
+
+### What the audit caught
+
+The power-budget test earned its place on its first run. The greediest 26 points of pure
+offence came out at **×3.31 damage** — except that was the probe applying the tree twice on
+top of `startGame`, which already applies it. The true figure was **×1.97**, still over
+budget: `Heft` and `Charged` were +0.5 flat damage on a 1.5 base, which is +33% at wave 1 and
+nothing by wave 40. Both dropped to +0.3, and the greediest build now measures **×1.77**
+against a declared ceiling of ×1.80. For scale, `Sword & Steel` alone is worth about ×1.7 —
+which is what *"about one extra favourite"* was supposed to mean.
+
+### The hole invariant 4 does not cover
+
+Pools are bound by the ceilings on the numbers they feed, so a node that writes a pool is
+safe by construction. **Flags are not pools.** `tollDelay`, `rerollBonus`, `chestCards` and
+`bankMul` are switches nothing rebuilds and nothing caps, so `metaClampFlags()` bounds them
+by hand where the tree is applied — the one place the architecture needed help rather than
+trust.
