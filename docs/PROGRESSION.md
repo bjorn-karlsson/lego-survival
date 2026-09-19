@@ -5,7 +5,8 @@ places, all decided by the author; the differences are listed under
 [What changed on the way in](#what-changed-on-the-way-in). The design text is kept as it was
 written so the reasoning survives. Two rounds of playtesting have since changed it again —
 see [Second pass](#second-pass--what-playtesting-changed) and
-[Third pass](#third-pass--the-wheel-became-a-map).*
+[Third pass](#third-pass--the-wheel-became-a-map) and
+[Fourth pass](#fourth-pass--out-of-the-middle-and-one-ability-at-a-time).*
 
 ---
 
@@ -501,3 +502,88 @@ Every node ID from the wheel is gone. Because the save stores node IDs and deriv
 everything else (invariants 1–3), every existing save simply dropped its unknown nodes and
 handed back all of its points to re-spend. There is no migration code for this, and there
 was never going to need to be.
+
+---
+
+## Fourth pass — out of the middle, and one ability at a time
+
+The third pass put the four doors on four sides of the rim. That made distance mean
+something, but it meant the weapons never met: a sword's early tree and a staff's early tree
+had nothing in common, and neither did the players. This pass turns it inside out.
+
+### Everyone starts in the middle; nobody starts the same way
+
+Four doors in the dead centre, each opening into **a cluster only that weapon can afford** —
+reach and riposte for the sword, bloodscent and wild swings for the axe, the weight of the
+slam for the mace, focus and warding for the staff. Your own beginning costs 4 points; it
+costs everybody else 14 to 16.
+
+That is the whole trick, and it is worth stating as an assertion rather than a paragraph:
+*every weapon's own opening is strictly cheaper for it than for any other weapon.* Wire all
+four doors into the same opening and the test names the weapon that lost its identity.
+
+Between each pair of doors sits a **crossing** both of them can reach, so your neighbour's
+half of the map is a detour rather than a wall.
+
+### The prizes moved to the rim
+
+Twelve keystones, all of them on the outside, 17 to 25 points from any door. One is a
+journey in a single direction; two is most of a ceiling. The test that holds this is the
+**union** of four real walks to the four corner keystones — 84 to 86 points against a
+ceiling of 46 — which is a different claim from adding four prices up, because the routes
+share their inner corridor.
+
+### One ability at a time
+
+The outer ring is now eight clusters that each name a single brick: `+1 damage with the
+Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Volley rate`, a wider Block Freeze, a heavier bomb. A tree that only ever says *+5% damage*
+has no opinions about anything; a node that names one of your bricks makes the map worth
+re-reading every time the deck hands you something new.
+
+Every one of those writers clamps **exactly where the brick that grants it clamps** —
+`BLAST_MAX_PIERCE`, `CHAIN_FORK_MAX`, `CLUSTER_MAX`, `ORBIT_MAX_R` — and the rates go
+through the same `paceOf` floors the cards do. Invariant 4 holds: the ceilings still bind,
+including ones added later.
+
+### Resistance, everywhere
+
+It used to be three nodes in a corner. It is now in every crossing, every ring-B cluster,
+every far corner, and — the part that actually changes how the tree feels — **every step of
+armour or core corridor is +1% to all three resistances**. A long walk in any direction
+leaves you a little harder to burn, freeze and shock, whatever you were walking toward.
+
+### A patch is a respec, not a reset
+
+The save now carries `tv`, the version of the tree its points were spent on. When the layout
+moves, every record whose `tv` is stale hands its points **back** — keeping every stud,
+every best wave and every boss — and the tree screen says so in as many words.
+
+This was always *nearly* true: the save stores node IDs and derives the rest, so `metaTrim`
+would have dropped the unknown nodes one at a time anyway. The version stamp does not change
+the outcome; it makes the outcome **legible**, and it is the difference between a player
+seeing "your points are back, spend them again" and a player quietly wondering what happened
+to their tree.
+
+### Zoom
+
+Four hundred nodes do not fit on a screen at a size anybody can read. Scroll zooms toward
+the cursor, drag pans, `FIT` restores the whole map. It is one `viewBox` attribute written
+straight onto the `<svg>` — re-rendering four hundred nodes on every wheel tick would make
+the whole thing feel like mud — and a drag is never mistaken for a purchase.
+
+### What it costs
+
+| | third pass | fourth pass |
+|---|--:|--:|
+| nodes | 225 | **412** |
+| of which corridor | 130 | **268** |
+| tree cost | 246 | **444** |
+| ceiling | 34 | **46** |
+| most of it anyone can hold | 14% | **10%** |
+| straight build, total power | ×1.60 | **×1.96** |
+| Glass Bricks, damage / power | ×2.08 / ×1.48 | **×2.46 / ×1.76** |
+
+The declared budget rose from ×1.80 to ×2.00 with the ceiling. That is a deliberate choice,
+not a drift: thirty stud points is eighteen thousand banked studs, and a player who has done
+that should be about twice the hero they started as.

@@ -828,7 +828,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
-| **Skill points** | **34** | Tree cost | 246 | Studs → points | 20 |
+| **Skill points** | **46** | Tree cost | 444 | Studs → points | 30 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -1156,30 +1156,39 @@ you have already beaten.
 **TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
 weapons — and **they share nothing**. Points earned on a staff are a staff's; switch to the
 axe and you find the axe's own tree exactly as you left it, and switching back finds the
-staff's. The **map is identical**; what changes is **which door you walk in through**, and
-the four doors are on four different sides of it.
+staff's.
 
-**It is a map, not a wheel.** Twenty-five clusters of nodes scattered across it, joined by
-long corridors of cheap travel nodes that run north, east, south and west and all the way
-around the outside. **The rim is the weak end on purpose** — what is near your door is small
-stuff, the prizes sit inward, and the points you spend walking to one are the real price of
-it. Go deep for a single keystone, or stay shallow and take four cheap clusters.
+**Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
+dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
+is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
+swings, the staff's is focus and warding. Your own beginning costs you **4** points and
+costs everybody else **14 to 16**. After that the map is shared, and it fans outward.
 
-The same prize costs different weapons wildly different amounts. Glass Bricks is 12 points
-out of the sword's door and 16 out of the mace's; the Mire's keystone is 7 for the axe and
-22 for the staff. **A far corner belongs to somebody. The dead centre belongs to nobody** —
-it is a 15-point walk from all four doors, which is what makes it the thing you give the
-whole run up for.
+**It is a map, not a wheel.** Thirty-six clusters, a hundred and four corridors of cheap
+travel nodes, and every ring joined all the way round. **The rim is where the good stuff
+is** — the twelve keystones all sit on the outside, seventeen to twenty-five points from any
+door, so one of them is a journey in a single direction and two of them is your whole
+ceiling. Go deep for one prize, or stay near the middle and take a dozen cheap ones.
+
+**The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
+WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
+Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Volley rate`. A tree that only ever says *+5% damage* has no opinions; a node that names one
+of your bricks makes you re-read the map every time the deck hands you something new.
+
+**Resistance is everywhere.** Every crossing has a ward, every ring-B cluster carries one,
+every corner stacks them, and **every step of armour or core corridor is +1% to all three** —
+so a long walk in any direction leaves you a little harder to burn, freeze and shock.
 
 **One currency you can see: skill points.** They come from two places, and both are
 *derived* — nothing is stored as a counter:
 
 | | |
 |---|--:|
-| `floor(studs banked ÷ 600)`, capped | **20** |
-| first time clearing wave 10, 20, 30, 40, 50, 60, 70 *with this weapon* | 7 |
+| `floor(studs banked ÷ 600)`, capped | **30** |
+| first time clearing wave 10, 20, 30, 40, 50, 60, 70, 80 *with this weapon* | 8 |
 | first time smashing each of the 8 bosses *with this weapon* | 8 |
-| **the ceiling on everything** | **34** |
+| **the ceiling on everything** | **46** |
 
 **The wave you CLEARED, not the one you died on.** Dying to the wave-30 boss is a wave-29
 run and the screen says so.
@@ -1189,9 +1198,9 @@ collects about 15× what a death at wave 15 does; banked raw, the early runs thi
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 246 points and you can never hold more than 34.** That is the whole design:
-at most **14%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
-225 nodes — 74 small ones in clusters, 9 notables, 8 keystones, and 130 steps of corridor
+**The tree costs 444 points and you can never hold more than 46.** That is the whole design:
+at most **10%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+412 nodes — 116 small ones in clusters, 12 notables, 12 keystones, and 268 steps of corridor
 between them. A travel node is a point you *spend*, not a point you get.
 
 **You cannot drop points wherever you like.** A node has to *touch* something you already
@@ -1204,10 +1213,20 @@ each one costs something different.
 at a time, free; a node holding up a branch is refused until you unwind the branch. `CLEAR
 ALL` is there when you want it.
 
+**Zoom and drag.** The map does not fit on a screen at a size you can read it, so scroll to
+zoom toward the cursor, drag to pan, and `FIT` puts the whole thing back. A drag is never
+mistaken for a purchase.
+
+**A PATCH NEVER COSTS YOU PROGRESS.** The save carries the version of the tree it was spent
+on. Move the tree and every stud, every best wave and every boss stays exactly where it was —
+the allocated points simply come **back**, and the tree screen says so in as many words:
+*THE TREE CHANGED — your N spent points are back. Spend them again.* A respec, never a reset.
+
 Eight colours of ground — WARFARE, PRECISION, SWIFTNESS, AFFLICTION, VITALITY, ARMOUR,
 ELEMENTS, ARCANA — and a gold CORE at the middle. Clusters wear the colour of the ground
 they stand on, so the regions read from across the map even before you have taken anything.
-Nine notables sit at the centre of a cluster, and eight **keystones carry a real downside**:
+Twelve notables sit at the centre of a cluster, and twelve **keystones carry a real
+downside**:
 
 | | |
 |---|---|
@@ -1219,6 +1238,10 @@ Nine notables sit at the centre of a cluster, and eight **keystones carry a real
 | **Bloodthirst** | +20% lifesteal chance and +6% share — and **no regeneration at all** |
 | **Hoarder** | **double** the studs you bank — and 20% less increased damage |
 | **Scavenger** | chests offer **two** cards — and you can never reroll |
+| **Livewire** | the Storm Brick fires twice as fast and forks — and **nothing you do lingers** |
+| **Vengeance** | +50% damage over time and a deeper wound — and **60% less critical chance** |
+| **Stoneheart** | +35% MORE maximum hearts and +6% all resistance — and **30% less damage** |
+| **Conduit** | +50% elemental damage and +8% all resistance — and **35% less cast speed** |
 
 A tree of pure upgrades is a ratchet; a tree of trade-offs is a set of builds. That is why
 people still open Path of Exile's tree after ten years.
@@ -1258,18 +1281,20 @@ weapons, which made the tree look shared when it never was. It now lands on the 
 that was selected when it was written, and nowhere else.
 
 **And the budget is a test, not a promise.** `meta.js` walks real routes out of the sword's
-own door, spends **exactly** the 34-point ceiling on them — a budget checked on a half-spent
-tree is a budget nobody is ever held to — and fails the build if it beats **×1.80 total
+own door, spends **exactly** the 46-point ceiling on them — a budget checked on a half-spent
+tree is a budget nobody is ever held to — and fails the build if it beats **×2.00 total
 power**, damage *times* hearts. Damage alone is the wrong measure: a glass build buys damage
 by selling hearts, and a damage-only budget waves it through while punishing an honest one.
 The product cannot be gamed, because a node with no downside raises both halves.
 
-Measured: a straight build is **×1.60 damage, ×1.60 power**; the Glass Bricks build is
-**×2.08 damage but only ×1.48 power** — more damage, less total, which is exactly the trade
+Measured: a straight build is **×1.96 damage, ×1.96 power**; the Glass Bricks build is
+**×2.46 damage but only ×1.76 power** — more damage, less total, which is exactly the trade
 it advertises. The audit caught the tree at ×1.97 on its very first run.
 
-The ceiling went from 26 to 34 and the power did **not** move, because the tree grew faster
-than the ceiling did: the extra points go into corridor. That is the corridor doing its job.
+The ceiling has gone 26 → 34 → **46** across three passes. On the second the power did not
+move at all, because the tree grew faster than the ceiling did and the extra points went
+into corridor. On the third it moved from ×1.60 to ×1.96 — a fully banked tree is now worth
+roughly twice a bare hero, and that is what thirty stud points and eight boss firsts buy.
 
 ---
 
