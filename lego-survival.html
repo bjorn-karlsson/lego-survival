@@ -696,7 +696,11 @@ const STORM_MAX_SIZE = 2.2; /* storm blades stop growing here */
    a favourite's +2 blades a rank costs you ranks rather than handing out more */
 const STORM_MAX_BLADES = 150;
 const VORTEX_MAX_R = 210;
-const FREEZE_MAX_R = 420;
+/* BLOCK FREEZE was a wall of frost that arrived rarely, reached most of the
+   screen and dropped its whole damage in one lump. It is now a short, frequent
+   pulse: half the reach, half the hit, and it comes round twice as often — a
+   spell you feel every few seconds rather than a bomb you wait for. */
+const FREEZE_MAX_R = 290;
 const BLAST_MAX_PIERCE = 8;
 /* A blaster brick shatters on the first thing it touches until you buy it the
    right to carry on, and every foe it goes through costs it a slice of its
@@ -719,7 +723,7 @@ function blastPierceTotal(p){
 const ORBIT_MAX_N = 15;                   /* guardian bricks in the ring */
 const BLAST_MAX_N = 40;                   /* bricks per volley */
 const BLAST_MAX_SHOTS = 40;               /* projectiles per volley, shards included */
-const FREEZE_MIN_RATE = 3.5;
+const FREEZE_MIN_RATE = 2.2;
 const EVADE_CAP = 0.55;                   /* no monster ever dodges more than this */
 const ZORB_SPD = 118;                     /* the storm orb drifts, it does not fly */
 const ZORB_SPIN = 2.1;                    /* rad/s, clockwise */
@@ -799,7 +803,7 @@ const ORBIT_SPD_BASE = 2.6;
    more — its old `Charged Storm` slot is the shock-chance brick now, so the way
    to make the storm come round faster is to own more bricks, not to buy speed */
 const BLAST_RATE_BASE = 2.4, CHAIN_RATE_BASE = 2.0, STORM_RATE_BASE = 6.5;
-const VORTEX_RATE_BASE = 9, FREEZE_RATE_BASE = 10, BOMB_RATE_BASE = 7;
+const VORTEX_RATE_BASE = 9, FREEZE_RATE_BASE = 5.5, BOMB_RATE_BASE = 7;
 /* BRICKBANE. A cloud of green gas coughed out in a wedge in front of you. It
    hits once when the front washes over a body, and then it KEEPS hitting — the
    poison sits on the monster and eats it over the next few seconds whether you
@@ -816,9 +820,15 @@ const BANE_R_MAX     = 430;
 const BANE_ARC_BASE  = 35*Math.PI/180;
 const BANE_ARC_MAX   = TAU;
 const BANE_DOT_BASE  = 1.2;    /* poison damage a second, before spell damage */
-const BANE_DOT_T     = 5;      /* and how long one dose lasts */
-const BANE_DOT_MAX_T = 12;
+const BANE_DOT_T     = 8;      /* and how long one dose lasts */
+const BANE_DOT_MAX_T = 16;
 const BANE_TICK      = 0.5;    /* how often the poison bites */
+/* POISON IS A DRAIN, NOT A DRIP. Half a second between bites meant a poisoned
+   body's health bar went down in visible steps with a number over each one,
+   which reads as a series of little hits rather than as rot. It comes off
+   thirty times a second instead, silently: no number, no flash, no shove —
+   just a bar that slides. The rate is unchanged; only the grain is. */
+const BANE_DRAIN_TICK = 1/30;
 /* how many doses ONE touch of the gas lays at once. The unlock brick buys these
    instead of flat damage: Brickbane is a damage-over-time spell, so the thing
    that ought to scale is how deep it puts you, not how hard the opening slap
@@ -1431,7 +1441,7 @@ const LEECH_SOURCES = new Set(['sword']);
    parallel build. The wound ticks for a share of the hit that made it, it reads
    the one increased-damage-over-time pool like every other lingering damage, and
    it tears worse on a body that keeps running -- stand still and it half closes. */
-const BLEED_T          = 8;      /* how long one wound runs */
+const BLEED_T          = 11;     /* how long one wound runs */
 const BLEED_SHARE_BASE = 0.40;   /* of the opening hit, per second */
 const BLEED_SHARE_MAX  = 0.70;
 const BLEED_CRIT_BASE  = 0.50;   /* a crit's own chance to open one */
@@ -1455,7 +1465,18 @@ const BLEED_STACK_MAX  = 8;
 const ECHILL_MAX  = 5;
 const ECHILL_STEP = 0.13;    /* slower per stack */
 const ECHILL_FLOOR = 0.32;
-const ECHILL_T    = 4;
+/* HOW LONG AN AILMENT STAYS ON A BODY. Four seconds was short enough that a
+   stack laid by one source had usually expired before a second source arrived,
+   which is the whole reason to own two sources — so every ailment clock here
+   got longer, and the ones that BRAND got longer still. */
+const ECHILL_T    = 7;
+/* FROZEN. A body frozen solid stays BRITTLE afterwards: every mark takes frost
+   resistance off it and the marks pile up. This is what the fifth chill stack
+   leaves behind, and it lands on a boss too — a boss cannot be held still, but
+   it can be made easy to freeze. */
+const FROZEN_RES_STEP = 0.12;
+const FROZEN_MAX      = 4;
+const FROZEN_T        = 14;
 /* ENEMY SHOCK — the lightning ailment, and the mirror of the shock that lands
    on YOU. A shocked body simply TAKES MORE, from everything, which is what the
    storm brick is now for: the bolt itself is modest and the shock it leaves
@@ -1463,7 +1484,20 @@ const ECHILL_T    = 4;
    body, not on the hero, so it sits outside the hero's own damage ceiling. */
 const ESHOCK_MAX  = 5;       /* stacks */
 const ESHOCK_STEP = 0.07;    /* MORE damage taken, per stack */
-const ESHOCK_T    = 4;       /* seconds a stack lasts, refreshed by the next */
+const ESHOCK_T    = 7;       /* seconds a stack lasts, refreshed by the next */
+/* SHOCKED — the brand, which shock never had. Five stacks used to be the end of
+   the line: the counter sat at its cap and every further bolt did nothing at
+   all. Now the fifth stack is a THRESHOLD, and a bolt landing on a body already
+   that deep can burn the stacks off into a mark that stays. */
+const ESHOCK_BRAND_AT      = 5;
+const SHOCKED_CHANCE       = 0.32;   /* at the threshold */
+const SHOCKED_CHANCE_PER   = 0.07;   /* per stack above it, for whatever raises the cap later */
+/* smaller than a BURNT mark on purpose: BURNT is 25% MORE *fire*, this is MORE
+   of EVERYTHING. Five stacks and three marks together is x1.65, which is what
+   the storm brick is for. */
+const SHOCKED_STEP         = 0.07;
+const SHOCKED_MAX          = 3;
+const SHOCKED_T            = 14;
 /* BLIGHT — the pool a blightspitter leaves. It is a ZONE, not a hit: it ticks
    while you stand in it and it does nothing at all once you step out, so the
    whole monster is a question about where you are standing. It ticks on its own
@@ -1490,16 +1524,30 @@ const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
    divide-by-zero — you can still grind a fire golem down with fire, it is simply
    the worst possible way to do it. */
 const ERES_CAP = 0.90;
+function frozenMarks(e){ return (e && e.frozen && e.frozen.t > 0) ? e.frozen.n : 0; }
 function enemyRes(e, el){
-  if(!e || !e.res || !el) return 0;
-  return Math.min(ERES_CAP, e.res[el] || 0);
+  if(!e || !el) return 0;
+  let r = Math.min(ERES_CAP, (e.res && e.res[el]) || 0);
+  /* FROZEN marks are frost resistance taken OFF, and they can push it negative,
+     which is a weakness and multiplies up — the same rule a fire golem's soft
+     spot already used. A body with no resistances at all still gets brittle. */
+  if(el === 'frost') r -= FROZEN_RES_STEP * frozenMarks(e);
+  return r;
 }
-const EBURN_MAX    = 5;      /* the fifth stack breaks and brands */
-const EBURN_DUR    = 6;      /* how long one stack burns */
+const EBURN_MAX    = 5;      /* the fifth stack is the THRESHOLD to brand */
+const EBURN_DUR    = 9;      /* how long one stack burns */
 const EBURN_SHARE  = 0.30;   /* of the hit that lit it, per second, per stack */
 const EBURN_TICK   = 0.4;
 const BURNT_STEP   = 0.25;   /* MORE fire damage taken, per mark */
-const BURNT_T      = 10;
+/* THE BRAND IS A CHANCE, NOT A COUNTER. It used to fire on the stack that
+   overflowed the cap — so Ember Scatter, which DEEPENS the well to ten and then
+   twenty, pushed BURNT further and further away. The upgrade was quietly a
+   downgrade for the thing it was supposed to feed. Five stacks is the threshold
+   however deep the well goes; every stack above it makes the brand likelier. */
+const EBURN_BRAND_AT   = 5;
+const BURNT_CHANCE     = 0.30;   /* at the threshold */
+const BURNT_CHANCE_PER = 0.05;   /* per stack above it */
+const BURNT_T      = 16;
 const BURNT_MAX    = 4;
 /* EMBER SCATTER — the fireball's legendary. Hitting a body that is ALREADY
    alight knocks embers off it, and each one flies to the nearest other monster
@@ -2063,7 +2111,7 @@ function newPlayer(){
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
-    freeze:{ n:0, r:190, dur:2.5, rate:FREEZE_RATE_BASE, cd:4, stun:0 },
+    freeze:{ n:0, r:128, dur:2.5, rate:FREEZE_RATE_BASE, cd:1.2, stun:0, flat:0, chill:0 },
     bane:{ n:0, dmg:2, rate:BANE_RATE_BASE, cd:1.5, r:BANE_R_BASE, arc:BANE_ARC_BASE,
            dot:BANE_DOT_BASE, dotT:BANE_DOT_T, stacks:1, burst:0 },
     /* BLEED. chanceFlat is added to every melee hit and stacks on top of the
@@ -3176,16 +3224,25 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   /* fractions survive all the way to the health bar. Rounding every hit to a
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
-  d = Math.max(0.05, Math.round(d*100)/100);
+  /* A DRAIN KEEPS ITS FRACTIONS. The 0.05 floor exists so a hit never rounds
+     away to nothing, but a drain lands thirty times a second — floored, a
+     one-per-second poison would deal one and a half. */
+  d = opts.drain ? Math.max(0, d) : Math.max(0.05, Math.round(d*100)/100);
   /* the swing drinks off what ACTUALLY landed, after armour and resistance —
      leeching off the number before mitigation would pay you for damage the
      monster never took */
   if(LEECH_SOURCES.has(source) && !opts.quiet) leechFrom(d);
-  e.hp = Math.round((e.hp - d)*100)/100; e.flash = 1;
-  const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
-  e.kx += Math.cos(kdir)*kb*kbm;
-  e.ky += Math.sin(kdir)*kb*kbm;
-  if(opts.quiet){
+  e.hp = opts.drain ? e.hp - d : Math.round((e.hp - d)*100)/100;
+  if(!opts.drain){
+    e.flash = 1;
+    const kbm = (e.type==='brute'||e.type==='jugg'||e.type==='revenant'||e.type==='bastion')?0.3 : e.type==='boss'?0 : 1;
+    e.kx += Math.cos(kdir)*kb*kbm;
+    e.ky += Math.sin(kdir)*kb*kbm;
+  }
+  if(opts.drain){
+    /* nothing. The bar sliding and the green coming off the body IS the tell —
+       a number thirty times a second is noise, and a flash is a lie. */
+  } else if(opts.quiet){
     /* a tick is a drip, not a blow — it does not shake the screen or shout a
        number over the fight it is quietly winning, and it drips in the colour
        of whatever is doing the killing */
@@ -3225,7 +3282,7 @@ function poisonCap(e){
 }
 function poisonEnemy(e, dps, dur){
   if(e.dead || e.state!=='active') return;
-  if(!e.poison) e.poison = { n:0, dps:0, t:0, tick:rnd(0.05, BANE_TICK) };
+  if(!e.poison) e.poison = { n:0, dps:0, t:0, tick:rnd(0.005, BANE_DRAIN_TICK) };
   const po = e.poison;
   const cap = poisonCap(e);
   if(po.n < cap) po.n++;
@@ -3268,17 +3325,39 @@ function burntMul(e){
   const n = (e.burnt && e.burnt.t > 0) ? e.burnt.n : 0;
   return Math.pow(1 + BURNT_STEP, n);
 }
+function burntChance(n){
+  if(n < EBURN_BRAND_AT) return 0;
+  return Math.min(1, BURNT_CHANCE + BURNT_CHANCE_PER*(n - EBURN_BRAND_AT));
+}
 function shockStacksOn(e){ return (e.shockN && e.shockT > 0) ? e.shockN : 0; }
-function shockMulOn(e){ return 1 + ESHOCK_STEP*shockStacksOn(e); }
+function shockedMarks(e){ return (e && e.shocked && e.shocked.t > 0) ? e.shocked.n : 0; }
+/* the stacks and the brand are separate MORE multipliers on the body */
+function shockedMul(e){ return Math.pow(1 + SHOCKED_STEP, shockedMarks(e)); }
+function shockMulOn(e){ return (1 + ESHOCK_STEP*shockStacksOn(e)) * shockedMul(e); }
+function shockedChance(n){
+  if(n < ESHOCK_BRAND_AT) return 0;
+  return Math.min(1, SHOCKED_CHANCE + SHOCKED_CHANCE_PER*(n - ESHOCK_BRAND_AT));
+}
 function shockEnemy(e, n){
   if(!e || e.dead || e.state!=='active') return;
   const before = shockStacksOn(e);
   e.shockN = Math.min(ESHOCK_MAX, before + Math.max(1, n||1));
   e.shockT = ESHOCK_T;
-  if(e.shockN > before){
-    addSparks(e.x, e.y-18*(e.scale||1), 2, '#ffe95a');
-    if(e.shockN === ESHOCK_MAX && before < ESHOCK_MAX)
-      addDmg(e.x, e.y-46*(e.scale||1), 'SHOCKED', '#ffe95a', 14);
+  if(e.shockN > before) addSparks(e.x, e.y-18*(e.scale||1), 2, '#ffe95a');
+  /* AT THE THRESHOLD THE BOLT CAN BRAND. Five stacks used to be the end of the
+     line — the counter sat at its cap and every further bolt was wasted. */
+  if(e.shockN >= ESHOCK_BRAND_AT && Math.random() < shockedChance(e.shockN)){
+    /* THE BRAND DOES NOT EAT THE STACKS, unlike burning. A fire's stacks are
+       the fuel, so spending five of them to brand costs you a fire you can
+       relight. Shock's stacks ARE the multiplier — spending them would drop a
+       fully shocked body back to nothing for a moment, which is the opposite of
+       what landing your fifth bolt should feel like. */
+    if(!e.shocked) e.shocked = { n:0, t:0 };
+    e.shocked.n = Math.min(SHOCKED_MAX, e.shocked.n + 1);
+    e.shocked.t = SHOCKED_T;
+    addDmg(e.x, e.y-46*(e.scale||1), 'SHOCKED \u00d7'+e.shocked.n, '#ffe95a', 15);
+    addRing(e.x, e.y, 6, 180, 42, '#ffe95a', 4, 0.3);
+    addSparks(e.x, e.y-18*(e.scale||1), 6, '#fff6a8');
   }
 }
 function chillStacksOn(e){ return (e.chillN && e.chillT > 0) ? e.chillN : 0; }
@@ -3291,10 +3370,19 @@ function chillEnemy(e, n){
     if(e.chillN >= ECHILL_MAX){
       /* THE FIFTH BREAKS: frozen solid, and the stacks go with it */
       e.chillN = 0; e.chillT = 0;
+      /* ...and it LEAVES A MARK. A boss cannot be held still, but it can be
+         left brittle, so the mark lands on everything while the stun does not —
+         which is the first thing frost has ever done to a boss that lasts. */
+      if(!e.frozen) e.frozen = { n:0, t:0 };
+      e.frozen.n = Math.min(FROZEN_MAX, e.frozen.n + 1);
+      e.frozen.t = FROZEN_T;
       if(e.type!=='boss'){
         e.stunT = Math.max(e.stunT||0, FREEZE_STUN_T);
         addDmg(e.x, e.y-46*(e.scale||1), 'FROZEN SOLID', '#dff2ff', 15);
         addSparks(e.x, e.y-16, 7, '#ffffff');
+      } else {
+        addDmg(e.x, e.y-46*(e.scale||1), 'BRITTLE \u00d7'+e.frozen.n, '#dff2ff', 15);
+        addSparks(e.x, e.y-16, 6, '#dff2ff');
       }
     }
   }
@@ -3311,10 +3399,11 @@ function burnEnemy(e, hit, depth){
   const list = e.eburn.list;
   /* EMBER SCATTER triggers on a body that was ALREADY alight when this landed */
   const wasLit = list.length > 0;
-  if(list.length >= burnCap()){
-    /* THE LAST ONE BREAKS. The body is BURNT: every fire that lands on it from
-       now on lands harder, and the marks stack. The fires themselves reset. */
-    list.length = 0;
+  /* FIVE STACKS IS THE THRESHOLD, however deep the well goes — and branding
+     EATS five rather than the whole fire, so a twenty-stack body is still a
+     twenty-stack body a moment after it brands. */
+  if(list.length >= EBURN_BRAND_AT && Math.random() < burntChance(list.length)){
+    list.splice(0, EBURN_BRAND_AT);
     if(!e.burnt) e.burnt = { n:0, t:0 };
     e.burnt.n = Math.min(BURNT_MAX, e.burnt.n + 1);
     e.burnt.t = BURNT_T;
@@ -3322,7 +3411,14 @@ function burnEnemy(e, hit, depth){
     addRing(e.x, e.y, 6, 200, 46, '#ff8a3c', 4, 0.35);
     addSparks(e.x, e.y-18, 7, '#ff9a3c');
   }
-  list.push({ dps, t:EBURN_DUR });
+  if(list.length >= burnCap()){
+    /* at the cap the new fire replaces the feeblest one, so relighting a body
+       already full of fire is a refresh rather than nothing at all */
+    let wi = 0;
+    for(let i=1;i<list.length;i++) if(list[i].dps < list[wi].dps) wi = i;
+    if(dps >= list[wi].dps) list[wi] = { dps, t:EBURN_DUR };
+    else list[wi].t = EBURN_DUR;
+  } else list.push({ dps, t:EBURN_DUR });
   if(wasLit) emberScatter(e, hit, depth || 0);
 }
 /* Knock the embers off a burning body. They fly to the nearest OTHER living
@@ -3433,9 +3529,13 @@ function poisonTick(e, dt){
   po.t -= dt;
   po.tick -= dt;
   if(po.tick <= 0 && !e.dead && e.state==='active'){
-    po.tick = BANE_TICK;
+    /* the grain the damage comes off at, NOT a fixed slice of it: whatever time
+       actually elapsed is what gets drained, so a slow frame takes exactly as
+       much as three fast ones and the rate never depends on the frame rate */
+    const step = BANE_DRAIN_TICK - po.tick;
+    po.tick = BANE_DRAIN_TICK;
     /* every stack bites at once — nine doses hurt nine times as fast as one */
-    hitEnemy(e, po.dps*po.n*BANE_TICK, rnd(TAU), 0, 'bane', {quiet:true, noCrit:true});
+    hitEnemy(e, po.dps*po.n*step, rnd(TAU), 0, 'bane', {drain:true, noCrit:true});
   }
   if(Math.random() < 0.18 + 0.04*po.n)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,34),
@@ -3720,11 +3820,13 @@ function isCaster(){ return !!(weapon && weapon.cast); }
 function isSlammer(){ return !!(weapon && weapon.slam); }
 /* Block Freeze's own damage. It is elemental, so it reads the elemental pool
    and the frost pool, exactly as the fire bolt reads fire. */
-const FREEZE_DMG_BASE = 1.6;
+const FREEZE_DMG_BASE = 0.85;
 function frostDamage(){
-  return Math.max(0, (FREEZE_DMG_BASE + player.flatElem)
+  return Math.max(0, (FREEZE_DMG_BASE + player.flatElem + (player.freeze.flat||0))
     * (1 + incTotal('spell', 'frost')) * moreTotal());
 }
+/* how many chill stacks one pulse lays — one, plus whatever you have bought */
+function freezeChill(){ return 1 + ((player.freeze && player.freeze.chill) || 0); }
 /* THE STORM BRICK IS LIGHTNING. It used to be a plain spell hit, which meant a
    caster's whole elemental tree did nothing for the one spell that is visibly
    made of lightning. It reads the flat ELEMENTAL pool the way the fireball
@@ -4643,6 +4745,12 @@ const FLAT_SPELL = [0.5, 1, 3, 5, 8];
 /* A bomb lands once, on a timer, in a crowd — half a point of flat damage was
    not worth the card, so its ladder starts at a whole one. */
 const FLAT_BOMB  = [1, 1.5, 3, 5, 8];
+/* Block Freeze pulses far more often than a bomb lands, so its ladder is the
+   shallow one — a flat point here is worth several on anything else. */
+const FLAT_FREEZE = [0.3, 0.6, 1.2, 2, 3.2];
+/* five chill stacks freeze a body solid, so laying five at once would make
+   every pulse a freeze and the stacking mean nothing */
+const FREEZE_CHILL_MAX = 3;
 const RAR_MULTS = RAR_ORDER.map(r=> RARITY[r].mult);
 function byRar(m, table){
   let best = 0, bd = Infinity;
@@ -5223,11 +5331,12 @@ const UPGRADES = [
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — wider, longer, and more chill`
       : `Spell: a burst of frost around you for ${fmtHp(frostDamage())} FROST damage, `+
-        `laying a CHILL stack — five freezes solid`,
+        `laying ${freezeChill()} CHILL stack${freezeChill()>1?'s':''} — five freezes solid, `+
+        `and leaves the body BRITTLE`,
     apply:c=>{ player.freeze.n += c.n; } },
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
     req:()=>isCaster() && player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
-    calc:m=>({v:Math.round(28*m)}),
+    calc:m=>({v:Math.round(20*m)}),
     desc:c=>`+${c.v} block freeze radius (cap ${FREEZE_MAX_R})`,
     apply:c=>{ player.freeze.r = Math.min(FREEZE_MAX_R, player.freeze.r + c.v); } },
   { id:'freezc', name:'Winter Wind', icon:'clock', cls:'SPELL',
@@ -5235,6 +5344,19 @@ const UPGRADES = [
     calc:m=>({v:0.12+0.05*m}),
     desc:c=>`Freeze triggers ${Math.round(c.v*100)}% faster (floor ${FREEZE_MIN_RATE.toFixed(1)}s)`,
     apply:c=>{ player.inc.freezeRate += c.v; syncStats(); } },
+  /* the two the spell never had: a flat number to build on, and a way to reach
+     the fifth chill stack in fewer pulses instead of waiting for five of them */
+  { id:'freezf', name:'Killing Frost', icon:'freeze', cls:'SPELL',
+    req:()=>isCaster() && player.freeze.n>0,
+    calc:m=>({v: byRar(m, FLAT_FREEZE)}),
+    desc:c=>`+${c.v} flat frost damage to every Block Freeze pulse`,
+    apply:c=>{ player.freeze.flat = Math.round((player.freeze.flat + c.v)*100)/100; } },
+  { id:'freezs', name:'Deepening Winter', icon:'icecube', cls:'SPELL', minRar:'rare',
+    req:()=>isCaster() && player.freeze.n>0 && freezeChill() < FREEZE_CHILL_MAX,
+    calc:m=>({n:1}),
+    desc:c=>`Every pulse lays ${freezeChill()+1} CHILL stacks instead of ${freezeChill()} `+
+      `(cap ${FREEZE_CHILL_MAX}) — five freezes a body solid and leaves it BRITTLE`,
+    apply:c=>{ player.freeze.chill = Math.min(FREEZE_CHILL_MAX-1, (player.freeze.chill||0) + 1); } },
   { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL', minRar:'uncommon',
     req:()=>canTakeSpell('bomb') && player.bomb.n < bombMaxN(),
     calc:m=>({n:spellCount(m)}),
@@ -6514,7 +6636,7 @@ const FAVOURITES = [
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainshock','eleminc','shockinc','orbm'] },
   { id:'storm',   name:'Bladestorm',   icon:'storm', melee:true, ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',melee:true, ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
-  { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','eleminc','elemflat'] },
+  { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','freezf','freezs','eleminc','elemflat'] },
   /* the caster's own opening hand — the staff equivalent of Sword & Steel */
   { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
     ids:['elemflat','eleminc','firinc','boltarea','aspd','crit','critpow','orbm','moredmg'] },
@@ -6683,8 +6805,9 @@ function weaponTip(w){
     L.push('It REPLACES the swing: no reach, no bleed,');
     L.push('no spin combo. Physical bricks are not offered');
     L.push('to you; the elemental ones are.');
-    L.push('Every bolt sets a fire, and five fires BURN OUT');
-    L.push('into a BURNT mark that makes the next one worse.');
+    L.push('Every bolt sets a fire. Five stacks is the');
+    L.push('threshold: from there every fire can BRAND the');
+    L.push('body BURNT, and a deeper fire brands sooner.');
   } else {
     L.push('Every brick works with every weapon.');
   }
@@ -6935,7 +7058,7 @@ const BENCH_SECTIONS = [
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
   { name:'FIREBALL',        ids:['elemflat','boltarea','boltember'] },
-  { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezestun'] },
+  { name:'BLOCK FREEZE',    ids:['freeze','freezr','freezc','freezf','freezs','freezestun'] },
   { name:'BRICKBANE',       ids:['bane','banearc','baner','banerate','banedot','baneburst'] }
 ];
 /* The bench shows one brick at one tier at a time, and SHIFT+SCROLL walks that
@@ -7394,9 +7517,13 @@ function spellSummaries(){
       `Everything caught by all ${p.bomb.n}: ${per(d*p.bomb.n)}` });
   }
   if(p.freeze.n>0){
-    out.push({ id:'freeze', icon:'freeze', name:'Block Freeze', head:'no damage', tip:
+    out.push({ id:'freeze', icon:'freeze', name:'Block Freeze', head:per(frostDamage()), tip:
       `Pure crowd control — deals no damage\n`+
       `Radius ${Math.round(p.freeze.r + (p.freeze.n-1)*30)}, every ${p.freeze.rate.toFixed(2)}s\n`+
+      `${per(frostDamage())} FROST and ${freezeChill()} CHILL stack${freezeChill()>1?'s':''} `+
+      `to everything caught — the fifth stack freezes a body SOLID and leaves it `+
+      `BRITTLE (\u2212${Math.round(FROZEN_RES_STEP*100)}% frost resistance a mark, `+
+      `${FROZEN_MAX} deep)\n`+
       `Frozen foes crawl at 45% speed for ${(p.freeze.dur + (p.freeze.n-1)*1.2).toFixed(1)}s`+
       (p.freeze.stun ? `\nAbsolute Zero: everything caught is frozen SOLID for ${FREEZE_STUN_T.toFixed(1)}s `+
         `— no moving, no attacks, no abilities` : '') });
@@ -7496,6 +7623,16 @@ const STAT_WHY = {
   'BOMB VOLLEY|Volley DPS': 'every bomb into one body, sustained. In a crowd it is worth far more than this',
   'BLOCK FREEZE|Radius':    'everything inside is hit and chilled. Each extra rank widens it',
   'BLOCK FREEZE|Freeze duration':'how long the chill holds. Five chill stacks freeze a body solid',
+  'BLOCK FREEZE|Chill a pulse':'how deep one pulse chills. Five stacks freeze a body solid and leave it BRITTLE',
+  'SHOCK|Per stack':'MORE damage taken from every source, per stack',
+  'SHOCK|SHOCKED mark':'the brand a bolt leaves on a body already five stacks deep. It does not spend the stacks',
+  'SHOCK|Brand chance':'odds one bolt on a fully shocked body leaves a mark',
+  'SHOCK|At full shock':'stacks and marks multiply together, because both are MORE on the body',
+  'CHILL|Slower per stack':'a chilled body crawls. The fifth stack freezes it solid',
+  'CHILL|BRITTLE mark':'frost resistance taken off whatever the fifth stack froze. It lands on bosses too',
+  'BURNING|Brand chance':'odds a fire on a body five stacks deep brands it BURNT',
+  'BURNING|Brand at full depth':'the same roll on a body burning at your full depth',
+  'BLOCK FREEZE|Flat frost':'Killing Frost, added to the base before every increase',
   'BRICKBANE|Opening hit':  'the cloud hits once as it passes, and THEN poisons. This is the hit',
   'BRICKBANE|Doses per touch':'how many poison stacks one pass lays. More doses is more damage over time, not a bigger hit',
   'BRICKBANE|Poison per second':'one dose, per second. It reads the increased DAMAGE OVER TIME pool',
@@ -7550,6 +7687,30 @@ const STAT_PROBES = [
     why:'what one stack deals over its whole '+EBURN_DUR+'s life, if nothing refreshes it' },
   { g:'BURNING', k:'BURNT mark',     get:()=> isCaster() ? (1+BURNT_STEP)*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
     why:'fire taken per mark, stacking to '+BURNT_MAX+' marks (×'+Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)+' at full)' },
+  { g:'BURNING', k:'Brand chance',   get:()=> isCaster() ? burntChance(EBURN_BRAND_AT)*100 : 0,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'odds a fire landing on a body already '+EBURN_BRAND_AT+' stacks deep brands it BURNT. '+
+        '+'+Math.round(BURNT_CHANCE_PER*100)+'% a stack above that, so a deeper fire brands sooner — '+
+        'and branding costs '+EBURN_BRAND_AT+' stacks, never the whole fire' },
+  { g:'BURNING', k:'Brand at full depth', get:()=> isCaster() ? burntChance(burnCap())*100 : 0,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'the same roll on a body burning at your full depth of '+burnCap()+' stacks' },
+  { g:'SHOCK', k:'Per stack',        get:()=> ESHOCK_STEP*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'MORE damage taken from EVERY source, per stack, stacking '+ESHOCK_MAX+' deep' },
+  { g:'SHOCK', k:'SHOCKED mark',     get:()=> SHOCKED_STEP*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'a bolt landing on a body already '+ESHOCK_BRAND_AT+' stacks deep can BRAND it: MORE of '+
+        'everything per mark, '+SHOCKED_MAX+' deep (×'+Math.pow(1+SHOCKED_STEP,SHOCKED_MAX).toFixed(2)+
+        ' at full). Unlike a fire, it does NOT spend the stacks' },
+  { g:'SHOCK', k:'Brand chance',     get:()=> shockedChance(ESHOCK_BRAND_AT)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'odds one bolt on a fully shocked body leaves a SHOCKED mark' },
+  { g:'SHOCK', k:'At full shock',    get:()=> (1+ESHOCK_STEP*ESHOCK_MAX)*Math.pow(1+SHOCKED_STEP,SHOCKED_MAX)*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'stacks and marks are separate MORE multipliers on the body, so they multiply together' },
+  { g:'CHILL', k:'Slower per stack', get:()=> ECHILL_STEP*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'a chilled body crawls, '+ECHILL_MAX+' stacks deep, and the fifth freezes it SOLID' },
+  { g:'CHILL', k:'BRITTLE mark',     get:()=> FROZEN_RES_STEP*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'frost resistance taken OFF whatever the fifth stack froze, '+FROZEN_MAX+' marks deep. '+
+        'It lands on a BOSS too — a boss cannot be held still, but it can be made brittle' },
   { g:'ELEMENTAL', k:'Increased elemental',get:()=> incElemAll(weapon.elem||'fire')*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'the GLOBAL elemental pool: fire, frost and lightning alike, from whatever source' },
   { g:'ELEMENTAL', k:'Increased fire',     get:()=> ((player&&player.inc.fire)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
@@ -7733,6 +7894,12 @@ const STAT_PROBES = [
     why:'seconds between blasts. CAST SPEED shortens it, down to its own floor' },
   { g:'BLOCK FREEZE', k:'Frost damage',     get:()=> player.freeze.n ? frostDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
     why:'it is a real elemental hit, not just a slow — it reads the spell AND the frost pools' },
+  { g:'BLOCK FREEZE', k:'Chill a pulse',    get:()=> player.freeze.n ? freezeChill() : 0,
+    fmt:v=>Math.round(v)+' stack'+(v===1?'':'s'), zero:true,
+    why:'how deep one pulse chills. Five stacks freeze a body solid and leave it BRITTLE' },
+  { g:'BLOCK FREEZE', k:'Flat frost',       get:()=> player.freeze.n ? (player.freeze.flat||0) : 0,
+    fmt:v=>v.toFixed(2), zero:true,
+    why:'Killing Frost, added to the base before every increase — the same shape as flat physical' },
   { g:'BLOCK FREEZE', k:'Held solid for',   get:()=> (player.freeze.n && player.freeze.stun) ? FREEZE_STUN_T : 0,
     fmt:v=>v.toFixed(1)+'s', zero:true,
     why:'Absolute Zero: every caught body is frozen SOLID this long, the way a fifth chill stack freezes you' },
@@ -9051,8 +9218,14 @@ function updatePlayer(dt){
       fz.cd = fz.rate;
       const rr = fz.r + (fz.n-1)*30;
       const dur = fz.dur + (fz.n-1)*1.2;
-      addRing(p.x, p.y, 20, 420, rr, FX.friend.frostDeep, 8, 0.5);
-      addRing(p.x, p.y, 10, 300, rr*0.7, FX.friend.frost, 5, 0.4);
+      /* THE RING HAS TO BE THE SPELL. A fixed expansion speed with a fixed life
+         drew a ring that reached the edge at exactly one radius and fell short
+         at every other — so a hero who had bought reach watched a small ring
+         freeze things well outside it. Speed is derived FROM the radius, so the
+         frost always arrives at the edge, and always at the same moment. */
+      const FZ_T = 0.42;
+      addRing(p.x, p.y, 20, (rr-20)/FZ_T,              rr,     FX.friend.frostDeep, 8, FZ_T);
+      addRing(p.x, p.y, 10, (rr*0.7-10)/(FZ_T*0.78),   rr*0.7, FX.friend.frost,     5, FZ_T*0.78);
       SFX.freeze();
       let cnt = 0;
       /* IT IS A FROST SPELL NOW, not pure crowd control: it lands elemental
@@ -9063,7 +9236,7 @@ function updatePlayer(dt){
         if(en.dead || en.state!=='active') continue;
         if(dist(en,p) < rr + hitR(en)){
           en.slowT = Math.max(en.slowT, dur);
-          chillEnemy(en, 1);
+          chillEnemy(en, freezeChill());
           hitEnemy(en, fdmg, angTo(p,en), 40, 'frost', {});
           if(fz.stun && en.type!=='boss'){
             en.stunT = Math.max(en.stunT||0, FREEZE_STUN_T);
@@ -9877,6 +10050,8 @@ function updateEnemy(e, dt){
   if(LORD_WARD[e.type]) lordWardTick(e, dt);
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
   if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
+  if(e.shocked){ e.shocked.t -= dt; if(e.shocked.t <= 0) e.shocked = null; }
+  if(e.frozen){ e.frozen.t -= dt; if(e.frozen.t <= 0) e.frozen = null; }
   if(e.emberCd > 0) e.emberCd -= dt;
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
@@ -16187,6 +16362,8 @@ function bossDebuffs(e){
   if(ch > 0) out.push({ k:'chill', n:ch, col:'#bfe3ff' });
   const sh = shockStacksOn(e);
   if(sh > 0) out.push({ k:'shock', n:sh, col:'#ffe95a' });
+  if(shockedMarks(e) > 0) out.push({ k:'shocked', n:shockedMarks(e), col:'#fff6a8' });
+  if(frozenMarks(e) > 0) out.push({ k:'brittle', n:frozenMarks(e), col:'#dff2ff' });
   if((e.stunT||0) > 0) out.push({ k:'frozen', n:Math.ceil(e.stunT), col:'#dff2ff' });
   return out;
 }

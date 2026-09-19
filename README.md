@@ -108,6 +108,27 @@ comparison against the sword.
 Fire, frost and lightning all stack, on you and on them, and **the fifth stack breaks
 something** — you freeze, they turn BURNT, everything you own hits a shocked body harder.
 
+**Five stacks is a threshold for all three.** Fire brands **BURNT** (+25% MORE fire, ×4),
+lightning brands **SHOCKED** (+7% MORE of *everything*, ×3) and frost brands **BRITTLE**
+(−12% frost resistance, ×4). Shock never had a brand at all: five stacks was the end of the
+line and every further bolt did nothing. Unlike a fire — whose stacks are *fuel* — a shock
+brand does **not** spend the stacks, because shock's stacks **are** the multiplier and
+spending them would drop a fully shocked body back to nothing the moment your fifth bolt
+landed. Stacks and marks are separate MORE multipliers on the body, so a fully shocked,
+fully branded monster takes **×1.65** from everything.
+
+**Every ailment lasts longer.** Four seconds was short enough that a stack laid by one source
+had usually expired before a second source arrived — which is the whole reason to own two.
+Chill and shock **4s → 7s**, burning **6s → 9s**, BURNT **10s → 16s**, bleed **8s → 11s**,
+poison **5s → 8s**.
+
+**Poison drains; it does not drip.** Half a second between bites meant a poisoned body's
+health bar came down in visible steps with a number over each one, which reads as a series of
+little hits rather than as rot. It comes off **thirty times a second** now, silently — no
+number, no flash, no shove, just a bar that slides and green coming off the body. The rate is
+unchanged; only the grain is. And it drains by *elapsed time*, not by a fixed slice, so a slow
+frame takes exactly as much as three fast ones.
+
 Curses, poison and bleed run alongside on their own pools. See
 [**Elements & ailments**](#elements--ailments).
 
@@ -277,11 +298,19 @@ kit — reach, the spin combo, bleed — and gets **+25% increased spell damage,
 elemental damage and +20% increased cast speed** for carrying it. Physical bricks are not
 offered to a staff hero at all; the elemental ones are not offered to anyone else.
 
-**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 6s, and
-they all burn at once. **The fifth stack breaks**: the fires go out and the body is **BURNT**,
-taking **25% MORE fire** from then on. Marks stack to four, each its own multiplier — a
-four-mark body takes **×2.44** fire. Burning is damage over time, so it reads the same
-`Rotbrick` pool poison and bleed do.
+**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 9s, and
+they all burn at once. **Five stacks is a threshold, not a counter.** From there, every fire
+that lands has a **30% chance** to brand the body **BURNT** — **+5% per stack above five**,
+so a deeper fire brands sooner — and branding costs **five stacks, not the whole fire**.
+A BURNT body takes **25% MORE fire**; marks stack to four, each its own multiplier, so a
+four-mark body takes **×2.44**. Burning is damage over time, so it reads the same `Rotbrick`
+pool poison and bleed do.
+
+> This used to fire on the stack that **overflowed the cap**, which made `Ember Scatter` —
+> whose whole job is to deepen the well to 10 stacks and then 20 — quietly a *downgrade* for
+> the thing it fed: at rank 2 you needed **21 fires** to see a single mark, and the brand
+> then threw **19 of your 20 stacks away**. Five is the threshold at every depth now, and a
+> brand costs five.
 
 Five bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
 elemental), `Pyromancy` (increased fire), `Wildfire` (a wider burst), and the legendary
@@ -318,9 +347,30 @@ A chain travels **3 bodies deep** and one body can only throw embers every 0.25s
 packed crowd lights up and then settles rather than running away.
 
 **`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
-**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
-clears them. It is only offered to a caster, the way the melee spells are only offered to
-a melee weapon.
+**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid**.
+
+It used to be a wall of frost that arrived rarely, reached most of the screen and dropped
+its whole hit in one lump. It is now a **short, frequent pulse**: the opening interval went
+**10s → 5.5s** (floor 3.5s → 2.2s), the reach **190 → 128** (cap 420 → 290) and the base hit
+**1.6 → 0.85**. Something you feel every few seconds rather than a bomb you wait for.
+
+**And the ring is the spell.** The frost animation expanded at a fixed 420 px/s for a fixed
+half-second, which reaches the edge at exactly one radius and misses at every other — a
+small pulse drew a ring **three times** the size of the spell, and a maxed one fell **60 px
+short** of what it was freezing. Speed is derived *from* the radius now, so the frost always
+arrives at the edge, and always at the same moment.
+
+**Frozen leaves a body BRITTLE.** The fifth chill stack still freezes a monster solid — and
+now leaves a mark that takes **12% frost resistance off it**, four marks deep. The mark lands
+on a **boss** too: a boss cannot be held still, but it can be made easy to freeze, which is
+the first thing frost has ever done to one that lasts.
+
+Two more bricks came with the rework: **`Killing Frost`** (flat frost damage, added to the
+base *before* every increase, like every other flat pool) and **`Deepening Winter`** (every
+pulse lays **+1 chill stack**, capped at 3 — five would freeze a body solid on its own and
+make the stacking mean nothing).
+
+It is only offered to a caster, the way the melee spells are only offered to a melee weapon.
 
 **Nothing is offered to a weapon that cannot use it — and the card says so.** Every brick
 whose requirement is narrower than "any weapon" prints the weapons it serves in a small row
