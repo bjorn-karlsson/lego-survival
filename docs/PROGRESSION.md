@@ -607,3 +607,104 @@ on top of a node?* `elementFromPoint` at the centre of every visible node, compa
 the node itself. It found six more nodes buried under cluster labels — the labels are painted
 over the map deliberately, and were swallowing clicks as well as pixels. `pointer-events:
 none` on every decorative element fixed those.
+
+
+---
+
+## Fifth pass — highways and pockets
+
+The fourth-pass map joined **cluster to cluster**. Every corridor ran from one cluster's
+nearest node to another's, which meant every long journey went *through* other people's
+clusters. A lightning build walking to the far side of the map collected increased physical
+damage on the way and paid a point for each node of it.
+
+That is exactly backwards. In the game this borrows from, the thing you walk along gives you
+**one attribute and nothing else**, and the interesting nodes hang *off* it. You skip what
+you do not want by driving past it, not by paying for it.
+
+### Roads carry you; clusters hang off them
+
+Three **ring roads**, one attribute each, all the way round the map. Twenty **spokes** across
+the gaps between them, cycling through all three attributes so whatever you are collecting
+there is a way further out still paying you in your own colour. Four **door roads**, one per
+weapon, each paying a different attribute — the staff walks out of the middle on
+intelligence, the mace on strength.
+
+A ring is a **jittered polygon**, not a circle, and a spoke begins and ends on a ring's own
+**vertex** — so where two roads meet they meet exactly. Every polyline is then sampled at a
+fixed step, and any two samples landing within `ROAD_MERGE` of each other become **one node**.
+That merge is the whole trick: it is what turns a pile of independent polylines into a network
+with real junctions rather than pairs of nodes sitting four pixels apart pretending to be one.
+
+A cluster attaches by **one short spur** to the road node nearest it, at the cluster node
+nearest that road, and by nothing else. It is a **pocket**: one way in, the same way out.
+
+### The property that had to be proved, not asserted
+
+*Nothing routes through a pocket.* It is easy to say and easy to break — one stray `add()`
+and a cluster is on somebody's shortest path again. So `roads.js` deletes **every node of
+every cluster in turn** and checks that every *other* cluster is still reachable from all four
+doors. Thirty-six clusters × four weapons × thirty-five targets, and not one of them is a
+choke point.
+
+Then the thing a player would actually notice: the **cheapest walk from any door to any
+keystone**, and how much of it is somebody else's cluster. Zero, in all forty-eight of them.
+Between 91% and 94% of each walk is road.
+
+And the highway itself has to be long, and it has to *go* somewhere — a knot of forty
+dexterity nodes in one corner is not a highway. So: the longest **connected run of travel
+nodes all paying the same attribute**, and the distance between the two furthest-apart nodes
+of that attribute.
+
+### What it costs
+
+| | fourth pass | fifth pass |
+|---|--:|--:|
+| nodes | 412 | **457** |
+| of which road or spur | 268 | **300** |
+| clusters | 36 | **36** |
+| cluster-to-cluster links | 104 | **0** |
+| longest one-attribute run | — | **44 / 95 / 123** (dex / str / int) |
+| how far that attribute spans | — | **3065 / 3075 / 4323** px |
+| a keystone, from your door | 17–25 | **22–32** |
+| your own beginning | 4 | **3–4** |
+| ceiling | 46 | **60** |
+| a road node is worth | 3 attribute | **2 attribute** |
+| straight build, total power | ×1.96 | **×2.42** |
+| Glass Bricks, damage / power | ×2.46 / ×1.76 | **×1.92 / ×1.37** |
+
+`META_TREE_VER` goes to **3**, so every existing save is refunded in full and respec'd rather
+than reset — the same migration the fourth pass used, and still the only one the tree needs.
+
+### The break-builds
+
+Five, one per property, each caught only by the assertion meant for it:
+
+| broken build | what it broke | which assertion caught it |
+|---|---|---|
+| `links` | cluster-to-cluster corridors put back | *a walk collects somebody else's cluster* |
+| `nodoor` | the doors' private roads removed | *a pocket is on the way to somewhere* |
+| `onering` | dexterity survives only on the inner ring | *a highway does not cross the map* |
+| `mixed` | every road node pays a different attribute from the one before | *no long single-attribute highway* |
+| `nowayin` | a door no longer opens into its own beginning | *your own beginning is a trek* |
+
+### Conversion, on the map
+
+Five nodes across the elemental and affliction side now hand over **damage conversion**
+itself — `10% of physical converted to fire` in THE FORGEFIRE, `12% to lightning` in FLUX,
+`15% to cold` in THE CONFLUENCE, and chaos gain in OPEN WOUNDS and THE ORCHARD. They go
+through `convAdd`/`convGain` like every brick does, so the legality rule lives in exactly one
+place and a nonsense pair simply does not go in.
+
+### The test that could not fail
+
+`meta.js` ended with `console.log('ERRORS:', …)` and nothing else. It never set an exit code,
+so the runner called it green no matter how many invariants it had just printed as broken —
+and it *was* printing one: the fifth-pass tree came in at **×3.04 total power** against a
+declared budget of ×2.60, and the suite reported `ok meta` anyway.
+
+Two fixes, not one. The runner now fails on a non-empty `ERRORS` or any page error, which is
+what made the budget visible. And the budget itself: a road node was worth **3** of an
+attribute in a map where a walk was fifteen nodes, and the fifth pass made a walk thirty. Two
+per node puts a straight build back at **×2.42**, under the ceiling it is held to, without
+touching the point ceiling the tree is built around.

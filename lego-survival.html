@@ -1594,9 +1594,28 @@ const CONV_ORDER = ['phys','shock','frost','fire','chaos'];
 const CONV_NAME  = { phys:'PHYSICAL', shock:'LIGHTNING', frost:'COLD', fire:'FIRE', chaos:'CHAOS' };
 const CONV_COL   = { phys:'#cfd6dd', shock:'#ffe95a', frost:'#bfe3ff', fire:'#ff8a3c', chaos:'#8ede4a' };
 const CONV_RANK  = CONV_ORDER.reduce((o,k,i)=>{ o[k] = i; return o; }, {});
+/* THE TWO WAYS TO WRITE ONE, and the only two anything uses. Keeping them here
+   rather than letting every brick poke at the object means the legality rule is
+   enforced in one place and a nonsense pair (fire to lightning, cold to cold)
+   simply does not go in. */
+function convAdd(c, from, to, v){
+  if(!c || !convLegal(from, to) || !(v > 0)) return false;
+  c.conv[from][to] = (c.conv[from][to] || 0) + v;
+  c.on = true;
+  return true;
+}
+function convGain(c, from, to, v){
+  if(!c || !convLegal(from, to) || !(v > 0)) return false;
+  c.gain[from][to] = (c.gain[from][to] || 0) + v;
+  c.on = true;
+  return true;
+}
 /* a hero's conversion table, empty until something fills it */
 function blankConv(){
-  const o = { conv:{}, gain:{} };
+  /* `on` is not bookkeeping for its own sake: convSplit runs on every hit in
+     the game, and a hero who converts nothing must not pay for the pipeline.
+     The two writers are the only things that can set it. */
+  const o = { conv:{}, gain:{}, on:false };
   for(const a of CONV_ORDER){ o.conv[a] = {}; o.gain[a] = {}; }
   return o;
 }
@@ -1645,8 +1664,11 @@ function convertDamage(base, from, c){
   }
   return out;
 }
-/* what a finished conversion is worth once each part has paid its OWN type's
-   increases. The destination's pools, never the source's. */
+/* what a finished conversion is worth once each part has paid the increases of
+   WHAT IT BECAME. The caller decides what that means — and in this game it
+   means a converted swing still counts as a swing: it keeps increased melee
+   damage for HOW IT WAS BUILT and gains increased fire damage for WHAT IT NOW
+   IS. Dropping the source's pools would make every conversion brick a trap. */
 function convParts(base, from, c, incOf){
   const raw = convertDamage(base, from, c), parts = [];
   for(const k of CONV_ORDER){
@@ -1657,6 +1679,19 @@ function convParts(base, from, c, incOf){
   }
   return parts;
 }
+/* WHAT EACH CONVERTED PART PAYS ITS INCREASES INTO. Physical has no element of
+   its own; chaos has a pool nothing else touches. */
+const CONV_ELEM = { phys:null, shock:'shock', frost:'frost', fire:'fire', chaos:'chaos' };
+/* ...and what a monster can actually resist. Chaos is deliberately missing. */
+const CONV_RESIST = { shock:'shock', frost:'frost', fire:'fire' };
+/* what a brick is worth, by rarity. GAIN AS EXTRA is worth less per point than
+   CONVERTED because it never has to give anything up. */
+const CONV_CARD = [0.10, 0.15, 0.20, 0.30, 0.40];   /* CONVERTED, by rarity */
+const GAIN_CARD = [0.06, 0.10, 0.15, 0.22, 0.30];   /* GAIN AS EXTRA, by rarity */
+/* CHAOS LEAVES A DOSE, the way physical opens a wound. */
+const CHAOS_POISON   = 0.35;   /* chance, at a hit that is ALL chaos */
+const CHAOS_POISON_S = 0.30;   /* of the chaos that landed, per second */
+const CHAOS_POISON_T = 4;
 /* WHICH ELEMENT A SOURCE IS. The hero has had elemental resistance since the
    start and monsters never did, which meant a fire golem was exactly as flammable
    as a skeleton — every golem was a reskin as far as your build was concerned.
@@ -1684,6 +1719,65 @@ function enemyRes(e, el){
      spot already used. A body with no resistances at all still gets brittle. */
   if(el === 'frost') r -= FROZEN_RES_STEP * frozenMarks(e);
   return r;
+}
+/* ===================== CONVERSION, APPLIED TO A REAL HIT =====================
+   Every number in this game is LINEAR in its base: a hit is base x (1+inc) x
+   more.  So the effect of conversion on a hit does not depend on the base at
+   all — run the pipeline on a base of ONE and you have both the ratio between
+   the converted hit and the plain one, and the share each type ended up with.
+
+   That is why nothing upstream had to change.  The swing still builds one
+   number the way it always did; this corrects its size and tells hitEnemy what
+   the number is MADE OF, which is the only thing mitigation needs to know. */
+function convFrom(source){ return SOURCE_ELEM[source] || 'phys'; }
+function convKind(source){
+  return SPELL_SOURCES.has(source) || source === 'fire' || source === 'frost'
+      || source === 'burn' || source === 'freeze' ? 'spell' : 'melee';
+}
+const CONV_PLAIN = CONV_ORDER.reduce((o, k)=>{
+  o[k] = { from:k, share:{ [k]:1 }, mul:1 }; return o; }, {});
+function convSplit(source){
+  const from = convFrom(source);
+  /* NOTHING CONVERTED: one whole part of what it started as, and a multiplier
+     of exactly one — arithmetically the code that was here before any of this.
+     Most heroes take this branch on most hits, so it comes first and allocates
+     nothing. */
+  if(!player || !player.conv || !player.conv.on) return CONV_PLAIN[from];
+  const kind = convKind(source);
+  const plain = 1 + incTotal(kind, CONV_ELEM[from]);
+  const parts = convParts(1, from, player.conv, k=> 1 + incTotal(kind, CONV_ELEM[k]));
+  let total = 0;
+  for(const pt of parts) total += pt.amount;
+  const share = {};
+  for(const pt of parts) share[pt.type] = total > 0 ? pt.amount/total : 0;
+  return { from, kind, share, mul: plain > 0 ? total/plain : 1 };
+}
+/* WHAT YOU ALREADY HAVE OF THIS PAIR, so a second copy of a brick says so.
+   Conversions out of one type are SHARED when they total more than all of it,
+   and a card that quietly does nothing is the worst card in the deck — so when
+   a hero is already converting everything, the tag says that too. */
+function convOwnTag(from, to, gain){
+  const c = player && player.conv;
+  if(!c) return '';
+  const have = ((gain ? c.gain : c.conv)[from] || {})[to] || 0;
+  if(!(have > 0)) return '';
+  let tag = ` (you have ${Math.round(have*100)}%`;
+  if(!gain){
+    let total = 0;
+    for(const k of CONV_ORDER) if(convLegal(from, k)) total += (c.conv[from][k] || 0);
+    if(total >= 1) tag += `, and every point of ${CONV_NAME[from].toLowerCase()} is already spoken for`;
+  }
+  return tag + ')';
+}
+/* does this hero convert ANYTHING? read by the sheet and by the tooltips */
+function convAny(c){
+  c = c || (player && player.conv);
+  if(!c) return false;
+  for(const a of CONV_ORDER) for(const b of CONV_ORDER){
+    if(!convLegal(a, b)) continue;
+    if(((c.conv[a]||{})[b] > 0) || ((c.gain[a]||{})[b] > 0)) return true;
+  }
+  return false;
 }
 const EBURN_MAX    = 5;      /* the fifth stack is the THRESHOLD to brand */
 const EBURN_DUR    = 9;      /* how long one stack burns */
@@ -2275,8 +2369,15 @@ function newPlayer(){
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
     xpInc:0, xpMore:1,
+    /* WHAT THIS HERO CONVERTS. Empty is the normal case and costs nothing:
+       convSplit reads a hero with no conversion as one whole part of the type
+       it started as, which is exactly what the game did before any of this. */
+    conv: blankConv(),
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, cast:0, roll:0, regen:0, heart:0,
           elem:0, fire:0, frost:0, shock:0, boltR:0,
+          /* CHAOS IS NOT ELEMENTAL, so it gets its own increase and takes no
+             part in the elemental one. That is the entire difference. */
+          chaos:0,
           orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
           /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
@@ -3403,31 +3504,61 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   if(crit) d *= critMult();
   if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
+  let split = null;
+  /* CONVERSION IS A PROPERTY OF THE HIT, not of the wound it leaves. A bleed, a
+     burn and a poison were all built the moment they were inflicted; running
+     them back through the pipeline on every tick would convert the same damage
+     over and over. Those arrive here quiet or draining, and take the path they
+     always took. */
+  const lingering = !!(opts.drain || opts.quiet);
   if(opts.noMit){
     /* a wound already paid armour when it was opened — charging it again on
        every tick for eight seconds would make bleed worthless on exactly the
-       armoured things it is supposed to grind down */
-  } else if(source==='frost'){
-    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
-  } else if(source==='fire' || source==='burn'){
-    /* elemental spell damage meets suppression like any other spell, and a BURNT
-       body takes every fire harder — one MORE multiplier per mark */
-    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
-    d *= burntMul(e);
-  } else if(SPELL_SOURCES.has(source)){
-    /* spells meet suppression, never armour. The storm brick is in this set and
-       stays in it: being LIGHTNING changes how its damage is BUILT, not how it
-       is mitigated — it is still a spell arriving at a body. */
-    if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
+       armoured things it is supposed to grind down. The monster's own
+       RESISTANCE is not mitigation of that kind: a fire golem has always shrugged
+       off the fire burning it, and still does. */
+    const el0 = SOURCE_ELEM[source];
+    if(el0) d *= (1 - enemyRes(e, el0));
+  } else if(lingering){
+    /* it still meets suppression and the monster's own resistance, exactly as
+       it did before any of this existed — it simply is not re-converted */
+    if(convKind(source) === 'spell'){
+      if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
+    } else d *= (1 - armourDR(e.armour||0, d));
+    const el0 = SOURCE_ELEM[source];
+    if(el0) d *= (1 - enemyRes(e, el0));
+    if(el0 === 'fire') d *= burntMul(e);
   } else {
-    /* attacks meet armour, scaled against the size of this very hit */
-    d *= (1 - armourDR(e.armour||0, d));
+    /* HOW IT ARRIVED decides suppression or armour; WHAT IT IS decides
+       resistance. Those were the same question until conversion existed. A
+       spell meets suppression however it has been converted — being cold does
+       not stop it being a spell — and an attack meets armour, but only on the
+       part of it that is still PHYSICAL. Converting a swing to fire is how you
+       walk past a golem's plate, and that is the point of the whole mechanic. */
+    const asSpell = convKind(source) === 'spell';
+    if(asSpell && e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
+    split = convSplit(source);
+    d *= split.mul;                      /* what conversion did to the SIZE */
+    let tot = 0;
+    for(const k of CONV_ORDER){
+      const sh = split.share[k];
+      if(!(sh > 0)) continue;
+      let part = d * sh;
+      /* armour is scaled against the size of the blow it is stopping, so the
+         part is the right number to hand it — an unconverted hit is one whole
+         part and lands on exactly the arithmetic this used to do */
+      if(k === 'phys' && !asSpell) part *= (1 - armourDR(e.armour||0, part));
+      /* THE MONSTER'S OWN ELEMENTAL RESISTANCE. A negative resistance is a
+         weakness and multiplies UP, which is how a fire golem is soft to frost
+         without needing a second rule. Chaos is not in the table at all. */
+      const el = CONV_RESIST[k];
+      if(el) part *= (1 - enemyRes(e, el));
+      /* a BURNT body takes every fire harder, whatever built the fire */
+      if(k === 'fire') part *= burntMul(e);
+      tot += part;
+    }
+    d = tot;
   }
-  /* THE MONSTER'S OWN ELEMENTAL RESISTANCE, read once for every elemental
-     source there is. A negative resistance is a weakness and multiplies UP,
-     which is how a fire golem is soft to frost without needing a second rule. */
-  const selem = SOURCE_ELEM[source];
-  if(selem) d *= (1 - enemyRes(e, selem));
   /* SHOCK is a multiplier ON THE BODY, so it applies to every source alike and
      after mitigation — being shocked does not help you through armour, it makes
      whatever did get through hurt more. */
@@ -3436,6 +3567,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      that barely got through barely bleeds. Ticks never re-roll it. */
   if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit, source))
     bleedEnemy(e, d);
+  /* CHAOS LEAVES A DOSE. Physical can open a wound; chaos is the poison-shaped
+     one, and the odds ride on how much of the hit actually WAS chaos. */
+  if(split && split.share.chaos > 0 && !opts.quiet && !opts.drain
+     && Math.random() < CHAOS_POISON * split.share.chaos)
+    poisonEnemy(e, d * split.share.chaos * CHAOS_POISON_S, CHAOS_POISON_T);
   /* fractions survive all the way to the health bar. Rounding every hit to a
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
@@ -4096,6 +4232,10 @@ function dexOf(p, w){ return attrOf('dex', p, w); }
 function incSpellAll(){ return player.incSpell + (weapon.incSpell || 0) + intOf()*ATTR_INT_SPELL; }
 function incMeleeAll(){ return player.incMelee + (weapon.incMelee || 0) + strOf()*ATTR_STR_DMG; }
 function incElemAll(el){
+  /* CHAOS IS NOT AN ELEMENT. It pays no elemental increase, no weapon's
+     elemental increase and no monster's elemental resistance — being outside
+     all three is the whole of what the type is for. */
+  if(el === 'chaos') return (player.inc.chaos || 0);
   return (player.inc.elem||0) + (player.inc[el]||0) + (weapon.incElem || 0);
 }
 /* an elemental attack's base: the weapon, plus the flat ELEMENTAL pool */
@@ -5213,6 +5353,54 @@ const UPGRADES = [
       `(now ${strOf()}/${intOf()}/${dexOf()})`,
     apply:c=>{ player.attr.str += c.v; player.attr.int += c.v; player.attr.dex += c.v;
                syncStats(); } },
+  /* ---- CONVERSION. Damage only ever travels one way — physical, lightning,
+     cold, fire, chaos — so nothing here can loop, and a converted part keeps
+     the increases for HOW it was built while gaining the ones for WHAT it
+     became. CONVERTED takes the damage out of the source; GAIN AS EXTRA leaves
+     it where it is and adds a second helping on top, which is why it is worth
+     less per point. ---- */
+  { id:'convfire', name:'Emberforge', icon:'pyro', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, CONV_CARD)}),
+    desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to FIRE — it stops `+
+      `meeting armour and starts meeting fire resistance, and it takes your increased `+
+      `fire damage with it${convOwnTag('phys','fire')}`,
+    apply:c=>{ convAdd(player.conv, 'phys', 'fire', c.v); } },
+  { id:'convfrost', name:'Rimeblade', icon:'snow', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, CONV_CARD)}),
+    desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to COLD — past armour, `+
+      `into frost resistance, scaling with everything that makes your cold hurt`+
+      `${convOwnTag('phys','frost')}`,
+    apply:c=>{ convAdd(player.conv, 'phys', 'frost', c.v); } },
+  { id:'convshock', name:'Galvanise', icon:'zapper', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, CONV_CARD)}),
+    desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to LIGHTNING — past `+
+      `armour, into lightning resistance${convOwnTag('phys','shock')}`,
+    apply:c=>{ convAdd(player.conv, 'phys', 'shock', c.v); } },
+  { id:'convchaos', name:'The Unmaking', icon:'prismdn', cls:'OFFENSE', minRar:'rare',
+    calc:m=>({v: byRar(m, CONV_CARD)}),
+    desc:c=>`${Math.round(c.v*100)}% of your FIRE damage CONVERTED to CHAOS — chaos is neither `+
+      `physical nor elemental, so nothing in the game resists it${convOwnTag('fire','chaos')}`,
+    apply:c=>{ convAdd(player.conv, 'fire', 'chaos', c.v); } },
+  { id:'gainchaos', name:'Creeping Blight', icon:'bane', cls:'OFFENSE', minRar:'rare',
+    calc:m=>({v: byRar(m, GAIN_CARD)}),
+    desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA CHAOS — the physical `+
+      `stays where it is, and a hit carrying chaos can leave a dose of poison behind`+
+      `${convOwnTag('phys','chaos', true)}`,
+    apply:c=>{ convGain(player.conv, 'phys', 'chaos', c.v); } },
+  { id:'gainfire', name:'Catalyst', icon:'prism', cls:'OFFENSE', minRar:'rare',
+    calc:m=>({v: byRar(m, GAIN_CARD)}),
+    desc:c=>`GAIN ${Math.round(c.v*100)}% of your COLD damage as EXTRA FIRE — the cold is not `+
+      `touched, and a frost build starts burning things too${convOwnTag('frost','fire', true)}`,
+    apply:c=>{ convGain(player.conv, 'frost', 'fire', c.v); } },
+  { id:'incchaos', name:'Entropy', icon:'burst', cls:'OFFENSE', minRar:'rare',
+    req:()=>convAny(),
+    calc:m=>({v:0.14+0.08*m}),
+    desc:c=>`${Math.round(c.v*100)}% increased CHAOS damage — nothing else in the game reads `+
+      `this pool, and nothing in the game resists what it scales`,
+    apply:c=>{ player.inc.chaos += c.v; } },
   { id:'elemflat', name:'Elemental Core', icon:'prism', cls:'OFFENSE',
     req:()=>isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
@@ -5886,7 +6074,7 @@ const META_POINT_MAX      = 60;   /* THE HARD CEILING */
    stud, every best wave and every boss — it just hands its allocated points
    BACK, because the nodes it chose are no longer where it left them. Nobody
    loses progress to a patch; they respec. */
-const META_TREE_VER = 2;
+const META_TREE_VER = 3;
 /* first time only, and per weapon — grinding a wave you have already beaten
    with that weapon pays nothing */
 /* ...and the achievements on top of it, which are the things a wave count
@@ -5935,6 +6123,19 @@ const META_STATS = {
   incFire:    { n:'increased fire damage',        pct:1, w:(p,v)=>{ p.inc.fire += v; } },
   incFrost:   { n:'increased frost damage',       pct:1, w:(p,v)=>{ p.inc.frost += v; } },
   incShock:   { n:'increased lightning damage',   pct:1, w:(p,v)=>{ p.inc.shock += v; } },
+  incChaos:   { n:'increased chaos damage',       pct:1, w:(p,v)=>{ p.inc.chaos += v; } },
+  /* CONVERSION, from the tree. One writer per pair, because the legality rule
+     lives in convAdd and nothing is allowed around it. */
+  convPFire:  { n:'of physical damage converted to FIRE',      pct:1,
+                w:(p,v)=>{ convAdd(p.conv, 'phys', 'fire',  v); } },
+  convPFrost: { n:'of physical damage converted to COLD',      pct:1,
+                w:(p,v)=>{ convAdd(p.conv, 'phys', 'frost', v); } },
+  convPShock: { n:'of physical damage converted to LIGHTNING', pct:1,
+                w:(p,v)=>{ convAdd(p.conv, 'phys', 'shock', v); } },
+  gainChaos:  { n:'of physical damage gained as extra CHAOS',  pct:1,
+                w:(p,v)=>{ convGain(p.conv, 'phys', 'chaos', v); } },
+  gainFire:   { n:'of cold damage gained as extra FIRE',       pct:1,
+                w:(p,v)=>{ convGain(p.conv, 'frost', 'fire', v); } },
   boltR:      { n:'increased fireball radius',    pct:1, w:(p,v)=>{ p.inc.boltR += v; }, only:['staff'] },
   ember:      { n:'rank of Ember Scatter',               w:(p,v)=>{ p.ember = Math.max(p.ember||0, v); }, only:['staff'] },
   /* defence */
@@ -6051,234 +6252,227 @@ const META_SPOKES = [
   { id:'elem',  name:'ELEMENTS',  col:'#c95bd0' },
   { id:'arc',   name:'ARCANA',    col:'#9b45d6' },
   { id:'core',  name:'THE CORE',  col:'#ffd76e' },
+  /* the three HIGHWAYS. A road is not a school of anything — it is one
+     attribute for as far as you care to walk it — so it wears the attribute's
+     colour rather than a cluster's. */
+  { id:'str',   name:'THE IRON ROAD',  col:'#ff5a4a' },
+  { id:'int',   name:'THE RUNE ROAD',  col:'#5aa8ff' },
+  { id:'dex',   name:'THE SWIFT ROAD', col:'#6ee06e' },
 ];
+/* ---- WHERE EVERYTHING SITS. Clusters name a BAND and an ANGLE rather than a
+   pixel, because the roads are circles and a cluster has to land in the gap
+   between two of them. Move a ring and the pockets follow it. ---- */
+const META_MAP = { cx:2600, cy:2600,
+  band:{ door:150, open:330, inner:790, mid:1370, outer:2080, far:2400 } };
+function metaPlace(band, deg){
+  const r = META_MAP.band[band], a = deg*Math.PI/180;
+  return { x:Math.round(META_MAP.cx + Math.cos(a)*r), y:Math.round(META_MAP.cy + Math.sin(a)*r) };
+}
 /* EVERY WEAPON STARTS IN THE MIDDLE, AND NO TWO START THE SAME WAY. Four doors
    in the dead centre, each opening into a cluster nobody else can reach cheaply
    — the sword's is reach and riposte, the mace's is the weight of the slam —
    and the whole map fans out from there. The good stuff is on the RIM, so a
    keystone is a long walk in one direction and you cannot afford two. */
 const META_STARTS = [
-  { id:'st_sword', weap:'sword', name:'THE SWORD', x:1000, y:890  },
-  { id:'st_axe',   weap:'axe',   name:'THE AXE',   x:1110, y:1000 },
-  { id:'st_mace',  weap:'mace',  name:'THE MACE',  x:1000, y:1110 },
-  { id:'st_staff', weap:'staff', name:'THE STAFF', x:890,  y:1000 },
+  { id:'st_sword', weap:'sword', name:'THE SWORD', band:'door', deg:-90 },
+  { id:'st_axe',   weap:'axe',   name:'THE AXE',   band:'door', deg:0   },
+  { id:'st_mace',  weap:'mace',  name:'THE MACE',  band:'door', deg:90  },
+  { id:'st_staff', weap:'staff', name:'THE STAFF', band:'door', deg:180 },
 ];
 const META_CLUSTERS = [
   /* ---- FOUR DIFFERENT BEGINNINGS. One cluster per weapon, right outside its
      own door, holding the thing only that weapon does. ---- */
-  { id:'sworn',  sp:'war',  x:1020, y:580,  name:'THE SWORN BLADE', r:100, at:0,
+  { id:'sworn',  sp:'war',  band:'open', deg:-60,  name:'THE SWORN BLADE', r:88, at:0,
     minors:[['Whetstone','incMelee',0.04],['Drill','str',6],['Guard Stance','fireRes',0.05],
             ['Riposte','incCrit',0.05],['Follow Through','incAtk',0.04]],
     notable:{ name:'Swordsman', at:10, mods:[['incMelee',0.08],['reach',6]] } },
-  { id:'berserk',sp:'swift',x:1420, y:1030, name:'THE BERSERKER',   r:100, at:0,
+  { id:'berserk',sp:'swift',band:'open', deg:30, name:'THE BERSERKER',   r:88, at:0,
     minors:[['Wild Swing','incAtk',0.05],['Reflexes','dex',8],['Bloodscent','leechRate',0.05],
             ['Warpaint','frostRes',0.05],['Hacking','bleedChance',0.05]],
     notable:{ name:'Berserker', at:10, mods:[['incAtk',0.07],['leech',0.02]] } },
-  { id:'breaker',sp:'arm',  x:975,  y:1425, name:'THE BREAKER',     r:100, at:0,
+  { id:'breaker',sp:'arm',  band:'open', deg:120, name:'THE BREAKER',     r:88, at:0,
     minors:[['Deadweight','slamDmg',0.5],['Brawn','str',8],['Shockplate','shockRes',0.05],
             ['Wide Fault','slamArc',6],['Braced','armour',4]],
     notable:{ name:'Breaker', at:10, mods:[['slamRange',0.12],['armour',5]] } },
-  { id:'adept',  sp:'arc',  x:580,  y:975,  name:'THE ADEPT',       r:100, at:0,
+  { id:'adept',  sp:'arc',  band:'open', deg:210,  name:'THE ADEPT',       r:88, at:0,
     minors:[['Focus','incSpell',0.04],['Study','int',8],['Warding','allRes',0.03],
             ['Quick Words','incCast',0.04],['Kindling','incElem',0.04]],
     notable:{ name:'Adept', at:10, mods:[['incSpell',0.08],['boltR',0.08]] } },
   /* ---- and four crossings SHARED by the two doors either side of them, so
      your neighbour's start is a detour rather than a wall ---- */
-  { id:'nexNE',  sp:'prec', x:1300, y:700,  name:'THE CROSSING',    r:88, at:0,
+  { id:'nexNE',  sp:'prec', band:'inner', deg:315,  name:'THE CROSSING',    r:88, at:0,
     minors:[['Keen Edge','incCrit',0.05],['Cruelty','critMult',0.10],['Fire Ward','fireRes',0.05]] },
-  { id:'nexSE',  sp:'aff',  x:1250, y:1300, name:'THE SOUR WAY',    r:88, at:0,
+  { id:'nexSE',  sp:'aff',  band:'inner', deg:45, name:'THE SOUR WAY',    r:88, at:0,
     minors:[['Serrated','bleedChance',0.05],['Rot','incDot',0.05],['Frost Ward','frostRes',0.05]] },
-  { id:'nexSW',  sp:'vit',  x:700,  y:1250, name:'THE LOW ROAD',    r:88, at:0,
+  { id:'nexSW',  sp:'vit',  band:'inner', deg:135, name:'THE LOW ROAD',    r:88, at:0,
     minors:[['Sturdy','incHp',0.04],['Mending','regen',0.012],['Storm Ward','shockRes',0.05]] },
-  { id:'nexNW',  sp:'elem', x:750,  y:700,  name:'THE EMBER PATH',  r:88, at:0,
+  { id:'nexNW',  sp:'elem', band:'inner', deg:225,  name:'THE EMBER PATH',  r:88, at:0,
     minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.3],['Ward','allRes',0.03]] },
   /* ---- RING A: cheap, plain, and the first ring everybody crosses ---- */
-  { id:'armoury',sp:'war',  x:1275, y:400,  name:'THE ARMOURY',     r:92, at:10,
+  { id:'armoury',sp:'war',  band:'inner', deg:345,  name:'THE ARMOURY',     r:92, at:10,
     minors:[['Heft','flatPhys',0.4],['Brutality','incMelee',0.05],['Plated','armour',3]] },
-  { id:'sight',  sp:'prec', x:1610, y:800,  name:'THE LONG SIGHT',  r:92, at:10,
+  { id:'sight',  sp:'prec', band:'inner', deg:15,  name:'THE LONG SIGHT',  r:92, at:10,
     minors:[['Precision','incCrit',0.06],['Executioner','critMult',0.12],['Longsword','reach',8]] },
-  { id:'courier',sp:'swift',x:1540, y:1285, name:'THE COURIER',     r:92, at:10,
+  { id:'courier',sp:'swift',band:'inner', deg:75, name:'THE COURIER',     r:92, at:10,
     minors:[['Nimble','speed',0.04],['Magnetic','magnet',0.10],['Prospector','studs',0.08]] },
-  { id:'blight', sp:'aff',  x:1200, y:1610, name:'THE BLIGHT',      r:92, at:10,
+  { id:'blight', sp:'aff',  band:'inner', deg:105, name:'THE BLIGHT',      r:92, at:10,
     minors:[['Virulent','poisonDot',0.25],['Gutting','bleedShare',0.04],['Lingering','incDot',0.05]] },
-  { id:'hearth', sp:'vit',  x:720,  y:1540, name:'THE HEARTH',      r:92, at:10,
+  { id:'hearth', sp:'vit',  band:'inner', deg:165, name:'THE HEARTH',      r:92, at:10,
     minors:[['Hale','incHp',0.06],['Recovery','incRegen',0.12],['Padded','heartDrop',0.10]] },
-  { id:'bastion',sp:'arm',  x:400,  y:1200, name:'THE BASTION',     r:92, at:10,
+  { id:'bastion',sp:'arm',  band:'inner', deg:195, name:'THE BASTION',     r:92, at:10,
     minors:[['Riveted','incArmour',0.07],['Warded','suppress',0.04],['Sealed','allRes',0.04]] },
-  { id:'forgefr',sp:'elem', x:395,  y:800,  name:'THE FORGEFIRE',   r:92, at:10,
-    minors:[['Smoulder','incFire',0.07],['Rimebite','incFrost',0.07],['Arcing','incShock',0.07]] },
-  { id:'library',sp:'arc',  x:800,  y:390,  name:'THE LIBRARY',     r:92, at:10,
+  { id:'forgefr',sp:'elem', band:'inner', deg:255,  name:'THE FORGEFIRE',   r:92, at:10,
+    minors:[['Smoulder','incFire',0.07],['Rimebite','incFrost',0.07],['Arcing','incShock',0.07],
+            ['Hot Blade','convPFire',0.10]] },
+  { id:'library',sp:'arc',  band:'inner', deg:285,  name:'THE LIBRARY',     r:92, at:10,
     minors:[['Resonant','incSpell',0.05],['Metronome','incCast',0.05],['Widening','boltR',0.10]] },
   /* ---- RING B: a notable apiece, and a resistance in every one of them ---- */
-  { id:'fury',   sp:'war',  x:1050, y:150,  name:'FURY',            r:96, at:20,
+  { id:'fury',   sp:'war',  band:'mid', deg:337.5,  name:'FURY',            r:96, at:20,
     minors:[['Warlust','incAll',0.03],['Overhead','incAtk',0.05],['Ironhide','fireRes',0.06]],
     notable:{ name:'Warmonger', at:25, mods:[['incMelee',0.10],['incAtk',0.04]] } },
-  { id:'mark',   sp:'prec', x:1660, y:340,  name:'THE MARK',        r:96, at:20,
+  { id:'mark',   sp:'prec', band:'mid', deg:22.5,  name:'THE MARK',        r:96, at:20,
     minors:[['Unerring','incCrit',0.07],['Savagery','critMult',0.14],['Cold Nerve','frostRes',0.06]],
     notable:{ name:'Assassin', at:25, mods:[['incCrit',0.15],['critMult',0.20]] } },
-  { id:'stride', sp:'swift',x:1850, y:1060, name:'THE LONG STRIDE', r:96, at:20,
+  { id:'stride', sp:'swift',band:'mid', deg:67.5, name:'THE LONG STRIDE', r:96, at:20,
     minors:[['Fleet','speed',0.05],['Vaulting','roll',0.12],['Surefoot','shockRes',0.06]],
     notable:{ name:'Outrider', at:25, mods:[['speed',0.07],['roll',0.15]] } },
-  { id:'wound',  sp:'aff',  x:1585, y:1665, name:'OPEN WOUNDS',     r:96, at:20,
-    minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Scar Tissue','allRes',0.03]],
+  { id:'wound',  sp:'aff',  band:'mid', deg:112.5, name:'OPEN WOUNDS',     r:96, at:20,
+    minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Scar Tissue','allRes',0.03],
+            ['Venomtouch','gainChaos',0.08]],
     notable:{ name:'Plaguebearer', at:25, mods:[['incDot',0.12],['poisonDot',0.4]] } },
-  { id:'watch',  sp:'vit',  x:950,  y:1845, name:'THE WATCH',       r:96, at:20,
+  { id:'watch',  sp:'vit',  band:'mid', deg:157.5, name:'THE WATCH',       r:96, at:20,
     minors:[['Stoic','incHp',0.05],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
     notable:{ name:'Warden', at:30, mods:[['incHp',0.12],['regen',0.02]] } },
-  { id:'forge',  sp:'arm',  x:340,  y:1580, name:'THE FORGE',       r:96, at:20,
+  { id:'forge',  sp:'arm',  band:'mid', deg:202.5, name:'THE FORGE',       r:96, at:20,
     minors:[['Tempered','incArmour',0.09],['Banded','armour',6],['Bracing','suppress',0.04]],
     notable:{ name:'Stonecutter', at:30, mods:[['incArmour',0.12],['suppress',0.05]] } },
-  { id:'flux',   sp:'elem', x:155,  y:945,  name:'FLUX',            r:96, at:20,
-    minors:[['Prismatic','incElem',0.05],['Pyromancy','incFire',0.08],['Conduction','incShock',0.08]],
+  { id:'flux',   sp:'elem', band:'mid', deg:247.5,  name:'FLUX',            r:96, at:20,
+    minors:[['Prismatic','incElem',0.05],['Pyromancy','incFire',0.08],['Conduction','incShock',0.08],
+            ['Voltaic','convPShock',0.12]],
     notable:{ name:'Emberwright', at:25, mods:[['ember',1],['incFire',0.06]] } },
-  { id:'chant',  sp:'arc',  x:340,  y:420,  name:'THE CHANT',       r:96, at:20,
+  { id:'chant',  sp:'arc',  band:'mid', deg:292.5,  name:'THE CHANT',       r:96, at:20,
     minors:[['Harmonic','incSpell',0.05],['Cadence','incCast',0.05],['Attunement','allRes',0.03]],
     notable:{ name:'Archivist', at:25, mods:[['spellCap',1],['incCast',0.04]] } },
   /* ---- RING C: one ABILITY apiece, and the keystone that comes with it. This
      is the ring that changes depending on what the deck handed you. ---- */
-  { id:'cOrbit', sp:'arc',  x:1390, y:100,  name:'THE ORBIT',       r:100, at:25,
+  { id:'cOrbit', sp:'arc',  band:'outer', deg:292.5,  name:'THE ORBIT',       r:100, at:25,
     minors:[['Heavier Guard','orbitDmg',1],['Wider Guard','orbitR',20],
             ['Swifter Guard','orbitSpd',0.12]],
     keystone:{ name:'Glass Bricks', at:25, note:'everything you own hits far harder, and you die to anything',
                mods:[['incAll',0.35],['moreHp',-0.30]] } },
-  { id:'cBlast', sp:'prec', x:2100, y:520,  name:'THE BARREL',      r:100, at:25,
+  { id:'cBlast', sp:'prec', band:'outer', deg:337.5,  name:'THE BARREL',      r:100, at:25,
     minors:[['Hot Load','blastDmg',1],['Rifling','blastPierce',1],
             ['Autoloader','blastRate',0.12]],
     keystone:{ name:'Perfect Strike', at:30, note:'every swing is a critical, and nothing else is',
                mods:[['incCrit',1.50],['critMult',-0.50]] } },
-  { id:'cChain', sp:'elem', x:2030, y:1490, name:'THE STORMHEAD',   r:100, at:25,
+  { id:'cChain', sp:'elem', band:'outer', deg:22.5, name:'THE STORMHEAD',   r:100, at:25,
     minors:[['Conductor','chainDmg',1],['Forked','chainFork',1],
-            ['Quickening','chainRate',0.12]],
+            ['Quickening','chainRate',0.12],['Arcbrand','convPShock',0.10]],
     keystone:{ name:'Livewire', at:30, note:'the bolts come twice as fast, and nothing you do lingers',
                mods:[['chainRate',0.40],['incShock',0.25],['incDot',-0.40]] } },
-  { id:'cStorm', sp:'war',  x:1490, y:2030, name:'THE WHIRLING',    r:100, at:25,
+  { id:'cStorm', sp:'war',  band:'outer', deg:67.5, name:'THE WHIRLING',    r:100, at:25,
     minors:[['Heavier Blades','stormDmg',1],['Broader Blades','stormSize',0.3],
             ['Faster Throw','stormRate',0.12]],
     keystone:{ name:'Slow Death', at:30, note:'everything lingering doubles; nothing lands hard',
                mods:[['incDot',0.60],['incAll',-0.25]] } },
-  { id:'cVort',  sp:'swift',x:520,  y:2100, name:'THE VORTEX',      r:100, at:25,
+  { id:'cVort',  sp:'swift',band:'outer', deg:112.5, name:'THE VORTEX',      r:100, at:25,
     minors:[['Deeper Cut','vortexDmg',1],['Wider Whirl','vortexR',25],
             ['Spinning Up','vortexRate',0.12]],
     keystone:{ name:'Ironclad Oath', at:30, note:'a wall that cannot run',
                mods:[['incArmour',0.50],['allRes',0.10],['speed',-0.20]] } },
-  { id:'cFreeze',sp:'vit',  x:-100, y:1400, name:'THE COLD SNAP',   r:100, at:25,
-    minors:[['Colder','freezeR',40],['Quicker','freezeRate',0.12],['Frostbite','frostRes',0.08]],
+  { id:'cFreeze',sp:'vit',  band:'outer', deg:157.5, name:'THE COLD SNAP',   r:100, at:25,
+    minors:[['Colder','freezeR',40],['Quicker','freezeRate',0.12],['Frostbite','frostRes',0.08],
+            ['Frostbrand','convPFrost',0.10],['Thaw','gainFire',0.08]],
     keystone:{ name:'Bloodthirst', at:35, note:'you take it back by hitting, or not at all',
                mods:[['leechRate',0.20],['leech',0.06],['noRegen',null]] } },
-  { id:'cBane',  sp:'aff',  x:-30,  y:610,  name:'THE ORCHARD',     r:100, at:25,
+  { id:'cBane',  sp:'aff',  band:'outer', deg:202.5,  name:'THE ORCHARD',     r:100, at:25,
     minors:[['Heavier Bane','baneDmg',1],['Wider Bane','baneR',0.12],
-            ['Quicker Bane','baneRate',0.12]],
+            ['Quicker Bane','baneRate',0.12],['Blightbrand','gainChaos',0.10]],
     keystone:{ name:'Slow Burn', at:30, note:'the world stays warm for ten more waves, and teaches you less',
                mods:[['tollDelay',10],['xp',-0.30]] } },
-  { id:'cBomb',  sp:'arm',  x:510,  y:-30,  name:'THE ORDNANCE',    r:100, at:25,
+  { id:'cBomb',  sp:'arm',  band:'outer', deg:247.5,  name:'THE ORDNANCE',    r:100, at:25,
     minors:[['Heavier Bomb','bombDmg',1],['Wider Bomb','bombR',0.12],['Clustering','bombCluster',1]],
     keystone:{ name:'Scavenger', at:25, note:'every chest is worth double, and you take what you are given',
                mods:[['chestCards',2],['noReroll',null]] } },
   /* ---- THE FOUR CORNERS. Furthest from every door, between two rims, and the
      only place the truly lopsided keystones live. ---- */
-  { id:'eyrie',  sp:'prec', x:2040, y:60,   name:'THE EYRIE',       r:104, at:30,
+  { id:'eyrie',  sp:'prec', band:'far', deg:315,   name:'THE EYRIE',       r:104, at:30,
     minors:[['Hawk-eyed','incCrit',0.08],['Merciless','critMult',0.18],
             ['Sharpshot','blastPierce',1],['Clear Sight','allRes',0.04]],
     keystone:{ name:'Hoarder', at:30, note:'the run pays double into the tree, and hits softer',
                mods:[['bankMul',2],['incAll',-0.20]] } },
-  { id:'rot',    sp:'aff',  x:2030, y:1940, name:'THE ROT',         r:104, at:30,
+  { id:'rot',    sp:'aff',  band:'far', deg:45, name:'THE ROT',         r:104, at:30,
     minors:[['Pestilent','incDot',0.08],['Corrosive','poisonDot',0.4],
-            ['Bleeding Out','bleedShare',0.05],['Inured','allRes',0.05]],
+            ['Bleeding Out','bleedShare',0.05],['Inured','allRes',0.05],
+            ['Unmaking','incChaos',0.12]],
     keystone:{ name:'Vengeance', at:35, note:'what you have already hurt hurts far more; nothing you meet fresh does',
                mods:[['incDot',0.50],['bleedShare',0.06],['incCrit',-0.60]] } },
-  { id:'keep',   sp:'arm',  x:-40,  y:1950, name:'THE KEEP',        r:104, at:30,
+  { id:'keep',   sp:'arm',  band:'far', deg:135, name:'THE KEEP',        r:104, at:30,
     minors:[['Adamant','incArmour',0.12],['Anchored','armour',8],
             ['Absorbing','suppress',0.05],['Layered','allRes',0.05]],
     keystone:{ name:'Stoneheart', at:35, note:'you will outlast anything; you will not out-hit it',
                mods:[['moreHp',0.35],['allRes',0.06],['incAll',-0.30]] } },
-  { id:'conflu', sp:'elem', x:-30,  y:55,   name:'THE CONFLUENCE',  r:104, at:30,
+  { id:'conflu', sp:'elem', band:'far', deg:225,   name:'THE CONFLUENCE',  r:104, at:30,
     minors:[['Convergent','incElem',0.07],['Pyre','incFire',0.09],
-            ['Rime','incFrost',0.09],['Tempest','incShock',0.09]],
+            ['Rime','incFrost',0.09],['Tempest','incShock',0.09],
+            ['Prism Edge','convPFrost',0.15]],
     keystone:{ name:'Conduit', at:30, note:'every element at once, and the words come slowly',
                mods:[['incElem',0.50],['allRes',0.08],['incCast',-0.35]] } },
 ];
-/* what a step of corridor is worth, by the colour of the ground it crosses.
-   Almost nothing — a travel node is a point you SPEND, not a point you get —
-   but resistance rides on the armour and the core paths, which is most of them,
-   so a long walk anywhere leaves you a little harder to kill. */
-/* WHAT A STEP OF CORRIDOR IS WORTH: an ATTRIBUTE, by the colour of the ground
-   it crosses. Boring on purpose — three strength is a fifth of a real node, and
-   the walk to a keystone is thirty of them, which is exactly the trade a long
-   journey is supposed to be. */
+/* WHAT A STEP OF ROAD IS WORTH: an ATTRIBUTE, and nothing else. That is the
+   whole trick. A road node is a point you SPEND to be somewhere else, and the
+   only thing it leaves behind is three of one attribute — so a lightning build
+   can cross the entire map without picking up a single point of physical
+   damage it did not want. Boring on purpose. Three strength is a fifth of a
+   real node, and the walk to a far keystone is twenty of them. */
 const META_TRAVEL = {
-  war:  ['Strength',     'str', 3],
-  prec: ['Dexterity',    'dex', 3],
-  swift:['Dexterity',    'dex', 3],
-  aff:  ['Intelligence', 'int', 3],
-  vit:  ['Strength',     'str', 3],
-  arm:  ['Strength',     'str', 3],
-  elem: ['Intelligence', 'int', 3],
-  arc:  ['Intelligence', 'int', 3],
-  core: ['Resolve',      'str', 2],
+  str: ['Strength',     'str', 2],
+  dex: ['Dexterity',    'dex', 2],
+  int: ['Intelligence', 'int', 2],
+  core:['Resolve',      'str', 2],
 };
-/* [from, to, how many travel nodes, how far the corridor bows sideways] */
-const META_LINKS = [
-  /* each door into its own beginning */
-  ['st_sword','sworn',1,0],   ['st_axe','berserk',1,0],
-  ['st_mace','breaker',1,0],  ['st_staff','adept',1,0],
-  /* ...and sideways into the crossing it shares with each neighbour */
-  ['st_sword','nexNE',2,0],   ['st_sword','nexNW',2,0],
-  ['st_axe','nexNE',2,0],     ['st_axe','nexSE',2,0],
-  ['st_mace','nexSE',2,0],    ['st_mace','nexSW',2,0],
-  ['st_staff','nexSW',2,0],   ['st_staff','nexNW',2,0],
-  /* a beginning also touches the two crossings beside it */
-  ['sworn','nexNE',1,0],      ['sworn','nexNW',1,0],
-  ['berserk','nexNE',1,0],    ['berserk','nexSE',1,0],
-  ['breaker','nexSE',1,0],    ['breaker','nexSW',1,0],
-  ['adept','nexSW',1,0],      ['adept','nexNW',1,0],
-  /* OUT OF THE MIDDLE. Two ways off every beginning and every crossing. */
-  ['sworn','armoury',2,-25],  ['sworn','library',2,25],
-  ['berserk','sight',2,-25],  ['berserk','courier',2,25],
-  ['breaker','blight',2,-25], ['breaker','hearth',2,25],
-  ['adept','bastion',2,-25],  ['adept','forgefr',2,25],
-  ['nexNE','armoury',2,25],   ['nexNE','sight',2,-25],
-  ['nexSE','courier',2,25],   ['nexSE','blight',2,-25],
-  ['nexSW','hearth',2,25],    ['nexSW','bastion',2,-25],
-  ['nexNW','forgefr',2,25],   ['nexNW','library',2,-25],
-  /* RING A, joined all the way round */
-  ['armoury','sight',3,-40],  ['sight','courier',3,-40],
-  ['courier','blight',3,-40], ['blight','hearth',3,-40],
-  ['hearth','bastion',3,-40], ['bastion','forgefr',3,-40],
-  ['forgefr','library',3,-40],['library','armoury',3,-40],
-  /* RING A outward — sixteen ways on, and none of them the same length */
-  ['armoury','fury',2,20],    ['armoury','mark',3,-20],
-  ['sight','mark',2,20],      ['sight','stride',3,-20],
-  ['courier','stride',2,20],  ['courier','wound',3,-20],
-  ['blight','wound',2,20],    ['blight','watch',3,-20],
-  ['hearth','watch',2,20],    ['hearth','forge',3,-20],
-  ['bastion','forge',2,20],   ['bastion','flux',3,-20],
-  ['forgefr','flux',2,20],    ['forgefr','chant',3,-20],
-  ['library','chant',2,20],   ['library','fury',3,-20],
-  /* RING B, joined all the way round */
-  ['fury','mark',4,-60],      ['mark','stride',4,-60],
-  ['stride','wound',4,-60],   ['wound','watch',4,-60],
-  ['watch','forge',4,-60],    ['forge','flux',4,-60],
-  ['flux','chant',4,-60],     ['chant','fury',4,-60],
-  /* RING B outward to the abilities */
-  ['fury','cOrbit',3,25],     ['mark','cOrbit',3,-25],
-  ['mark','cBlast',3,25],     ['stride','cBlast',3,-25],
-  ['stride','cChain',3,25],   ['wound','cChain',3,-25],
-  ['wound','cStorm',3,25],    ['watch','cStorm',3,-25],
-  ['watch','cVort',3,25],     ['forge','cVort',3,-25],
-  ['forge','cFreeze',3,25],   ['flux','cFreeze',3,-25],
-  ['flux','cBane',3,25],      ['chant','cBane',3,-25],
-  ['chant','cBomb',3,25],     ['fury','cBomb',3,-25],
-  /* RING C, joined all the way round — the long way past every keystone */
-  ['cOrbit','cBlast',4,-50],  ['cBlast','cChain',4,-50],
-  ['cChain','cStorm',4,-50],  ['cStorm','cVort',4,-50],
-  ['cVort','cFreeze',4,-50],  ['cFreeze','cBane',4,-50],
-  ['cBane','cBomb',4,-50],    ['cBomb','cOrbit',4,-50],
-  /* and out to the corners, which touch the rim twice and the ring below once */
-  ['cOrbit','eyrie',2,0],     ['cBlast','eyrie',2,0],     ['mark','eyrie',4,40],
-  ['cChain','rot',2,0],       ['cStorm','rot',2,0],       ['wound','rot',4,40],
-  ['cVort','keep',2,0],       ['cFreeze','keep',2,0],     ['forge','keep',4,40],
-  ['cBane','conflu',2,0],     ['cBomb','conflu',2,0],     ['chant','conflu',4,40],
+/* ======================= THE HIGHWAYS ========================================
+   The map used to join CLUSTER TO CLUSTER, which meant every journey went
+   THROUGH somebody else's cluster: a spell build walking to the far side
+   collected physical damage on the way whether it wanted it or not, and paid a
+   point for each. That is exactly backwards.
+
+   Roads carry you; clusters hang OFF them. A road is a long run of nodes that
+   pay ONE attribute, so you can cross the whole map on dexterity alone and
+   arrive with nothing in your build you did not choose. A cluster is a POCKET
+   on a short spur: you step off the road into it, take what you came for, and
+   step back. Nothing routes THROUGH a cluster, ever — which is why skipping one
+   costs you nothing at all.
+
+   Rings are jittered polygons rather than circles, and a spoke starts and ends
+   on a ring's own VERTEX, so where two roads meet they meet exactly and the
+   junction is one node rather than two nodes a few pixels apart. */
+const ROAD_STEP  = 120;   /* how far apart nodes sit along a road */
+const ROAD_MERGE = 80;    /* two road samples this close are ONE junction */
+const ROAD_JIT   = 0.09;  /* how far a ring vertex wanders off its radius */
+const META_ROADS = [
+  /* three ring roads, one attribute each, all the way round */
+  { id:'ring1', attr:'dex', kind:'ring', r:META_MAP.band.open  + 230, n:12, seed:17 },
+  { id:'ring2', attr:'str', kind:'ring', r:META_MAP.band.inner + 310, n:14, seed:53 },
+  { id:'ring3', attr:'int', kind:'ring', r:META_MAP.band.mid   + 350, n:18, seed:91 },
 ];
+/* the four doors each get a PRIVATE road out to the inner ring, and no two of
+   them pay the same attribute — the staff walks out on intelligence, the mace
+   on strength. Different beginnings, still all in the middle. */
+[['sword',-90,'str'], ['axe',0,'dex'], ['mace',90,'str'], ['staff',180,'int']]
+  .forEach(d=> META_ROADS.push({ id:'dr_'+d[0], attr:d[2], kind:'door',
+                                 deg:d[1], r0:260, to:'ring1' }));
+/* twelve spokes across the inner gap and eight across the outer one, offset so
+   they pass BETWEEN the pockets rather than through them, and cycling through
+   ALL THREE attributes at both levels — so whatever you are collecting, there
+   is a way further out that is still paying you in your own colour */
+const ROAD_CYCLE = ['dex','str','int'];
+for(let i=0;i<12;i++)
+  META_ROADS.push({ id:'spA'+i, attr: ROAD_CYCLE[i%3],
+                    kind:'spoke', deg: i*30, from:'ring1', to:'ring2' });
+for(let i=0;i<8;i++)
+  META_ROADS.push({ id:'spB'+i, attr: ROAD_CYCLE[i%3],
+                    kind:'spoke', deg: i*45, from:'ring2', to:'ring3' });
 const META_NODES = [];
 const META_BY_ID = {};
 const META_CLUSTER_BY_ID = {};
@@ -6287,6 +6481,9 @@ const META_NODE_R = { start:46, keystone:40, notable:34, minor:25, travel:15 };
   const edges = [];
   const add = (a,b)=>{ if(a && b && a !== b) edges.push([a,b]); };
   const push = n=>{ META_NODES.push(n); META_BY_ID[n.id] = n; return n; };
+  /* band + angle become pixels, once, before anything reads a coordinate */
+  for(const st of META_STARTS) Object.assign(st, metaPlace(st.band, st.deg));
+  for(const c  of META_CLUSTERS) Object.assign(c,  metaPlace(c.band,  c.deg));
   for(const st of META_STARTS)
     push({ id:st.id, kind:'start', weap:st.weap, name:st.name, spoke:'core', cl:null,
            x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
@@ -6314,40 +6511,124 @@ const META_NODE_R = { start:46, keystone:40, notable:34, minor:25, travel:15 };
       for(let i=0;i<c.nodes.length;i+=2) add(c.nodes[i], n.id);
     }
   }
-  /* where a corridor attaches: the node of each cluster nearest the other end,
-     so the long way round genuinely arrives on the far side */
-  const endOf = id=>{
-    const c = META_CLUSTER_BY_ID[id];
-    if(c) return { x:c.x, y:c.y, sp:c.sp, pick:(tx,ty)=>{
-      let best = null, bd = Infinity;
-      for(const nid of c.nodes){
-        const n = META_BY_ID[nid], d = (n.x-tx)*(n.x-tx) + (n.y-ty)*(n.y-ty);
-        if(d < bd){ bd = d; best = nid; }
-      }
-      return best; } };
-    const n = META_BY_ID[id];
-    return { x:n.x, y:n.y, sp:null, pick:()=>id };
+  /* ---- THE ROAD NETWORK -------------------------------------------------
+     Rings first, because a spoke has to start and end on a ring's own vertex.
+     Then every polyline is sampled at ROAD_STEP, and any two samples landing
+     within ROAD_MERGE of each other become ONE node — which is what turns a
+     pile of independent polylines into a network with real junctions. */
+  const TREE_CX = META_MAP.cx, TREE_CY = META_MAP.cy;
+  const rhash = n=>{ let h = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b);
+                     h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ (h >>> 16)) >>> 0; };
+  const ringVerts = {};
+  for(const R of META_ROADS){
+    if(R.kind !== 'ring') continue;
+    const v = [];
+    for(let i=0;i<R.n;i++){
+      const a = (i/R.n)*TAU - Math.PI/2;
+      const j = 1 + (((rhash(R.seed*131 + i) % 200) - 100)/100) * ROAD_JIT;
+      v.push([Math.round(TREE_CX + Math.cos(a)*R.r*j), Math.round(TREE_CY + Math.sin(a)*R.r*j)]);
+    }
+    ringVerts[R.id] = v;
+  }
+  /* the vertex whose ANGLE is nearest — not the one nearest some point far out
+     along the bearing, because a jittered ring is not a circle */
+  const nearestVert = (ring, deg)=>{
+    const a = deg*Math.PI/180;
+    let best = null, bd = Infinity;
+    for(const v of ringVerts[ring] || []){
+      const va = Math.atan2(v[1]-TREE_CY, v[0]-TREE_CX);
+      const d = Math.abs(((va - a + Math.PI*3) % TAU) - Math.PI);
+      if(d < bd){ bd = d; best = v; }
+    }
+    return best;
   };
-  META_LINKS.forEach((L, li)=>{
-    const A = endOf(L[0]), B = endOf(L[1]);
-    const an = META_BY_ID[A.pick(B.x, B.y)], bn = META_BY_ID[B.pick(A.x, A.y)];
-    if(!an || !bn) return;
-    const cnt = L[2] || 1, bow = L[3] || 0;
-    const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy) || 1;
-    const px = -dy/len, py = dx/len;
-    const sa = A.sp || B.sp || 'core', sb = B.sp || A.sp || 'core';
-    let prev = an.id;
-    for(let i=0;i<cnt;i++){
-      const t = (i+1)/(cnt+1);
-      const off = Math.sin(t*Math.PI)*bow + (((li+i)%3) - 1)*7;
-      const sp = t < 0.5 ? sa : sb, use = META_TRAVEL[sp] || META_TRAVEL.core;
-      const n = push({ id:'t'+li+'_'+i, kind:'travel', spoke:sp, cl:null, name:use[0],
-        x:Math.round(an.x + dx*t + px*off), y:Math.round(an.y + dy*t + py*off),
+  /* one shared pool of road nodes, so a sample landing on an existing one JOINS
+     it rather than sitting beside it */
+  const roadAt = [];
+  const roadNode = (x, y, attr, rid)=>{
+    for(const n of roadAt)
+      if(Math.hypot(n.x-x, n.y-y) < ROAD_MERGE) return n;
+    const use = META_TRAVEL[attr] || META_TRAVEL.core;
+    const n = push({ id:'rd'+roadAt.length, kind:'travel', spoke:attr, cl:null, road:rid,
+      name:use[0], x:Math.round(x), y:Math.round(y), at:0, cost:1,
+      mods:[[use[1], use[2]]], req:[] });
+    roadAt.push(n);
+    return n;
+  };
+  const layRoad = (pts, attr, rid, loop)=>{
+    const seq = [];
+    for(let i=0;i<pts.length - (loop?0:1);i++){
+      const A = pts[i], B = pts[(i+1)%pts.length];
+      const len = Math.hypot(B[0]-A[0], B[1]-A[1]);
+      const steps = Math.max(1, Math.round(len/ROAD_STEP));
+      for(let k=0;k<steps;k++){
+        const t = k/steps;
+        seq.push(roadNode(A[0] + (B[0]-A[0])*t, A[1] + (B[1]-A[1])*t, attr, rid));
+      }
+    }
+    if(loop) seq.push(seq[0]);
+    else if(pts.length) seq.push(roadNode(pts[pts.length-1][0], pts[pts.length-1][1], attr, rid));
+    for(let i=0;i<seq.length-1;i++) add(seq[i].id, seq[i+1].id);
+    return seq;
+  };
+  const roadHead = {};                      /* where each door road begins */
+  for(const R of META_ROADS){
+    if(R.kind === 'ring'){ layRoad(ringVerts[R.id], R.attr, R.id, true); continue; }
+    if(R.kind === 'door'){
+      const a = R.deg*Math.PI/180;
+      const head = [Math.round(TREE_CX + Math.cos(a)*R.r0), Math.round(TREE_CY + Math.sin(a)*R.r0)];
+      const end  = nearestVert(R.to, R.deg);
+      if(end) roadHead[R.id] = layRoad([head, end], R.attr, R.id, false)[0];
+      continue;
+    }
+    const a = nearestVert(R.from, R.deg), b = nearestVert(R.to, R.deg);
+    if(a && b) layRoad([a, b], R.attr, R.id, false);
+  }
+  /* ---- AND THE POCKETS. A cluster hangs off ONE spur and has no other way in
+     or out, so a build that does not want what is in it simply drives past. --- */
+  const nearestRoad = (x, y)=>{
+    let best = null, bd = Infinity;
+    for(const n of roadAt){ const d = Math.hypot(n.x-x, n.y-y); if(d < bd){ bd = d; best = n; } }
+    return best;
+  };
+  for(const c of META_CLUSTERS){
+    const rd = nearestRoad(c.x, c.y);
+    if(!rd) continue;
+    /* the node of the pocket nearest the road is its door */
+    let door = null, bd = Infinity;
+    for(const nid of c.nodes){
+      const n = META_BY_ID[nid], d = Math.hypot(n.x-rd.x, n.y-rd.y);
+      if(d < bd){ bd = d; door = n; }
+    }
+    if(!door) continue;
+    const gap = Math.hypot(door.x-rd.x, door.y-rd.y);
+    const hops = gap > 250 ? 2 : gap > 140 ? 1 : 0;
+    const use = META_TRAVEL[rd.spoke] || META_TRAVEL.core;
+    let prev = rd.id;
+    for(let i=0;i<hops;i++){
+      const t = (i+1)/(hops+1);
+      const n = push({ id:'sp_'+c.id+'_'+i, kind:'travel', spoke:rd.spoke, cl:null, name:use[0],
+        x:Math.round(rd.x + (door.x-rd.x)*t), y:Math.round(rd.y + (door.y-rd.y)*t),
         at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
       add(prev, n.id); prev = n.id;
     }
-    add(prev, bn.id);
-  });
+    add(prev, door.id);
+    c.road = rd.id;
+  }
+  /* each door opens two ways: into its own beginning, and straight out onto its
+     own private road. Nothing else touches either. */
+  for(const st of META_STARTS){
+    const head = roadHead['dr_'+st.weap];
+    if(head) add(st.id, head.id);
+    const own = META_CLUSTERS.find(c=>c.band === 'open' && c.deg === st.deg + 30);
+    if(!own || !own.nodes.length) continue;
+    let door = null, bd = Infinity;
+    for(const nid of own.nodes){
+      const n = META_BY_ID[nid], d = Math.hypot(n.x-st.x, n.y-st.y);
+      if(d < bd){ bd = d; door = n; }
+    }
+    if(door) add(st.id, door.id);
+  }
   /* NUDGE. A corridor laid straight through the middle of a cluster reads as a
      node belonging to it, and it does not. Shove the travel nodes off whatever
      they landed on — a little, and never far enough to change which way the
@@ -6357,8 +6638,11 @@ const META_NODE_R = { start:46, keystone:40, notable:34, minor:25, travel:15 };
     const R = n=> META_NODE_R[n.kind] || 14;
     const home = {};
     for(const n of META_NODES) if(n.kind === 'travel') home[n.id] = [n.x, n.y];
+    /* the SPUR is laid before this runs, so a minor that shifts here keeps the
+       edge it already has — only the pixels move */
+    for(const n of META_NODES) if(n.kind === 'minor') home[n.id] = [n.x, n.y];
     for(let pass=0; pass<40; pass++) for(const n of META_NODES){
-      if(n.kind !== 'travel') continue;
+      if(n.kind !== 'travel' && n.kind !== 'minor') continue;
       let mx = 0, my = 0;
       for(const o of META_NODES){
         if(o === n) continue;
@@ -6369,8 +6653,11 @@ const META_NODE_R = { start:46, keystone:40, notable:34, minor:25, travel:15 };
       }
       if(!mx && !my) continue;
       n.x = Math.round(n.x + mx); n.y = Math.round(n.y + my);
+      /* a SPUR may wander; a ROAD may not, or the highway stops reading as a
+         line you can follow with your eye */
+      const cap = n.road ? 34 : n.kind === 'minor' ? 16 : 70;
       const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
-      if(od > 70){ n.x = Math.round(h[0] + ox/od*70); n.y = Math.round(h[1] + oy/od*70); }
+      if(od > cap){ n.x = Math.round(h[0] + ox/od*cap); n.y = Math.round(h[1] + oy/od*cap); }
     }
   })();
   /* REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a corridor can be
@@ -7639,6 +7926,8 @@ function buildDiffRow(){
    under EVERYTHING ELSE, so a new brick is never invisible. */
 const BENCH_SECTIONS = [
   { name:'ATTRIBUTES',      ids:['attstr','attint','attdex','attall'] },
+  { name:'CONVERSION', ids:['convfire','convfrost','convshock','convchaos',
+                            'gainchaos','gainfire','incchaos'] },
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'GROUND SLAM',     ids:['slampow','slamarc','slamrange','slamspd','slamelem'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
@@ -8324,6 +8613,22 @@ const STAT_PROBES = [
     why:'frost only — Block Freeze and every chill it lays. Adds into the elemental pool, never multiplies it' },
   { g:'ELEMENTAL', k:'Increased lightning',get:()=> ((player&&player.inc.shock)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'lightning only — every storm bolt and every leap it makes. Adds into the elemental pool, never multiplies it' },
+  { g:'ELEMENTAL', k:'Increased chaos',    get:()=> ((player&&player.inc.chaos)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'chaos only. Chaos is neither physical nor elemental — the elemental pool does not touch it, '+
+        'and no monster in the game resists it' },
+  /* WHAT A SWING IS MADE OF. Five rows, one per type, reading the same split
+     the hit itself uses — so if the sheet and the monster ever disagree, one of
+     them is wrong and you can see which. */
+  ...CONV_ORDER.map(k=>({ g:'CONVERSION', k:CONV_NAME[k]+' share',
+    get:()=> (player ? convSplit(isCaster() ? 'fire' : 'sword').share[k] || 0 : 0)*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'how much of one ordinary hit arrives as '+CONV_NAME[k].toLowerCase()+
+        '. Each part pays its OWN resistance, and only the PHYSICAL part ever meets armour' })),
+  { g:'CONVERSION', k:'Conversion multiplier',
+    get:()=> player ? convSplit(isCaster() ? 'fire' : 'sword').mul : 1,
+    fmt:v=>v.toFixed(2)+'×', zero:true,
+    why:'what conversion does to the SIZE of a hit, before any monster sees it. Above one means the '+
+        'increases on what it became beat the increases on what it was; GAIN AS EXTRA always pushes it up' },
   { g:'PHYSICAL', k:'Weapon hit',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
@@ -9109,6 +9414,32 @@ function renderCharSheet(){
         : 'a ward brick plates you in armour and resistance')
   ]);
 
+  /* WHAT A HIT IS MADE OF. Only shown to a hero who converts something — a card
+     of five zeroes teaches nobody anything. It reads the SAME split the hit
+     itself reads, so if this card and the monster ever disagree you can see it. */
+  const csp = convSplit(isCaster() ? (weapon.elem || 'fire') : 'sword');
+  const conversion = convAny() ? sBlock('CONVERSION', CONV_ORDER
+    .filter(k=>csp.share[k] > 0)
+    .map(k=>sRow(CONV_NAME[k], Math.round(csp.share[k]*100)+'%',
+      k === 'phys' ? 'meets armour, and is the only part that does'
+      : k === 'chaos' ? 'neither physical nor elemental — nothing resists it'
+      : 'mitigated as '+CONV_NAME[k].toLowerCase()+', whatever it set out as',
+      `Of one ordinary hit, ${Math.round(csp.share[k]*100)}% arrives as `+
+      `${CONV_NAME[k]}.\n\n`+
+      `Conversion happens AFTER flat damage joins the base and BEFORE any\n`+
+      `increase touches it. Each part then pays the increases for what it\n`+
+      `BECAME on top of the ones for how it was BUILT — a swing converted to\n`+
+      `fire is still a swing.\n\n`+
+      `And each part is mitigated on its own: ${k === 'phys'
+        ? 'this is the only part armour ever stops.'
+        : k === 'chaos' ? 'nothing in the game resists chaos.'
+        : 'this part pays '+CONV_NAME[k].toLowerCase()+' resistance and walks past armour.'}`))
+    .concat([sRow('Size of the hit', '×'+csp.mul.toFixed(2),
+      'what conversion does before any monster sees it',
+      `Above ×1.00 means the increases on what your damage BECAME beat the ones\n`+
+      `on what it was. GAIN AS EXTRA always pushes it up, because it never gives\n`+
+      `anything back.\n\n`+
+      `Yours: ×${csp.mul.toFixed(3)} on every hit, before mitigation.`)])) : '';
   const resist = sBlock('ELEMENTAL RESISTANCE', [
     sRow('Fire', pct((1-elemTake('fire'))),
       p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.fire)}` : 'burn damage and duration',
@@ -9235,7 +9566,7 @@ function renderCharSheet(){
 
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
-     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${resist}${ail}${curseBlock}${loot}${run}</div>
+     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${resist}${ail}${curseBlock}${loot}${run}</div>
      <div class="seclabel">SPELLS</div>
      <div class="spellgrid">${spellHtml}</div>
      <div class="seclabel">EVERY STAT &mdash; HOVER ANY ROW</div>

@@ -1236,14 +1236,48 @@ staff's.
 **Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
 dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
 is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
-swings, the staff's is focus and warding. Your own beginning costs you **4** points and
-costs everybody else **14 to 16**. After that the map is shared, and it fans outward.
+swings, the staff's is focus and warding. Your own beginning costs you **3 to 4** points and
+costs everybody else **15 to 24**. After that the map is shared, and it fans outward.
 
-**It is a map, not a wheel.** Thirty-six clusters, a hundred and four corridors of cheap
-travel nodes, and every ring joined all the way round. **The rim is where the good stuff
-is** — the twelve keystones all sit on the outside, seventeen to twenty-five points from any
-door, so one of them is a journey in a single direction and two of them is your whole
-ceiling. Go deep for one prize, or stay near the middle and take a dozen cheap ones.
+### Highways and pockets
+
+**The map used to join cluster to cluster, and that was backwards.** Every journey ran
+*through* somebody else's cluster, so a lightning build walking to the far side collected
+increased physical damage on the way — and paid a point for each node of it. You were charged
+for stats you did not want in order to reach the ones you did.
+
+**Now the roads carry you and the clusters hang off them.** A road is a long run of nodes
+that pay **one attribute and nothing else**, so you can cross the entire map on dexterity
+alone and arrive with nothing in your build you did not choose:
+
+Three ring roads, twenty spokes across the gaps between them, and four door roads — one per
+weapon, each paying a different attribute, so the staff walks out of the middle on
+intelligence and the mace on strength.
+
+| Attribute | Which roads pay it | Longest unbroken run | How far it spans |
+|---|---|--:|--:|
+| **DEXTERITY** | the inner ring, the axe's door, a third of the spokes | **44** nodes | 3065 px |
+| **STRENGTH** | the middle ring, the sword's and mace's doors, a third of the spokes | **95** | 3075 px |
+| **INTELLIGENCE** | the outer ring, the staff's door, a third of the spokes | **123** | 4323 px |
+
+A road node is worth **2** of its attribute — a fifth of a real node. Walking across the map
+is never *nothing*, and it is never as good as arriving.
+
+**A cluster is a POCKET.** It hangs off a single short spur and has no other way in or out,
+so **nothing ever routes through one**. Knock any cluster out of the map entirely and every
+other cluster is still reachable from every door — which means skipping a cluster you do not
+want costs you exactly nothing. That is the whole rework in one sentence.
+
+The cheapest walk to any keystone, from any door, passes through **zero** other clusters, and
+**91 to 94% of it is road**. You take the highway out, step into the pocket you came for,
+and step back.
+
+**Four hundred and fifty-seven nodes**, in bands: four doors in the dead centre, four
+openings around them, twelve clusters between the first and second ring, eight between the
+second and third, eight abilities outside the third, and four corners further out still.
+**The rim is where the good stuff is** — the twelve keystones all sit on the outside,
+**twenty-two to thirty-two points** from your door, so one of them is a real journey and
+two of them is your whole ceiling.
 
 **The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
 WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
@@ -1425,11 +1459,9 @@ roughly twice a bare hero, and that is what thirty stud points and eight boss fi
 
 ---
 
-## Damage conversion — the groundwork
+## Damage conversion
 
-**Not wired into a single live hit yet, and deliberately so.** What is here is the model, the
-pipeline and the rules, tested on their own, so that turning it on later is one call site
-rather than a rewrite.
+**Live, on every hit in the game.**
 
 **Five types, one direction.** Conversion only ever runs *down* this list, which is the whole
 reason it terminates — there is no arrangement of modifiers that can send damage back round
@@ -1445,25 +1477,65 @@ the loop:
 | `Gain #% of X as Extra Y` | leaves the source intact and adds a copy as the new type |
 
 **When it happens:** after flat added damage joins the base, and **before** any increased or
-more multiplier touches it. That ordering is the whole point — converted damage is scaled by
-the **destination** type's increases, which is why a physical-to-cold build wants increased
-cold damage and not increased physical.
+more multiplier touches it.
 
-**What the monster does about it: nothing to do with you.** A hit that arrives as cold is
-mitigated as cold, whatever it set out as.
+**A converted part keeps the increases for how it was BUILT and gains the ones for what it
+BECAME.** A sword swing converted to fire is still a swing — it keeps increased physical
+damage and picks up increased fire damage on top. Dropping the source's pools would have made
+every conversion brick a trap, which is the one thing the mechanic must not be.
+
+**What the monster does about it: nothing to do with you.**
+
+- A part that arrives as **cold** pays **cold resistance**, whatever it set out as.
+- **Only the part that is still physical ever meets armour.** Converting a swing to fire is
+  how you walk past a golem's plate, and that is the point of the entire mechanic.
+- A **spell** meets suppression however it has been converted — being cold does not stop it
+  being a spell.
+- **What lingers is not converted again.** A bleed, a burn and a poison were all built the
+  moment they were inflicted; running them back through the pipeline on every tick would
+  convert the same damage over and over.
+
+**How it is wired, and why nothing upstream had to change.** Every number in this game is
+linear in its base — a hit is `base × (1 + increased) × more` — so the *effect* of conversion
+does not depend on the base at all. Run the pipeline on a base of **one** and you have both
+the ratio between the converted hit and the plain one and the share each type ended up with.
+The swing still builds one number the way it always did; `hitEnemy` corrects its size and
+mitigates each share as what it became. A hero who converts nothing takes a one-line fast
+path that is arithmetically identical to the code that was there before.
+
+**Seven bricks write it**, and five skill-tree nodes do too:
+
+| Brick | |
+|---|---|
+| **Emberforge** / **Rimeblade** / **Galvanise** | 10–40% of your physical converted to fire, cold or lightning |
+| **The Unmaking** | 10–40% of your fire converted to chaos |
+| **Creeping Blight** | gain 6–30% of your physical as extra chaos |
+| **Catalyst** | gain 6–30% of your cold as extra fire |
+| **Entropy** | increased chaos damage — offered only once you convert something |
 
 **Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
 you half of each, never a hero dealing 160% of their own damage.
 
-**CHAOS** is the fifth type and has no home yet: neither physical nor elemental, so armour
-does not stop it and no elemental resistance names it. It is the poison-flavoured one — where
-physical can open a bleed, chaos can leave a dose behind.
+**CHAOS** is neither physical nor elemental, so **armour does not stop it and nothing in the
+game resists it** — it pays its own increase pool and no other. It is the poison-flavoured
+one: where physical can open a bleed, a hit carrying chaos can leave a **dose of poison**
+behind, on odds that ride on how much of the hit actually was chaos.
 
-`conv.js` proves all of it, including that an uphill pair is refused, that a hero with no
-table at all is the safest path through rather than the one that throws, and that the worst
-case — every legal conversion *and* every gain-as-extra at 90% and 30% simultaneously —
-terminates in under a millisecond. Six break-builds, each caught by the assertion meant for
-it.
+**The character sheet grows a CONVERSION card** the moment you convert anything — one row
+per type showing what share of an ordinary hit arrives as it and what it meets on the way in,
+plus the multiplier conversion puts on the size of the hit. It reads the *same* split the hit
+itself reads, so if the card and the monster ever disagree you can see which one is lying.
+The exhaustive EVERY STAT list below it carries the same five rows, always.
+
+`conv.js` proves the pipeline on its own — an uphill pair is refused, a hero with no table is
+the safest path through rather than the one that throws, and the worst case (every legal
+conversion *and* every gain-as-extra at once) terminates in under a millisecond.
+`conv2.js` puts a hero in front of a monster and measures what actually comes off its health
+bar: armour walked past, the right resistance paid, half-converted is half-mitigated, a real
+swing arriving at exactly `base × every pool that should apply to it`, gain-as-extra leaving
+the source alone, chaos resisted by nothing, chaos leaving doses, a drain **not** re-converted,
+and the sheet agreeing with the hit. Sixteen break-builds between them, each caught by the
+assertion meant for it.
 
 ---
 
