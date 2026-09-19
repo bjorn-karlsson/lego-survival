@@ -708,3 +708,91 @@ what made the budget visible. And the budget itself: a road node was worth **3**
 attribute in a map where a walk was fifteen nodes, and the fifth pass made a walk thirty. Two
 per node puts a straight build back at **×2.42**, under the ceiling it is held to, without
 touching the point ceiling the tree is built around.
+
+---
+
+## Sixth pass — three countries
+
+Two complaints, one screenshot each. *"There is like 12 attribute nodes in a row here, make
+the spacing bigger."* And, next to a picture of Path of Exile's tree cut into a red, a green
+and a blue third: *"separate the attribute nodes more, like this."*
+
+### The stride
+
+The fifth pass laid road nodes 120px apart, and between two pockets on the outer ring that is
+a dozen of them nose to tail. The fix is the obvious one — a longer stride — and the cost of
+it is that the map gets cheaper to cross, which is most of what the rest of this pass is
+about.
+
+| | fifth pass | sixth pass |
+|---|--:|--:|
+| road nodes | 267 | **134** |
+| median gap between two of them | 119px | **210px** |
+| most you cross with no choice in them | 7 | **5** |
+| nodes | 457 | **328** |
+| tree cost | 489 | **360** |
+
+### The ground decides
+
+A road used to name the attribute it paid. Now it does not: `roadNode` reads the wedge the
+node is standing in, so a ring is red on the red side and blue on the blue side and changes
+colour exactly at the border. Nothing has to be kept in step by hand, and adding a road
+anywhere gets the right colour for free.
+
+That has one sharp edge. The nudge pass that keeps travel nodes off cluster nodes can shove a
+road node thirty-four pixels, which near a border is enough to move it into the next country
+while it is still carrying the last one's attribute. So the ground is read **again**, after
+the nudge, and that is the reading that sticks. The break-build that set every road to
+strength caught nothing at first — the second reading quietly repaired it, which is its own
+small proof that it is doing something.
+
+### The border had to cost something
+
+Cutting the map into countries and then leaving the ring roads whole is decoration. With all
+three rings complete, every keystone on the map sat within **two points** of every door: half
+a lap of the inner ring is eight points, and from anywhere on it you can take any spoke
+outward. `meta.js` said so — *"a prize costs everyone the same"* — the moment the sectors went
+in.
+
+So the inner and middle rings are **cut at every border**: laid as loops, then the three edges
+that cross a frontier are dropped. The only road between countries is the outer ring, and
+going the long way round it is a journey.
+
+| | inner ring whole | both inner rings cut |
+|---|--:|--:|
+| sword to its own abilities | 19 | **19** |
+| sword to somebody else's | 21 | **30** |
+| axe, home / away | 16 / 21 | **16 / 25** |
+| staff, home / away | 18 / 19 | **18 / 22** |
+
+The abilities also had to move **off** the borders. An ability ten degrees from a frontier
+belongs to both sides, and with three of them sitting on one the staff's advantage in its own
+country came out at a single point.
+
+### What the budget caught this time
+
+The hand-written route lists that `meta.js` measured its power budget with were written for a
+map with no countries in it, so they measure a **wanderer** — and this pass made wandering the
+expensive way to play. A build that buys its own third of the map and nothing else was never
+being looked at, and it was **×2.75 total power** against a declared ×2.60 while the test
+reported green.
+
+`meta.js` now walks each country, nearest node first, to the ceiling, and takes the worst of
+the three. The red country came in over because every point of increased hearts in the game
+is now within twenty points of the sword's door — which is the clustering working exactly as
+asked, so the numbers gave instead: Warden 12% → 8%, Hale 6% → 5%, Stoic 5% → 4%, Sturdy
+4% → 3%, Warmonger and Swordsman a point of increased physical each.
+
+| stay-at-home build | power |
+|---|--:|
+| red (sword) | **×2.52** |
+| green (axe's country, measured on a sword) | ×1.32 |
+| blue | ×1.21 |
+
+### The adjacency that read double
+
+`roads.js` built its adjacency by pushing both ends of every `req` — but `req` already holds
+the edge from both sides, so every neighbour appeared twice and every degree came out even.
+The run-length check looked for nodes with exactly two neighbours and found four in the whole
+map. It was asserting nothing at all, and had been since it was written an hour earlier.
+Deduped through a `Set`, it reads 5.

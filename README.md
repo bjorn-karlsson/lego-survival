@@ -1236,8 +1236,10 @@ staff's.
 **Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
 dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
 is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
-swings, the staff's is focus and warding. Your own beginning costs you **3 to 4** points and
-costs everybody else **15 to 24**. After that the map is shared, and it fans outward.
+swings, the staff's is focus and warding. Each door sits in its own country — the sword and
+the mace in the red, the axe in the green, the staff in the blue — and each has a private road
+out of the middle that pays its own attribute. Your own beginning costs you **3 to 4** points
+and costs everybody else **15 to 24**.
 
 ### Highways and pockets
 
@@ -1250,18 +1252,37 @@ for stats you did not want in order to reach the ones you did.
 that pay **one attribute and nothing else**, so you can cross the entire map on dexterity
 alone and arrive with nothing in your build you did not choose:
 
-Three ring roads, twenty spokes across the gaps between them, and four door roads — one per
-weapon, each paying a different attribute, so the staff walks out of the middle on
-intelligence and the mace on strength.
+### Three countries
 
-| Attribute | Which roads pay it | Longest unbroken run | How far it spans |
-|---|---|--:|--:|
-| **DEXTERITY** | the inner ring, the axe's door, a third of the spokes | **44** nodes | 3065 px |
-| **STRENGTH** | the middle ring, the sword's and mace's doors, a third of the spokes | **95** | 3075 px |
-| **INTELLIGENCE** | the outer ring, the staff's door, a third of the spokes | **123** | 4323 px |
+The map is cut into three wedges, and **what lives in a wedge belongs to it**. No road carries
+a label saying which attribute it pays — it pays the attribute of the **ground it is standing
+on**, so a ring changes colour exactly where the border is and the map colours itself.
+
+| | | |
+|---|---|---|
+| **RED — STRENGTH** | the sword and the mace | physical damage, hearts, regeneration, armour |
+| **GREEN — DEXTERITY** | the axe | criticals, speed, bleed and poison, everything that lingers |
+| **BLUE — INTELLIGENCE** | the staff | spells, the elements, the cold and the storm |
+
+Conversion is in all three, because every build has something worth converting.
+
+**The inner and middle rings are cut at every border.** Laid whole, they made the countries
+decoration: half a lap of the inner ring was eight points and from anywhere on it you could
+take any spoke outward, which put every prize on the map within two points of every door.
+Cut, the only road between countries is the **outer ring**, and going the long way round that
+is a journey you can feel. Your own third of the map is **16 to 19** points to its abilities;
+somebody else's is **24 to 30**.
+
+| Attribute | Longest unbroken run | How far it spans | Road nodes |
+|---|--:|--:|--:|
+| **STRENGTH** | **67** nodes | 3046 px | 51 |
+| **DEXTERITY** | **56** | 2723 px | 43 |
+| **INTELLIGENCE** | **48** | 2666 px | 40 |
 
 A road node is worth **2** of its attribute — a fifth of a real node. Walking across the map
-is never *nothing*, and it is never as good as arriving.
+is never *nothing*, and it is never as good as arriving. Road nodes sit a **median 210px**
+apart and you cross at most **five** with no choice in them before the next junction; the map
+this replaced ran 119px and seven, which read as a queue of identical dots.
 
 **A cluster is a POCKET.** It hangs off a single short spur and has no other way in or out,
 so **nothing ever routes through one**. Knock any cluster out of the map entirely and every
@@ -1269,15 +1290,15 @@ other cluster is still reachable from every door — which means skipping a clus
 want costs you exactly nothing. That is the whole rework in one sentence.
 
 The cheapest walk to any keystone, from any door, passes through **zero** other clusters, and
-**91 to 94% of it is road**. You take the highway out, step into the pocket you came for,
+**89 to 94% of it is road**. You take the highway out, step into the pocket you came for,
 and step back.
 
-**Four hundred and fifty-seven nodes**, in bands: four doors in the dead centre, four
+**Three hundred and twenty-eight nodes**, in bands: four doors in the dead centre, four
 openings around them, twelve clusters between the first and second ring, eight between the
 second and third, eight abilities outside the third, and four corners further out still.
 **The rim is where the good stuff is** — the twelve keystones all sit on the outside,
-**twenty-two to thirty-two points** from your door, so one of them is a real journey and
-two of them is your whole ceiling.
+**thirteen to thirty-four points** from your door depending on whose country it is in, so
+one of them is a real journey and two of them is your whole ceiling.
 
 **The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
 WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
