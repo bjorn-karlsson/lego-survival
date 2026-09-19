@@ -370,14 +370,30 @@ to buy radius and duration with **no cap on either**: forty-six of them read **1
 **63 seconds** on the test bench, which is not a spell, it is an oversight. They lay an extra
 chill stack now instead, capped at **4** — five freezes a body solid, so one pulse can never
 do it alone however you got there. The card stops being offered once it can buy nothing more,
-and both cards that deepen the pulse print the **same sentence from the same function**, so
-neither can promise a stack the ceiling will not hand over.
+and it prints its own ceiling, so it can never promise a stack it will not hand over.
 
-Two more bricks came with the rework: **`Killing Frost`** (flat frost damage, added to the
-base *before* every increase, like every other flat pool) and **`Deepening Winter`** (the
-same +1 chill stack, from the other direction). The freeze also **holds longer** — the chill
-2.5s → **4.5s**, and Absolute Zero 3.0s → **4.5s** — because a pulse this small and this
-frequent has to make what it lands stick.
+**It has its own rarity ladder, and it starts at RARE.** Every other spell counts in
+projectiles and can afford eight of them; this one counts in chill stacks, so an *uncommon*
+handing over two was three quarters of a permanent freeze on one card. A **rare gives +1**,
+an **epic +2**, and it is never offered below rare.
+
+| | |
+|---|---|
+| **`Killing Frost`** | flat frost damage, added to the base *before* every increase |
+| **`Absolute Zero`** | every caught foe frozen SOLID for 4.5s **and left BRITTLE** — and anything that **dies frozen SHATTERS**, throwing your own pulse out of the corpse |
+
+`Deepening Winter` is gone: it did the job the spell's own stacks now do, which made picking
+the spell up twice and picking it up once the same card in two coats.
+
+**A frozen corpse throws your pulse.** Absolute Zero's payoff is no longer just a stun — a
+body that dies frozen shatters for **75% of your own radius**, with the same frost and the
+same chill, and what it died **BRITTLE** with is the multiplier: **+50% a mark, four deep**,
+so a four-mark corpse hits for **2×** a one-mark corpse. A shatter that kills sets off
+another, twice deep and no further. The frost build's own debuff is what makes its kills
+worth watching.
+
+The freeze also **holds longer** — the chill 2.5s → **4.5s**, and Absolute Zero 3.0s →
+**4.5s** — because a pulse this small and this frequent has to make what it lands stick.
 
 It is only offered to a caster, the way the melee spells are only offered to a melee weapon.
 
