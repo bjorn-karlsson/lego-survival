@@ -765,7 +765,7 @@ const TOTEM_EVERY = [0, 6, 3];            /* seconds between totems, by rank */
 const TOTEM_LIFE  = [0, 9, 12];
 const TOTEM_MUL   = [0, 1/3, 0.55];       /* share of vortex damage it deals */
 const TOTEM_TICK = 0.3;
-const FREEZE_STUN_T = 3.0;                /* Absolute Zero: frozen solid this long */
+const FREEZE_STUN_T = 4.5;                /* Absolute Zero: frozen solid this long */
 const BLAST_SPLIT_MAX = 2;                /* Scattershot: 3 shards, then 9 */
 /* Scattershot used to DIVIDE the damage among the shards, so three shards of a
    third were exactly the brick you started with: coverage for free and power
@@ -2111,7 +2111,7 @@ function newPlayer(){
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
-    freeze:{ n:0, r:128, dur:2.5, rate:FREEZE_RATE_BASE, cd:1.2, stun:0, flat:0, chill:0 },
+    freeze:{ n:0, r:128, dur:4.5, rate:FREEZE_RATE_BASE, cd:1.2, stun:0, flat:0, chill:0 },
     bane:{ n:0, dmg:2, rate:BANE_RATE_BASE, cd:1.5, r:BANE_R_BASE, arc:BANE_ARC_BASE,
            dot:BANE_DOT_BASE, dotT:BANE_DOT_T, stacks:1, burst:0 },
     /* BLEED. chanceFlat is added to every melee hit and stacks on top of the
@@ -3825,8 +3825,28 @@ function frostDamage(){
   return Math.max(0, (FREEZE_DMG_BASE + player.flatElem + (player.freeze.flat||0))
     * (1 + incTotal('spell', 'frost')) * moreTotal());
 }
-/* how many chill stacks one pulse lays — one, plus whatever you have bought */
-function freezeChill(){ return 1 + ((player.freeze && player.freeze.chill) || 0); }
+/* HOW MANY CHILL STACKS ONE PULSE LAYS. Extra stacks of the spell used to buy
+   radius and duration with NO CEILING ON EITHER — forty-six of them read 1654px
+   and 63 seconds on the bench, which is not a spell, it is an oversight. Every
+   stack past the first deepens the CHILL instead, and chill has a ceiling. */
+function freezeChill(){
+  const fz = player && player.freeze;
+  if(!fz) return 1;
+  return Math.min(FREEZE_CHILL_MAX, 1 + Math.max(0, fz.n - 1) + (fz.chill || 0));
+}
+/* ...so the spell itself stops being offered once it can buy nothing more */
+function freezeDeeper(){ return freezeChill() < FREEZE_CHILL_MAX; }
+/* ONE SENTENCE, WRITTEN ONCE. Both cards that deepen the pulse print this, so
+   neither can promise a stack the ceiling will not let it hand over — the bench
+   showed "lays 5 CHILL stacks instead of 4 (cap 4)" on a card that was already
+   greyed out, which is a card calling itself a liar. */
+function freezeChillDesc(add){
+  const now = freezeChill(), then = Math.min(FREEZE_CHILL_MAX, now + add);
+  const tail = `— five freezes a body solid and leaves it BRITTLE`;
+  if(then <= now) return `Already laying ${now} CHILL stacks, the deepest a pulse goes ${tail}`;
+  return `Every pulse lays ${then} CHILL stack${then>1?'s':''} instead of ${now} `+
+         `(cap ${FREEZE_CHILL_MAX}) ${tail}`;
+}
 /* THE STORM BRICK IS LIGHTNING. It used to be a plain spell hit, which meant a
    caster's whole elemental tree did nothing for the one spell that is visibly
    made of lightning. It reads the flat ELEMENTAL pool the way the fireball
@@ -4749,8 +4769,10 @@ const FLAT_BOMB  = [1, 1.5, 3, 5, 8];
    shallow one — a flat point here is worth several on anything else. */
 const FLAT_FREEZE = [0.3, 0.6, 1.2, 2, 3.2];
 /* five chill stacks freeze a body solid, so laying five at once would make
-   every pulse a freeze and the stacking mean nothing */
-const FREEZE_CHILL_MAX = 3;
+   every pulse a freeze and the stacking mean nothing. EVERYTHING that deepens
+   the pulse meets this one number: the spell's own stacks and Deepening Winter
+   alike, so the two can never quietly add up past it. */
+const FREEZE_CHILL_MAX = 4;
 const RAR_MULTS = RAR_ORDER.map(r=> RARITY[r].mult);
 function byRar(m, table){
   let best = 0, bd = Infinity;
@@ -5327,13 +5349,15 @@ const UPGRADES = [
     apply:c=>{ player.bane.burst = Math.min(BANE_BURST.length-1, player.bane.burst + 1); } },
   { id:'freeze', name:'Block Freeze', icon:'freeze', cls:'SPELL', minRar:'uncommon',
     /* a frost spell belongs to the hero who can carry frost */
-    req:()=>isCaster() && canTakeSpell('freeze'),
+    req:()=>isCaster() && canTakeSpell('freeze') && (player.freeze.n === 0 || freezeDeeper()),
     calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — wider, longer, and more chill`
+    desc:(c,owned)=> owned>0
+      ? freezeChillDesc(c.n)
       : `Spell: a burst of frost around you for ${fmtHp(frostDamage())} FROST damage, `+
-        `laying ${freezeChill()} CHILL stack${freezeChill()>1?'s':''} — five freezes solid, `+
-        `and leaves the body BRITTLE`,
-    apply:c=>{ player.freeze.n += c.n; } },
+        `laying a CHILL stack — five freezes solid, and leaves the body BRITTLE`,
+    /* clamped where it is WRITTEN, not only where it is read, so the character
+       sheet never reports a stack the pulse cannot use */
+    apply:c=>{ player.freeze.n = Math.min(FREEZE_CHILL_MAX, player.freeze.n + c.n); } },
   { id:'freezr', name:'Deep Chill', icon:'freeze', cls:'SPELL',
     req:()=>isCaster() && player.freeze.n>0 && player.freeze.r < FREEZE_MAX_R,
     calc:m=>({v:Math.round(20*m)}),
@@ -5352,10 +5376,9 @@ const UPGRADES = [
     desc:c=>`+${c.v} flat frost damage to every Block Freeze pulse`,
     apply:c=>{ player.freeze.flat = Math.round((player.freeze.flat + c.v)*100)/100; } },
   { id:'freezs', name:'Deepening Winter', icon:'icecube', cls:'SPELL', minRar:'rare',
-    req:()=>isCaster() && player.freeze.n>0 && freezeChill() < FREEZE_CHILL_MAX,
+    req:()=>isCaster() && player.freeze.n>0 && freezeDeeper(),
     calc:m=>({n:1}),
-    desc:c=>`Every pulse lays ${freezeChill()+1} CHILL stacks instead of ${freezeChill()} `+
-      `(cap ${FREEZE_CHILL_MAX}) — five freezes a body solid and leaves it BRITTLE`,
+    desc:c=>freezeChillDesc(1),
     apply:c=>{ player.freeze.chill = Math.min(FREEZE_CHILL_MAX-1, (player.freeze.chill||0) + 1); } },
   { id:'bombplus', name:'Bomb Volley', icon:'bomb', cls:'SPELL', minRar:'uncommon',
     req:()=>canTakeSpell('bomb') && player.bomb.n < bombMaxN(),
@@ -6595,7 +6618,7 @@ const FAV_PERKS = {
                    '-10% vortex cooldown'],
     apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
       p.inc.vortexRate += 0.11; } },
-  freeze: { grants:'freeze', lines:['Start with 1 block freeze', '+20% freeze radius',
+  freeze: { grants:'freeze', lines:['Start with Block Freeze', '+20% freeze radius',
                    '+0.5s freeze duration'],
     apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
   bomb: { grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
@@ -7519,12 +7542,12 @@ function spellSummaries(){
   if(p.freeze.n>0){
     out.push({ id:'freeze', icon:'freeze', name:'Block Freeze', head:per(frostDamage()), tip:
       `Pure crowd control — deals no damage\n`+
-      `Radius ${Math.round(p.freeze.r + (p.freeze.n-1)*30)}, every ${p.freeze.rate.toFixed(2)}s\n`+
+      `Radius ${Math.round(p.freeze.r)}, every ${p.freeze.rate.toFixed(2)}s\n`+
       `${per(frostDamage())} FROST and ${freezeChill()} CHILL stack${freezeChill()>1?'s':''} `+
       `to everything caught — the fifth stack freezes a body SOLID and leaves it `+
       `BRITTLE (\u2212${Math.round(FROZEN_RES_STEP*100)}% frost resistance a mark, `+
       `${FROZEN_MAX} deep)\n`+
-      `Frozen foes crawl at 45% speed for ${(p.freeze.dur + (p.freeze.n-1)*1.2).toFixed(1)}s`+
+      `Frozen foes crawl at 45% speed for ${p.freeze.dur.toFixed(1)}s`+
       (p.freeze.stun ? `\nAbsolute Zero: everything caught is frozen SOLID for ${FREEZE_STUN_T.toFixed(1)}s `+
         `— no moving, no attacks, no abilities` : '') });
   }
@@ -7888,8 +7911,8 @@ const STAT_PROBES = [
   { g:'BOMB VOLLEY', k:'Blast radius',      get:()=> player.bomb.n ? player.bomb.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'BOMB VOLLEY', k:'Interval',          get:()=> player.bomb.n ? player.bomb.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
   { g:'BOMB VOLLEY', k:'Volley DPS',        get:()=> player.bomb.n ? calcDamage(player.bomb.dmg,'spell')*player.bomb.n/player.bomb.rate : 0, fmt:v=>v.toFixed(1), zero:true },
-  { g:'BLOCK FREEZE', k:'Radius',           get:()=> player.freeze.n ? player.freeze.r + (player.freeze.n-1)*30 : 0, fmt:v=>Math.round(v)+' px', zero:true },
-  { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur + (player.freeze.n-1)*1.2 : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
+  { g:'BLOCK FREEZE', k:'Radius',           get:()=> player.freeze.n ? player.freeze.r : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'BLOCK FREEZE', k:'Freeze duration',  get:()=> player.freeze.n ? player.freeze.dur : 0, fmt:v=>v.toFixed(1)+'s', zero:true },
   { g:'BLOCK FREEZE', k:'Interval',         get:()=> player.freeze.n ? player.freeze.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true,
     why:'seconds between blasts. CAST SPEED shortens it, down to its own floor' },
   { g:'BLOCK FREEZE', k:'Frost damage',     get:()=> player.freeze.n ? frostDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
@@ -9216,8 +9239,8 @@ function updatePlayer(dt){
     fz.cd -= dt;
     if(fz.cd<=0){
       fz.cd = fz.rate;
-      const rr = fz.r + (fz.n-1)*30;
-      const dur = fz.dur + (fz.n-1)*1.2;
+      const rr = fz.r;
+      const dur = fz.dur;
       /* THE RING HAS TO BE THE SPELL. A fixed expansion speed with a fixed life
          drew a ring that reached the edge at exactly one radius and fell short
          at every other — so a hero who had bought reach watched a small ring
