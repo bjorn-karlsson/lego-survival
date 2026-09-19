@@ -925,13 +925,13 @@ function syncStats(){
   if(!p) return;
   const i = p.inc;
   p.maxHp = Math.max(1, Math.min(heartCap(),
-    Math.round(pool(HP_BASE, p.hpFlat, i.hp, p.hpMore))));
+    Math.round(pool(HP_BASE, p.hpFlat, i.hp + strOf(p)*ATTR_STR_HP, p.hpMore))));
   if(p.hp > p.maxHp) p.hp = p.maxHp;
   p.speed   = Math.min(SPEED_MAX,  pool(SPEED_BASE, 0, i.speed, 1));
   p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
   p.studMul = pool(1, 0, i.studs, 1);
   /* the weapon sets the BASE; the bricks scale it, exactly as before */
-  p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0), atkFloor());
+  p.atkRate = paceOf(weapon.rate, i.atk + (weapon.incAtk || 0) + dexOf(p)*ATTR_DEX_ATK, atkFloor());
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
   p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, castInc(i.orbitSpd), 1));
@@ -958,8 +958,10 @@ function syncStats(){
   p.armour      = pool(0, p.armourFlat, 0, 1);      /* the flat pool; armourValue() finishes it */
   p.reach       = Math.min(REACH_MAX,     pool(0, p.reachFlat, 0, 1));
   p.suppress    = Math.min(1,             pool(0, p.suppressFlat, 0, 1));
-  p.critMultPct = Math.min(CRIT_MULT_CAP, pool(weapon.critMult, p.critMultFlat, 0, 1));
-  p.regenRate   = p.noRegen ? 0 : Math.min(REGEN_MAX, pool(0, p.regenFlat, i.regen, 1));
+  p.critMultPct = Math.min(CRIT_MULT_CAP,
+    pool(weapon.critMult, p.critMultFlat, p.incCritMult + dexOf(p)*ATTR_DEX_CMULT, 1));
+  p.regenRate   = p.noRegen ? 0
+    : Math.min(REGEN_MAX, pool(0, p.regenFlat, i.regen + intOf(p)*ATTR_INT_REGEN, 1));
   p.heartChance = Math.min(HEART_CHANCE_MAX, i.heart);
   p.xpMul       = pool(1, 0, p.xpInc, p.xpMore);
   for(const el of ELEMENTS) p.res[el] = pool(0, p.resFlat[el], 0, 1);
@@ -1350,17 +1352,21 @@ const WEAPONS = {
     blurb:'Balanced. Nothing it does is the best, and nothing it does is bad.',
     dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
     bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade',
-    lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15 },
+    lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15,
+    /* balanced, and the only weapon with a little of all three */
+    attr:{ str:10, int:4, dex:8 } },
   axe: { id:'axe', name:'AXE', col:'#e0a81a',
     blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
     dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
     bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe',
-    lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20 },
+    lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20,
+    attr:{ str:8, int:0, dex:16 } },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
     blurb:'Does not swing \u2014 it SLAMS. A fault of stone teeth opens in front of you.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
     bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace',
     lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10,
+    attr:{ str:20, int:0, dex:2 },
     /* THE MACE DOES NOT SWING. Its basic attack is the boss's own slam, turned
        around: it drives the head into the floor and a fan of stone tears up out
        of the ground in front of it. Reach, the spin combo and the whirl all go;
@@ -1379,6 +1385,7 @@ const WEAPONS = {
     incSpell:0.25, incElem:0.30, incAtk:0.20,
     /* it stands in the fire it starts, so it is a little harder to burn */
     res:0.08,
+    attr:{ str:0, int:22, dex:4 },
     boltSpd:520, boltR:46 }
 };
 /* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
@@ -1436,7 +1443,8 @@ const BARE_HANDS = { id:'bare', name:'BARE HANDS', col:'#8a9299',
   blurb:'Nothing in your hands. Every weapon is written against this.',
   dmg:1.0, rate:0.50, reach:40, spinReach:40, crit:0.05, critMult:100,
   bleed:1.0, spin:1.00, kb:1.00, hold:'sword', throw:'blade',
-  lessTaken:0, suppress:0, leech:0, leechChance:0 };
+  lessTaken:0, suppress:0, leech:0, leechChance:0,
+  attr:{ str:0, int:0, dex:0 } };
 /* the baseline the rest of the game is balanced against, kept for the bricks
    that quote a "base" number in their own text */
 const CRIT_BASE       = WEAPONS.sword.crit;
@@ -1554,6 +1562,101 @@ const SHOCKED_T            = 14;
 const VENOM_LIFE = 5.5;      /* seconds the pool lingers */
 const VENOM_TICK = 0.55;     /* seconds between bites */
 const VENOM_SHARE = 0.45;    /* of the gobbet's damage, per bite */
+/* ======================= DAMAGE CONVERSION: THE GROUNDWORK ==================
+   NOT WIRED INTO A SINGLE LIVE HIT YET, and deliberately so. What is here is
+   the model, the pipeline and the rules, tested on its own, so that turning it
+   on later is one call site rather than a rewrite.
+
+   FIVE TYPES, ONE DIRECTION. Conversion only ever runs down this list, which is
+   the whole reason it terminates: there is no arrangement of modifiers that can
+   send damage back round the loop.
+
+       PHYSICAL → LIGHTNING → COLD → FIRE → CHAOS
+
+   TWO FORMS, AND THE DIFFERENCE IS WHAT HAPPENS TO THE SOURCE:
+     CONVERTED TO   takes the damage OUT of the source type.
+     GAIN AS EXTRA  leaves the source intact and adds a copy as the new type.
+
+   WHEN IT HAPPENS: after flat added damage joins the base, and BEFORE any
+   increased or more multiplier touches it. That ordering is the whole point —
+   converted damage is scaled by the DESTINATION type's increases, which is why
+   a physical-to-cold build wants increased cold damage and not increased
+   physical.
+
+   WHAT THE MONSTER DOES ABOUT IT: nothing to do with you. A hit that arrives as
+   cold is mitigated as cold, whatever it set out as.
+
+   CHAOS is the fifth type and has no home yet: it is neither physical nor
+   elemental, so armour does not stop it and no elemental resistance does
+   either. It is the poison-flavoured one — where physical can open a bleed,
+   chaos can leave a dose behind. */
+const CONV_ORDER = ['phys','shock','frost','fire','chaos'];
+const CONV_NAME  = { phys:'PHYSICAL', shock:'LIGHTNING', frost:'COLD', fire:'FIRE', chaos:'CHAOS' };
+const CONV_COL   = { phys:'#cfd6dd', shock:'#ffe95a', frost:'#bfe3ff', fire:'#ff8a3c', chaos:'#8ede4a' };
+const CONV_RANK  = CONV_ORDER.reduce((o,k,i)=>{ o[k] = i; return o; }, {});
+/* a hero's conversion table, empty until something fills it */
+function blankConv(){
+  const o = { conv:{}, gain:{} };
+  for(const a of CONV_ORDER){ o.conv[a] = {}; o.gain[a] = {}; }
+  return o;
+}
+/* IS THIS PAIR LEGAL? Only downhill, and never to itself. */
+function convLegal(from, to){
+  return CONV_RANK[from] !== undefined && CONV_RANK[to] !== undefined
+      && CONV_RANK[to] > CONV_RANK[from];
+}
+/* HOW MUCH OF A TYPE LEAVES IT. Conversions out of one type are shared
+   proportionally when they total more than all of it, exactly as they are in
+   the game this is borrowed from: asking for 80% to cold and 80% to fire gets
+   you half of each, not a hero dealing 160% of their own damage. */
+function convShares(c, from){
+  const row = (c && c.conv && c.conv[from]) || {};
+  let total = 0;
+  for(const to of CONV_ORDER) if(convLegal(from, to)) total += Math.max(0, row[to] || 0);
+  const out = {};
+  const scale = total > 1 ? 1/total : 1;
+  for(const to of CONV_ORDER)
+    if(convLegal(from, to) && row[to] > 0) out[to] = row[to] * scale;
+  return out;
+}
+/* THE PIPELINE. Takes a base amount of one type and returns what it has become:
+   an object of type -> amount, with everything gained as extra already in it.
+   Run down CONV_ORDER once, so every type is finished before anything
+   downstream of it is considered and nothing is ever visited twice. */
+function convertDamage(base, from, c){
+  const out = {};
+  for(const k of CONV_ORDER) out[k] = 0;
+  if(!(base > 0) || CONV_RANK[from] === undefined) return out;
+  out[from] = base;
+  for(const a of CONV_ORDER){
+    const have = out[a];
+    if(!(have > 0)) continue;
+    /* GAIN AS EXTRA reads the amount BEFORE conversion takes any of it away,
+       so the two forms never fight over the same pool */
+    const gainRow = (c && c.gain && c.gain[a]) || {};
+    const shares = convShares(c, a);
+    let moved = 0;
+    for(const to of CONV_ORDER){
+      if(!convLegal(a, to)) continue;
+      if(shares[to] > 0){ out[to] += have * shares[to]; moved += have * shares[to]; }
+      if(gainRow[to] > 0) out[to] += have * gainRow[to];
+    }
+    out[a] = have - moved;
+  }
+  return out;
+}
+/* what a finished conversion is worth once each part has paid its OWN type's
+   increases. The destination's pools, never the source's. */
+function convParts(base, from, c, incOf){
+  const raw = convertDamage(base, from, c), parts = [];
+  for(const k of CONV_ORDER){
+    if(!(raw[k] > 0)) continue;
+    let mul = 1;
+    try { mul = incOf ? incOf(k) : 1; } catch(e){ mul = 1; }
+    parts.push({ type:k, base:raw[k], amount:raw[k]*mul });
+  }
+  return parts;
+}
 /* WHICH ELEMENT A SOURCE IS. The hero has had elemental resistance since the
    start and monsters never did, which meant a fire golem was exactly as flammable
    as a skeleton — every golem was a reskin as far as your build was concerned.
@@ -2062,6 +2165,13 @@ function applyPick(u, rar){
   logEvent('took '+u.name+' ('+rar+')', RARITY[rar].col);
   taken[u.id] = (taken[u.id]||0)+1;
   buildLog.push({ id:u.id, rar });
+  /* A SPELL CAN BE FINISHED MID-RUN, and the point for finishing it should
+     exist the moment it is, not the moment you die. */
+  if(!sandbox && state !== 'title') for(const k of metaMastery(player)){
+    const M = META_MASTERY[k];
+    logEvent('ACHIEVEMENT \u2014 '+M.name+' \u00b7 +1 skill point', '#ffd76e');
+    showBanner(M.name, '+1 skill point', '#ffd76e', 2.2, 34);
+  }
 }
 /* Rebuild the whole character from the log with one brick left out. Replaying is
    the only honest way to undo a pick: the `apply` functions multiply, clamp and
@@ -2220,6 +2330,9 @@ function newPlayer(){
        crit's own 50%; shareFlat deepens the wound itself. Both are rebuilt by
        syncStats like everything else -- no card writes the derived number. */
     bleedChanceFlat:0, bleedShareFlat:0, bleedChance:0, bleedShare:BLEED_SHARE_BASE,
+    /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
+    attr:{ str:0, int:0, dex:0 },
+    incCritMult:0,
     /* storm bricks — `zappers` hovering bricks (max CHAIN_MAX_ZAPPERS), each firing a
        bolt that leaps through `n` foes. Damage always scales with spell damage. */
     chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0, shock:0 },
@@ -3948,8 +4061,40 @@ function physDamage(more){ return calcDamage(physBase(), 'melee', more); }
 /* A WEAPON GRANTS INCREASES, and an increase sums into the pool it belongs to —
    it never gets its own multiplier. These are the three pools a weapon can pay
    into, read everywhere the pool itself is read. */
-function incSpellAll(){ return player.incSpell + (weapon.incSpell || 0); }
-function incMeleeAll(){ return player.incMelee + (weapon.incMelee || 0); }
+/* ============================ THE THREE ATTRIBUTES ==========================
+   STRENGTH, INTELLIGENCE and DEXTERITY: the boring numbers you collect on the
+   way to somewhere interesting. Every step of corridor in the skill tree hands
+   one over, so walking across the map is never NOTHING — it is simply never as
+   good as arriving.
+
+   WHAT THEY GRANT IS DERIVED, NEVER WRITTEN. A brick that handed you ten
+   strength and also poked +5% into the increased-physical pool would double
+   count the moment a second source of strength turned up, and the pool would
+   keep the bonus after the strength went away. The attribute is the pool; the
+   percentage is read off it at the point of use, every rebuild, like the
+   weapon's own increases already are. */
+const ATTRS = [
+  { id:'str', name:'STRENGTH',     short:'STR', col:'#ff5a4a',
+    what:'+0.5% increased physical damage and +0.5% increased maximum hearts, each' },
+  { id:'int', name:'INTELLIGENCE', short:'INT', col:'#5aa8ff',
+    what:'+0.5% increased spell damage and +0.5% increased regeneration, each' },
+  { id:'dex', name:'DEXTERITY',    short:'DEX', col:'#6ee06e',
+    what:'+0.3% increased critical chance, critical damage and attack speed, each' },
+];
+const ATTR_STR_DMG   = 0.005, ATTR_STR_HP    = 0.005;
+const ATTR_INT_SPELL = 0.005, ATTR_INT_REGEN = 0.005;
+const ATTR_DEX_CRIT  = 0.003, ATTR_DEX_CMULT = 0.003, ATTR_DEX_ATK = 0.003;
+/* the weapon's own attributes plus every one a brick or a node handed over */
+function attrOf(id, p, w){
+  p = p || player; w = w || weapon;
+  if(!p) return 0;
+  return Math.max(0, ((w && w.attr && w.attr[id]) || 0) + ((p.attr && p.attr[id]) || 0));
+}
+function strOf(p, w){ return attrOf('str', p, w); }
+function intOf(p, w){ return attrOf('int', p, w); }
+function dexOf(p, w){ return attrOf('dex', p, w); }
+function incSpellAll(){ return player.incSpell + (weapon.incSpell || 0) + intOf()*ATTR_INT_SPELL; }
+function incMeleeAll(){ return player.incMelee + (weapon.incMelee || 0) + strOf()*ATTR_STR_DMG; }
 function incElemAll(el){
   return (player.inc.elem||0) + (player.inc[el]||0) + (weapon.incElem || 0);
 }
@@ -4014,7 +4159,9 @@ function boltRadius(){
 }
 /* kept under their old names so nothing that reads "the sword's damage" breaks */
 const swordBase = physBase, swordDamage = physDamage;
-function critChance(){ return clamp(player.critBase * (1 + player.incCrit), 0, CRIT_CHANCE_CAP); }
+function critChance(){
+  return clamp(player.critBase * (1 + player.incCrit + dexOf()*ATTR_DEX_CRIT), 0, CRIT_CHANCE_CAP);
+}
 function critMultPct(){ return Math.min(CRIT_MULT_CAP, player.critMultPct); }
 function critMult(){ return critMultPct()/100; }
 /* The armour curve. Mitigation always uses the ACTUAL hit damage. */
@@ -4915,6 +5062,10 @@ const FLAT_BOMB  = [1, 1.5, 3, 5, 8];
 /* Block Freeze pulses far more often than a bomb lands, so its ladder is the
    shallow one — a flat point here is worth several on anything else. */
 const FLAT_FREEZE = [0.3, 0.6, 1.2, 2, 3.2];
+/* attributes are BORING BY DESIGN, so a common one has to be worth taking when
+   there is nothing better on the screen and never worth taking when there is */
+const ATTR_CARD     = [6, 10, 16, 26, 40];
+const ATTR_ALL_CARD = [0, 0,  6,  10, 16];
 /* five chill stacks freeze a body solid, so laying five at once would make
    every pulse a freeze and the stacking mean nothing. EVERYTHING that deepens
    the pulse meets this one number: the spell's own stacks and Deepening Winter
@@ -5041,6 +5192,27 @@ const UPGRADES = [
      upgrade a frost build can take — and it was called Ember Core, wore a
      flame, and said "to your fire bolt". Picking Block Freeze as a favourite
      and being handed an ember is a card lying about itself, not a bad roll. */
+  /* THE FOUR EVERYBODY CAN BE OFFERED. No weapon gate, no favourite gate, no
+     spell to own first: attributes are the one currency the whole game shares,
+     and these are the only bricks in the deck that hand them over directly. */
+  { id:'attstr', name:'Ironbone', icon:'fist', cls:'OFFENSE',
+    calc:m=>({v: byRar(m, ATTR_CARD)}),
+    desc:c=>`+${c.v} STRENGTH — ${ATTRS[0].what} (now ${strOf()})`,
+    apply:c=>{ player.attr.str += c.v; syncStats(); } },
+  { id:'attint', name:'Runescript', icon:'arcane', cls:'OFFENSE',
+    calc:m=>({v: byRar(m, ATTR_CARD)}),
+    desc:c=>`+${c.v} INTELLIGENCE — ${ATTRS[1].what} (now ${intOf()})`,
+    apply:c=>{ player.attr.int += c.v; syncStats(); } },
+  { id:'attdex', name:'Quicksilver', icon:'boot', cls:'OFFENSE',
+    calc:m=>({v: byRar(m, ATTR_CARD)}),
+    desc:c=>`+${c.v} DEXTERITY — ${ATTRS[2].what} (now ${dexOf()})`,
+    apply:c=>{ player.attr.dex += c.v; syncStats(); } },
+  { id:'attall', name:'The Whole Brick', icon:'prism', cls:'OFFENSE', minRar:'rare',
+    calc:m=>({v: byRar(m, ATTR_ALL_CARD)}),
+    desc:c=>`+${c.v} to ALL THREE attributes — strength, intelligence and dexterity `+
+      `(now ${strOf()}/${intOf()}/${dexOf()})`,
+    apply:c=>{ player.attr.str += c.v; player.attr.int += c.v; player.attr.dex += c.v;
+               syncStats(); } },
   { id:'elemflat', name:'Elemental Core', icon:'prism', cls:'OFFENSE',
     req:()=>isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
@@ -5048,8 +5220,12 @@ const UPGRADES = [
       `ability you own — your ${weapon.elem||'elemental'} bolt, Block Freeze, the Storm `+
       `Brick — before a single increase touches it`,
     apply:c=>{ player.flatElem = Math.round((player.flatElem + c.v)*100)/100; } },
+  /* A SWORD OWNS ELEMENTAL DAMAGE TOO. The Storm Brick is lightning, Block
+     Freeze is frost, a bomb is fire and a mace's slam cycles all three — gating
+     the one brick that scales every last one of them behind CARRYING a staff
+     was a rule about the hand rather than about the build. */
   { id:'eleminc', name:'Elemental Focus', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>isCaster() && incRoom('spell', weapon.elem||'fire'),
+    req:()=>incRoom('spell', weapon.elem||'fire'),
     calc:m=>({v:0.08+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike `+
       `${incCapTag('spell', weapon.elem||'fire')}`,
@@ -5698,9 +5874,14 @@ const META_VER = 2;
    the early runs this exists to reward would feel WORSE. The square root
    compresses that to about 4x and explains itself in one line. */
 const META_BANK_K        = 4;
-const META_STUD_PER_POINT = 600;
-const META_STUD_POINT_MAX = 30;   /* studs alone can never carry the whole tree */
-const META_POINT_MAX      = 46;   /* THE HARD CEILING */
+/* EVERY WAVE IS A POINT, AND STUDS ARE NOT. Studs were the gate, and the gate
+   was the problem: a run that got further than any before it paid the same as
+   one that shuffled around wave 12 hoovering bricks, so the tree was a grind
+   rather than a record. Your BEST WAVE is your point total — reach 38 and you
+   have 38 to place; reach 40 next time and you have two more, because 40 is
+   your high-water mark and not your fortieth lap. Studs are still counted, and
+   they still buy nothing here. */
+const META_POINT_MAX      = 60;   /* THE HARD CEILING */
 /* BUMP THIS WHENEVER THE LAYOUT MOVES. A save from an older tree keeps every
    stud, every best wave and every boss — it just hands its allocated points
    BACK, because the nodes it chose are no longer where it left them. Nobody
@@ -5708,7 +5889,24 @@ const META_POINT_MAX      = 46;   /* THE HARD CEILING */
 const META_TREE_VER = 2;
 /* first time only, and per weapon — grinding a wave you have already beaten
    with that weapon pays nothing */
-const META_WAVE_POINTS   = [10, 20, 30, 40, 50, 60, 70, 80];
+/* ...and the achievements on top of it, which are the things a wave count
+   cannot see: how deep you levelled, which bosses you have ever put down, and
+   whether you have actually finished a spell rather than merely owned it. */
+const META_LEVEL_POINTS  = [10, 25, 50, 75, 80, 90, 100];
+/* MASTERY. Every CAPPED brick of one spell, at its cap. Flat damage is left
+   out on purpose: it has no ceiling, so "all of it" would never be true. */
+const META_MASTERY = {
+  bane: { name:'BRICKBANE MASTER', icon:'bane',
+    note:'every capped Brickbane brick at its cap \u2014 stacks, spread, reach, '+
+         'rate, dose length and Spore Burst. Flat poison damage has no cap, so it is not asked for.',
+    done:p=> !!p && p.bane && p.bane.n > 0
+      && p.bane.stacks >= BANE_STACK_MAX
+      && p.bane.arc    >= BANE_ARC_MAX - 0.01
+      && p.bane.r      >= BANE_R_MAX - 0.5
+      && p.bane.rate   <= BANE_MIN_RATE + 1e-6
+      && p.bane.dotT   >= BANE_DOT_MAX_T - 1e-6
+      && p.bane.burst  >= BANE_BURST.length - 1 },
+};
 
 /* ---- WHAT A NODE CAN GIVE YOU. One registry: the writer, the wording and the
    formatting all live together, so the tooltip, the stat panel and the hero can
@@ -5747,7 +5945,16 @@ const META_STATS = {
   fireRes:    { n:'fire resistance',              pct:1, w:(p,v)=>{ p.resFlat.fire += v; } },
   frostRes:   { n:'frost resistance',             pct:1, w:(p,v)=>{ p.resFlat.frost += v; } },
   shockRes:   { n:'lightning resistance',         pct:1, w:(p,v)=>{ p.resFlat.shock += v; } },
+  /* ATTRIBUTES. What every step of corridor hands over, and what makes walking
+     across the map worth something without ever being worth as much as arriving. */
+  str:        { n:'STRENGTH',     col:'#ff5a4a', w:(p,v)=>{ p.attr.str += v; } },
+  int:        { n:'INTELLIGENCE', col:'#5aa8ff', w:(p,v)=>{ p.attr.int += v; } },
+  dex:        { n:'DEXTERITY',    col:'#6ee06e', w:(p,v)=>{ p.attr.dex += v; } },
   hearts:     { n:'maximum hearts',                      w:(p,v)=>{ p.hpFlat += v; } },
+  /* +0.03 MAXIMUM HEARTS was a node nobody could feel and nobody could read.
+     A percentage of a pool that grows with the build is both. */
+  incHp:      { n:'increased maximum hearts', pct:1, w:(p,v)=>{ p.inc.hp += v; } },
+  incCritMult:{ n:'increased critical damage', pct:1, w:(p,v)=>{ p.incCritMult += v; } },
   moreHp:     { n:'MORE maximum hearts',          pct:1, w:(p,v)=>{ p.hpMore *= (1+v); } },
   regen:      { n:'hearts a second regenerated',         w:(p,v)=>{ p.regenFlat += v; } },
   incRegen:   { n:'increased regeneration',       pct:1, w:(p,v)=>{ p.inc.regen += v; } },
@@ -5815,6 +6022,7 @@ function metaModText(m){
   const num = st.pct ? Math.round(a*1000)/10+'%'
             : st.px  ? Math.round(a)+' px'
             : st.deg ? Math.round(a)+'°'
+            : st.col ? Math.round(a)               /* an attribute is a whole number */
             : (Math.round(a*100)/100);
   return sign+num+' '+st.n;
 }
@@ -5859,19 +6067,19 @@ const META_CLUSTERS = [
   /* ---- FOUR DIFFERENT BEGINNINGS. One cluster per weapon, right outside its
      own door, holding the thing only that weapon does. ---- */
   { id:'sworn',  sp:'war',  x:1020, y:580,  name:'THE SWORN BLADE', r:100, at:0,
-    minors:[['Whetstone','incMelee',0.04],['Guard Stance','fireRes',0.05],
+    minors:[['Whetstone','incMelee',0.04],['Drill','str',6],['Guard Stance','fireRes',0.05],
             ['Riposte','incCrit',0.05],['Follow Through','incAtk',0.04]],
     notable:{ name:'Swordsman', at:10, mods:[['incMelee',0.08],['reach',6]] } },
   { id:'berserk',sp:'swift',x:1420, y:1030, name:'THE BERSERKER',   r:100, at:0,
-    minors:[['Wild Swing','incAtk',0.05],['Bloodscent','leechRate',0.05],
+    minors:[['Wild Swing','incAtk',0.05],['Reflexes','dex',8],['Bloodscent','leechRate',0.05],
             ['Warpaint','frostRes',0.05],['Hacking','bleedChance',0.05]],
     notable:{ name:'Berserker', at:10, mods:[['incAtk',0.07],['leech',0.02]] } },
   { id:'breaker',sp:'arm',  x:975,  y:1425, name:'THE BREAKER',     r:100, at:0,
-    minors:[['Deadweight','slamDmg',0.5],['Shockplate','shockRes',0.05],
+    minors:[['Deadweight','slamDmg',0.5],['Brawn','str',8],['Shockplate','shockRes',0.05],
             ['Wide Fault','slamArc',6],['Braced','armour',4]],
     notable:{ name:'Breaker', at:10, mods:[['slamRange',0.12],['armour',5]] } },
   { id:'adept',  sp:'arc',  x:580,  y:975,  name:'THE ADEPT',       r:100, at:0,
-    minors:[['Focus','incSpell',0.04],['Warding','allRes',0.03],
+    minors:[['Focus','incSpell',0.04],['Study','int',8],['Warding','allRes',0.03],
             ['Quick Words','incCast',0.04],['Kindling','incElem',0.04]],
     notable:{ name:'Adept', at:10, mods:[['incSpell',0.08],['boltR',0.08]] } },
   /* ---- and four crossings SHARED by the two doors either side of them, so
@@ -5881,7 +6089,7 @@ const META_CLUSTERS = [
   { id:'nexSE',  sp:'aff',  x:1250, y:1300, name:'THE SOUR WAY',    r:88, at:0,
     minors:[['Serrated','bleedChance',0.05],['Rot','incDot',0.05],['Frost Ward','frostRes',0.05]] },
   { id:'nexSW',  sp:'vit',  x:700,  y:1250, name:'THE LOW ROAD',    r:88, at:0,
-    minors:[['Sturdy','hearts',0.3],['Mending','regen',0.012],['Storm Ward','shockRes',0.05]] },
+    minors:[['Sturdy','incHp',0.04],['Mending','regen',0.012],['Storm Ward','shockRes',0.05]] },
   { id:'nexNW',  sp:'elem', x:750,  y:700,  name:'THE EMBER PATH',  r:88, at:0,
     minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.3],['Ward','allRes',0.03]] },
   /* ---- RING A: cheap, plain, and the first ring everybody crosses ---- */
@@ -5894,7 +6102,7 @@ const META_CLUSTERS = [
   { id:'blight', sp:'aff',  x:1200, y:1610, name:'THE BLIGHT',      r:92, at:10,
     minors:[['Virulent','poisonDot',0.25],['Gutting','bleedShare',0.04],['Lingering','incDot',0.05]] },
   { id:'hearth', sp:'vit',  x:720,  y:1540, name:'THE HEARTH',      r:92, at:10,
-    minors:[['Hale','hearts',0.5],['Recovery','incRegen',0.12],['Padded','heartDrop',0.10]] },
+    minors:[['Hale','incHp',0.06],['Recovery','incRegen',0.12],['Padded','heartDrop',0.10]] },
   { id:'bastion',sp:'arm',  x:400,  y:1200, name:'THE BASTION',     r:92, at:10,
     minors:[['Riveted','incArmour',0.07],['Warded','suppress',0.04],['Sealed','allRes',0.04]] },
   { id:'forgefr',sp:'elem', x:395,  y:800,  name:'THE FORGEFIRE',   r:92, at:10,
@@ -5915,8 +6123,8 @@ const META_CLUSTERS = [
     minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Scar Tissue','allRes',0.03]],
     notable:{ name:'Plaguebearer', at:25, mods:[['incDot',0.12],['poisonDot',0.4]] } },
   { id:'watch',  sp:'vit',  x:950,  y:1845, name:'THE WATCH',       r:96, at:20,
-    minors:[['Stoic','hearts',0.4],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
-    notable:{ name:'Warden', at:30, mods:[['hearts',1],['regen',0.02]] } },
+    minors:[['Stoic','incHp',0.05],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
+    notable:{ name:'Warden', at:30, mods:[['incHp',0.12],['regen',0.02]] } },
   { id:'forge',  sp:'arm',  x:340,  y:1580, name:'THE FORGE',       r:96, at:20,
     minors:[['Tempered','incArmour',0.09],['Banded','armour',6],['Bracing','suppress',0.04]],
     notable:{ name:'Stonecutter', at:30, mods:[['incArmour',0.12],['suppress',0.05]] } },
@@ -5993,16 +6201,20 @@ const META_CLUSTERS = [
    Almost nothing — a travel node is a point you SPEND, not a point you get —
    but resistance rides on the armour and the core paths, which is most of them,
    so a long walk anywhere leaves you a little harder to kill. */
+/* WHAT A STEP OF CORRIDOR IS WORTH: an ATTRIBUTE, by the colour of the ground
+   it crosses. Boring on purpose — three strength is a fifth of a real node, and
+   the walk to a keystone is thirty of them, which is exactly the trade a long
+   journey is supposed to be. */
 const META_TRAVEL = {
-  war:  ['Grit',    'incMelee', 0.010],
-  prec: ['Focus',   'incCrit',  0.015],
-  swift:['Pace',    'speed',    0.008],
-  aff:  ['Taint',   'incDot',   0.012],
-  vit:  ['Vigour',  'hearts',   0.08 ],
-  arm:  ['Ward',    'allRes',   0.010],
-  elem: ['Spark',   'incElem',  0.010],
-  arc:  ['Insight', 'incSpell', 0.010],
-  core: ['Resolve', 'allRes',   0.008],
+  war:  ['Strength',     'str', 3],
+  prec: ['Dexterity',    'dex', 3],
+  swift:['Dexterity',    'dex', 3],
+  aff:  ['Intelligence', 'int', 3],
+  vit:  ['Strength',     'str', 3],
+  arm:  ['Strength',     'str', 3],
+  elem: ['Intelligence', 'int', 3],
+  arc:  ['Intelligence', 'int', 3],
+  core: ['Resolve',      'str', 2],
 };
 /* [from, to, how many travel nodes, how far the corridor bows sideways] */
 const META_LINKS = [
@@ -6192,7 +6404,7 @@ function metaApplyNode(n, p){
 }
 
 /* ---- the save. Difficulty, then WEAPON: twelve independent records. ---- */
-function blankMeta(){ return { best:{ wave:0 }, bosses:[], studsEarned:0, nodes:[], tv:META_TREE_VER }; }
+function blankMeta(){ return { best:{ wave:0, level:0 }, bosses:[], mastery:[], studsEarned:0, nodes:[], tv:META_TREE_VER }; }
 let META = null;
 /* how many points the last load handed back because the tree moved under them */
 let META_REFUNDED = 0;
@@ -6203,9 +6415,14 @@ function metaParseOne(r){
   if(r && typeof r === 'object'){
     b.tv = metaInt(r.tv, 0, 9999);
     b.studsEarned = metaInt(r.studsEarned, 0, 1e12);
-    if(r.best && typeof r.best === 'object') b.best.wave = metaInt(r.best.wave, 0, 99999);
+    if(r.best && typeof r.best === 'object'){
+      b.best.wave  = metaInt(r.best.wave, 0, 99999);
+      b.best.level = metaInt(r.best.level, 0, 99999);
+    }
     if(Array.isArray(r.bosses))
       for(const k of r.bosses) if(typeof k === 'string' && b.bosses.indexOf(k) < 0) b.bosses.push(k);
+    if(Array.isArray(r.mastery))
+      for(const k of r.mastery) if(META_MASTERY[k] && b.mastery.indexOf(k) < 0) b.mastery.push(k);
     /* an unknown node id is simply dropped, and because SPENT is derived its
        points come back on their own */
     if(Array.isArray(r.nodes))
@@ -6271,18 +6488,19 @@ function metaStartId(wk){
 }
 
 /* ---- points, all DERIVED ---- */
-function metaStudPoints(m){
-  return Math.min(META_STUD_POINT_MAX, Math.floor((m.studsEarned||0) / META_STUD_PER_POINT));
+/* the high-water mark, not the lap count */
+function metaWavePoints(m){ return Math.max(0, m.best.wave||0); }
+function metaLevelPoints(m){
+  let n = 0;
+  for(const L of META_LEVEL_POINTS) if((m.best.level||0) >= L) n++;
+  return n;
 }
 function metaMilestonePoints(m){
-  let n = 0;
-  for(const w of META_WAVE_POINTS) if((m.best.wave||0) >= w) n++;
-  n += (m.bosses||[]).length;
-  return n;
+  return metaLevelPoints(m) + (m.bosses||[]).length + (m.mastery||[]).length;
 }
 function metaPointsEarned(m){
   m = m || metaCur();
-  return Math.min(META_POINT_MAX, metaStudPoints(m) + metaMilestonePoints(m));
+  return Math.min(META_POINT_MAX, metaWavePoints(m) + metaMilestonePoints(m));
 }
 function metaPointsSpent(m){
   m = m || metaCur();
@@ -6291,10 +6509,11 @@ function metaPointsSpent(m){
   return t;
 }
 function metaPointsLeft(m){ m = m || metaCur(); return metaPointsEarned(m) - metaPointsSpent(m); }
-function metaStudsToNext(m){
+/* what the NEXT point costs, which is now always one more wave */
+function metaNextPoint(m){
   m = m || metaCur();
-  if(metaStudPoints(m) >= META_STUD_POINT_MAX) return null;
-  return META_STUD_PER_POINT - ((m.studsEarned||0) % META_STUD_PER_POINT);
+  if(metaPointsEarned(m) >= META_POINT_MAX) return null;
+  return (m.best.wave||0) + 1;
 }
 function metaHas(id, m){ m = m || metaCur(); return m.nodes.indexOf(id) >= 0; }
 function metaLocked(n, m){ m = m || metaCur(); return (m.best.wave||0) < (n.at||0); }
@@ -6418,6 +6637,7 @@ function metaStatLines(m){
     }
   }
   return Object.keys(tot).map(k=>({ key:k, text:metaModText([k, tot[k]]),
+                                    col:(META_STATS[k] && META_STATS[k].col) || '',
                                     good:metaModGood([k, tot[k]]) }));
 }
 /* ---- what a finished run is worth ---- */
@@ -6432,15 +6652,39 @@ function metaBank(){
      a wave-29 run — the banner said otherwise and it was simply wrong. */
   const done = wavesCleared();
   const firsts = [];
-  if(done > (m.best.wave||0)){
-    for(const w of META_WAVE_POINTS)
-      if(done >= w && (m.best.wave||0) < w) firsts.push('wave '+w);
+  /* THE HIGH-WATER MARK. Beating your own best by two waves is worth two
+     points; beating it by nothing is worth nothing, however long the run was. */
+  const wasWave = m.best.wave||0;
+  if(done > wasWave){
+    firsts.push('wave '+done+' — '+(done-wasWave)+' new point'+(done-wasWave===1?'':'s'));
     m.best.wave = done;
   }
+  const lvl = Math.max(0, p.level||0), wasLvl = m.best.level||0;
+  if(lvl > wasLvl){
+    for(const L of META_LEVEL_POINTS)
+      if(lvl >= L && wasLvl < L) firsts.push('level '+L);
+    m.best.level = lvl;
+  }
   metaSave();
-  return { banked, collected, firsts, cleared:done,
+  return { banked, collected, firsts, cleared:done, level:lvl,
            gained: metaPointsEarned(m) - before,
            total: m.studsEarned, left: metaPointsLeft(m) };
+}
+/* A SPELL YOU HAVE ACTUALLY FINISHED. Checked whenever a brick lands, because
+   the last cap can be met mid-run and a point earned at wave 30 should not have
+   to wait for you to die before it exists. */
+function metaMastery(p){
+  if(!META) metaLoad();
+  const m = metaCur(), got = [];
+  for(const k of Object.keys(META_MASTERY)){
+    if(m.mastery.indexOf(k) >= 0) continue;
+    let ok = false;
+    try { ok = !!META_MASTERY[k].done(p || player); } catch(e){ ok = false; }
+    if(!ok) continue;
+    m.mastery.push(k); got.push(k);
+  }
+  if(got.length) metaSave();
+  return got;
 }
 function metaBossKill(key){
   if(!key) return false;
@@ -6568,7 +6812,8 @@ function metaTipHtml(n, m){
   const lines = n.mods.map(mod=>{
     const st = META_STATS[mod[0]];
     const dud = st && st.only && st.only.indexOf(wk) < 0;
-    return `<li class="${metaModGood(mod)?'good':'bad'}${dud?' dud':''}">${esc(metaModText(mod))}`+
+    const col = st && st.col ? ` style="color:${st.col}"` : '';
+    return `<li class="${metaModGood(mod)?'good':'bad'}${dud?' dud':''}"${col}>${esc(metaModText(mod))}`+
            `${dud?' <em>— nothing for a '+esc(wk)+'</em>':''}</li>`;
   }).join('');
   const cl = META_CLUSTER_BY_ID[n.cl];
@@ -6669,7 +6914,7 @@ function renderTree(){
   parts.push('</svg>');
 
   const stats = metaStatLines(m);
-  const nextStuds = metaStudsToNext(m);
+  const nextWave = metaNextPoint(m);
   const side = `
     ${META_REFUNDED > 0 ? `<div class="tnews"><b>THE TREE CHANGED</b>
       Your ${META_REFUNDED} spent point${META_REFUNDED===1?' is':'s are'} back — every stud,
@@ -6683,14 +6928,20 @@ function renderTree(){
          cheap and what is a long walk.</p>
          <div class="tmeta">Every weapon has its own tree on every difficulty — twelve
          in all, one map, four doors set far apart.</div>`}</div>
+    <div class="tbar"><b>${metaWavePoints(m)}</b> points from waves
+      <i>${nextWave === null ? 'the ceiling of '+META_POINT_MAX+' is reached'
+                             : 'your best is wave '+(m.best.wave||0)+' — clear wave '+
+                               nextWave+' for the next one'}</i></div>
+    <div class="tbar"><b>${metaMilestonePoints(m)}</b> points from achievements
+      <i>${metaLevelPoints(m)}/${META_LEVEL_POINTS.length} levels (${META_LEVEL_POINTS.join(', ')})
+      · ${(m.bosses||[]).length} bosses · ${(m.mastery||[]).length}/${Object.keys(META_MASTERY).length} mastered
+      · all with THIS weapon</i></div>
     <div class="tbar"><b>${m.studsEarned}</b> studs banked
-      <i>${nextStuds === null ? 'studs give no more points — the rest come from firsts'
-                              : nextStuds+' to the next point'}</i></div>
-    <div class="tbar"><b>${metaMilestonePoints(m)}</b> points from firsts
-      <i>waves ${META_WAVE_POINTS.join(', ')} · each boss once · with THIS weapon</i></div>
+      <i>a lifetime count. Studs buy bricks inside a run and nothing at all in here</i></div>
     <div class="tstats">
       <h4>WHAT THE TREE IS GIVING YOU</h4>
-      ${stats.length ? `<ul>${stats.map(l=>`<li class="${l.good?'good':'bad'}">${esc(l.text)}</li>`).join('')}</ul>`
+      ${stats.length ? `<ul>${stats.map(l=>`<li class="${l.good?'good':'bad'}"`+
+                        `${l.col?` style="color:${l.col}"`:''}>${esc(l.text)}</li>`).join('')}</ul>`
                      : `<div class="tmeta">nothing yet — place a point</div>`}
     </div>`;
   body.innerHTML = `<div class="treewrap">${parts.join('')}</div><div class="treeside">${side}</div>`;
@@ -7387,6 +7638,7 @@ function buildDiffRow(){
    order they happen to be declared. Ids that do not appear here still show up,
    under EVERYTHING ELSE, so a new brick is never invisible. */
 const BENCH_SECTIONS = [
+  { name:'ATTRIBUTES',      ids:['attstr','attint','attdex','attall'] },
   { name:'SWORD',           ids:['dmg','aspd','reach','bladem','blademaster'] },
   { name:'GROUND SLAM',     ids:['slampow','slamarc','slamrange','slamspd','slamelem'] },
   { name:'DAMAGE',          ids:['orbm','moredmg','banedotinc'] },
@@ -8132,6 +8384,28 @@ const STAT_PROBES = [
         'swing speeds the slam — and it meets the same floor a swing does' },
   { g:'GROUND SLAM', k:'Element cycle',  get:()=> (player.slam && player.slam.elem) || 0, fmt:v=>v>=2?'ring + cycle':(v?'cycling':'\u2014'), zero:true,
     why:'SLAM OF THE ELEMENTS: each slam converts half of every tooth into fire, then lightning, then frost, and brings that ailment with it' },
+  { g:'ATTRIBUTES', k:'Strength',     get:()=> strOf(), fmt:v=>Math.round(v)+'', zero:true,
+    why:'the weapon\u2019s own plus every brick and node that handed some over. '+
+        'Each point is +'+(ATTR_STR_DMG*100)+'% increased PHYSICAL damage and '+
+        '+'+(ATTR_STR_HP*100)+'% increased MAXIMUM HEARTS' },
+  { g:'ATTRIBUTES', k:'Intelligence', get:()=> intOf(), fmt:v=>Math.round(v)+'', zero:true,
+    why:'each point is +'+(ATTR_INT_SPELL*100)+'% increased SPELL damage and '+
+        '+'+(ATTR_INT_REGEN*100)+'% increased REGENERATION' },
+  { g:'ATTRIBUTES', k:'Dexterity',    get:()=> dexOf(), fmt:v=>Math.round(v)+'', zero:true,
+    why:'each point is +'+(ATTR_DEX_CRIT*100)+'% increased CRITICAL CHANCE, '+
+        '+'+(ATTR_DEX_CMULT*100)+'% increased CRITICAL DAMAGE and '+
+        '+'+(ATTR_DEX_ATK*100)+'% increased ATTACK SPEED' },
+  { g:'ATTRIBUTES', k:'From strength',     get:()=> strOf()*ATTR_STR_DMG*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'increased physical damage and increased maximum hearts, both, from STRENGTH alone. '+
+        'It is DERIVED every rebuild and never written into the pool, so two sources of '+
+        'strength can never double-count' },
+  { g:'ATTRIBUTES', k:'From intelligence', get:()=> intOf()*ATTR_INT_SPELL*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'increased spell damage, and the same again as increased regeneration, from INTELLIGENCE' },
+  { g:'ATTRIBUTES', k:'From dexterity',    get:()=> dexOf()*ATTR_DEX_CRIT*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'increased critical chance from DEXTERITY, and the same again on critical damage and attack speed' },
   { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
@@ -17382,14 +17656,16 @@ function renderRunEnd(res, prevBest){
     (wave.n > done ? ` <span>· died on ${wave.n}</span>` : '')+`</div>`);
   L.push(`<div class="rerow"><span>studs banked</span><b>+${res.banked}</b>`+
          `<i>${res.total} total · ${weapon.name} on ${difficulty.name}</i></div>`);
+  L.push(`<div class="rerow"><span>reached level</span><b>${res.level}</b>`+
+         `<i>best ${m.best.level||0} · a point at ${META_LEVEL_POINTS.join(', ')}</i></div>`);
   for(const f of res.firsts)
     L.push(`<div class="rerow first"><span>FIRST</span><b>${esc(f)}</b><i>+1 skill point</i></div>`);
   if(res.gained > 0)
     L.push(`<div class="rerow first"><span>skill points</span><b>+${res.gained}</b>`+
            `<i>${res.left} unspent</i></div>`);
-  const next = metaStudsToNext(m);
+  const next = metaNextPoint(m);
   if(next !== null)
-    L.push(`<div class="rerow"><span>next point</span><b>${next} studs away</b>`+
+    L.push(`<div class="rerow"><span>next point</span><b>clear wave ${next}</b>`+
            `<i>${metaPointsEarned(m)} earned, ceiling ${META_POINT_MAX}</i></div>`);
   /* NAME SOMETHING YOU COULD ACTUALLY GO AND TAKE — not a door you already
      stand in, and not a node on the far side of a tree you have not walked to */

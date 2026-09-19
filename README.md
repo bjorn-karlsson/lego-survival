@@ -903,7 +903,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
-| **Skill points** | **46** | Tree cost | 444 | Studs → points | 30 |
+| **Skill points** | **60** | Tree cost | 444 | Points per wave | 1 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -1258,12 +1258,29 @@ so a long walk in any direction leaves you a little harder to burn, freeze and s
 **One currency you can see: skill points.** They come from two places, and both are
 *derived* — nothing is stored as a counter:
 
+**EVERY WAVE IS A POINT, AND STUDS ARE NOT.** Studs were the gate, and the gate was the
+problem: a run that got further than any before it paid exactly what one that shuffled round
+wave 12 hoovering bricks did, so the tree was a grind rather than a record.
+
+**Your best wave IS your point total.** Reach 38 and you have 38 to place. Reach 40 next
+time and you have **two** more — because 40 is your high-water mark, not your fortieth lap.
+A worse run pays nothing, however long it was.
+
 | | |
 |---|--:|
-| `floor(studs banked ÷ 600)`, capped | **30** |
-| first time clearing wave 10, 20, 30, 40, 50, 60, 70, 80 *with this weapon* | 8 |
-| first time smashing each of the 8 bosses *with this weapon* | 8 |
-| **the ceiling on everything** | **46** |
+| **your best wave** *with this weapon* | **1 point each** |
+| reaching level 10, 25, 50, 75, 80, 90, 100 | 7 |
+| first time smashing each of the 8 bosses | 8 |
+| **BRICKBANE MASTER** — every capped Brickbane brick at its cap | 1 |
+| **the ceiling on everything** | **60** |
+
+**BRICKBANE MASTER** wants stacks, spread, reach, rate, dose length and Spore Burst all at
+their ceilings. Flat poison damage is *not* asked for: it has no cap, so "all of it" could
+never be true. The point lands the moment the last cap is met — mid-run, with a banner —
+rather than waiting for you to die.
+
+Studs are still banked and still counted. They buy bricks inside a run and **nothing at all**
+in here.
 
 **The wave you CLEARED, not the one you died on.** Dying to the wave-30 boss is a wave-29
 run and the screen says so.
@@ -1273,10 +1290,34 @@ collects about 15× what a death at wave 15 does; banked raw, the early runs thi
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 444 points and you can never hold more than 46.** That is the whole design:
-at most **10%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+**The tree costs 444 points and you can never hold more than 60.** That is the whole design:
+at most **14%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
 412 nodes — 116 small ones in clusters, 12 notables, 12 keystones, and 268 steps of corridor
-between them. A travel node is a point you *spend*, not a point you get.
+between them.
+
+**Every step of corridor is an ATTRIBUTE**, and attributes are the boring numbers you collect
+on the way to somewhere interesting:
+
+| | | |
+|---|---|--:|
+| 🔴 **STRENGTH** | +0.5% increased physical damage, +0.5% increased maximum hearts | *each* |
+| 🔵 **INTELLIGENCE** | +0.5% increased spell damage, +0.5% increased regeneration | *each* |
+| 🟢 **DEXTERITY** | +0.3% increased critical chance, critical damage and attack speed | *each* |
+
+**Every weapon starts somewhere different on the three** — a mace opens on 20 strength, a
+staff on 22 intelligence, an axe on 16 dexterity, and the sword is the only one with a little
+of all three. Four bricks hand them over directly and **any weapon and any favourite can be
+offered all four**: `Ironbone`, `Runescript`, `Quicksilver`, and `The Whole Brick` for all
+three at once.
+
+**What an attribute grants is DERIVED, never written.** A brick that handed you ten strength
+*and* poked +5% into the increased-physical pool would double-count the moment a second source
+of strength turned up, and the pool would keep the bonus after the strength went away. The
+attribute is the pool; the percentage is read off it at the point of use, every rebuild.
+
+> `+0.03 maximum hearts` was a node nobody could feel and nobody could read. Those are
+> `+4% increased maximum hearts` now — a percentage of a pool that grows with the build is
+> both.
 
 **You cannot drop points wherever you like.** A node has to *touch* something you already
 hold, and everything you hold has to trace back to your weapon's door. Every corridor is
@@ -1365,20 +1406,64 @@ weapons, which made the tree look shared when it never was. It now lands on the 
 that was selected when it was written, and nowhere else.
 
 **And the budget is a test, not a promise.** `meta.js` walks real routes out of the sword's
-own door, spends **exactly** the 46-point ceiling on them — a budget checked on a half-spent
-tree is a budget nobody is ever held to — and fails the build if it beats **×2.00 total
+own door, spends **exactly** the 60-point ceiling on them — a budget checked on a half-spent
+tree is a budget nobody is ever held to — and fails the build if it beats **×2.60 total
 power**, damage *times* hearts. Damage alone is the wrong measure: a glass build buys damage
 by selling hearts, and a damage-only budget waves it through while punishing an honest one.
 The product cannot be gamed, because a node with no downside raises both halves.
 
-Measured: a straight build is **×1.96 damage, ×1.96 power**; the Glass Bricks build is
-**×2.46 damage but only ×1.76 power** — more damage, less total, which is exactly the trade
-it advertises. The audit caught the tree at ×1.97 on its very first run.
+Measured at the full 60-point ceiling: a straight build is **×2.09 damage, ×2.39 power**.
+Glass Bricks is **×2.79 damage but only ×2.39 power** against **×2.27 / ×2.92** for *the same
+walk with the keystone left out* — more damage, less total, which is exactly the trade it
+advertises. (Comparing it against a *different* route list measured the two lists as much as
+it measured the keystone; dropping the one node out of the one walk measures the keystone.)
 
-The ceiling has gone 26 → 34 → **46** across three passes. On the second the power did not
+The ceiling has gone 26 → 34 → 46 → **60** across four passes. On the second the power did not
 move at all, because the tree grew faster than the ceiling did and the extra points went
 into corridor. On the third it moved from ×1.60 to ×1.96 — a fully banked tree is now worth
 roughly twice a bare hero, and that is what thirty stud points and eight boss firsts buy.
+
+---
+
+## Damage conversion — the groundwork
+
+**Not wired into a single live hit yet, and deliberately so.** What is here is the model, the
+pipeline and the rules, tested on their own, so that turning it on later is one call site
+rather than a rewrite.
+
+**Five types, one direction.** Conversion only ever runs *down* this list, which is the whole
+reason it terminates — there is no arrangement of modifiers that can send damage back round
+the loop:
+
+> **PHYSICAL → LIGHTNING → COLD → FIRE → CHAOS**
+
+**Two forms, and the difference is what happens to the source:**
+
+| | |
+|---|---|
+| `#% of X Converted to Y` | takes the damage **out** of the source type |
+| `Gain #% of X as Extra Y` | leaves the source intact and adds a copy as the new type |
+
+**When it happens:** after flat added damage joins the base, and **before** any increased or
+more multiplier touches it. That ordering is the whole point — converted damage is scaled by
+the **destination** type's increases, which is why a physical-to-cold build wants increased
+cold damage and not increased physical.
+
+**What the monster does about it: nothing to do with you.** A hit that arrives as cold is
+mitigated as cold, whatever it set out as.
+
+**Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
+you half of each, never a hero dealing 160% of their own damage.
+
+**CHAOS** is the fifth type and has no home yet: neither physical nor elemental, so armour
+does not stop it and no elemental resistance names it. It is the poison-flavoured one — where
+physical can open a bleed, chaos can leave a dose behind.
+
+`conv.js` proves all of it, including that an uphill pair is refused, that a hero with no
+table at all is the safest path through rather than the one that throws, and that the worst
+case — every legal conversion *and* every gain-as-extra at 90% and 30% simultaneously —
+terminates in under a millisecond. Six break-builds, each caught by the assertion meant for
+it.
 
 ---
 
