@@ -109,6 +109,12 @@
   .btn.gray:hover{box-shadow:0 8px 0 #6d6e68,0 16px 26px rgba(0,0,0,.4)}
   .btn.gray:active{box-shadow:0 2px 0 #6d6e68}
   .btn.small{font-size:16px;padding:10px 26px}
+  .btn.tiny{font-size:13px;letter-spacing:1.6px;padding:8px 18px;border-radius:10px}
+  /* an OFF switch has to look switched off from across the room */
+  .btn.off{background:#4a5560;color:#aab6bf;box-shadow:0 6px 0 #313b44,0 12px 22px rgba(0,0,0,.35)}
+  .btn.off:hover{box-shadow:0 8px 0 #313b44,0 16px 26px rgba(0,0,0,.4)}
+  .btn.off:active{box-shadow:0 2px 0 #313b44}
+  .audiorow{display:flex;gap:10px;justify-content:center;margin-top:9px}
   .btn:disabled{opacity:.45;pointer-events:none}
   kbd{display:inline-block;min-width:30px;text-align:center;padding:4px 8px;border-radius:7px;background:#f4f1ea;
     color:#1b2a34;font-family:'Fredoka';font-weight:700;font-size:13px;
@@ -486,6 +492,10 @@
     <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
     <button id="treeBtn" class="btn gray">SKILL TREE — <b id="treePts">0</b> POINTS</button>
+    <div class="audiorow">
+      <button id="musicBtn" class="btn tiny gray">MUSIC: ON</button>
+      <button id="sfxBtn" class="btn tiny gray">SOUND: ON</button>
+    </div>
     <div class="ctl">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
       <span><kbd>LMB</kbd> <b>swing</b></span>
@@ -495,7 +505,7 @@
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>spellbook</b></span>
       <span><kbd>ESC</kbd> <b>pause</b></span>
-      <span><kbd>M</kbd> <b>sound</b></span>
+      <span><kbd>M</kbd> <b>mute everything</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
     </div>
     <div class="best" id="bestLine"></div>
@@ -1671,13 +1681,60 @@ function fitTitle(){
 window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
 
 /* =============================== AUDIO =============================== */
-const A = { ctx:null, master:null, sfx:null, mus:null, muted:false, noiseBuf:null, delay:null };
+/* THREE SWITCHES, NOT ONE. M has always killed the lot, which is fine when
+   somebody walks into the room and useless when it is only the music you are
+   tired of. Music and sound are their own toggles, both remembered between
+   sessions, and M still takes everything down at once. */
+const A = { ctx:null, master:null, sfx:null, mus:null, muted:false,
+            musicOn:true, sfxOn:true, noiseBuf:null, delay:null };
+const MUS_GAIN = 0.17, SFX_GAIN = 0.8, MASTER_GAIN = 0.9;
+function audioLoad(){
+  try{
+    A.musicOn = localStorage.getItem('bb_music') !== '0';
+    A.sfxOn   = localStorage.getItem('bb_sfx')   !== '0';
+  }catch(e){}
+  refreshAudioBtns();
+}
+function audioSave(){
+  try{
+    localStorage.setItem('bb_music', A.musicOn ? '1' : '0');
+    localStorage.setItem('bb_sfx',   A.sfxOn   ? '1' : '0');
+  }catch(e){}
+}
+function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
+/* a voice nobody will hear is not worth building */
+function destOff(dest){ return (dest === A.mus || dest === A.delay) ? !A.musicOn : !A.sfxOn; }
+function audioApply(){
+  if(A.master) A.master.gain.value = A.muted ? 0 : MASTER_GAIN;
+  if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN : 0;
+  if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN : 0;
+  /* THE SCHEDULER STOPS DEAD while the music is off, so its clock falls behind
+     real time. Catching it up here is the difference between the music coming
+     back on the beat and it coming back as ten minutes of notes at once. */
+  if(A.ctx && musicLive() && music.next < A.ctx.currentTime)
+    music.next = A.ctx.currentTime + 0.05;
+  refreshAudioBtns();
+  audioSave();
+}
+function toggleMusic(){ A.musicOn = !A.musicOn; audioApply(); return A.musicOn; }
+function toggleSfx(){   A.sfxOn   = !A.sfxOn;   audioApply(); return A.sfxOn; }
+function toggleMute(){  A.muted   = !A.muted;   audioApply(); return !A.muted; }
+function refreshAudioBtns(){
+  const set = (id, on)=>{
+    const b = document.getElementById(id);
+    if(!b) return;
+    b.textContent = (id === 'musicBtn' ? 'MUSIC' : 'SOUND') + ': ' + (on ? 'ON' : 'OFF');
+    b.classList.toggle('off', !on);
+  };
+  set('musicBtn', A.musicOn && !A.muted);
+  set('sfxBtn',   A.sfxOn   && !A.muted);
+}
 function audioInit(){
   if(A.ctx){ if(A.ctx.state==='suspended') A.ctx.resume(); return; }
   const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return;
   try{
     A.ctx = new AC();
-    A.master = A.ctx.createGain(); A.master.gain.value = 0.9;
+    A.master = A.ctx.createGain(); A.master.gain.value = MASTER_GAIN;
     /* Forty bricks popping at once used to add up to a wall of clipping fizz.
        The master runs through a compressor so a busy moment ducks instead of
        distorting, and every effect goes through a gentle lid on the top end so
@@ -1689,8 +1746,8 @@ function audioInit(){
     A.sfxLid = A.ctx.createBiquadFilter();
     A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 7200; A.sfxLid.Q.value = 0.4;
     A.sfxLid.connect(A.master);
-    A.sfx = A.ctx.createGain(); A.sfx.gain.value = 0.8; A.sfx.connect(A.sfxLid);
-    A.mus = A.ctx.createGain(); A.mus.gain.value = 0.17; A.mus.connect(A.master);
+    A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN; A.sfx.connect(A.sfxLid);
+    A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN; A.mus.connect(A.master);
     const nb = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
     const d = nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     A.noiseBuf = nb;
@@ -1698,10 +1755,11 @@ function audioInit(){
     const fb = A.ctx.createGain(); fb.gain.value = 0.3;
     A.delay.connect(fb); fb.connect(A.delay); A.delay.connect(A.mus);
     startMusic();
+    audioApply();                  /* whatever was remembered, applied at once */
   }catch(err){ console.warn('audio unavailable:', err); }
 }
 function tone(type,f0,f1,dur,vol,dest=A.sfx,when=0){
-  if(!A.ctx||A.muted) return;
+  if(!A.ctx||A.muted||destOff(dest)) return;
   const t = A.ctx.currentTime + when;
   const o = A.ctx.createOscillator(), g = A.ctx.createGain();
   o.type = type; o.frequency.setValueAtTime(f0,t);
@@ -1711,7 +1769,7 @@ function tone(type,f0,f1,dur,vol,dest=A.sfx,when=0){
   o.connect(g); g.connect(dest); o.start(t); o.stop(t+dur+0.02);
 }
 function noiseHit(dur,vol,fc,fc1,type='bandpass',when=0,dest=A.sfx){
-  if(!A.ctx||A.muted) return;
+  if(!A.ctx||A.muted||destOff(dest)) return;
   const t = A.ctx.currentTime + when;
   const s = A.ctx.createBufferSource(); s.buffer = A.noiseBuf; s.loop = true;
   const f = A.ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(fc,t);
@@ -1801,12 +1859,18 @@ const TRACKS = [
     leadB: [81,0,76,72, 0,74,76,0, 79,0,74,71, 0,72,0,0],
     pad:   [45,0,0,0, 0,0,0,0, 48,0,0,0, 0,0,0,0],
     kick:[0,10], snare:[8], hat:0, hatHz:9000, sparkle:true },
-  { id:'overdrive', name:'STUD OVERDRIVE', bpm:150, lead:'square', bassW:'sawtooth', kind:'field',
-    bass:  [40,40,47,40, 45,45,52,45, 43,43,50,43, 40,47,40,52],
-    leadA: [76,79,83,79, 81,83,86,83, 79,83,86,83, 81,79,76,0],
-    leadB: [88,83,79,83, 86,81,78,81, 83,86,88,86, 83,0,79,0],
-    pad:   [52,0,0,0, 57,0,0,0, 55,0,0,0, 59,0,0,0],
-    kick:[0,6,8,14], snare:[4,12], hat:1, hatHz:7600 },
+  /* STUD OVERDRIVE lived here: 150bpm, a square-wave lead and a hat on every
+     sixteenth, and it played for every wave from fifteen to the end of the run.
+     Ten minutes of it was exhausting. THE DEEP FOUNDRY is the opposite bet —
+     slower than the track before it, a descending D-minor walk under a lead
+     that leaves gaps, and the weight comes from the low end rather than the
+     tempo. Something you can hear for an hour. */
+  { id:'foundry', name:'THE DEEP FOUNDRY', bpm:116, lead:'triangle', bassW:'sawtooth', kind:'field',
+    bass:  [38,0,38,45, 36,0,36,43, 33,0,33,40, 34,0,36,37],
+    leadA: [74,0,77,0, 76,74,0,72, 69,0,72,0, 74,0,0,0],
+    leadB: [81,0,79,77, 76,0,74,0, 72,74,76,74, 72,0,69,0],
+    pad:   [50,0,0,0, 48,0,0,0, 45,0,0,0, 46,0,0,0],
+    kick:[0,6,10], snare:[4,12], hat:2, hatHz:6200 },
   { id:'tyrant', name:'THE BRICK TYRANT', bpm:138, lead:'sawtooth', bassW:'sawtooth', kind:'boss',
     bass:  [36,36,0,36, 39,0,36,0, 34,34,0,34, 31,0,34,36],
     leadA: [72,75,79,75, 80,0,79,75, 74,77,80,77, 79,0,75,0],
@@ -1832,13 +1896,13 @@ function trackForWave(n){
            : n<=3     ? 'caves'
            : n<=8     ? 'quarry'
            : n<=14    ? 'march'
-           : 'overdrive';
+           : 'foundry';
   return TRACKS.find(t=>t.id===id) || TRACKS[0];
 }
 function setTrack(t, announce){
   if(!t || t===music.track) return;
   music.track = t; music.pending = t; music.bars = 0; music.loop = 0;
-  if(announce) musicToast = { name:t.name, life:3.2 };
+  if(announce && musicLive()) musicToast = { name:t.name, life:3.2 };
 }
 /* called once per wave — the swap lands on the next bar so nothing stutters */
 function queueTrackForWave(n){ music.pending = trackForWave(n); }
@@ -1847,10 +1911,10 @@ function startMusic(){
   music.next = A.ctx.currentTime + 0.1; music.step = 0; music.loop = 0; music.bars = 0;
   music.track = trackForWave(Math.max(1, wave.n));
   music.pending = music.track;
-  musicToast = { name:music.track.name, life:3.2 };
+  if(musicLive()) musicToast = { name:music.track.name, life:3.2 };
   if(music.timer) clearInterval(music.timer);
   music.timer = setInterval(()=>{
-    if(!A.ctx || A.muted) return;
+    if(!musicLive()) return;
     const spb = 60/music.track.bpm/2;
     while(music.next < A.ctx.currentTime + 0.18){
       scheduleStep(music.step, music.next);
@@ -1893,7 +1957,7 @@ window.addEventListener('keydown', e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
   if(e.code==='KeyF' && state==='play' && wave.state==='ready') waveSkip();
-  if(e.code==='KeyM'){ A.muted = !A.muted; if(A.master) A.master.gain.value = A.muted?0:0.9; }
+  if(e.code==='KeyM') toggleMute();
   /* P IS THE SPELLBOOK, and the spellbook does not stop the wave — the state
      machine is left on 'play' throughout, so everything keeps updating behind
      it. ESC still pauses, but closes the book first if it is open. */
@@ -17093,6 +17157,14 @@ function showBest(){
 }
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('treeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
+/* audioInit() FIRST on both: a browser will not start an audio context until
+   somebody clicks something, and this click is as good as any — otherwise
+   turning the music on in the menu does nothing at all until the run starts. */
+document.getElementById('musicBtn').addEventListener('click', ()=>{
+  audioInit(); toggleMusic(); SFX.click(); });
+document.getElementById('sfxBtn').addEventListener('click', ()=>{
+  audioInit(); toggleSfx(); SFX.click(); });
+audioLoad();
 document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });

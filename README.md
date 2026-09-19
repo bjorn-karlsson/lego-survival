@@ -1366,6 +1366,25 @@ roughly twice a bare hero, and that is what thirty stud points and eight boss fi
 
 ---
 
+## Sound
+
+**Music and sound are separate switches, both on the menu, both remembered.** `M` still
+takes everything down at once — which is what you want when somebody walks into the room,
+and useless when it is only the music you are tired of. The buttons say `MUSIC: OFF` the
+moment `M` mutes, so the menu never disagrees with what you can hear.
+
+A silent channel **builds no voices**: turning the music off stops the scheduler rather than
+turning its volume down, and the scheduler's clock is caught up when it comes back — otherwise
+ten silent minutes return as ten minutes of notes at once.
+
+**`STUD OVERDRIVE` is gone.** 150 bpm, a square-wave lead and a hat on every sixteenth, and
+it played for every wave from fifteen to the end of the run; ten minutes of it was exhausting.
+**`THE DEEP FOUNDRY`** takes its place and makes the opposite bet: 116 bpm, slower than the
+track before it, a descending D-minor walk under a lead that leaves gaps, and the weight in
+the low end rather than in the tempo. Something you can hear for an hour.
+
+---
+
 ## The world gets colder
 
 A hero who ignored resistance entirely used to be perfectly fine at wave 50, because
