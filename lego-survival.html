@@ -68,6 +68,25 @@
   .cpanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
   .cpanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
   .cpanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
+  /* the left panel carries every probe on the character sheet now, so it is
+     wider, taller and it scrolls — and the group headings stick while it does */
+  #comboStats{width:400px;flex:0 1 400px}
+  #comboStats .cpgrp{position:sticky;top:-14px;z-index:2;margin:14px 0 5px;
+    background:rgba(10,15,13,.97);padding:5px 0 3px}
+  .cpanel .cpstat b{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+  .cpanel .cpstat.cpdim{opacity:.4}
+  .cpanel .cpchip{font-style:normal;font-weight:700;font-size:9px;letter-spacing:.3px;
+    padding:1px 4px;border-radius:5px;margin-left:0;white-space:nowrap;
+    background:rgba(255,255,255,.08)}
+  .cpanel .cpchip.up{color:#7ddc6a;background:rgba(125,220,106,.14)}
+  .cpanel .cpchip.dn{color:#ff6a5a;background:rgba(255,106,90,.14)}
+  .cpanel .cpabil{display:flex;gap:8px;align-items:center;margin:3px 0;padding:5px 8px;
+    border-radius:8px;background:rgba(255,255,255,.05);cursor:default}
+  .cpanel .cpabil svg{width:16px;height:16px;flex:0 0 16px}
+  .cpanel .cpabil span{flex:1;font-size:11.5px;color:#e8ece9}
+  .cpanel .cpabil b{color:#ffd76e;font-size:11.5px;white-space:nowrap}
+  #statTip.wtipbox b{display:inline;font-family:'Fredoka';font-size:12px;
+    letter-spacing:0;margin:0;color:inherit}
   /* A REAL TOOLTIP, NOT THE BROWSER'S. A `title=` attribute needs about a
      second of stationary hover on an 18px row before the OS draws anything, so
      in practice the explanations were invisible — the attribute was there and
@@ -110,6 +129,9 @@
   .btn.gray:active{box-shadow:0 2px 0 #6d6e68}
   .btn.small{font-size:16px;padding:10px 26px}
   .btn.tiny{font-size:13px;letter-spacing:1.6px;padding:8px 18px;border-radius:10px}
+  #treeBtn .tspent{font-style:normal;font-size:13px;color:#4a5560;margin-left:6px}
+  #treeBtn .twho{display:block;font-style:normal;font-family:'Fredoka',sans-serif;
+    font-size:11px;letter-spacing:1.4px;color:#3d4750;margin-top:2px}
   /* an OFF switch has to look switched off from across the room */
   .btn.off{background:#4a5560;color:#aab6bf;box-shadow:0 6px 0 #313b44,0 12px 22px rgba(0,0,0,.35)}
   .btn.off:hover{box-shadow:0 8px 0 #313b44,0 16px 26px rgba(0,0,0,.4)}
@@ -222,16 +244,17 @@
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
   #weaponRow .diff{position:relative}
-  .wtip{display:none;position:absolute;left:50%;bottom:calc(100% + 12px);
-    transform:translateX(-50%);white-space:pre;background:#12181d;border:2px solid #ffb900;
-    border-radius:12px;padding:11px 16px;font-size:12px;font-weight:500;color:#f2f3f2;
-    line-height:1.7;text-align:left;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.75);
-    font-family:'Fredoka';pointer-events:none;letter-spacing:0}
-  #weaponRow .diff:hover .wtip{display:block}
-  .wtip b.up{color:#7ddc6a;font-weight:700}
-  .wtip b.dn{color:#ff6a5a;font-weight:700}
-  .wtip i{color:#c9d2ce;font-style:normal}
-  .wtip u{color:#ffd76e;text-decoration:none;font-weight:700}
+  /* THE MACE AND THE STAFF DID NOT FIT. An absolutely positioned tip anchored
+     above its row has no idea where the top of the window is, so the two
+     longest ones ran off the screen. It is the same FIXED, viewport-clamped
+     element the stat rows use now, and it scrolls if it still cannot fit. */
+  .wtip{display:none}
+  #statTip.wtipbox{white-space:pre;line-height:1.7;letter-spacing:0;max-width:none}
+  #statTip b.up{color:#7ddc6a;font-weight:700}
+  #statTip b.dn{color:#ff6a5a;font-weight:700}
+  #statTip.wtipbox i{color:#c9d2ce;font-style:normal}
+  #statTip.wtipbox u{color:#ffd76e;text-decoration:none;font-weight:700}
+
   .diff{min-width:118px;padding:7px 13px 6px;border-radius:13px;cursor:pointer;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);
     font-family:'Titan One';font-size:13px;letter-spacing:1px;color:#f0e6e6;
@@ -491,7 +514,7 @@
     <div id="favRow"></div>
     <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
-    <button id="treeBtn" class="btn gray">SKILL TREE — <b id="treePts">0</b> POINTS</button>
+    <button id="treeBtn" class="btn gray">SKILL TREE — <b id="treePts">0</b> TO PLACE</button>
     <div class="audiorow">
       <button id="musicBtn" class="btn tiny gray">MUSIC: ON</button>
       <button id="sfxBtn" class="btn tiny gray">SOUND: ON</button>
@@ -1324,7 +1347,7 @@ function mobRankMul(r){ return Math.pow(1 + MOB_LEVEL_STEP, r === undefined ? mo
    clean cut bleeds least, and a blunt one bleeds worst. */
 const WEAPONS = {
   sword: { id:'sword', name:'SWORD', col:'#cfd6dd',
-    blurb:'Balanced. Every number in this game is written against it.',
+    blurb:'Balanced. Nothing it does is the best, and nothing it does is bad.',
     dmg:1.0,  rate:0.34, reach:56, spinReach:64, crit:0.05, critMult:150,
     bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade',
     lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15 },
@@ -1397,8 +1420,23 @@ function setWeapon(id){
   }
   const blurb = document.getElementById('weaponBlurb');
   if(blurb) blurb.textContent = weapon.blurb;
+  /* EVERY WEAPON HAS ITS OWN TREE, so the button's number belongs to the
+     weapon and has to move with it */
+  if(typeof refreshTreeBtn === 'function') refreshTreeBtn();
+  if(typeof treeOn !== 'undefined' && treeOn && typeof renderTree === 'function') renderTree();
   buildComboPanel();
 }
+/* THE BARE HAND. Not a weapon you can pick: the ZERO every weapon is measured
+   against. The sword used to be the yardstick, which meant hovering the sword
+   showed nothing at all and every other weapon's numbers were written against a
+   choice rather than against nothing. Every multiplier here is 1, every crit
+   bonus is none, and every defensive perk is zero — a level-1 hero with
+   nothing in their hands. */
+const BARE_HANDS = { id:'bare', name:'BARE HANDS', col:'#8a9299',
+  blurb:'Nothing in your hands. Every weapon is written against this.',
+  dmg:1.0, rate:0.50, reach:40, spinReach:40, crit:0.05, critMult:100,
+  bleed:1.0, spin:1.00, kb:1.00, hold:'sword', throw:'blade',
+  lessTaken:0, suppress:0, leech:0, leechChance:0 };
 /* the baseline the rest of the game is balanced against, kept for the bricks
    that quote a "base" number in their own text */
 const CRIT_BASE       = WEAPONS.sword.crit;
@@ -4998,10 +5036,17 @@ const UPGRADES = [
   /* THE ELEMENTAL TREE. Only offered to a hero actually carrying an elemental
      weapon, so a swordsman is never handed a dead card — and the moment a
      second caster weapon exists these all work for it untouched. */
-  { id:'elemflat', name:'Ember Core', icon:'ember', cls:'OFFENSE',
+  /* IT WAS NEVER A FIRE CARD. `flatElem` is read by the bolt, by Block Freeze
+     and by the Storm Brick alike, so this has always been the best single
+     upgrade a frost build can take — and it was called Ember Core, wore a
+     flame, and said "to your fire bolt". Picking Block Freeze as a favourite
+     and being handed an ember is a card lying about itself, not a bad roll. */
+  { id:'elemflat', name:'Elemental Core', icon:'prism', cls:'OFFENSE',
     req:()=>isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
-    desc:c=>`+${fmtHp(c.v)} FLAT base damage to your ${weapon.elem||'elemental'} bolt — before any increase`,
+    desc:c=>`+${fmtHp(c.v)} FLAT ELEMENTAL damage, added to the BASE of every elemental `+
+      `ability you own — your ${weapon.elem||'elemental'} bolt, Block Freeze, the Storm `+
+      `Brick — before a single increase touches it`,
     apply:c=>{ player.flatElem = Math.round((player.flatElem + c.v)*100)/100; } },
   { id:'eleminc', name:'Elemental Focus', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isCaster() && incRoom('spell', weapon.elem||'fire'),
@@ -6682,9 +6727,19 @@ function renderTree(){
     : (META.on ? 'applied when a run starts — never to the test bench’s preview heroes'
                : 'switched off: runs are played on the raw numbers');
 }
+/* THE BUTTON HAS TO SAY WHICH NUMBER IT IS SHOWING. It printed points LEFT, so
+   a hero who had spent all twelve read "SKILL TREE — 0 POINTS", which looks
+   exactly like a hero who has never earned one. And it was refreshed when the
+   DIFFICULTY changed but not when the WEAPON did, so it went on showing the
+   last weapon's count — twelve trees, one label, and no way to tell. */
 function refreshTreeBtn(){
-  const b = document.getElementById('treePts');
-  if(b){ if(!META) metaLoad(); b.textContent = metaPointsLeft(); }
+  const btn = document.getElementById('treeBtn');
+  if(!btn) return;
+  if(!META) metaLoad();
+  const m = metaCur(), left = metaPointsLeft(m), spent = metaPointsSpent(m);
+  btn.innerHTML = `SKILL TREE — <b id="treePts">${left}</b> TO PLACE`+
+    (spent > 0 ? ` <i class="tspent">${spent} spent</i>` : '') +
+    `<i class="twho">${esc(weapon.name)} \u00b7 ${esc(difficulty.name)}</i>`;
 }
 function toggleTree(){
   const el = document.getElementById('treeScreen');
@@ -6872,8 +6927,8 @@ function anA(word){ return (/^[aeiou]/i.test(word) ? 'an ' : 'a ') + word; }
    because a bare "+59%" on swing time reads like good news and is not.
    The sword prints no delta column at all: it IS the baseline. */
 function weaponTip(w){
-  const b = WEAPONS.sword;
-  const isBase = w.id === 'sword';
+  const b = BARE_HANDS;
+  const isBase = w.id === BARE_HANDS.id;
   const d = (v, base, lowerIsBetter) => {
     if(isBase || Math.abs(v-base) < 1e-9) return '';
     const pct = Math.round((v/base - 1)*100);
@@ -6882,12 +6937,15 @@ function weaponTip(w){
     const arrow = better ? '\u25b2' : '\u25bc';
     return `<b class="${cls}">${pct>0?'+':''}${pct}% ${arrow}</b>`;
   };
-  const pad = (t,n) => (t+'                    ').slice(0, n);
-  const row = (label, val, delta) => `<i>${pad(label,17)}</i>${pad(val,8)}${delta}`;
+  const pad = (t,n) => (t+'                      ').slice(0, n);
+  const row = (label, val, delta) => `<i>${pad(label,19)}</i>${pad(val,9)}${delta}`;
   const L = [];
-  L.push(`<u>${w.name}</u>` + (isBase ? '   \u2014 the baseline' : ''));
+  L.push(`<u>${w.name}</u>`);
   L.push(w.blurb);
   L.push('');
+  if(!isBase) L.push('<i>every % is against BARE HANDS \u2014 a level-1</i>');
+  if(!isBase) L.push('<i>hero with nothing in them</i>');
+  if(!isBase) L.push('');
   L.push(row('Base damage',     w.dmg.toFixed(2),                  d(w.dmg, b.dmg)));
   if(w.cast){
     /* A CASTER HAS NO REACH, NO BLEED AND NO SPIN, so printing them as -100%
@@ -6910,12 +6968,15 @@ function weaponTip(w){
     L.push(row('Spin swing',      '\u00d7'+w.spin.toFixed(2),         d(w.spin, b.spin)));
     L.push(row('Knockback',       '\u00d7'+w.kb.toFixed(2),           d(w.kb, b.kb)));
     L.push('');
+    /* BARE HANDS HAVE NONE OF THESE, and "+infinity%" against zero is not a
+       comparison — these three print what the weapon gives, full stop. */
     L.push(row('Damage taken',    '\u2212'+Math.round((w.lessTaken||0)*100)+'%',
-      '<b class="up">LESS \u25b2</b>'));
+      (w.lessTaken||0) > 0 ? '<b class="up">LESS ▲</b>' : ''));
     L.push(row('Spell suppression','+'+Math.round((w.suppress||0)*100)+'%',
-      '<b class="up">\u25b2</b>'));
+      (w.suppress||0) > 0 ? '<b class="up">▲</b>' : ''));
     L.push(row('Lifesteal',       Math.round((w.leechChance||0)*100)+'% for '+
-      ((w.leech||0)*100).toFixed(1)+'%',                 d(w.leech, b.leech)));
+      ((w.leech||0)*100).toFixed(1)+'%',
+      (w.leech||0) > 0 ? '<b class="up">▲</b>' : ''));
     if(w.slam){
       L.push('');
       L.push('IT DOES NOT SWING. Its basic attack is a GROUND');
@@ -7043,8 +7104,34 @@ function statTip(){
   return statTipEl;
 }
 function statTipHide(){ if(statTipEl) statTipEl.style.display = 'none'; }
+/* THE SAME BOX, GIVEN HTML AND PLACED WHERE IT FITS. Preferred above the row,
+   dropped below when there is no room above, clamped to the viewport either
+   way, and allowed to scroll rather than run off the top of the window. */
+function floatTipShow(row, html, cls){
+  const el = statTip();
+  el.className = cls || '';
+  el.style.maxHeight = 'none';
+  el.innerHTML = html;
+  el.style.display = 'block';
+  el.style.left = '-9999px'; el.style.top = '0px';
+  const r = row.getBoundingClientRect();
+  const PADV = 10;
+  const room = Math.max(160, window.innerHeight - PADV*2);
+  if(el.offsetHeight > room){ el.style.maxHeight = room+'px'; el.style.overflowY = 'auto'; }
+  else el.style.overflowY = 'visible';
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let x = Math.round(r.left + r.width/2 - w/2);
+  x = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8));
+  let y = r.top - h - 12;
+  if(y < PADV) y = r.bottom + 12;                    /* no room above: go below */
+  if(y + h > window.innerHeight - PADV) y = window.innerHeight - h - PADV;
+  el.style.left = x+'px';
+  el.style.top  = Math.round(Math.max(PADV, y))+'px';
+}
 function statTipShow(row, label, text){
   const el = statTip();
+  el.className = '';
+  el.style.maxHeight = 'none'; el.style.overflowY = 'visible';
   el.innerHTML = `<b>${esc(label)}</b>${esc(text)}`;
   el.style.display = 'block';
   const r = row.getBoundingClientRect();
@@ -7062,6 +7149,16 @@ function statTipShow(row, label, text){
 /* wire every explained row in a panel that has just been rebuilt */
 function wireStatTips(root){
   if(!root) return;
+  /* an ability's tip is a whole damage panel, so it gets the pre-formatted box
+     rather than the one-paragraph one the stat rows use */
+  for(const row of root.querySelectorAll('.cpabil.cptip')){
+    const why = row.getAttribute('data-why') || '';
+    const label = (row.querySelector('span') || {}).textContent || '';
+    if(!why) continue;
+    row.addEventListener('mouseenter', ()=>
+      floatTipShow(row, `<u>${esc(label)}</u>\n${esc(why)}`, 'wtipbox'));
+    row.addEventListener('mouseleave', statTipHide);
+  }
   for(const row of root.querySelectorAll('.cprow.cptip')){
     const why = row.getAttribute('data-why') || '';
     const label = (row.querySelector('span') || {}).textContent || '';
@@ -7069,6 +7166,109 @@ function wireStatTips(root){
     row.addEventListener('mouseenter', ()=> statTipShow(row, label, why));
     row.addEventListener('mouseleave', statTipHide);
   }
+}
+/* WHERE EVERY NUMBER COMES FROM. The panel used to show nine opening stats and
+   a percentage against "no favourite", which answered one question out of
+   three: a hero is a BARE HAND plus a weapon plus a favourite plus a skill
+   tree, and until now the tree was invisible on this screen entirely.
+
+   Four heroes are stood up from scratch and every probe on the character sheet
+   is read off each of them. The difference between one layer and the next IS
+   that layer's contribution — nothing is estimated, nothing is duplicated, and
+   a stat nobody has thought about yet is on this panel the moment somebody adds
+   a probe for it. */
+const CP_LAYERS = [
+  { key:'bare', name:'BARE HANDS' },
+  { key:'weap', name:'weapon',     tag:'W', col:'#cfd6dd' },
+  { key:'fav',  name:'favourite',  tag:'F', col:'#ffd76e' },
+  { key:'tree', name:'skill tree', tag:'T', col:'#9b45d6' },
+];
+function comboLayers(){
+  const keepP = player, keepF = favourite, keepW = weapon;
+  const snap = ()=>{
+    const o = {};
+    for(const q of STAT_PROBES){
+      let v = 0;
+      try { v = q.get(); } catch(e){ v = 0; }
+      o[q.g+'|'+q.k] = (typeof v === 'number' && isFinite(v)) ? v : 0;
+    }
+    return o;
+  };
+  /* NO FAVOURITE IS A FAVOURITE. It hands out +5% increased damage, a heart,
+     ten armour and the rest, so a "weapon only" layer that quietly applied it
+     made every real favourite look like it COST you five per cent — which it
+     does, and which is exactly the thing the F column should be saying out
+     loud rather than hiding inside the W one. The perk is its own step. */
+  const stand = (w, f, perk, tree)=>{
+    weapon = w; favourite = f;
+    player = newPlayer();
+    syncStats();
+    const pk = perk && f && FAV_PERKS[f.id];
+    if(pk) try { pk.apply(player); } catch(e){}
+    if(tree) try { applyMetaTree(player); } catch(e){}
+    syncStats();
+    return player;
+  };
+  const none = FAVOURITES[0], f = keepF || none;
+  const out = {};
+  stand(BARE_HANDS, none, false, false);  out.bare = snap();
+  stand(keepW,      none, false, false);  out.weap = snap();
+  stand(keepW,      f,    true,  false);  out.fav  = snap();
+  const hero = stand(keepW, f, true, true);
+  out.tree = snap();
+  /* the ABILITIES list is read off the hero you would actually start with */
+  out.abilities = [];
+  const wname = isCaster() ? 'Fireball' : isSlammer() ? 'Ground Slam' : 'Weapon swing';
+  const wicon = isCaster() ? 'flame' : isSlammer() ? 'fist' : 'sword';
+  out.abilities.push({ id:'weapon', icon:wicon, name:wname,
+    head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : physDamage()),
+    tip:`${weapon.name}, every ${hero.atkRate.toFixed(2)}s\n`+
+        `${fmtHp(swordDps())} a second sustained, crits folded in\n`+
+        (isCaster() ? `${Math.round(boltRadius())} burst radius, and every bolt sets a fire`
+         : isSlammer() ? `A fault of ${SLAM_MAX_HITS} teeth, ${Math.round(SLAM_SHARE*100)}% of a swing each`
+         : `${Math.round(hero.reach)} reach, every third swing is the spin combo`) });
+  try { for(const sp of spellSummaries()) out.abilities.push(sp); } catch(e){}
+  out.favBricks = null;
+  player = keepP; favourite = keepF; weapon = keepW;
+  if(player) syncStats();
+  return out;
+}
+/* every probe, in the order the character sheet lists them, with the layer that
+   moved it named beside it */
+function comboStatRows(L){
+  const parts = [];
+  let group = null;
+  for(const q of STAT_PROBES){
+    const k = q.g+'|'+q.k;
+    const v = { bare:L.bare[k], weap:L.weap[k], fav:L.fav[k], tree:L.tree[k] };
+    const chips = [];
+    for(let i=1;i<CP_LAYERS.length;i++){
+      const cur = CP_LAYERS[i], prev = CP_LAYERS[i-1];
+      const d = v[cur.key] - v[prev.key];
+      if(Math.abs(d) < 1e-9) continue;
+      chips.push(`<i class="cpchip ${d>0?'up':'dn'}" title="${esc(cur.name)}">`+
+        `${cur.tag}${d>0?'+':'−'}${cpNum(Math.abs(d), q)}</i>`);
+    }
+    const dead = !v.bare && !v.weap && !v.fav && !v.tree;
+    if(dead && !q.zero) continue;                 /* a probe that is off for everyone */
+    if(q.g !== group){
+      group = q.g;
+      parts.push(`<div class="cphead cpgrp">${esc(group)}</div>`);
+    }
+    const why = statWhy(q.g, q.k) || '';
+    parts.push(`<div class="cprow cpstat${dead?' cpdim':''}${why?' cptip':''}"`+
+      `${why?` data-why="${esc(why)}"`:''}>`+
+      `<span>${esc(q.k)}</span><b>${cpFmt(v.tree, q)}${chips.join('')}</b></div>`);
+  }
+  return parts.join('');
+}
+function cpFmt(v, q){ try { return q.fmt ? q.fmt(v) : (Math.round(v*100)/100).toString(); }
+                      catch(e){ return String(v); } }
+/* a DELTA formatted like the value it moved, but never with the unit twice */
+function cpNum(v, q){
+  const t = cpFmt(v, q);
+  const m = /^[^0-9-]*(-?[\d.,]+)\s*(.*)$/.exec(t);
+  return m ? (m[1] + (m[2] && m[2].length <= 2 ? m[2] : '')) : t;
 }
 function buildComboPanel(){
   const stats = document.getElementById('comboStats');
@@ -7104,39 +7304,38 @@ function buildComboPanel(){
       <div><b>${esc(b.name)}${b.blocked?' \u2014 never offered to '+anA(weapon.name.toLowerCase()):''}</b>`+
      `<em>${esc(b.body)}</em></div>
     </div>`).join('');
+  const L = comboLayers();
+  const abil = L.abilities.map((a,ix)=>
+    `<div class="cpabil cptip" data-why="${esc(a.tip||'')}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffd76e" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">${ICONS[a.icon]||''}</svg>
+      <span>${esc(a.name)}</span><b>${esc(a.head)}</b></div>`).join('');
   stats.innerHTML =
     `<h4>${weapon.name} \u00d7 ${esc(f.name).toUpperCase()}</h4>
      <div class="cpsub">${esc(weapon.blurb)}</div>` +
     (perk ? `<div class="cphead">YOU START WITH</div><ul>${
         perk.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>` : '') +
-    `<div class="cphead">OPENING STATS</div>
-     <div class="cpvs">every % is what this favourite is worth against
-     NO FAVOURITE on the same weapon</div>` +
-    row('Hearts', now.hearts, base.hearts, 0, '', ['DEFENCE','Max hearts']) +
-    row(now.hitLabel, now.hit, base.hit, undefined, '',
-        cast ? ['FIREBALL','Bolt damage'] : ['PHYSICAL','Weapon hit']) +
-    row(now.rateLabel, now.rate, base.rate, undefined, '', ['PHYSICAL','Swing rate']) +
-    row('Damage a second', now.dps, base.dps, 1, '',
-        cast ? ['FIREBALL','Bolt DPS'] : ['PHYSICAL','Sustained DPS']) +
-    row('Crit chance', now.crit, base.crit, 1, '%', ['PHYSICAL','Crit chance']) +
-    row('Crit multiplier', now.critMult, base.critMult, 0, '%', ['SWORD','Crit damage']) +
-    row('Armour', now.armour, base.armour, 0, '', ['DEFENCE','Armour']) +
-    row('Move speed', now.speed, base.speed, 0, '', ['UTILITY','Move speed']) +
-    (now.regen > 0 ? row('Regeneration', now.regen, base.regen, 3, '/s', ['DEFENCE','Regeneration']) : '') +
-    (now.spells.length ? `<div class="cprow"><span>Starts with</span><b>${
-        now.spells.map(k=>k.toUpperCase()).join(', ')}</b></div>` : '') +
+    `<div class="cphead">ABILITIES</div>
+     <div class="cpvs">what you open with. Hover one for its damage</div>` +
+    abil +
+    `<div class="cphead">EVERY STAT</div>
+     <div class="cpvs">the finished number, and which layer moved it:
+       <i class="cpchip cpleg up">W</i> weapon
+       <i class="cpchip cpleg up">F</i> favourite
+       <i class="cpchip cpleg up">T</i> skill tree.
+       Everything is measured from BARE HANDS \u2014 a level-1 hero holding nothing.
+       Hover a row for what it means.</div>` +
+    comboStatRows(L) +
     `<div class="cphead">CEILINGS</div>
      <div class="cpvs">nothing in a run climbs past these, however long it runs</div>` +
     orow('Increased damage', Math.round(INC_DMG_CAP*100)+'%',
-      'every increase that applies to one hit, summed — levels, physical, spell, elemental — stops here') +
+      'every increase that applies to one hit, summed \u2014 levels, physical, spell, elemental \u2014 stops here') +
     orow('MORE multiplier', '\u00d7'+MORE_DMG_CAP.toFixed(2),
       'every PERMANENT more multiplier together. A timed rage buff multiplies on top of this, on purpose') +
     orow('Crit chance', Math.round(CRIT_CHANCE_CAP*100)+'%', statWhy('PHYSICAL','Crit chance')) +
     orow('Crit multiplier', CRIT_MULT_CAP+'%', statWhy('SWORD','Crit damage')) +
-    `<div class="cphead">ABILITY FLOORS</div>
-     <div class="cpvs">CAST SPEED shortens every ability at once — each one stops here</div>` +
     Object.keys(SPELL_FLOOR).map(k=>
-      orow(esc(SPELL_NAME[k]||k), SPELL_FLOOR[k].toFixed(2)+'s',
+      orow(esc(SPELL_NAME[k]||k)+' floor', SPELL_FLOOR[k].toFixed(2)+'s',
         `however much CAST SPEED you buy, ${SPELL_NAME[k]||k} never comes round faster than this`)).join('') +
     orow('Guardian ring', ORBIT_MAX_SPD.toFixed(1)+' rad/s',
       'past this the guardian bricks strobe instead of spinning');
@@ -7161,10 +7360,13 @@ function buildWeaponRow(){
   const row = document.getElementById('weaponRow');
   if(!row) return;
   row.innerHTML = WEAPON_KEYS.map(id=>
-    `<div class="diff" data-weapon="${id}">${WEAPONS[id].name}`+
-    `<span class="wtip">${weaponTip(WEAPONS[id])}</span></div>`).join('');
-  for(const el of row.children)
+    `<div class="diff" data-weapon="${id}">${WEAPONS[id].name}</div>`).join('');
+  for(const el of row.children){
     el.addEventListener('click', ()=>{ SFX.click(); setWeapon(el.dataset.weapon); });
+    el.addEventListener('mouseenter', ()=>
+      floatTipShow(el, weaponTip(WEAPONS[el.dataset.weapon]), 'wtipbox'));
+    el.addEventListener('mouseleave', statTipHide);
+  }
   let saved = 'sword';
   try{ saved = localStorage.getItem('bb_weapon') || 'sword'; }catch(e){}
   setWeapon(WEAPONS[saved] ? saved : 'sword');
@@ -7917,13 +8119,17 @@ const STAT_PROBES = [
     why:'the weapon plus every FLAT physical brick and every Fault Hammer — the number the increases then multiply' },
   { g:'GROUND SLAM', k:'Fault width',    get:()=> isSlammer() ? player.slamArc*57.2958 : 0, fmt:v=>Math.round(v)+'\u00b0', zero:true,
     why:'how wide the fan opens. 180\u00b0 is the ceiling until SLAM OF THE ELEMENTS is taken twice, which opens it to a full ring' },
-  { g:'GROUND SLAM', k:'Fault reach',    get:()=> isSlammer() ? player.slamRange : 0, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'GROUND SLAM', k:'Fault reach',    get:()=> isSlammer() ? player.slamRange : 0, fmt:v=>Math.round(v)+' px', zero:true,
+    why:'how far in front of you the fault runs before it closes. Deepening it adds ROWS of teeth, '+
+        'so reach is damage as much as it is range — it stops at '+SLAM_RANGE_MAX+'px' },
   { g:'GROUND SLAM', k:'Fault speed',    get:()=> isSlammer() ? player.slamSpeed : 0, fmt:v=>Math.round(v)+' px/s', zero:true,
     why:'how fast the fault runs outward. Slow, and the far teeth arrive after the pack has walked off them' },
   { g:'GROUND SLAM', k:'Teeth a slam',   get:()=> isSlammer() ? slamRays(player.slamArc)*Math.max(2, Math.round(player.slamRange/SLAM_STEP)) : 0,
     fmt:v=>Math.round(v)+'', zero:true,
     why:'lines of stone times rows. Widening the fault adds lines, deepening it adds rows' },
-  { g:'GROUND SLAM', k:'Slams a second', get:()=> isSlammer() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
+  { g:'GROUND SLAM', k:'Slams a second', get:()=> isSlammer() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
+    why:'how often the fault opens. It is the ATTACK SPEED pool, so every brick that speeds a '+
+        'swing speeds the slam — and it meets the same floor a swing does' },
   { g:'GROUND SLAM', k:'Element cycle',  get:()=> (player.slam && player.slam.elem) || 0, fmt:v=>v>=2?'ring + cycle':(v?'cycling':'\u2014'), zero:true,
     why:'SLAM OF THE ELEMENTS: each slam converts half of every tooth into fire, then lightning, then frost, and brings that ailment with it' },
   { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },

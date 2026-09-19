@@ -1382,6 +1382,57 @@ roughly twice a bare hero, and that is what thirty stud points and eight boss fi
 
 ---
 
+## The main menu
+
+**Every stat, and which layer put it there.** The left panel used to show nine opening
+numbers and a percentage against "no favourite", which answered one question out of three: a
+hero is a **bare hand + a weapon + a favourite + a skill tree**, and the tree was invisible on
+this screen entirely.
+
+Four heroes are now stood up from scratch and **every probe on the character sheet** is read
+off each of them. The difference between one layer and the next *is* that layer's
+contribution, printed beside the finished number as a chip:
+
+> **Bolt damage 3.18** `W+2.64` `T+0.54`
+
+Nothing is estimated, nothing is duplicated, and a stat nobody has thought of yet appears on
+this panel the moment somebody adds a probe for it. The panel scrolls, its group headings
+stick while it does, and every row explains itself on hover.
+
+> **No Favourite is a favourite.** It hands out +5% increased damage, a heart, ten armour and
+> more — so a "weapon only" layer that quietly applied it made every real favourite look like
+> it *cost* you five per cent. Which it does, and which is exactly what the `F` chip should
+> say out loud rather than hide inside the `W` one.
+
+**ABILITIES, not ability floors.** The panel lists what you actually open with — your weapon's
+attack and every spell your favourite grants — with its damage beside it, and hovering one
+opens its full damage panel. The floors moved down into CEILINGS where they belong.
+
+**The sword is not the yardstick any more.** Hovering it used to show nothing at all, because
+every weapon was written against it. Everything is written against **BARE HANDS** now — a
+level-1 hero holding nothing, every multiplier 1 and every defensive perk zero — so the sword
+reads −32% swing time, +40% reach, +50% crit multiplier and +40% less damage taken like any
+other choice.
+
+And the tooltips **fit**. An absolutely positioned tip anchored above its row has no idea
+where the top of the window is, so the mace's and the staff's ran off the screen. They use the
+same fixed, viewport-clamped element the stat rows use, drop below the row when there is no
+room above, and scroll when the window is shorter than they are.
+
+**The skill tree button says which number it is showing, and whose.** It printed points
+*left*, so a hero who had spent all twelve read `SKILL TREE — 0 POINTS` — identical to one who
+had never earned any. And it was refreshed when the **difficulty** changed but not when the
+**weapon** did, so it went on showing the last weapon's count. Twelve trees, one label, and no
+way to tell them apart. It now reads `SKILL TREE — 4 TO PLACE · 15 spent · STAFF · HARD`.
+
+**`Ember Core` was never a fire card.** `flatElem` is read by the bolt, by Block Freeze and by
+the Storm Brick alike, so it has always been the single best upgrade a frost build can take —
+and it was called Ember Core, wore a flame, and said *"to your fire bolt"*. Being handed an
+ember after picking Block Freeze as your favourite was a card lying about itself, not a bad
+roll. It is **`Elemental Core`** now and says what it feeds.
+
+---
+
 ## Sound
 
 **Music and sound are separate switches, both on the menu, both remembered.** `M` still
