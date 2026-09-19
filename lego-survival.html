@@ -6192,36 +6192,52 @@ function treeZoomBy(mul, ev){
   treeCy = p.y - (p.y - treeCy) * (was/want);
   treeApplyView();
 }
+/* a press that wanders less than this is a CLICK, not a pan — a hand on a
+   mouse always moves a pixel or two between pressing and letting go */
+const TREE_DRAG_SLOP = 6;
+let treeDragged = false, treeWinBound = false;
 function treeBindView(svg){
   svg.addEventListener('wheel', ev=>{
     ev.preventDefault();
     treeZoomBy(ev.deltaY < 0 ? 1.18 : 1/1.18, ev);
   }, { passive:false });
+  /* NO POINTER CAPTURE HERE. Capturing on the <svg> retargets the pointer to
+     it, and the click that follows is then delivered to the <svg> and never
+     reaches the node that was pressed — which is every node, which is the whole
+     tree. The window hears the drag instead, and the nodes keep their clicks. */
   svg.addEventListener('pointerdown', ev=>{
     if(ev.button !== 0 && ev.button !== 1) return;
-    const p = treeUserXY(svg, ev);
-    treeDrag = { ux:p.x, uy:p.y, cx:treeCx, cy:treeCy, moved:0 };
-    svg.setPointerCapture(ev.pointerId);
+    treeDrag = { moved:0 };
   });
-  svg.addEventListener('pointermove', ev=>{
+  treeBindWindow();
+}
+function treeBindWindow(){
+  if(treeWinBound) return;
+  treeWinBound = true;
+  window.addEventListener('pointermove', ev=>{
     if(!treeDrag) return;
-    /* the drag is measured against where the map WAS, so it tracks the cursor
-       exactly however far you have zoomed in */
-    const w = TREE_VIEW.w / treeZoom, h = TREE_VIEW.h / treeZoom;
-    const r = svg.getBoundingClientRect();
-    const sc = Math.max(w / r.width, h / r.height);
     treeDrag.moved += Math.abs(ev.movementX||0) + Math.abs(ev.movementY||0);
+    if(treeDrag.moved <= TREE_DRAG_SLOP) return;
+    const svg = document.getElementById('treeSvg');
+    if(!svg) return;
+    /* the map moves exactly as far as the cursor did, however far you are in */
+    const r = svg.getBoundingClientRect();
+    if(!r.width || !r.height) return;
+    const sc = Math.max((TREE_VIEW.w/treeZoom) / r.width, (TREE_VIEW.h/treeZoom) / r.height);
     treeCx -= (ev.movementX||0) * sc;
     treeCy -= (ev.movementY||0) * sc;
     treeApplyView();
   });
-  const up = ev=>{ if(treeDrag){ const m = treeDrag.moved; treeDrag = null;
-                   svg.releasePointerCapture && svg.releasePointerCapture(ev.pointerId);
-                   treeDragged = m > 5; setTimeout(()=>{ treeDragged = false; }, 0); } };
-  svg.addEventListener('pointerup', up);
-  svg.addEventListener('pointercancel', up);
+  const up = ()=>{
+    if(!treeDrag) return;
+    treeDragged = treeDrag.moved > TREE_DRAG_SLOP;
+    treeDrag = null;
+    /* the click lands after pointerup, so the flag is cleared right behind it */
+    setTimeout(()=>{ treeDragged = false; }, 0);
+  };
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
 }
-let treeDragged = false;
 function metaNodeXY(n){ return { x:n.x, y:n.y }; }
 function metaSpokeCol(id){
   const sp = META_SPOKES.find(x=>x.id===id);
@@ -6279,7 +6295,7 @@ function renderTree(){
   /* a faint blot behind each cluster, so a GROUP of nodes reads as one thing */
   for(const c of META_CLUSTERS)
     parts.push(`<circle cx="${c.x}" cy="${c.y}" r="${(c.r||92)+42}" fill="${metaSpokeCol(c.sp)}" `+
-               `opacity="0.055"/>`);
+               `opacity="0.055" pointer-events="none"/>`);
   /* EVERY EDGE IS DRAWN, so you can see the whole walk before you pay for it */
   for(const n of META_NODES){
     for(const rid of n.req){
@@ -6290,7 +6306,8 @@ function renderTree(){
       const live = metaHas(n.id, m) && (metaHas(rid, m) || rid === startId);
       parts.push(`<line x1="${r.x}" y1="${r.y}" x2="${n.x}" y2="${n.y}" `+
         `stroke="${live ? metaSpokeCol(n.spoke) : 'rgba(255,255,255,.20)'}" `+
-        `stroke-width="${live?10:5}" stroke-linecap="round" opacity="${live?0.9:1}"/>`);
+        `stroke-width="${live?10:5}" stroke-linecap="round" opacity="${live?0.9:1}" `+
+        `pointer-events="none"/>`);
     }
   }
   for(const n of META_NODES){
@@ -6332,7 +6349,7 @@ function renderTree(){
     const u = Math.cos(a), v = Math.sin(a);
     const lx = c.x + u*off, ly = c.y + v*off;
     parts.push(`<text x="${Math.round(lx)}" y="${Math.round(ly)}" fill="${metaSpokeCol(c.sp)}" `+
-      `font-size="30" font-family="Titan One" opacity="0.92"`+
+      `font-size="30" font-family="Titan One" opacity="0.92" pointer-events="none"`+
       ` stroke="rgba(4,7,10,.92)" stroke-width="7" paint-order="stroke"`+
       ` text-anchor="${u > 0.3 ? 'start' : u < -0.3 ? 'end' : 'middle'}"`+
       ` dy="${v > 0.3 ? 28 : v < -0.3 ? -8 : 10}">${esc(c.name)}</text>`);

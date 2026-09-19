@@ -587,3 +587,23 @@ the whole thing feel like mud — and a drag is never mistaken for a purchase.
 The declared budget rose from ×1.80 to ×2.00 with the ceiling. That is a deliberate choice,
 not a drift: thirty stud points is eighteen thousand banked studs, and a player who has done
 that should be about twice the hero they started as.
+
+### The tree nobody could click
+
+The zoom shipped broken: `setPointerCapture` on the `<svg>` to follow a drag retargets the
+pointer, so the `click` that follows is delivered to the `<svg>` and never reaches the node
+that was pressed. Every node in the tree was dead.
+
+`metaplay.js` passed. It drove the map with `dispatchEvent(new MouseEvent('click'))`, which
+skips the pointer handlers the map installs — **a test that clicks in a way no hand can is a
+test that proves nothing**, and it had been doing that since the tree was first built. It
+now moves a real mouse, presses, wobbles a pixel or two the way a hand does, and releases.
+
+The drag is tracked on `window` instead, with a six-pixel slop so a wobble stays a click, and
+nothing is captured.
+
+Then a second question worth asking the browser rather than the author: *is anything sitting
+on top of a node?* `elementFromPoint` at the centre of every visible node, compared against
+the node itself. It found six more nodes buried under cluster labels — the labels are painted
+over the map deliberately, and were swallowing clicks as well as pixels. `pointer-events:
+none` on every decorative element fixed those.

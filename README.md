@@ -1217,6 +1217,15 @@ ALL` is there when you want it.
 zoom toward the cursor, drag to pan, and `FIT` puts the whole thing back. A drag is never
 mistaken for a purchase.
 
+> The first version of this captured the pointer on the `<svg>` to follow a drag, which
+> retargets the pointer — and the `click` that follows is delivered to the `<svg>` and never
+> reaches the node you pressed. **Every node in the tree became unclickable.** `metaplay.js`
+> passed anyway, because it drove the map with a synthetic `MouseEvent` that skipped the
+> pointer handlers entirely: a test that clicks in a way no hand can is a test that proves
+> nothing. It now presses, wobbles two pixels the way a hand does, and releases — and it asks
+> the browser, via `elementFromPoint`, whether anything is sitting on top of any node. That
+> second check found six more nodes hidden under cluster labels.
+
 **A PATCH NEVER COSTS YOU PROGRESS.** The save carries the version of the tree it was spent
 on. Move the tree and every stud, every best wave and every boss stays exactly where it was —
 the allocated points simply come **back**, and the tree screen says so in as many words:
