@@ -1284,6 +1284,23 @@ is never *nothing*, and it is never as good as arriving. Road nodes sit a **medi
 apart and you cross at most **five** with no choice in them before the next junction; the map
 this replaced ran 119px and seven, which read as a queue of identical dots.
 
+**A door opens three ways.** Each one fans into two short branches of its own — two nodes
+long, dead ends, weapon-flavoured — either side of the way into its own beginning, plus its
+private road. Two exits is not a decision; you take both. Four is.
+
+**No two pockets are the same object.** A cluster says what *shape* it is, and the shape
+changes what buying into it costs you: a **ring** (the prize touches every other node), a
+**wheel** (it touches all of them — one step in, the rest is yours to leave), a **fan** (no
+ring at all; every leaf hangs off the hub alone), an **arc** (open, so there is a long way
+round and a short way), or a **chain** (a tendril with the prize at the far end, so the whole
+cluster is the price of it).
+
+**The roads talk to each other.** Rings and spokes on their own make a grid of big empty quads
+with two ways round each; a cross-link is an extra edge between two road nodes of different
+roads that are near each other — never across a border, never along one road. And the stride
+is not a ruler: each segment picks its own step out of a hash of where it is, so some
+stretches are three short hops and the next is one long reach.
+
 **A cluster is a POCKET.** It hangs off a single short spur and has no other way in or out,
 so **nothing ever routes through one**. Knock any cluster out of the map entirely and every
 other cluster is still reachable from every door — which means skipping a cluster you do not
@@ -1293,7 +1310,7 @@ The cheapest walk to any keystone, from any door, passes through **zero** other 
 **89 to 94% of it is road**. You take the highway out, step into the pocket you came for,
 and step back.
 
-**Three hundred and twenty-eight nodes**, in bands: four doors in the dead centre, four
+**Three hundred and forty-three nodes**, in bands: four doors in the dead centre, four
 openings around them, twelve clusters between the first and second ring, eight between the
 second and third, eight abilities outside the third, and four corners further out still.
 **The rim is where the good stuff is** — the twelve keystones all sit on the outside,
@@ -1500,10 +1517,16 @@ the loop:
 **When it happens:** after flat added damage joins the base, and **before** any increased or
 more multiplier touches it.
 
-**A converted part keeps the increases for how it was BUILT and gains the ones for what it
-BECAME.** A sword swing converted to fire is still a swing — it keeps increased physical
-damage and picks up increased fire damage on top. Dropping the source's pools would have made
-every conversion brick a trap, which is the one thing the mechanic must not be.
+**A converted part is scaled by every type it has ever been.** A sword swing converted to
+cold and then to fire keeps increased physical damage for how it was built, *and* gains
+increased cold for the road it took, *and* increased fire for what it arrived as — all three,
+once each. (The global elemental pool is paid once however many elements the chain touched;
+paid per element it would be a free multiplier for anyone converting twice.)
+
+That is why damage travels the pipeline as **parcels** rather than as one number per type.
+Each parcel remembers its own history and splits when it converts. Totals cannot carry that:
+cold arriving from two different chains would have to share one provenance, and whichever one
+you picked would overpay the half that did not take that road.
 
 **What the monster does about it: nothing to do with you.**
 
@@ -1524,23 +1547,51 @@ The swing still builds one number the way it always did; `hitEnemy` corrects its
 mitigates each share as what it became. A hero who converts nothing takes a one-line fast
 path that is arithmetically identical to the code that was there before.
 
-**Seven bricks write it**, and five skill-tree nodes do too:
+**Fifteen bricks write it**, and seven skill-tree nodes do too. Every legal pair in the
+chain has something behind it, in both forms:
 
-| Brick | |
+| Converted — takes the damage out of the source | |
 |---|---|
-| **Emberforge** / **Rimeblade** / **Galvanise** | 10–40% of your physical converted to fire, cold or lightning |
-| **The Unmaking** | 10–40% of your fire converted to chaos |
-| **Creeping Blight** | gain 6–30% of your physical as extra chaos |
-| **Catalyst** | gain 6–30% of your cold as extra fire |
-| **Entropy** | increased chaos damage — offered only once you convert something |
+| **Emberforge** / **Rimeblade** / **Galvanise** | physical → fire, cold, lightning |
+| **Stormfrost** / **Fulminate** | lightning → cold, cold → fire |
+| **Rotgale** / **The Unmaking** | cold → chaos, fire → chaos |
+
+| Gained as extra — leaves the source alone | |
+|---|---|
+| **Brand Iron** / **Hoarfrost** / **Static Charge** | physical → fire, cold, lightning |
+| **Catalyst** | cold → fire |
+| **Creeping Blight** / **Sour Ending** | physical → chaos, fire → chaos |
+
+| And the two that scale it | |
+|---|---|
+| **Entropy** | increased chaos damage — offered once you convert anything |
+| **Sourproof** | chaos resistance, which nothing else in the game gives you |
+
+Stack Stormfrost under Fulminate and a storm bolt arrives as fire carrying increased
+lightning, increased cold *and* increased fire.
 
 **Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
 you half of each, never a hero dealing 160% of their own damage.
 
-**CHAOS** is neither physical nor elemental, so **armour does not stop it and nothing in the
-game resists it** — it pays its own increase pool and no other. It is the poison-flavoured
-one: where physical can open a bleed, a hit carrying chaos can leave a **dose of poison**
-behind, on odds that ride on how much of the hit actually was chaos.
+### Chaos
+
+**Neither physical nor elemental**, and the rules follow from exactly that:
+
+- **Armour never stops it.** Armour is a physical mitigation and chaos is not physical.
+- **It has a resistance of its own**, and almost nothing in the roster carries any — but it
+  *is* a resistance, not a hole in the rules.
+- **Nothing that says "to every elemental resistance" covers it.** Not a brick, not a tree
+  node, and not a curse that sunders your elemental resistances either. Chaos resistance is
+  bought on its own or not at all.
+- **It pays its own increase pool.** Increased elemental damage does nothing for it.
+- **Poison is chaos damage over time**, the way bleed is physical over time and burn is fire.
+  It reads increased chaos damage as well as increased damage over time, it pays the
+  monster's chaos resistance, and the dose *you* are carrying is reduced by yours.
+- **A hit carrying chaos can leave a dose behind**, on odds that ride on how much of the hit
+  actually was chaos — the way physical can open a bleed.
+
+Which makes chaos the answer to a monster that resists everything else, and chaos resistance
+the answer to a blightspitter.
 
 **The character sheet grows a CONVERSION card** the moment you convert anything — one row
 per type showing what share of an ordinary hit arrives as it and what it meets on the way in,

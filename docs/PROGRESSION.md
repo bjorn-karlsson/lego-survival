@@ -796,3 +796,111 @@ the edge from both sides, so every neighbour appeared twice and every degree cam
 The run-length check looked for nodes with exactly two neighbours and found four in the whole
 map. It was asserting nothing at all, and had been since it was written an hour earlier.
 Deduped through a `Set`, it reads 5.
+
+---
+
+## Seventh pass — shapes, branches, and the suite that could not fail
+
+### The suite that could not fail
+
+`meta.js` was fixed two passes ago for printing its errors and exiting 0. It was not the only
+one. **Thirty-eight of the forty-one tests did exactly the same thing** — they end with
+
+```js
+console.log('ERRORS:', JSON.stringify(errs));
+```
+
+and nothing else, so the runner, which only ever looked at the exit code, called them green
+however many assertions they had just printed as broken. Every "failure" this suite has ever
+reported was a *crash*: a missing file, a page error, a Playwright timeout.
+
+Fixing thirty-eight files one at a time would leave the thirty-ninth free to do it again, so
+the fix is in the runner: a run fails if it exits non-zero, **or** prints a non-empty
+`ERRORS` list, **or** prints a non-empty `FAILURES` list, **or** reports a page error.
+
+It found exactly one thing, and it had been hiding since attributes went in.
+
+### The life assertion that never held
+
+`poe3.js` checks that increased and more scale max life the way the pool rule says. It
+compared `maxHp` with `+100% increased` against `Math.round(hpBase * 2)` — where `hpBase` is
+itself `Math.round(pool(...))`. A sword starts with ten strength, which is +5% increased
+hearts, so the raw pool is 6.3 and `maxHp` is 6. Doubling the *rounded* number and comparing
+it against the game's rounded *double* was never going to hold: 6 × 2 is 12, and
+round(6.3 × 2) is 13.
+
+The expectation now comes from the same rule the game documents — increases add into one pool,
+more multiplies separately — so `+100% increased` on a hero already carrying +5% is ×2.05 and
+not ×2 × 1.05. It still fails on a build where increased hearts multiply instead of adding,
+which is what it is there for.
+
+### Five shapes of pocket
+
+Thirty-six clusters that were all the same object is a map with one idea in it. A pocket now
+says what shape it is:
+
+| | |
+|---|---|
+| **ring** | a closed ring; the prize touches every *other* node |
+| **wheel** | a closed ring and the prize touches all of it — one step in, the rest is yours to leave |
+| **fan** | no ring. The prize is the hub and every leaf hangs off it alone |
+| **arc** | an *open* ring: a long way round and a short way, prize across the gap |
+| **chain** | a tendril; the minors run in a line and the prize is at the far end |
+
+A fan with no notable or keystone in it is a handful of nodes joined to nobody — eight of them
+were, the first time this ran. A hubless fan is a ring.
+
+### Three ways out of a door
+
+A door used to have exactly two: into your own beginning, and onto your own road. Two is not a
+decision, you take both. Each door now fans into **three short branches** of its own, one
+either side of the way into your beginning, two nodes long and dead ends. They are cheap and
+you cannot have all of them at once. Other weapons' branches are hidden, or they are four
+pairs of nodes floating in the middle wired to nothing visible.
+
+### More connections, and a stride that is not a ruler
+
+Rings and spokes alone make a grid of big empty quads with two ways round each. A **cross-link**
+is an extra edge between two road nodes of different roads that are near each other. Never
+across a border and never along one road, because those are the two things holding the
+countries up.
+
+The reach matters more than it looks. **An edge is free** — only nodes cost points — so a
+cross-link that reaches far is a free shortcut, and at 470px they took the walk to a far
+keystone from twenty-seven points to **ten**. A long jump as a free edge was tried and thrown
+away for the same reason: one node for a thousand pixels is four strides of ground for one
+point. Cross-links reach 285px now, one stride and a bit, which joins what is already
+touching and skips nothing.
+
+The variety went into the **stride** instead. Each segment of a road picks its own step out of
+a hash of where it is, ±42%, so some stretches are three short hops and the next is one long
+reach across an empty quarter. Same number of nodes, same price, and it stops looking machined.
+
+### Conversion carries its whole history
+
+A converted part is scaled by **every type it has ever been** — physical to cold to fire is
+increased by increased physical, increased cold *and* increased fire. Totals cannot carry
+that: cold arriving from two different chains would have to share one provenance, and
+whichever union you picked would overpay the half that did not take that road.
+
+So damage travels the pipeline as **parcels**. Each one remembers its own chain and splits
+when it converts, and `convParts` asks the caller what each parcel is owed given where it has
+been. The global elemental pool is added once however many elements a chain touched — per
+element it would be a free multiplier for anyone converting twice, and the break-build that
+does exactly that is caught.
+
+Every legal pair in the chain now has a brick behind it in both forms: fifteen of them, where
+there were seven.
+
+### Chaos, properly
+
+Chaos was "the type nothing resists", which is a hole in the rules rather than a damage type.
+It now has a resistance of its own that almost nothing in the roster carries, and the rule
+that makes it interesting: **nothing that says "to every elemental resistance" covers it.** Not
+a brick, not a tree node, not a curse that sunders them. `ELEMENTS` stays three long and a new
+`RES_KINDS` is the one that includes chaos.
+
+And **poison is chaos damage over time**, the way bleed is physical and burn is fire. It reads
+increased chaos damage as well as increased damage over time, it pays the monster's chaos
+resistance, and the dose you are carrying is reduced by yours — which is the first thing in
+the game that makes chaos resistance worth a brick on its own.
