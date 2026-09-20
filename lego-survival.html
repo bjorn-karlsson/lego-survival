@@ -929,8 +929,11 @@ function syncStats(){
   const p = player;
   if(!p) return;
   const i = p.inc;
+  /* HEARTS OUT OF INTELLIGENCE. Flat, and into the same pool every other flat
+     heart goes into, so every increase and every MORE still multiplies it. */
+  const intHp = (p.heartsPerInt||0) * Math.floor(intOf(p)/5);
   p.maxHp = Math.max(1, Math.min(heartCap(),
-    Math.round(pool(HP_BASE, p.hpFlat, i.hp + strOf(p)*ATTR_STR_HP, p.hpMore))));
+    Math.round(pool(HP_BASE, p.hpFlat + intHp, i.hp + strOf(p)*ATTR_STR_HP, p.hpMore))));
   if(p.hp > p.maxHp) p.hp = p.maxHp;
   p.speed   = Math.min(SPEED_MAX,  pool(SPEED_BASE, 0, i.speed, 1));
   p.magnetR = Math.min(MAGNET_MAX, pool(MAGNET_BASE, 0, i.magnet, 1));
@@ -2430,6 +2433,9 @@ function newPlayer(){
        finished number — the tree obeys the same rule the bricks do, so every
        ceiling in the game binds it, including ceilings that do not exist yet. */
     tollDelay:0, noRegen:false, rerollBonus:0, chestCards:1, noReroll:false,
+    /* the switches the strangest nodes throw. Every one of them is off by
+       default, which is what makes them worth walking to. */
+    heartsPerInt:0, noArmour:false, lessSpell:0, metaGrants:[],
     bankMul:1, studsTotal:0,
     /* XP used to keep an increase and a MORE in the same field, one `+=` and
        one `*=` fighting over it. They are two pools now, as they must be. */
@@ -4385,7 +4391,11 @@ const WARD_RES = 0.12;       /* resistance per stack, before the usual cap */
 const WARD_MAX = 2;
 function wardArmour(){ return player.wardT > 0 ? WARD_ARMOUR * player.wardN : 0; }
 function wardRes(){ return player.wardT > 0 ? WARD_RES * player.wardN : 0; }
+/* THE OPEN GUARD throws away armour entirely. The POOL keeps filling, because
+   every pool in this game does; the DERIVED value is zero, which is the rule
+   every other ceiling in here obeys. */
 function armourValue(){
+  if(player && player.noArmour) return 0;
   /* (base + every flat source, the ward included) x (1 + the one increased
      pool) x the one LESS multiplier a curse applies — then the ceiling. */
   return Math.min(ARMOUR_VALUE_MAX, Math.max(0,
@@ -4678,6 +4688,9 @@ function playerDamage(n, src, elem, spell){
       d *= SUPPRESS_TAKEN; supp = true;
       addDmg(p.x, p.y-70, 'SUPPRESSED', '#9fd4ff', 16);
     }
+    /* a LESS multiplier, after suppression, so the two stack the way more and
+       less always do rather than competing for the same pool */
+    d *= (1 - (p.lessSpell || 0));
   } else {
     d *= (1 - armourDR(armourValue(), d));
   }
@@ -6245,18 +6258,15 @@ const META_STATS = {
   incShock:   { n:'increased lightning damage',   pct:1, w:(p,v)=>{ p.inc.shock += v; } },
   incChaos:   { n:'increased chaos damage',       pct:1, w:(p,v)=>{ p.inc.chaos += v; } },
   chaosRes:   { n:'chaos resistance',             pct:1, w:(p,v)=>{ p.resFlat.chaos += v; } },
-  /* CONVERSION, from the tree. One writer per pair, because the legality rule
-     lives in convAdd and nothing is allowed around it. */
-  convPFire:  { n:'of physical damage converted to FIRE',      pct:1,
-                w:(p,v)=>{ convAdd(p.conv, 'phys', 'fire',  v); } },
-  convPFrost: { n:'of physical damage converted to COLD',      pct:1,
-                w:(p,v)=>{ convAdd(p.conv, 'phys', 'frost', v); } },
-  convPShock: { n:'of physical damage converted to LIGHTNING', pct:1,
-                w:(p,v)=>{ convAdd(p.conv, 'phys', 'shock', v); } },
-  gainChaos:  { n:'of physical damage gained as extra CHAOS',  pct:1,
-                w:(p,v)=>{ convGain(p.conv, 'phys', 'chaos', v); } },
-  gainFire:   { n:'of cold damage gained as extra FIRE',       pct:1,
-                w:(p,v)=>{ convGain(p.conv, 'frost', 'fire', v); } },
+  /* ---- THE STRANGE ONES. Not pools: switches, and each one is the reason a
+     build exists rather than a number on top of one. ---- */
+  heartsPerInt:{ n:'heart for every 5 INTELLIGENCE',
+                w:(p,v)=>{ p.heartsPerInt = (p.heartsPerInt||0) + v; } },
+  noArmour:   { n:'NO armour at all, ever',              w:(p)=>{ p.noArmour = true; } },
+  lessSpell:  { n:'LESS spell damage taken',      pct:1,
+                w:(p,v)=>{ p.lessSpell = 1 - (1 - (p.lessSpell||0)) * (1 - v); } },
+  grant:      { n:'',                                    w:(p,v)=>{
+                (p.metaGrants = p.metaGrants || []).push(v); } },
   boltR:      { n:'increased fireball radius',    pct:1, w:(p,v)=>{ p.inc.boltR += v; }, only:['staff'] },
   ember:      { n:'rank of Ember Scatter',               w:(p,v)=>{ p.ember = Math.max(p.ember||0, v); }, only:['staff'] },
   /* defence */
@@ -6338,6 +6348,7 @@ function metaModText(m){
   const st = META_STATS[m[0]];
   if(!st) return '';
   const v = m[1];
+  if(m[0] === 'grant') return 'START THE RUN WITH '+(SPELL_NAME[v] || v).toUpperCase();
   if(v === undefined || v === null) return st.n;
   const sign = v < 0 ? '−' : '+';
   const a = Math.abs(v);
@@ -6348,21 +6359,61 @@ function metaModText(m){
             : (Math.round(a*100)/100);
   return sign+num+' '+st.n;
 }
+/* ---- EVERY CONVERSION THE PIPELINE ALLOWS, GENERATED --------------------
+   Ten legal pairs and two forms of each is twenty writers, and writing twenty
+   by hand is twenty chances to get the legality rule wrong. Add a damage type
+   to CONV_ORDER and the tree can hand over every conversion involving it
+   without another line here. */
+for(const a of CONV_ORDER) for(const b of CONV_ORDER){
+  if(!convLegal(a, b)) continue;
+  META_STATS['cv_'+a+'_'+b] = {
+    n:'of '+CONV_NAME[a].toLowerCase()+' damage converted to '+CONV_NAME[b], pct:1,
+    w:(p,v)=>{ convAdd(p.conv, a, b, v); } };
+  META_STATS['gn_'+a+'_'+b] = {
+    n:'of '+CONV_NAME[a].toLowerCase()+' damage gained as EXTRA '+CONV_NAME[b], pct:1,
+    w:(p,v)=>{ convGain(p.conv, a, b, v); } };
+}
+/* ---- AND ONE PAIR PER WEAPON --------------------------------------------
+   A tree is per weapon, so a node that only a sword can use is simply a node in
+   the sword's tree — but the panel still has to say so, which is what `only` is
+   for. Generated from WEAPON_KEYS, so the day a fifth weapon lands it has its
+   own flat and its own increase without anybody remembering to add them. */
+for(const wk of WEAPON_KEYS){
+  const W = WEAPONS[wk], cast = !!(W && W.cast), nm = (W && W.name) || wk;
+  META_STATS['dmg_'+wk] = {
+    n:'flat '+(cast ? 'elemental' : 'physical')+' damage — '+nm+' only', only:[wk],
+    w:(p,v)=>{ if(cast) p.flatElem += v; else p.flatPhys += v; } };
+  META_STATS['inc_'+wk] = {
+    n:'increased '+(cast ? 'spell' : 'physical')+' damage — '+nm+' only', pct:1, only:[wk],
+    w:(p,v)=>{ if(cast) p.incSpell += v; else p.incMelee += v; } };
+}
 function metaModGood(m){
   const v = m[1];
-  if(m[0] === 'noRegen' || m[0] === 'noReroll') return false;
+  if(m[0] === 'noRegen' || m[0] === 'noReroll' || m[0] === 'noArmour') return false;
+  if(m[0] === 'grant') return true;
   return !(typeof v === 'number' && v < 0);
 }
 
-/* ---- THE TREE. NOT a wheel. A MAP: clusters of nodes scattered across it and
-   joined by long chains of cheap travel nodes, with four doors set far apart on
-   the rim. Every direction is walkable — north, east, south, west, and around
-   the outside — and none of the routes is short.
+/* ======================= THE MAP =============================================
+   A LATTICE, not a wheel and not a set of pockets hanging off rings. Five rings
+   of HUBS, each hub joined to its neighbours around its own ring and to the
+   nearest hubs on the rings either side of it — so every hub has three to five
+   ways out of it and there is never a gap you can see but not cross.
 
-   THE RIM IS THE WEAK END ON PURPOSE. What is near your door is small stuff;
-   the keystones sit inward, and the points you spend walking to one are the
-   real price of it. That is the whole trade: go deep for one prize, or stay
-   shallow and take four cheap ones. ---- */
+   A hub is either a plain JUNCTION (one travel node, one attribute, nothing
+   else) or a CLUSTER. A lane between two hubs is a short chain of travel nodes,
+   and it attaches to whichever node of a cluster is nearest the other end — so
+   a cluster with three lanes meeting it has three ways in, and walking THROUGH
+   one is a real option rather than an impossibility.
+
+   Nothing here is hand-placed. Hubs come off the ring table, clusters come off
+   a template library, and both are picked by a hash of where they are, so the
+   map is identical every time you open it and adding a weapon, a spell or a
+   damage type extends it without anybody moving a coordinate.
+
+   THREE COUNTRIES still: red STRENGTH, green DEXTERITY, blue INTELLIGENCE. A
+   lane pays the attribute of the ground it crosses, so it colours itself, and a
+   template says which country it belongs to and how deep it may sit. */
 const META_SPOKES = [
   { id:'war',   name:'WARFARE',   col:'#ff8a4a' },
   { id:'prec',  name:'PRECISION', col:'#ffd166' },
@@ -6373,37 +6424,19 @@ const META_SPOKES = [
   { id:'elem',  name:'ELEMENTS',  col:'#c95bd0' },
   { id:'arc',   name:'ARCANA',    col:'#9b45d6' },
   { id:'core',  name:'THE CORE',  col:'#ffd76e' },
-  /* the three HIGHWAYS. A road is not a school of anything — it is one
-     attribute for as far as you care to walk it — so it wears the attribute's
-     colour rather than a cluster's. */
+  /* the three highways wear the colour of what they pay */
   { id:'str',   name:'THE IRON ROAD',  col:'#ff5a4a' },
   { id:'int',   name:'THE RUNE ROAD',  col:'#5aa8ff' },
   { id:'dex',   name:'THE SWIFT ROAD', col:'#6ee06e' },
 ];
-/* ---- WHERE EVERYTHING SITS. Clusters name a BAND and an ANGLE rather than a
-   pixel, because the roads are circles and a cluster has to land in the gap
-   between two of them. Move a ring and the pockets follow it. ---- */
-/* ======================= THREE COUNTRIES ====================================
-   The map is cut into three WEDGES, one per attribute, and what lives in a
-   wedge belongs to it. A road does not carry a label saying which attribute it
-   pays — it pays the attribute of the GROUND IT IS STANDING ON, so the roads
-   colour themselves and a ring changes colour as it crosses a border.
-
-     RED   — STRENGTH     — the sword and the mace, physical, health, armour
-     GREEN — DEXTERITY    — the axe, criticals, speed, everything that lingers
-     BLUE  — INTELLIGENCE — the staff, spells, the elements
-
-   Conversion is in all three, because every build has something to convert. */
-const META_MAP = { cx:2600, cy:2600,
-  band:{ door:150, open:330, inner:790, mid:1370, outer:2080, far:2400 },
-  /* [from, to] clockwise in degrees, 0 = east. They tile the circle exactly. */
+const META_MAP = { cx:4200, cy:4200,
+  /* [from, to] clockwise in degrees, 0 = east. They tile the circle exactly.
+     Red is widest because two weapons live in it. */
   sector:{ str:[95, 235], int:[235, 345], dex:[345, 95] } };
-/* which country a bearing is in. The wedge that wraps past 360 is the reason
-   this is a function and not a comparison. */
 function metaSectorOf(deg){
   const a = ((deg % 360) + 360) % 360;
   for(const k of ['str','int','dex']){
-    const [f, t] = META_MAP.sector[k];
+    const f = META_MAP.sector[k][0], t = META_MAP.sector[k][1];
     if(f < t ? (a >= f && a < t) : (a >= f || a < t)) return k;
   }
   return 'str';
@@ -6411,578 +6444,621 @@ function metaSectorOf(deg){
 function metaSectorAt(x, y){
   return metaSectorOf(Math.atan2(y - META_MAP.cy, x - META_MAP.cx) * 180/Math.PI);
 }
-function metaPlace(band, deg){
-  const r = META_MAP.band[band], a = deg*Math.PI/180;
-  return { x:Math.round(META_MAP.cx + Math.cos(a)*r), y:Math.round(META_MAP.cy + Math.sin(a)*r) };
-}
-/* EVERY WEAPON STARTS IN THE MIDDLE, AND NO TWO START THE SAME WAY. Four doors
-   in the dead centre, each opening into a cluster nobody else can reach cheaply
-   — the sword's is reach and riposte, the mace's is the weight of the slam —
-   and the whole map fans out from there. The good stuff is on the RIM, so a
-   keystone is a long walk in one direction and you cannot afford two. */
-/* AND A DOOR OPENS MORE THAN ONE WAY. It used to have exactly two: into your
-   own beginning, and onto your own road. Two is not a decision — you take both.
-   Each door now fans into THREE short branches of its own before anything else,
-   one either side of the way into your beginning, each two nodes long and each
-   a dead end. They are small and they are cheap and you cannot afford all of
-   them at once, which is the whole point of putting them there. */
-const META_STARTS = [
-  { id:'st_sword', weap:'sword', name:'THE SWORD', band:'door', deg:105, road:145,
-    branches:[ { deg:-36, nodes:[['Edge Work','incMelee',0.03],['Footwork','incAtk',0.03]] },
-               { deg: 36, nodes:[['Sidestep','speed',0.03],['Parry','armour',3]] } ] },
-  { id:'st_mace',  weap:'mace',  name:'THE MACE',  band:'door', deg:225, road:185,
-    branches:[ { deg:-36, nodes:[['Heft','slamDmg',0.4],['Set Stance','armour',3]] },
-               { deg: 36, nodes:[['Thick Skin','incHp',0.03],['Follow Up','incMelee',0.03]] } ] },
-  { id:'st_axe',   weap:'axe',   name:'THE AXE',   band:'door', deg:40,  road:5,
-    branches:[ { deg:-36, nodes:[['Quick Hands','incAtk',0.04],['Openings','incCrit',0.04]] },
-               { deg: 36, nodes:[['Bloodletting','bleedChance',0.04],['Light Feet','speed',0.03]] } ] },
-  { id:'st_staff', weap:'staff', name:'THE STAFF', band:'door', deg:285, road:320,
-    branches:[ { deg:-36, nodes:[['First Words','incSpell',0.03],['Kindle','incElem',0.03]] },
-               { deg: 36, nodes:[['Clear Mind','incCast',0.04],['Wards','allRes',0.03]] } ] },
+/* WHICH COUNTRY EACH WEAPON CALLS HOME. The one table to extend when a weapon
+   is added: its door, its own nodes and its half of the map all follow. */
+const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int' };
+/* THE RINGS. Radius, how many hubs sit on it, and how far round it they are
+   turned so no two rings line up. */
+const META_RINGS = [
+  { r:760,  n:12, phase:0  },
+  { r:1440, n:18, phase:10 },
+  { r:2180, n:24, phase:5  },
+  { r:2960, n:30, phase:8  },
+  { r:3760, n:36, phase:3  },
 ];
-const META_CLUSTERS = [
-  /* ---- FOUR DIFFERENT BEGINNINGS. One cluster per weapon, right outside its
-     own door, holding the thing only that weapon does. ---- */
-  { id:'sworn',  sp:'war',  shape:'wheel', band:'open', deg:105,  name:'THE SWORN BLADE', r:88, at:0,
-    minors:[['Whetstone','incMelee',0.04],['Drill','str',6],['Guard Stance','fireRes',0.05],
-            ['Riposte','incCrit',0.05],['Follow Through','incAtk',0.04]],
-    notable:{ name:'Swordsman', at:10, mods:[['incMelee',0.07],['reach',6]] } },
-  { id:'berserk',sp:'swift',shape:'wheel', band:'open', deg:40, name:'THE BERSERKER',   r:88, at:0,
-    minors:[['Wild Swing','incAtk',0.05],['Reflexes','dex',8],['Bloodscent','leechRate',0.05],
-            ['Warpaint','frostRes',0.05],['Hacking','bleedChance',0.05]],
-    notable:{ name:'Berserker', at:10, mods:[['incAtk',0.07],['leech',0.02]] } },
-  { id:'breaker',sp:'arm',  shape:'wheel', band:'open', deg:225, name:'THE BREAKER',     r:88, at:0,
-    minors:[['Deadweight','slamDmg',0.5],['Brawn','str',8],['Shockplate','shockRes',0.05],
-            ['Wide Fault','slamArc',6],['Braced','armour',4]],
-    notable:{ name:'Breaker', at:10, mods:[['slamRange',0.12],['armour',5]] } },
-  { id:'adept',  sp:'arc',  shape:'wheel', band:'open', deg:285,  name:'THE ADEPT',       r:88, at:0,
-    minors:[['Focus','incSpell',0.04],['Study','int',8],['Warding','allRes',0.03],
-            ['Quick Words','incCast',0.04],['Kindling','incElem',0.04]],
-    notable:{ name:'Adept', at:10, mods:[['incSpell',0.08],['boltR',0.08]] } },
-  /* ---- and four crossings SHARED by the two doors either side of them, so
-     your neighbour's start is a detour rather than a wall ---- */
-  { id:'nexNE',  sp:'prec', shape:'fan', band:'inner', deg:18,  name:'THE CROSSING',    r:88, at:0,
-    minors:[['Keen Edge','incCrit',0.05],['Cruelty','critMult',0.10],['Fire Ward','fireRes',0.05]] },
-  { id:'nexSE',  sp:'aff',  shape:'chain', band:'inner', deg:90, name:'THE SOUR WAY',    r:88, at:0,
-    minors:[['Serrated','bleedChance',0.05],['Rot','incDot',0.05],['Frost Ward','frostRes',0.05]] },
-  { id:'nexSW',  sp:'vit',  shape:'fan', band:'inner', deg:145, name:'THE LOW ROAD',    r:88, at:0,
-    minors:[['Sturdy','incHp',0.03],['Mending','regen',0.012],['Storm Ward','shockRes',0.05]] },
-  { id:'nexNW',  sp:'elem', shape:'chain', band:'inner', deg:255,  name:'THE EMBER PATH',  r:88, at:0,
-    minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.3],['Ward','allRes',0.03]] },
-  /* ---- RING A: cheap, plain, and the first ring everybody crosses ---- */
-  { id:'armoury',sp:'war',  shape:'arc', band:'inner', deg:110,  name:'THE ARMOURY',     r:92, at:10,
-    minors:[['Heft','flatPhys',0.4],['Brutality','incMelee',0.05],['Plated','armour',3]] },
-  { id:'sight',  sp:'prec', shape:'chain', band:'inner', deg:350,  name:'THE LONG SIGHT',  r:92, at:10,
-    minors:[['Precision','incCrit',0.06],['Executioner','critMult',0.12],['Longsword','reach',8]] },
-  { id:'courier',sp:'swift',shape:'fan', band:'inner', deg:42, name:'THE COURIER',     r:92, at:10,
-    minors:[['Nimble','speed',0.04],['Magnetic','magnet',0.10],['Prospector','studs',0.08]] },
-  { id:'blight', sp:'aff',  shape:'ring', band:'inner', deg:66, name:'THE BLIGHT',      r:92, at:10,
-    minors:[['Virulent','poisonDot',0.25],['Gutting','bleedShare',0.04],['Lingering','incDot',0.05]] },
-  { id:'hearth', sp:'vit',  shape:'chain', band:'inner', deg:180, name:'THE HEARTH',      r:92, at:10,
-    minors:[['Hale','incHp',0.05],['Recovery','incRegen',0.12],['Padded','heartDrop',0.10]] },
-  { id:'bastion',sp:'arm',  shape:'ring', band:'inner', deg:215, name:'THE BASTION',     r:92, at:10,
-    minors:[['Riveted','incArmour',0.07],['Warded','suppress',0.04],['Sealed','allRes',0.04]] },
-  { id:'forgefr',sp:'elem', shape:'arc', band:'inner', deg:325,  name:'THE FORGEFIRE',   r:92, at:10,
-    minors:[['Smoulder','incFire',0.07],['Rimebite','incFrost',0.07],['Arcing','incShock',0.07],
-            ['Hot Blade','convPFire',0.10]] },
-  { id:'library',sp:'arc',  shape:'fan', band:'inner', deg:290,  name:'THE LIBRARY',     r:92, at:10,
-    minors:[['Resonant','incSpell',0.05],['Metronome','incCast',0.05],['Widening','boltR',0.10]] },
-  /* ---- RING B: a notable apiece, and a resistance in every one of them ---- */
-  { id:'fury',   sp:'war',  shape:'wheel', band:'mid', deg:120,  name:'FURY',            r:96, at:20,
-    minors:[['Warlust','incAll',0.03],['Overhead','incAtk',0.05],['Ironhide','fireRes',0.06]],
-    notable:{ name:'Warmonger', at:25, mods:[['incMelee',0.08],['incAtk',0.04]] } },
-  { id:'mark',   sp:'prec', shape:'arc', band:'mid', deg:355,  name:'THE MARK',        r:96, at:20,
-    minors:[['Unerring','incCrit',0.07],['Savagery','critMult',0.14],['Cold Nerve','frostRes',0.06]],
-    notable:{ name:'Assassin', at:25, mods:[['incCrit',0.15],['critMult',0.20]] } },
-  { id:'stride', sp:'swift',shape:'chain', band:'mid', deg:30, name:'THE LONG STRIDE', r:96, at:20,
-    minors:[['Fleet','speed',0.05],['Vaulting','roll',0.12],['Surefoot','shockRes',0.06]],
-    notable:{ name:'Outrider', at:25, mods:[['speed',0.07],['roll',0.15]] } },
-  { id:'wound',  sp:'aff',  shape:'fan', band:'mid', deg:65, name:'OPEN WOUNDS',     r:96, at:20,
-    minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Scar Tissue','allRes',0.03],
-            ['Venomtouch','gainChaos',0.08],['Sour Blood','chaosRes',0.06]],
-    notable:{ name:'Plaguebearer', at:25, mods:[['incDot',0.12],['poisonDot',0.4]] } },
-  { id:'watch',  sp:'vit',  shape:'ring', band:'mid', deg:165, name:'THE WATCH',       r:96, at:20,
-    minors:[['Stoic','incHp',0.04],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
-    notable:{ name:'Warden', at:30, mods:[['incHp',0.08],['regen',0.02]] } },
-  { id:'forge',  sp:'arm',  shape:'chain', band:'mid', deg:210, name:'THE FORGE',       r:96, at:20,
-    minors:[['Tempered','incArmour',0.09],['Banded','armour',6],['Bracing','suppress',0.04]],
-    notable:{ name:'Stonecutter', at:30, mods:[['incArmour',0.12],['suppress',0.05]] } },
-  { id:'flux',   sp:'elem', shape:'arc', band:'mid', deg:250,  name:'FLUX',            r:96, at:20,
-    minors:[['Prismatic','incElem',0.05],['Pyromancy','incFire',0.08],['Conduction','incShock',0.08],
-            ['Voltaic','convPShock',0.12]],
-    notable:{ name:'Emberwright', at:25, mods:[['ember',1],['incFire',0.06]] } },
-  { id:'chant',  sp:'arc',  shape:'ring', band:'mid', deg:300,  name:'THE CHANT',       r:96, at:20,
-    minors:[['Harmonic','incSpell',0.05],['Cadence','incCast',0.05],['Attunement','allRes',0.03]],
-    notable:{ name:'Archivist', at:25, mods:[['spellCap',1],['incCast',0.04]] } },
-  /* ---- RING C: one ABILITY apiece, and the keystone that comes with it. This
-     is the ring that changes depending on what the deck handed you. ---- */
-  { id:'cOrbit', sp:'arc',  shape:'wheel', band:'outer', deg:320,  name:'THE ORBIT',       r:100, at:25,
-    minors:[['Heavier Guard','orbitDmg',1],['Wider Guard','orbitR',20],
-            ['Swifter Guard','orbitSpd',0.12]],
-    keystone:{ name:'Glass Bricks', at:25, note:'everything you own hits far harder, and you die to anything',
-               mods:[['incAll',0.35],['moreHp',-0.30]] } },
-  { id:'cBlast', sp:'prec', shape:'fan', band:'outer', deg:15,  name:'THE BARREL',      r:100, at:25,
-    minors:[['Hot Load','blastDmg',1],['Rifling','blastPierce',1],
-            ['Autoloader','blastRate',0.12]],
-    keystone:{ name:'Perfect Strike', at:30, note:'every swing is a critical, and nothing else is',
-               mods:[['incCrit',1.50],['critMult',-0.50]] } },
-  { id:'cChain', sp:'elem', shape:'arc', band:'outer', deg:285, name:'THE STORMHEAD',   r:100, at:25,
-    minors:[['Conductor','chainDmg',1],['Forked','chainFork',1],
-            ['Quickening','chainRate',0.12],['Arcbrand','convPShock',0.10]],
-    keystone:{ name:'Livewire', at:30, note:'the bolts come twice as fast, and nothing you do lingers',
-               mods:[['chainRate',0.40],['incShock',0.25],['incDot',-0.40]] } },
-  { id:'cStorm', sp:'war',  shape:'chain', band:'outer', deg:120, name:'THE WHIRLING',    r:100, at:25,
-    minors:[['Heavier Blades','stormDmg',1],['Broader Blades','stormSize',0.3],
-            ['Faster Throw','stormRate',0.12]],
-    keystone:{ name:'Slow Death', at:30, note:'everything lingering doubles; nothing lands hard',
-               mods:[['incDot',0.60],['incAll',-0.25]] } },
-  { id:'cVort',  sp:'swift',shape:'wheel', band:'outer', deg:45, name:'THE VORTEX',      r:100, at:25,
-    minors:[['Deeper Cut','vortexDmg',1],['Wider Whirl','vortexR',25],
-            ['Spinning Up','vortexRate',0.12]],
-    keystone:{ name:'Ironclad Oath', at:30, note:'a wall that cannot run',
-               mods:[['incArmour',0.50],['allRes',0.10],['speed',-0.20]] } },
-  { id:'cFreeze',sp:'vit',  shape:'fan', band:'outer', deg:250, name:'THE COLD SNAP',   r:100, at:25,
-    minors:[['Colder','freezeR',40],['Quicker','freezeRate',0.12],['Frostbite','frostRes',0.08],
-            ['Frostbrand','convPFrost',0.10],['Thaw','gainFire',0.08]],
-    keystone:{ name:'Bloodthirst', at:35, note:'you take it back by hitting, or not at all',
-               mods:[['leechRate',0.20],['leech',0.06],['noRegen',null]] } },
-  { id:'cBane',  sp:'aff',  shape:'arc', band:'outer', deg:75,  name:'THE ORCHARD',     r:100, at:25,
-    minors:[['Heavier Bane','baneDmg',1],['Wider Bane','baneR',0.12],
-            ['Quicker Bane','baneRate',0.12],['Blightbrand','gainChaos',0.10]],
-    keystone:{ name:'Slow Burn', at:30, note:'the world stays warm for ten more waves, and teaches you less',
-               mods:[['tollDelay',10],['xp',-0.30]] } },
-  { id:'cBomb',  sp:'arm',  shape:'chain', band:'outer', deg:180,  name:'THE ORDNANCE',    r:100, at:25,
-    minors:[['Heavier Bomb','bombDmg',1],['Wider Bomb','bombR',0.12],['Clustering','bombCluster',1]],
-    keystone:{ name:'Scavenger', at:25, note:'every chest is worth double, and you take what you are given',
-               mods:[['chestCards',2],['noReroll',null]] } },
-  /* ---- THE FOUR CORNERS. Furthest from every door, between two rims, and the
-     only place the truly lopsided keystones live. ---- */
-  { id:'eyrie',  sp:'prec', shape:'ring', band:'far', deg:10,   name:'THE EYRIE',       r:104, at:30,
-    minors:[['Hawk-eyed','incCrit',0.08],['Merciless','critMult',0.18],
-            ['Sharpshot','blastPierce',1],['Clear Sight','allRes',0.04]],
-    keystone:{ name:'Hoarder', at:30, note:'the run pays double into the tree, and hits softer',
-               mods:[['bankMul',2],['incAll',-0.20]] } },
-  { id:'rot',    sp:'aff',  shape:'wheel', band:'far', deg:80, name:'THE ROT',         r:104, at:30,
-    minors:[['Pestilent','incDot',0.08],['Corrosive','poisonDot',0.4],
-            ['Bleeding Out','bleedShare',0.05],['Inured','allRes',0.05],
-            ['Unmaking','incChaos',0.12],['Inoculated','chaosRes',0.08]],
-    keystone:{ name:'Vengeance', at:35, note:'what you have already hurt hurts far more; nothing you meet fresh does',
-               mods:[['incDot',0.50],['bleedShare',0.06],['incCrit',-0.60]] } },
-  { id:'keep',   sp:'arm',  shape:'fan', band:'far', deg:190, name:'THE KEEP',        r:104, at:30,
-    minors:[['Adamant','incArmour',0.12],['Anchored','armour',8],
-            ['Absorbing','suppress',0.05],['Layered','allRes',0.05]],
-    keystone:{ name:'Stoneheart', at:35, note:'you will outlast anything; you will not out-hit it',
-               mods:[['moreHp',0.35],['allRes',0.06],['incAll',-0.30]] } },
-  { id:'conflu', sp:'elem', shape:'arc', band:'far', deg:275,   name:'THE CONFLUENCE',  r:104, at:30,
-    minors:[['Convergent','incElem',0.07],['Pyre','incFire',0.09],
-            ['Rime','incFrost',0.09],['Tempest','incShock',0.09],
-            ['Prism Edge','convPFrost',0.15]],
-    keystone:{ name:'Conduit', at:30, note:'every element at once, and the words come slowly',
-               mods:[['incElem',0.50],['allRes',0.08],['incCast',-0.35]] } },
-];
-/* WHAT A STEP OF ROAD IS WORTH: an ATTRIBUTE, and nothing else. That is the
-   whole trick. A road node is a point you SPEND to be somewhere else, and the
-   only thing it leaves behind is three of one attribute — so a lightning build
-   can cross the entire map without picking up a single point of physical
-   damage it did not want. Boring on purpose. Three strength is a fifth of a
-   real node, and the walk to a far keystone is twenty of them. */
+const HUB_JIT   = 0.055;  /* how far a hub wanders off its ring */
+const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next */
+const LANE_STEP = 215;    /* how far apart travel nodes sit along a lane */
+const LANE_VARY = 0.34;   /* and how much that wanders, per lane */
+/* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
   str: ['Strength',     'str', 1],
   dex: ['Dexterity',    'dex', 1],
   int: ['Intelligence', 'int', 1],
   core:['Resolve',      'str', 2],
 };
-/* ======================= THE HIGHWAYS ========================================
-   The map used to join CLUSTER TO CLUSTER, which meant every journey went
-   THROUGH somebody else's cluster: a spell build walking to the far side
-   collected physical damage on the way whether it wanted it or not, and paid a
-   point for each. That is exactly backwards.
+/* WHAT A DOOR FANS INTO. Two short chains per weapon, two nodes each, dead ends
+   — so the first decision of a run is which of them you can afford. Keyed by
+   weapon with a fallback, so a new weapon gets a beginning whether or not
+   anybody writes one for it. */
+const META_BRANCH = {
+  sword:[[['Edge Work','incMelee',0.03],['Footwork','incAtk',0.03]],
+         [['Sidestep','speed',0.03],['Parry','armour',3]]],
+  mace: [[['Heft','slamDmg',0.4],['Set Stance','armour',3]],
+         [['Thick Skin','incHp',0.03],['Follow Up','incMelee',0.03]]],
+  axe:  [[['Quick Hands','incAtk',0.04],['Openings','incCrit',0.04]],
+         [['Bloodletting','bleedChance',0.04],['Light Feet','speed',0.03]]],
+  staff:[[['First Words','incSpell',0.03],['Kindle','incElem',0.03]],
+         [['Clear Mind','incCast',0.04],['Wards','allRes',0.03]]],
+  _:    [[['First Steps','incAll',0.02],['Grip','incAtk',0.03]],
+         [['Footing','incHp',0.03],['Guard','armour',3]]],
+};
+const META_STARTS = [];
+let META_TREE_UNPLACED = [];
+/* ---- THE SMALL GROUPS ----------------------------------------------------
+   Every one of these is ONE OR TWO KINDS OF STAT and nothing else, which is the
+   whole point: a cluster you can read at a glance and want or not want. They
+   REPEAT — the same three fire nodes turn up in four places around the blue
+   country, the way the same small wheel turns up all over the tree this is
+   borrowed from — so the library stays short and the map stays big.
 
-   Roads carry you; clusters hang OFF them. A road is a long run of nodes that
-   pay ONE attribute, so you can cross the whole map on dexterity alone and
-   arrive with nothing in your build you did not choose. A cluster is a POCKET
-   on a short spur: you step off the road into it, take what you came for, and
-   step back. Nothing routes THROUGH a cluster, ever — which is why skipping one
-   costs you nothing at all.
-
-   Rings are jittered polygons rather than circles, and a spoke starts and ends
-   on a ring's own VERTEX, so where two roads meet they meet exactly and the
-   junction is one node rather than two nodes a few pixels apart. */
-const ROAD_STEP  = 215;   /* how far apart nodes sit along a road */
-const ROAD_MERGE = 145;   /* two road samples this close are ONE junction */
-const ROAD_JIT   = 0.09;  /* how far a ring vertex wanders off its radius */
-/* ---- AND THE ROADS TALK TO EACH OTHER -----------------------------------
-   Rings and spokes on their own make a grid of big empty quads: two ways round
-   every one of them and neither of them interesting. A CROSS-LINK is an extra
-   edge between two road nodes of DIFFERENT roads that happen to be near each
-   other — a ring node and the spoke that passes it, two spokes leaning in at
-   the same junction. It costs nothing to walk (an edge is free; you pay for
-   nodes) so what it buys is CHOICE: a short way across a quad instead of the
-   long way round two sides of it.
-
-   Never across a border, because the border walls are what make a country
-   yours, and never between two nodes of the same road, because that would be a
-   shortcut along a ring and rings are meant to be walked.
-
-   AN EDGE IS FREE and only nodes cost points, so a cross-link that reaches far
-   is a free shortcut — reaching 470px, they took the walk to a far keystone
-   from twenty-seven points to ten. They reach just past one stride now, which
-   joins the nodes that are already all but touching and skips nothing.
-
-   AND THE STRIDE IS NOT A CONSTANT. A road laid at one fixed step is a ruler,
-   and every quad on the map the same size as every other. Each segment of a
-   road now picks its own stride out of a hash of where it is, so some stretches
-   are three short hops and the next is one long reach across an empty quarter.
-   It is the same number of nodes either way — it costs what it always cost, it
-   just stops looking machined.
-
-   (A long jump as a free EDGE was tried first and thrown away: one node for a
-   thousand pixels is four strides of ground for one point, and it took the walk
-   to a far keystone from twenty-seven points down to twelve.) */
-const ROAD_LINK  = 285;   /* how far a cross-link will reach: one stride and a bit */
-const ROAD_VARY  = 0.42;  /* how far a segment's stride wanders off ROAD_STEP */
-const META_ROADS = [
-  /* three ring roads. None of them names an attribute: a road pays for the
-     GROUND IT CROSSES, so a ring is red on the red side and blue on the blue
-     side and changes colour exactly where the border is. */
-  /* THE INNER RING IS THREE ARCS, NOT A RING. Laid as one circle and then cut
-     at each border, because a complete ring this close to the doors made every
-     country free: half a lap of it is eight points, and from anywhere on it you
-     can take any spoke outward. That put every prize on the map within three
-     points of every door, which is the opposite of what a home country is for.
-     Cut, the only way out of your own third is the middle ring — and going the
-     long way round THAT is a journey you can feel. */
-  { id:'ring1', kind:'ring', r:META_MAP.band.open  + 230, n:12, seed:17, cut:true },
-  /* the MIDDLE ring is cut too. With only the inner one walled off, crossing
-     a border cost one or two points and the countries were decoration. Cut,
-     the only road between them is the outer ring — and going the long way
-     round THAT is what makes your own third of the map worth living in. */
-  { id:'ring2', kind:'ring', r:META_MAP.band.inner + 310, n:14, seed:53, cut:true },
-  { id:'ring3', kind:'ring', r:META_MAP.band.mid   + 350, n:18, seed:91 },
+   `home` is the country it belongs to, `d` the rings it may sit on. */
+const META_GROUPS = [
+  /* ============ RED: physical, hearts, armour, regeneration ============ */
+  { id:'whet',  name:'WHETSTONE',   sp:'war', home:'str', d:[0,3], shape:'ring',
+    minors:[['Whetstone','incMelee',0.035],['Honing','incMelee',0.03],['Grindstone','incMelee',0.025]] },
+  { id:'heft',  name:'HEFT',        sp:'war', home:'str', d:[0,2], shape:'chain',
+    minors:[['Heft','flatPhys',0.08],['Weight','flatPhys',0.06]] },
+  { id:'plate', name:'PLATING',     sp:'arm', home:'str', d:[0,3], shape:'ring',
+    minors:[['Plated','armour',3],['Riveted','incArmour',0.06],['Banded','armour',3]] },
+  { id:'hale',  name:'HALE',        sp:'vit', home:'str', d:[0,3], shape:'ring',
+    minors:[['Hale','incHp',0.035],['Sturdy','incHp',0.03],['Thickset','incHp',0.025]] },
+  { id:'mend',  name:'MENDING',     sp:'vit', home:'str', d:[1,4], shape:'arc',
+    minors:[['Mending','regen',0.010],['Recovery','incRegen',0.09],['Knitting','incRegen',0.07]] },
+  { id:'quench',name:'QUENCHED',    sp:'arm', home:'str', d:[1,4], shape:'chain',
+    minors:[['Quenched','fireRes',0.06],['Rimeplate','frostRes',0.06]] },
+  { id:'ground',name:'GROUNDED',    sp:'arm', home:'str', d:[1,4], shape:'chain',
+    minors:[['Grounded','shockRes',0.06],['Bracing','suppress',0.04]] },
+  { id:'warcry',name:'WARCRY',      sp:'war', home:'str', d:[1,4], shape:'fan',
+    minors:[['Overhead','incAtk',0.035],['Follow Through','incMelee',0.03],['Bellow','incAtk',0.025]] },
+  { id:'gore',  name:'GORE',        sp:'war', home:'str', d:[1,4], shape:'ring',
+    minors:[['Serrated','bleedChance',0.05],['Gutting','bleedShare',0.04],['Rending','bleedChance',0.04]] },
+  { id:'drink', name:'BLOODBIND',   sp:'vit', home:'str', d:[2,4], shape:'chain',
+    minors:[['Bloodscent','leechRate',0.05],['Draught','leech',0.015]] },
+  { id:'stone', name:'STONESKIN',   sp:'arm', home:'str', d:[2,4], shape:'arc',
+    minors:[['Adamant','incArmour',0.10],['Anchored','armour',6],['Layered','allRes',0.04]] },
+  { id:'faults',name:'THE FAULT',   sp:'arm', home:'str', d:[2,4], shape:'chain',
+    minors:[['Deadweight','slamDmg',0.5],['Wide Fault','slamArc',6]] },
+  /* ============ GREEN: criticals, speed, bleed, poison, loot ============ */
+  { id:'keen',  name:'KEEN EDGE',   sp:'prec', home:'dex', d:[0,3], shape:'ring',
+    minors:[['Keen Edge','incCrit',0.04],['Precision','incCrit',0.04],['Sharpening','incCrit',0.03]] },
+  { id:'cruel', name:'CRUELTY',     sp:'prec', home:'dex', d:[1,4], shape:'chain',
+    minors:[['Cruelty','critMult',0.08],['Savagery','critMult',0.07]] },
+  { id:'fleet', name:'FLEET',       sp:'swift',home:'dex', d:[0,3], shape:'chain',
+    minors:[['Fleet','speed',0.04],['Vaulting','roll',0.11]] },
+  { id:'quick', name:'QUICKDRAW',   sp:'swift',home:'dex', d:[0,3], shape:'ring',
+    minors:[['Quick Hands','incAtk',0.04],['Wild Swing','incAtk',0.035],['Reflexes','incAtk',0.03]] },
+  { id:'venom', name:'VENOM',       sp:'aff', home:'dex', d:[1,4], shape:'ring',
+    minors:[['Virulent','poisonDot',0.25],['Lingering','incDot',0.05],['Septic','poisonDot',0.20]] },
+  { id:'rot',   name:'ROT',         sp:'aff', home:'dex', d:[2,4], shape:'chain',
+    minors:[['Pestilent','incDot',0.06],['Sour','incChaos',0.07]] },
+  { id:'lace',  name:'LACERATE',    sp:'aff', home:'dex', d:[1,4], shape:'fan',
+    minors:[['Lacerate','bleedChance',0.06],['Bleeding Out','bleedShare',0.05],['Scoring','bleedShare',0.04]] },
+  { id:'purse', name:'THE PURSE',   sp:'swift',home:'dex', d:[0,2], shape:'chain',
+    minors:[['Prospector','studs',0.08],['Magnetic','magnet',0.10]] },
+  { id:'temper',name:'TEMPERED',    sp:'prec', home:'dex', d:[1,4], shape:'chain',
+    minors:[['Cold Nerve','frostRes',0.06],['Surefoot','shockRes',0.06]] },
+  { id:'hunt',  name:'BLOODHUNT',   sp:'prec', home:'dex', d:[2,4], shape:'arc',
+    minors:[['Hawk-eyed','incCrit',0.06],['Merciless','critMult',0.12],['Unerring','incCrit',0.05]] },
+  { id:'inoc',  name:'INOCULATION', sp:'aff', home:'dex', d:[2,4], shape:'chain',
+    minors:[['Sour Blood','chaosRes',0.06],['Inured','chaosRes',0.05]] },
+  /* ============ BLUE: spells, the elements, cast speed ============ */
+  { id:'focus', name:'FOCUS',       sp:'arc', home:'int', d:[0,3], shape:'ring',
+    minors:[['Focus','incSpell',0.035],['Study','incSpell',0.03],['Resonant','incSpell',0.025]] },
+  { id:'cad',   name:'CADENCE',     sp:'arc', home:'int', d:[0,3], shape:'chain',
+    minors:[['Cadence','incCast',0.05],['Metronome','incCast',0.04]] },
+  { id:'pyro',  name:'PYROMANCY',   sp:'elem',home:'int', d:[1,4], shape:'chain',
+    minors:[['Smoulder','incFire',0.055],['Pyre','incFire',0.05]] },
+  { id:'rime',  name:'RIME',        sp:'elem',home:'int', d:[1,4], shape:'chain',
+    minors:[['Rimebite','incFrost',0.055],['Hoar','incFrost',0.05]] },
+  { id:'tempe', name:'TEMPEST',     sp:'elem',home:'int', d:[1,4], shape:'chain',
+    minors:[['Arcing','incShock',0.055],['Conduction','incShock',0.05]] },
+  { id:'prism', name:'PRISM',       sp:'elem',home:'int', d:[0,3], shape:'ring',
+    minors:[['Prismatic','incElem',0.04],['Convergent','incElem',0.035],['Tinder','incElem',0.03]] },
+  { id:'ward',  name:'WARDING',     sp:'arc', home:'int', d:[0,4], shape:'ring',
+    minors:[['Warding','allRes',0.03],['Attunement','allRes',0.03],['Sealed','allRes',0.03]] },
+  { id:'kindle',name:'KINDLING',    sp:'elem',home:'int', d:[0,2], shape:'chain',
+    minors:[['Kindling','flatElem',0.08],['Charged','flatElem',0.06]] },
+  { id:'embw',  name:'THE EMBER WELL', sp:'elem', home:'int', d:[1,4], shape:'chain',
+    minors:[['Emberskin','fireRes',0.06],['Firebrand','incFire',0.06]] },
+  { id:'frow',  name:'THE FROST WELL', sp:'elem', home:'int', d:[1,4], shape:'chain',
+    minors:[['Frostskin','frostRes',0.06],['Frostbrand','incFrost',0.06]] },
+  { id:'stow',  name:'THE STORM WELL', sp:'elem', home:'int', d:[1,4], shape:'chain',
+    minors:[['Stormskin','shockRes',0.06],['Stormbrand','incShock',0.06]] },
+  { id:'wide',  name:'WIDENING',    sp:'arc', home:'int', d:[1,4], shape:'chain',
+    minors:[['Widening','boltR',0.10],['Harmonic','incSpell',0.04]] },
 ];
-/* the four doors each get a PRIVATE road out to the inner ring, leaning away
-   from their own beginning so it does not drive through it. Each one stays in
-   its weapon's own country, so the staff walks out on intelligence and the mace
-   on strength without anybody having to say so. */
-for(const st of META_STARTS)
-  META_ROADS.push({ id:'dr_'+st.weap, kind:'door', deg:st.road, r0:260, to:'ring1' });
-/* A SPOKE GOES WHERE NO POCKET IS. Rather than a list of angles that has to be
-   re-checked by hand every time a cluster moves, each spoke sits at the
-   MIDPOINT of a gap between two consecutive clusters of the band it crosses —
-   so adding a cluster shoves the spokes out of its way on its own. */
-function metaBandGaps(band){
-  const at = META_CLUSTERS.filter(c=>c.band === band)
-                          .map(c=>((c.deg % 360) + 360) % 360).sort((p,q)=>p-q);
-  const mid = [];
-  for(let i=0;i<at.length;i++){
-    const f = at[i], t = at[(i+1) % at.length] + (i === at.length-1 ? 360 : 0);
-    mid.push(Math.round(((f + t)/2) % 360));
-  }
-  return mid;
+/* ---- THE CONVERSION GROUPS ----------------------------------------------
+   One per legal pair, both forms in the same cluster, generated. Add a damage
+   type to CONV_ORDER and every conversion involving it gets a home on the map
+   without another line here. Which country a pair belongs to follows from what
+   it converts OUT of: physical is red, lightning and cold are blue, and
+   anything ending in chaos is green. */
+const CONV_GROUP_NAME = {
+  'phys>shock':'THE LIVE WIRE', 'phys>frost':'THE RIMEBLADE', 'phys>fire':'THE FORGE-EDGE',
+  'phys>chaos':'CREEPING BLIGHT', 'shock>frost':'STORMFROST',  'shock>fire':'THE ARC-FLAME',
+  'shock>chaos':'VOIDARC',       'frost>fire':'FULMINATE',     'frost>chaos':'ROTGALE',
+  'fire>chaos':'THE UNMAKING',
+};
+for(const a of CONV_ORDER) for(const b of CONV_ORDER){
+  if(!convLegal(a, b)) continue;
+  const key = a+'>'+b;
+  META_GROUPS.push({
+    id:'cv_'+a+'_'+b, name:CONV_GROUP_NAME[key] || (CONV_NAME[a]+' TO '+CONV_NAME[b]),
+    sp: b === 'chaos' ? 'aff' : 'elem',
+    home: b === 'chaos' ? 'dex' : a === 'phys' ? 'str' : 'int',
+    d:[1,4], shape:'chain', must:true,
+    minors:[[CONV_NAME[b].charAt(0)+CONV_NAME[b].slice(1).toLowerCase()+'brand', 'cv_'+a+'_'+b, 0.10],
+            ['Bleed-over', 'gn_'+a+'_'+b, 0.06]] });
 }
-for(const d of metaBandGaps('inner'))
-  META_ROADS.push({ id:'spA'+d, kind:'spoke', deg:d, from:'ring1', to:'ring2' });
-for(const d of metaBandGaps('mid'))
-  META_ROADS.push({ id:'spB'+d, kind:'spoke', deg:d, from:'ring2', to:'ring3' });
+/* ---- AND ONE GROUP PER WEAPON -------------------------------------------
+   Generated from WEAPON_KEYS and dropped in that weapon's own country, so the
+   day a fifth weapon lands it arrives on the map with its own nodes. */
+for(const wk of WEAPON_KEYS){
+  const W = WEAPONS[wk], nm = ((W && W.name) || wk).toUpperCase();
+  META_GROUPS.push({ id:'w_'+wk, name:'THE '+nm+"'S OATH", sp:'core',
+    home: META_HOME[wk] || 'str', d:[0,3], shape:'fan', only:wk, must:true,
+    minors:[['Grip','dmg_'+wk, 0.1],['Practice','inc_'+wk, 0.04],['Drill','inc_'+wk, 0.03]] });
+}
+/* ---- THE NOTABLES. One of each, ever, and each one sits in the middle of a
+   cluster of its own kind. Deeper `d` means further out and dearer to reach. */
+const META_NOTABLES = [
+  /* red */
+  { id:'n_sword', name:'THE SWORN BLADE', sp:'war', home:'str', d:[1,2], shape:'wheel',
+    minors:[['Riposte','incCrit',0.05],['Guard Stance','fireRes',0.05],['Drill','incMelee',0.04]],
+    notable:{ name:'Swordsman', mods:[['incMelee',0.07],['reach',6]] } },
+  { id:'n_war',   name:'FURY',         sp:'war', home:'str', d:[2,3], shape:'ring',
+    minors:[['Warlust','incAll',0.03],['Brutality','incMelee',0.05],['Ironhide','fireRes',0.06]],
+    notable:{ name:'Warmonger', mods:[['incMelee',0.08],['incAtk',0.04]] } },
+  { id:'n_break', name:'THE BREAKER',   sp:'arm', home:'str', d:[1,2], shape:'wheel',
+    minors:[['Shockplate','shockRes',0.05],['Braced','armour',4],['Deadweight','slamDmg',0.5]],
+    notable:{ name:'Breaker', mods:[['slamRange',0.12],['armour',5]] } },
+  { id:'n_forge', name:'THE FORGE',     sp:'arm', home:'str', d:[2,4], shape:'arc',
+    minors:[['Tempered','incArmour',0.09],['Banded','armour',6],['Bracing','suppress',0.04]],
+    notable:{ name:'Stonecutter', mods:[['incArmour',0.12],['suppress',0.05]] } },
+  { id:'n_watch', name:'THE WATCH',     sp:'vit', home:'str', d:[2,4], shape:'ring',
+    minors:[['Stoic','incHp',0.04],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
+    notable:{ name:'Warden', mods:[['incHp',0.08],['regen',0.02]] } },
+  { id:'n_hearth',name:'THE HEARTH',    sp:'vit', home:'str', d:[1,3], shape:'fan',
+    minors:[['Hale','incHp',0.05],['Padded','heartDrop',0.10],['Knitting','incRegen',0.10]],
+    notable:{ name:'Hearthkeeper', mods:[['incHp',0.06],['heartDrop',0.20]] } },
+  { id:'n_arm',   name:'THE ARMOURY',   sp:'war', home:'str', d:[1,3], shape:'ring',
+    minors:[['Heft','flatPhys',0.08],['Plated','armour',3],['Whetstone','incMelee',0.04]],
+    notable:{ name:'Quartermaster', mods:[['flatPhys',0.2],['armour',4]] } },
+  /* green */
+  { id:'n_axe',   name:'THE BERSERKER', sp:'swift',home:'dex', d:[1,2], shape:'wheel',
+    minors:[['Wild Swing','incAtk',0.05],['Bloodscent','leechRate',0.05],['Warpaint','frostRes',0.05]],
+    notable:{ name:'Berserker', mods:[['incAtk',0.07],['leech',0.02]] } },
+  { id:'n_mark',  name:'THE MARK',      sp:'prec', home:'dex', d:[2,4], shape:'ring',
+    minors:[['Unerring','incCrit',0.07],['Savagery','critMult',0.14],['Cold Nerve','frostRes',0.06]],
+    notable:{ name:'Assassin', mods:[['incCrit',0.15],['critMult',0.20]] } },
+  { id:'n_stride',name:'THE LONG STRIDE',sp:'swift',home:'dex',d:[2,4], shape:'chain',
+    minors:[['Fleet','speed',0.05],['Vaulting','roll',0.12],['Surefoot','shockRes',0.06]],
+    notable:{ name:'Outrider', mods:[['speed',0.07],['roll',0.15]] } },
+  { id:'n_wound', name:'OPEN WOUNDS',   sp:'aff', home:'dex', d:[2,4], shape:'fan',
+    minors:[['Lacerate','bleedChance',0.07],['Septic','poisonDot',0.20],['Scar Tissue','allRes',0.03]],
+    notable:{ name:'Plaguebearer', mods:[['incDot',0.12],['poisonDot',0.4]] } },
+  { id:'n_sight', name:'THE LONG SIGHT',sp:'prec', home:'dex', d:[1,3], shape:'arc',
+    minors:[['Precision','incCrit',0.06],['Executioner','critMult',0.12],['Longsword','reach',8]],
+    notable:{ name:'Duellist', mods:[['incCrit',0.09],['incAtk',0.04]] } },
+  { id:'n_courier',name:'THE COURIER',  sp:'swift',home:'dex', d:[0,2], shape:'chain',
+    minors:[['Nimble','speed',0.04],['Magnetic','magnet',0.10],['Prospector','studs',0.08]],
+    notable:{ name:'Courier', mods:[['speed',0.05],['studs',0.15]] } },
+  { id:'n_blight',name:'THE BLIGHT',    sp:'aff', home:'dex', d:[1,3], shape:'ring',
+    minors:[['Virulent','poisonDot',0.25],['Gutting','bleedShare',0.04],['Sour','incChaos',0.06]],
+    notable:{ name:'Blightbringer', mods:[['incChaos',0.12],['poisonDot',0.3]] } },
+  /* blue */
+  { id:'n_staff', name:'THE ADEPT',     sp:'arc', home:'int', d:[1,2], shape:'wheel',
+    minors:[['Warding','allRes',0.03],['Quick Words','incCast',0.04],['Kindling','incElem',0.04]],
+    notable:{ name:'Adept', mods:[['incSpell',0.08],['boltR',0.08]] } },
+  { id:'n_chant', name:'THE CHANT',     sp:'arc', home:'int', d:[2,4], shape:'ring',
+    minors:[['Harmonic','incSpell',0.05],['Cadence','incCast',0.05],['Attunement','allRes',0.03]],
+    notable:{ name:'Archivist', mods:[['spellCap',1],['incCast',0.04]] } },
+  { id:'n_flux',  name:'FLUX',          sp:'elem',home:'int', d:[2,4], shape:'arc',
+    minors:[['Prismatic','incElem',0.05],['Pyromancy','incFire',0.08],['Conduction','incShock',0.08]],
+    notable:{ name:'Emberwright', mods:[['ember',1],['incFire',0.06]] } },
+  { id:'n_lib',   name:'THE LIBRARY',   sp:'arc', home:'int', d:[1,3], shape:'fan',
+    minors:[['Resonant','incSpell',0.05],['Metronome','incCast',0.05],['Widening','boltR',0.10]],
+    notable:{ name:'Librarian', mods:[['incSpell',0.07],['incCast',0.04]] } },
+  { id:'n_forgf', name:'THE FORGEFIRE', sp:'elem',home:'int', d:[1,3], shape:'ring',
+    minors:[['Smoulder','incFire',0.07],['Rimebite','incFrost',0.07],['Arcing','incShock',0.07]],
+    notable:{ name:'Elementalist', mods:[['incElem',0.09],['allRes',0.04]] } },
+  { id:'n_ember', name:'THE EMBER PATH',sp:'elem',home:'int', d:[0,2], shape:'chain',
+    minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.08],['Ward','allRes',0.03]],
+    notable:{ name:'Firewalker', mods:[['incFire',0.10],['fireRes',0.06]] } },
+];
+/* ---- THE KEYSTONES. One line of rules each, both halves real, and every one
+   of them far enough out that you can hold two at most. */
+const META_KEYSTONES = [
+  { id:'k_glass', name:'THE ORBIT',    sp:'arc', home:'int', d:[3,4], shape:'wheel',
+    minors:[['Heavier Guard','orbitDmg',1],['Wider Guard','orbitR',20],['Swifter Guard','orbitSpd',0.12]],
+    keystone:{ name:'Glass Bricks', note:'everything you own hits far harder, and you die to anything',
+               mods:[['incAll',0.35],['moreHp',-0.30]] } },
+  { id:'k_perf',  name:'THE BARREL',   sp:'prec',home:'dex', d:[3,4], shape:'fan',
+    minors:[['Hot Load','blastDmg',1],['Rifling','blastPierce',1],['Autoloader','blastRate',0.12]],
+    keystone:{ name:'Perfect Strike', note:'every swing is a critical, and nothing else is',
+               mods:[['incCrit',1.50],['critMult',-0.50]] } },
+  { id:'k_live',  name:'THE STORMHEAD',sp:'elem',home:'int', d:[3,4], shape:'arc',
+    minors:[['Conductor','chainDmg',1],['Forked','chainFork',1],['Quickening','chainRate',0.12]],
+    keystone:{ name:'Livewire', note:'the bolts come twice as fast, and nothing you do lingers',
+               mods:[['chainRate',0.40],['incShock',0.25],['incDot',-0.40]] } },
+  { id:'k_slow',  name:'THE WHIRLING', sp:'war', home:'str', d:[3,4], shape:'chain',
+    minors:[['Heavier Blades','stormDmg',1],['Broader Blades','stormSize',0.3],['Faster Throw','stormRate',0.12]],
+    keystone:{ name:'Slow Death', note:'everything lingering doubles; nothing lands hard',
+               mods:[['incDot',0.60],['incAll',-0.25]] } },
+  { id:'k_iron',  name:'THE VORTEX',   sp:'arm', home:'str', d:[3,4], shape:'wheel',
+    minors:[['Deeper Cut','vortexDmg',1],['Wider Whirl','vortexR',25],['Spinning Up','vortexRate',0.12]],
+    keystone:{ name:'Ironclad Oath', note:'a wall that cannot run',
+               mods:[['incArmour',0.50],['allRes',0.10],['speed',-0.20]] } },
+  { id:'k_blood', name:'THE COLD SNAP',sp:'elem',home:'int', d:[3,4], shape:'fan',
+    minors:[['Colder','freezeR',40],['Quicker','freezeRate',0.12],['Frostbite','frostRes',0.08]],
+    keystone:{ name:'Bloodthirst', note:'you take it back by hitting, or not at all',
+               mods:[['leechRate',0.20],['leech',0.06],['noRegen',null]] } },
+  { id:'k_burn',  name:'THE ORCHARD',  sp:'aff', home:'dex', d:[3,4], shape:'ring',
+    minors:[['Heavier Bane','baneDmg',1],['Wider Bane','baneR',0.12],['Quicker Bane','baneRate',0.12]],
+    keystone:{ name:'Slow Burn', note:'the world stays warm for ten more waves, and teaches you less',
+               mods:[['tollDelay',10],['xp',-0.30]] } },
+  { id:'k_scav',  name:'THE ORDNANCE', sp:'arm', home:'str', d:[3,4], shape:'arc',
+    minors:[['Heavier Bomb','bombDmg',1],['Wider Bomb','bombR',0.12],['Clustering','bombCluster',1]],
+    keystone:{ name:'Scavenger', note:'every chest is worth double, and you take what you are given',
+               mods:[['chestCards',2],['noReroll',null]] } },
+  { id:'k_hoard', name:'THE EYRIE',    sp:'prec',home:'dex', d:[4,4], shape:'ring',
+    minors:[['Hawk-eyed','incCrit',0.08],['Merciless','critMult',0.18],['Clear Sight','allRes',0.04]],
+    keystone:{ name:'Hoarder', note:'the run pays double into the tree, and hits softer',
+               mods:[['bankMul',2],['incAll',-0.20]] } },
+  { id:'k_veng',  name:'THE ROT',      sp:'aff', home:'dex', d:[4,4], shape:'fan',
+    minors:[['Pestilent','incDot',0.08],['Corrosive','poisonDot',0.4],['Inured','chaosRes',0.06]],
+    keystone:{ name:'Vengeance', note:'what you have already hurt hurts far more; nothing you meet fresh does',
+               mods:[['incDot',0.50],['bleedShare',0.06],['incCrit',-0.60]] } },
+  { id:'k_stone', name:'THE KEEP',     sp:'arm', home:'str', d:[4,4], shape:'ring',
+    minors:[['Adamant','incArmour',0.12],['Anchored','armour',8],['Absorbing','suppress',0.05]],
+    keystone:{ name:'Stoneheart', note:'you will outlast anything; you will not out-hit it',
+               mods:[['moreHp',0.35],['allRes',0.06],['incAll',-0.30]] } },
+  { id:'k_cond',  name:'THE CONFLUENCE',sp:'elem',home:'int',d:[4,4], shape:'arc',
+    minors:[['Pyre','incFire',0.09],['Rime','incFrost',0.09],['Tempest','incShock',0.09]],
+    keystone:{ name:'Conduit', note:'every element at once, and the words come slowly',
+               mods:[['incElem',0.50],['allRes',0.08],['incCast',-0.35]] } },
+  /* ---- AND THE STRANGE ONES. Each of these changes what a build IS rather
+     than what its numbers are, which is the only reason to walk this far. ---- */
+  { id:'k_rune',  name:'RUNEBLOOD',    sp:'arc', home:'int', d:[3,4], shape:'chain',
+    minors:[['Study','incSpell',0.04],['Bookish','int',6]],
+    keystone:{ name:'Runeblood', note:'your learning is your body',
+               mods:[['heartsPerInt',1],['moreHp',-0.15]] } },
+  { id:'k_void',  name:'VOIDCALL',     sp:'aff', home:'dex', d:[3,4], shape:'chain',
+    minors:[['Leak','gn_shock_chaos',0.08],['Earthing','shockRes',0.06]],
+    keystone:{ name:'Voidcall', note:'every storm you raise comes down as something worse',
+               mods:[['cv_shock_chaos',1],['incShock',0.30]] } },
+  { id:'k_sour',  name:'THE SOUR SUN', sp:'aff', home:'dex', d:[3,4], shape:'chain',
+    minors:[['Sour Ending','gn_fire_chaos',0.08],['Cinderproof','fireRes',0.06]],
+    keystone:{ name:'The Sour Sun', note:'your fireballs are not made of fire any more',
+               mods:[['cv_fire_chaos',1],['incFire',0.30]] } },
+  { id:'k_frost', name:'FROSTBOUND',   sp:'elem',home:'int', d:[3,4], shape:'chain',
+    minors:[['Hoarfrost','gn_phys_frost',0.08],['Frostskin','frostRes',0.06]],
+    keystone:{ name:'Frostbound', note:'nothing you swing is made of metal any more',
+               mods:[['cv_phys_frost',1],['incFrost',0.25]] } },
+  { id:'k_open',  name:'THE OPEN GUARD',sp:'arm',home:'str', d:[3,4], shape:'chain',
+    minors:[['Unburdened','speed',0.05],['Read the Room','suppress',0.05]],
+    keystone:{ name:'The Open Guard', note:'you wear nothing, and nothing cast at you lands properly',
+               mods:[['noArmour',null],['lessSpell',0.50]] } },
+];
+/* ---- THE LEGENDARIES. Five points each, on the outermost ring, and what they
+   hand over is not a number but a BRICK: you begin the run already holding the
+   spell. Generated from SPELL_KEYS, so a new spell arrives on the map with its
+   own legendary the day it is written. */
+const META_LEGENDS = SPELL_KEYS.map((k, i)=>({
+  id:'l_'+k, name:'THE '+((SPELL_NAME[k]||k).toUpperCase()), sp:'core',
+  home:['str','dex','int'][i % 3], d:[4,4], shape:'fan', r:120,
+  minors:[['Resolve','incAll',0.03],['Patience','incHp',0.03]],
+  legend:{ name:'Born With '+(SPELL_NAME[k]||k), cost:5,
+           note:'you begin every run already holding it',
+           mods:[['grant', k]] },
+}));
 const META_NODES = [];
 const META_BY_ID = {};
 const META_CLUSTER_BY_ID = {};
-const META_NODE_R = { start:46, keystone:40, notable:34, minor:25, travel:19 };
+const META_CLUSTERS = [];
+const META_NODE_R = { start:46, legend:44, keystone:40, notable:34, minor:25, travel:19 };
+/* what a ring costs to be standing on, and what the cluster sizes are there */
+const RING_AT = [0, 5, 12, 22, 34];
 (function buildTree(){
   const edges = [];
   const add = (a,b)=>{ if(a && b && a !== b) edges.push([a,b]); };
   const push = n=>{ META_NODES.push(n); META_BY_ID[n.id] = n; return n; };
-  /* band + angle become pixels, once, before anything reads a coordinate */
-  for(const st of META_STARTS) Object.assign(st, metaPlace(st.band, st.deg));
-  for(const c  of META_CLUSTERS) Object.assign(c,  metaPlace(c.band,  c.deg));
-  for(const st of META_STARTS)
-    push({ id:st.id, kind:'start', weap:st.weap, name:st.name, spoke:'core', cl:null,
-           x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
-  /* the branches off each door: two nodes out and nothing after them, so the
-     first decision of a run is which two of three ways out you can afford */
-  for(const st of META_STARTS){
-    st.branchIds = [];
-    (st.branches || []).forEach((br, bi)=>{
-      const a = (st.deg + br.deg) * Math.PI/180;
-      let prev = st.id;
-      br.nodes.forEach((row, i)=>{
-        const rr = META_MAP.band.door + 110 + i*150;
-        const n = push({ id:st.id+'_b'+bi+'_'+i, kind:'minor', spoke:metaSectorOf(st.deg + br.deg),
-          cl:null, start:st.weap, name:row[0],
-          x:Math.round(META_MAP.cx + Math.cos(a)*rr), y:Math.round(META_MAP.cy + Math.sin(a)*rr),
-          at:0, cost:1, mods:[[row[1], row[2]]], req:[] });
-        add(prev, n.id); prev = n.id;
-        st.branchIds.push(n.id);
-      });
-    });
-  }
-  /* ---- FIVE SHAPES OF POCKET ----------------------------------------------
-     Every cluster used to be the same object: a closed ring with the prize in
-     the middle, joined to every other node of it. Thirty-six of those is a map
-     with one idea in it, and you learn the idea once and never look again. A
-     pocket now says what SHAPE it is, and the shape changes what buying into it
-     costs you — which is the only kind of variety worth having.
+  const CX = META_MAP.cx, CY = META_MAP.cy;
+  const hash = n=>{ let h = Math.imul((n|0) ^ 0x9e3779b9, 0x85ebca6b);
+                    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ (h >>> 16)) >>> 0; };
+  const jit = (n, amt)=> ((hash(n) % 2000)/1000 - 1) * amt;
 
-       RING   a closed ring; the prize touches every OTHER node, so you walk
-              part of the ring whichever side you come in on
-       WHEEL  a closed ring and the prize touches ALL of it: one step from the
-              door to the prize, and the rest of the ring is yours to leave
-       FAN    no ring at all. The prize is the hub and every leaf hangs off it
-              on its own — buy the middle first, then only what you want
-       ARC    an OPEN ring. There is a long way round and a short way, and the
-              prize sits across the gap
-       CHAIN  a tendril. The minors run in a line and the prize is at the far
-              end of it, so the whole cluster is the price of the prize */
-  const shapeRing = (ids, closed)=>{
+  /* ---- 1. THE HUBS. Every one of them is a place; what it HOLDS comes next. */
+  const hubs = [];
+  META_RINGS.forEach((R, ri)=>{
+    for(let j=0;j<R.n;j++){
+      const step = 360/R.n;
+      const deg = R.phase + j*step + jit(ri*997 + j*31 + 7, HUB_SWING*step);
+      const rad = R.r * (1 + jit(ri*613 + j*57 + 3, HUB_JIT));
+      const a = deg*Math.PI/180;
+      hubs.push({ ring:ri, j, deg:((deg%360)+360)%360, r:rad,
+                  x:Math.round(CX + Math.cos(a)*rad), y:Math.round(CY + Math.sin(a)*rad),
+                  sec:metaSectorOf(deg), site:null, node:null });
+    }
+  });
+  const ringHubs = ri=> hubs.filter(h=>h.ring === ri);
+
+  /* ---- 2. WHAT SITS ON THEM. The one-of-a-kind things claim their sites
+     first, deepest and dearest before the rest, and each takes the free hub in
+     its own country whose hash is lowest — deterministic, so the map is the
+     same every time, and self-arranging, so adding a template needs no
+     coordinate from anybody. */
+  const claim = (tpl)=>{
+    let best = null, bh = Infinity;
+    for(const h of hubs){
+      if(h.site) continue;
+      if(h.sec !== tpl.home) continue;
+      if(h.ring < tpl.d[0] || h.ring > tpl.d[1]) continue;
+      const k = hash(h.ring*7919 + h.j*104729 + tpl.id.length*31);
+      if(k < bh){ bh = k; best = h; }
+    }
+    if(best) best.site = tpl;
+    return !!best;
+  };
+  const unplaced = [];
+  for(const t of META_LEGENDS)   if(!claim(t)) unplaced.push(t.id);
+  for(const t of META_KEYSTONES) if(!claim(t)) unplaced.push(t.id);
+  for(const t of META_NOTABLES)  if(!claim(t)) unplaced.push(t.id);
+  /* ...and everything marked MUST gets at least one place of its own, before
+     the dice are rolled. Every conversion the pipeline allows has a node on the
+     map because of this line: left to the random fill, four of the ten pairs
+     never landed anywhere at all. */
+  for(const t of META_GROUPS) if(t.must && !claim(t)) unplaced.push(t.id);
+  /* ...then the repeatable groups take a share of what is left, and everything
+     still free stays a JUNCTION: one travel node, one attribute, and a long
+     empty lane either side of it. That is what you walk on. */
+  let gi = 0;
+  for(const h of hubs){
+    if(h.site) continue;
+    /* MOST OF THE MAP IS LANE. Packing clusters onto every other hub leaves no
+       room to walk: the longest run of plain attribute nodes fell to twenty-four
+       and a country stopped being something you could cross without shopping. */
+    if(hash(h.ring*31 + h.j*17 + 5) % 100 >= 40) continue;      /* stays a junction */
+    let fits = META_GROUPS.filter(g=>g.home === h.sec && h.ring >= g.d[0] && h.ring <= g.d[1]);
+    if(!fits.length) continue;
+    /* NOT THE ONE NEXT DOOR. Picked purely by hash, the same three fire nodes
+       turned up four times in one corner of the map and the country read as a
+       copy-paste. A template already standing within sight is off the list. */
+    const near = fits.filter(g=>!hubs.some(o=>o.site && o.site.id === g.id
+      && Math.hypot(o.x-h.x, o.y-h.y) < 1500));
+    if(near.length) fits = near;
+    h.site = fits[(hash(h.ring*911 + h.j*131 + (gi++)) % fits.length)];
+  }
+
+  /* ---- 3. THE CLUSTERS. Five shapes, and the shape decides what buying into
+     one costs you. A lane arrives at whichever node is nearest it, so a cluster
+     with three lanes on it has three ways in and walking through is a choice. */
+  const shapeChain = (ids, closed)=>{
     for(let i=0;i<ids.length-1;i++) add(ids[i], ids[i+1]);
     if(closed && ids.length > 2) add(ids[ids.length-1], ids[0]);
   };
-  for(const c of META_CLUSTERS){
-    META_CLUSTER_BY_ID[c.id] = c;
-    /* A FAN IS NOTHING WITHOUT ITS HUB. The leaves touch the middle and nothing
-       else, so a cluster with no notable or keystone in it would be a handful
-       of nodes joined to nobody — eight of them were, the first time this ran.
-       A hubless fan is a ring. */
-    const shape = (c.shape === 'fan' && !(c.keystone || c.notable)) ? 'ring'
-                : (c.shape || 'ring');
-    const r = c.r || 92, a0 = ((c.a0 === undefined ? -90 : c.a0) * Math.PI) / 180;
-    /* a chain runs ALONG the band rather than out of it, so its far end does not
-       land under the cluster's own name */
-    const out = Math.atan2(c.y - META_MAP.cy, c.x - META_MAP.cx);
-    const tan = out + Math.PI/2;
-    const n0 = c.minors.length;
-    c.nodes = [];
-    c.minors.forEach((row, i)=>{
+  let cn = 0;
+  for(const h of hubs){
+    if(!h.site) continue;
+    const t = h.site, uniq = !!(t.notable || t.keystone || t.legend);
+    const c = { id:t.id + (uniq ? '' : '@' + (cn++)), tpl:t.id, name:t.name, sp:t.sp,
+                x:h.x, y:h.y, deg:h.deg, ring:h.ring, shape:t.shape || 'ring',
+                r: t.r || (h.ring <= 1 ? 86 : h.ring === 2 ? 98 : 112),
+                at: RING_AT[h.ring] || 0, nodes:[], centre:null };
+    META_CLUSTERS.push(c); META_CLUSTER_BY_ID[c.id] = c;
+    h.cluster = c;
+    const shape = (c.shape === 'fan' && !uniq) ? 'ring' : c.shape;
+    const out = Math.atan2(c.y - CY, c.x - CX), tan = out + Math.PI/2;
+    const n0 = t.minors.length;
+    t.minors.forEach((row, i)=>{
       let x, y;
       if(shape === 'chain'){
-        const t = -1 + (i / Math.max(1, n0)) * 1.7;             /* -1 .. +0.7 */
-        const w = ((i % 2) ? 0.26 : -0.26) * r;
-        x = c.x + Math.cos(tan)*r*t + Math.cos(out)*w;
-        y = c.y + Math.sin(tan)*r*t + Math.sin(out)*w;
+        const tt = -1 + (i / Math.max(1, n0)) * 1.7;
+        const w = ((i % 2) ? 0.26 : -0.26) * c.r;
+        x = c.x + Math.cos(tan)*c.r*tt + Math.cos(out)*w;
+        y = c.y + Math.sin(tan)*c.r*tt + Math.sin(out)*w;
       } else {
-        const a = a0 + (i / n0) * TAU;
-        x = c.x + Math.cos(a)*r; y = c.y + Math.sin(a)*r;
+        const a = -Math.PI/2 + (i / n0) * TAU + (c.deg*Math.PI/180)*0.4;
+        x = c.x + Math.cos(a)*c.r; y = c.y + Math.sin(a)*c.r;
       }
       c.nodes.push(push({ id:c.id+'_'+i, kind:'minor', spoke:c.sp, cl:c.id, name:row[0],
-        x:Math.round(x), y:Math.round(y),
-        at:c.at||0, cost:1, mods:[[row[1], row[2]]], req:[] }).id);
+        x:Math.round(x), y:Math.round(y), at:c.at, cost:1,
+        mods:[[row[1], row[2]]], req:[] }).id);
     });
-    if(shape === 'fan'){ /* the leaves never touch each other */ }
-    else if(shape === 'chain') shapeRing(c.nodes, false);
-    else shapeRing(c.nodes, shape !== 'arc');
-    const mid = c.keystone || c.notable;
+    if(shape === 'fan'){ /* leaves touch the hub and nothing else */ }
+    else if(shape === 'chain') shapeChain(c.nodes, false);
+    else shapeChain(c.nodes, shape !== 'arc');
+    const mid = t.legend || t.keystone || t.notable;
     if(mid){
-      /* the prize sits in the middle of everything except a chain, where it is
-         the far end of the tendril */
-      const cx = shape === 'chain' ? Math.round(c.x + Math.cos(tan)*r*1.25) : c.x;
-      const cy = shape === 'chain' ? Math.round(c.y + Math.sin(tan)*r*1.25) : c.y;
-      const n = push({ id:c.id+'_C', kind: c.keystone ? 'keystone' : 'notable',
-        spoke:c.sp, cl:c.id, name:mid.name, note:mid.note, x:cx, y:cy,
-        at: mid.at || c.at || 0, cost: c.keystone ? 3 : 2, mods:mid.mods, req:[] });
+      const kind = t.legend ? 'legend' : t.keystone ? 'keystone' : 'notable';
+      const cx = shape === 'chain' ? Math.round(c.x + Math.cos(tan)*c.r*1.3) : c.x;
+      const cy = shape === 'chain' ? Math.round(c.y + Math.sin(tan)*c.r*1.3) : c.y;
+      const n = push({ id:c.id+'_C', kind, spoke:c.sp, cl:c.id, name:mid.name, note:mid.note,
+        x:cx, y:cy, at: Math.max(c.at, mid.at || 0),
+        cost: mid.cost || (kind === 'legend' ? 5 : kind === 'keystone' ? 3 : 2),
+        mods:mid.mods, req:[] });
       c.centre = n.id;
       if(shape === 'chain') add(c.nodes[c.nodes.length-1], n.id);
-      else if(shape === 'wheel' || shape === 'fan')
-        for(const id of c.nodes) add(id, n.id);
-      else if(shape === 'arc')
-        { add(c.nodes[0], n.id); add(c.nodes[c.nodes.length-1], n.id); }
+      else if(shape === 'wheel' || shape === 'fan') for(const id of c.nodes) add(id, n.id);
+      else if(shape === 'arc'){ add(c.nodes[0], n.id); add(c.nodes[c.nodes.length-1], n.id); }
       else for(let i=0;i<c.nodes.length;i+=2) add(c.nodes[i], n.id);
     }
   }
-  /* ---- THE ROAD NETWORK -------------------------------------------------
-     Rings first, because a spoke has to start and end on a ring's own vertex.
-     Then every polyline is sampled at ROAD_STEP, and any two samples landing
-     within ROAD_MERGE of each other become ONE node — which is what turns a
-     pile of independent polylines into a network with real junctions. */
-  const TREE_CX = META_MAP.cx, TREE_CY = META_MAP.cy;
-  const rhash = n=>{ let h = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b);
-                     h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ (h >>> 16)) >>> 0; };
-  const ringVerts = {};
-  for(const R of META_ROADS){
-    if(R.kind !== 'ring') continue;
-    const v = [];
-    for(let i=0;i<R.n;i++){
-      const a = (i/R.n)*TAU - Math.PI/2;
-      const j = 1 + (((rhash(R.seed*131 + i) % 200) - 100)/100) * ROAD_JIT;
-      v.push([Math.round(TREE_CX + Math.cos(a)*R.r*j), Math.round(TREE_CY + Math.sin(a)*R.r*j)]);
-    }
-    ringVerts[R.id] = v;
+  /* a hub with nothing on it is one travel node: the lane's own vertex */
+  for(const h of hubs){
+    if(h.cluster) continue;
+    const use = META_TRAVEL[h.sec] || META_TRAVEL.core;
+    h.node = push({ id:'j'+h.ring+'_'+h.j, kind:'travel', spoke:h.sec, cl:null, road:'hub',
+      name:use[0], x:h.x, y:h.y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
   }
-  /* the vertex whose ANGLE is nearest — not the one nearest some point far out
-     along the bearing, because a jittered ring is not a circle */
-  const nearestVert = (ring, deg)=>{
-    const a = deg*Math.PI/180;
+  /* ---- 4. THE LANES. Around each ring, and out to the ring beyond it. A lane
+     starts and ends at whichever node of a hub is nearest the other end, so a
+     cluster is entered where you arrive at it rather than at one appointed
+     door. Nothing is cut at a border: the countries are far enough apart on a
+     map this size that the walk between them is a journey on its own, and a
+     wall you can see but not cross was the worst thing on the old map. */
+  const endOf = (h, tx, ty)=>{
+    if(!h.cluster) return h.node;
     let best = null, bd = Infinity;
-    for(const v of ringVerts[ring] || []){
-      const va = Math.atan2(v[1]-TREE_CY, v[0]-TREE_CX);
-      const d = Math.abs(((va - a + Math.PI*3) % TAU) - Math.PI);
-      if(d < bd){ bd = d; best = v; }
+    const ids = h.cluster.nodes.concat(h.cluster.centre ? [h.cluster.centre] : []);
+    for(const id of ids){
+      const n = META_BY_ID[id], d = (n.x-tx)*(n.x-tx) + (n.y-ty)*(n.y-ty);
+      if(d < bd){ bd = d; best = n; }
     }
     return best;
   };
-  /* one shared pool of road nodes, so a sample landing on an existing one JOINS
-     it rather than sitting beside it */
-  const roadAt = [];
-  /* THE GROUND DECIDES. A road node pays the attribute of the country it stands
-     in, which is why no road carries a label and why a ring changes colour at a
-     border instead of running one attribute all the way round the map. */
-  const roadNode = (x, y, rid)=>{
-    for(const n of roadAt)
-      if(Math.hypot(n.x-x, n.y-y) < ROAD_MERGE) return n;
-    const attr = metaSectorAt(x, y);
-    const use = META_TRAVEL[attr] || META_TRAVEL.core;
-    const n = push({ id:'rd'+roadAt.length, kind:'travel', spoke:attr, cl:null, road:rid,
-      name:use[0], x:Math.round(x), y:Math.round(y), at:0, cost:1,
-      mods:[[use[1], use[2]]], req:[] });
-    roadAt.push(n);
-    return n;
+  const laneAt = [];
+  const laid = {};
+  const lane = (A, B, key)=>{
+    if(laid[key]) return;
+    laid[key] = 1;
+    const an = endOf(A, B.x, B.y), bn = endOf(B, A.x, A.y);
+    if(!an || !bn || an === bn) return;
+    const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy);
+    /* this lane's own stride, so nothing on the map is evenly spaced */
+    const vary = 1 + jit(an.x*7 + an.y*13 + bn.x*3, LANE_VARY);
+    const steps = Math.max(1, Math.round(len / (LANE_STEP*vary)));
+    let prev = an;
+    for(let i=1;i<steps;i++){
+      const t = i/steps;
+      const px = an.x + dx*t + Math.cos(Math.atan2(dy,dx)+Math.PI/2)*jit(an.x+i*71, 26);
+      const py = an.y + dy*t + Math.sin(Math.atan2(dy,dx)+Math.PI/2)*jit(an.y+i*97, 26);
+      const sec = metaSectorAt(px, py), use = META_TRAVEL[sec] || META_TRAVEL.core;
+      const n = push({ id:'ln'+laneAt.length, kind:'travel', spoke:sec, cl:null, road:key,
+        name:use[0], x:Math.round(px), y:Math.round(py), at:0, cost:1,
+        mods:[[use[1], use[2]]], req:[] });
+      laneAt.push(n);
+      add(prev.id, n.id); prev = n;
+    }
+    add(prev.id, bn.id);
   };
-  const layRoad = (pts, rid, loop, cut)=>{
-    const seq = [];
-    for(let i=0;i<pts.length - (loop?0:1);i++){
-      const A = pts[i], B = pts[(i+1)%pts.length];
-      const len = Math.hypot(B[0]-A[0], B[1]-A[1]);
-      /* this segment's own stride, from a hash of where it starts — so the map
-         is the same every time you open it and nothing on it is evenly spaced */
-      const vary = 1 + (((rhash(A[0]*7919 + A[1]*104729 + i) % 200) - 100)/100) * ROAD_VARY;
-      const steps = Math.max(1, Math.round(len/(ROAD_STEP*vary)));
-      for(let k=0;k<steps;k++){
-        const t = k/steps;
-        seq.push(roadNode(A[0] + (B[0]-A[0])*t, A[1] + (B[1]-A[1])*t, rid));
-      }
-    }
-    if(loop) seq.push(seq[0]);
-    else if(pts.length) seq.push(roadNode(pts[pts.length-1][0], pts[pts.length-1][1], rid));
-    for(let i=0;i<seq.length-1;i++){
-      /* a CUT road stops at the border rather than crossing it */
-      if(cut && seq[i].spoke !== seq[i+1].spoke) continue;
-      add(seq[i].id, seq[i+1].id);
-    }
-    return seq;
-  };
-  const roadHead = {};                      /* where each door road begins */
-  for(const R of META_ROADS){
-    if(R.kind === 'ring'){ layRoad(ringVerts[R.id], R.id, true, R.cut); continue; }
-    if(R.kind === 'door'){
-      const a = R.deg*Math.PI/180;
-      const head = [Math.round(TREE_CX + Math.cos(a)*R.r0), Math.round(TREE_CY + Math.sin(a)*R.r0)];
-      const end  = nearestVert(R.to, R.deg);
-      if(end) roadHead[R.id] = layRoad([head, end], R.id, false)[0];
-      continue;
-    }
-    const a = nearestVert(R.from, R.deg), b = nearestVert(R.to, R.deg);
-    if(a && b) layRoad([a, b], R.id, false);
-  }
-  /* CROSS-LINKS: every pair of road nodes on different roads, in the same
-     country, near enough to see each other and not already joined. */
-  const joined = {};
-  for(const e of edges) joined[e[0]+'|'+e[1]] = joined[e[1]+'|'+e[0]] = 1;
-  const crossable = (a, b)=> a.road !== b.road && a.spoke === b.spoke
-                          && !joined[a.id+'|'+b.id];
-  for(let i=0;i<roadAt.length;i++) for(let j=i+1;j<roadAt.length;j++){
-    const a = roadAt[i], b = roadAt[j];
-    if(!crossable(a, b)) continue;
-    if(Math.hypot(a.x-b.x, a.y-b.y) > ROAD_LINK) continue;
-    add(a.id, b.id); joined[a.id+'|'+b.id] = joined[b.id+'|'+a.id] = 1;
-  }
-  /* ---- AND THE POCKETS. A cluster hangs off ONE spur and has no other way in
-     or out, so a build that does not want what is in it simply drives past. --- */
-  const nearestRoad = (x, y)=>{
+  /* round every ring */
+  META_RINGS.forEach((R, ri)=>{
+    const hs = ringHubs(ri);
+    for(let j=0;j<hs.length;j++) lane(hs[j], hs[(j+1)%hs.length], 'r'+ri+'_'+j);
+  });
+  /* ...and outward. Every hub reaches the nearest hub on the ring beyond it AND
+     the nearest on the ring inside it, which is what leaves no hub with one way
+     out and makes the whole thing a web rather than a wheel with spokes. */
+  const nearestOn = (ri, deg)=>{
     let best = null, bd = Infinity;
-    for(const n of roadAt){ const d = Math.hypot(n.x-x, n.y-y); if(d < bd){ bd = d; best = n; } }
+    for(const h of ringHubs(ri)){
+      const d = Math.abs(((h.deg - deg + 540) % 360) - 180);
+      if(d < bd){ bd = d; best = h; }
+    }
     return best;
   };
-  for(const c of META_CLUSTERS){
-    const rd = nearestRoad(c.x, c.y);
-    if(!rd) continue;
-    /* the node of the pocket nearest the road is its door */
-    let door = null, bd = Infinity;
-    for(const nid of c.nodes){
-      const n = META_BY_ID[nid], d = Math.hypot(n.x-rd.x, n.y-rd.y);
-      if(d < bd){ bd = d; door = n; }
+  for(let ri=0; ri<META_RINGS.length-1; ri++){
+    for(const h of ringHubs(ri)){
+      const o = nearestOn(ri+1, h.deg);
+      if(o) lane(h, o, 'x'+ri+'_'+h.j+'_'+o.j);
     }
-    if(!door) continue;
-    const gap = Math.hypot(door.x-rd.x, door.y-rd.y);
-    const hops = gap > 250 ? 2 : gap > 140 ? 1 : 0;
-    const use = META_TRAVEL[rd.spoke] || META_TRAVEL.core;
-    let prev = rd.id;
-    for(let i=0;i<hops;i++){
-      const t = (i+1)/(hops+1);
-      const n = push({ id:'sp_'+c.id+'_'+i, kind:'travel', spoke:rd.spoke, cl:null, name:use[0],
-        x:Math.round(rd.x + (door.x-rd.x)*t), y:Math.round(rd.y + (door.y-rd.y)*t),
-        at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
-      add(prev, n.id); prev = n.id;
+    for(const h of ringHubs(ri+1)){
+      const o = nearestOn(ri, h.deg);
+      if(o) lane(o, h, 'x'+ri+'_'+o.j+'_'+h.j);
     }
-    add(prev, door.id);
-    c.road = rd.id;
   }
-  /* each door opens two ways: into its own beginning, and straight out onto its
-     own private road. Nothing else touches either. */
-  for(const st of META_STARTS){
-    const head = roadHead['dr_'+st.weap];
-    if(head) add(st.id, head.id);
-    const own = META_CLUSTERS.find(c=>c.band === 'open' && c.deg === st.deg);
-    if(!own || !own.nodes.length) continue;
-    let door = null, bd = Infinity;
-    for(const nid of own.nodes){
-      const n = META_BY_ID[nid], d = Math.hypot(n.x-st.x, n.y-st.y);
-      if(d < bd){ bd = d; door = n; }
-    }
-    if(door) add(st.id, door.id);
+
+  /* ---- 5. THE DOORS. One per weapon, in its own country, spread evenly across
+     it so two weapons sharing a country do not share a beginning. Each opens
+     four ways: two short branches of its own and the two nearest hubs of the
+     inner ring. */
+  const byHome = {};
+  for(const wk of WEAPON_KEYS) (byHome[META_HOME[wk]||'str'] = byHome[META_HOME[wk]||'str'] || []).push(wk);
+  for(const sec of Object.keys(byHome)){
+    const list = byHome[sec], f = META_MAP.sector[sec][0], t = META_MAP.sector[sec][1];
+    const span = ((t - f) + 360) % 360;
+    list.forEach((wk, i)=>{
+      const deg = f + span * ((i + 1) / (list.length + 1));
+      /* OUT WHERE THE LATTICE BEGINS, not in the hole at the middle. Four
+         doors within two hundred pixels of the centre of a map four thousand
+         across are four doors on top of each other, and the middle of this map
+         is meant to be empty the way the middle of the one it is borrowed from
+         is empty. */
+      const a = deg*Math.PI/180, R = 430;
+      const W = WEAPONS[wk];
+      const st = { id:'st_'+wk, weap:wk, name:'THE '+((W && W.name) || wk).toUpperCase(),
+                   deg:((deg%360)+360)%360,
+                   x:Math.round(CX + Math.cos(a)*R), y:Math.round(CY + Math.sin(a)*R) };
+      META_STARTS.push(st);
+      push({ id:st.id, kind:'start', weap:wk, name:st.name, spoke:'core', cl:null,
+             x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
+      /* two branches of its own: two nodes out, dead ends, and you cannot have
+         both and the road as well on the points a first run hands you */
+      const br = META_BRANCH[wk] || META_BRANCH._;
+      br.forEach((chain, bi)=>{
+        const ba = (deg + (bi ? 38 : -38)) * Math.PI/180;
+        let prev = st.id;
+        chain.forEach((row, k)=>{
+          const rr = R + 120 + k*140;
+          const n = push({ id:st.id+'_b'+bi+'_'+k, kind:'minor',
+            spoke:metaSectorOf(deg + (bi ? 38 : -38)), cl:null, start:wk, name:row[0],
+            x:Math.round(CX + Math.cos(ba)*rr), y:Math.round(CY + Math.sin(ba)*rr),
+            at:0, cost:1, mods:[[row[1], row[2]]], req:[] });
+          add(prev, n.id); prev = n.id;
+        });
+      });
+      /* and out onto the lattice, at the two inner hubs nearest the door */
+      const near = ringHubs(0).slice().sort((p,q)=>
+        Math.abs(((p.deg-deg+540)%360)-180) - Math.abs(((q.deg-deg+540)%360)-180));
+      for(const h of near.slice(0, 2)) lane({ x:st.x, y:st.y, node:META_BY_ID[st.id] }, h,
+                                            'door_'+wk+'_'+h.ring+'_'+h.j);
+    });
   }
-  /* NUDGE. A corridor laid straight through the middle of a cluster reads as a
-     node belonging to it, and it does not. Shove the travel nodes off whatever
-     they landed on — a little, and never far enough to change which way the
-     corridor goes. Doing it here rather than by hand means the next cluster
-     anyone adds cannot quietly bury one. */
+
+  /* ---- 6. THE NUDGE. A lane laid straight through a cluster node reads as a
+     node belonging to it, and clicking for one and getting the other is the
+     kind of bug nobody reports. Shove what can move, a little, and never far. */
   (function relax(){
     const R = n=> META_NODE_R[n.kind] || 14;
     const home = {};
-    for(const n of META_NODES) if(n.kind === 'travel') home[n.id] = [n.x, n.y];
-    /* the SPUR is laid before this runs, so a minor that shifts here keeps the
-       edge it already has — only the pixels move */
-    for(const n of META_NODES) if(n.kind === 'minor') home[n.id] = [n.x, n.y];
-    for(let pass=0; pass<40; pass++) for(const n of META_NODES){
-      if(n.kind !== 'travel' && n.kind !== 'minor') continue;
+    for(const n of META_NODES) if(n.kind === 'travel' || n.kind === 'minor') home[n.id] = [n.x, n.y];
+    for(let pass=0; pass<26; pass++) for(const n of META_NODES){
+      if(!home[n.id]) continue;
       let mx = 0, my = 0;
       for(const o of META_NODES){
         if(o === n) continue;
-        const dx = n.x-o.x, dy = n.y-o.y, need = R(n)+R(o)+20, d = Math.hypot(dx, dy);
+        const dx = n.x-o.x, dy = n.y-o.y, need = R(n)+R(o)+18, d = Math.hypot(dx, dy);
         if(d >= need) continue;
         const a = d < 0.01 ? ((n.x*7 + n.y*13) % 628)/100 : Math.atan2(dy, dx);
         mx += Math.cos(a)*(need-d)*0.5; my += Math.sin(a)*(need-d)*0.5;
       }
       if(!mx && !my) continue;
       n.x = Math.round(n.x + mx); n.y = Math.round(n.y + my);
-      /* a SPUR may wander; a ROAD may not, or the highway stops reading as a
-         line you can follow with your eye */
-      const cap = n.road ? 34 : n.kind === 'minor' ? 16 : 70;
+      /* a MINOR may give more ground than it used to: a door's branch tip and a
+         cluster node landed on each other and sixteen pixels was not enough to
+         part them */
+      const cap = n.kind === 'minor' ? 28 : 40;
       const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
       if(od > cap){ n.x = Math.round(h[0] + ox/od*cap); n.y = Math.round(h[1] + oy/od*cap); }
     }
-    /* AND THEN READ THE GROUND AGAIN. The nudge above can shove a node up to
-       thirty-four pixels, which near a border is enough to move it into the
-       next country while it is still carrying the last one's attribute — a node
-       sitting in the green wedge paying strength. Whatever a road node ends up
-       standing on is what it pays, and that is true only if this runs last. */
+    /* AND THEN READ THE GROUND AGAIN. The nudge can move a node across a border
+       while it is still carrying the last country's attribute. Whatever a lane
+       node ends up standing on is what it pays, and that is only true if this
+       runs last. */
     for(const n of META_NODES){
-      if(!n.road) continue;
-      const attr = metaSectorAt(n.x, n.y);
-      if(n.spoke === attr) continue;
-      const use = META_TRAVEL[attr] || META_TRAVEL.core;
-      n.spoke = attr; n.name = use[0]; n.mods = [[use[1], use[2]]];
+      if(n.kind !== 'travel') continue;
+      const sec = metaSectorAt(n.x, n.y);
+      if(n.spoke === sec) continue;
+      const use = META_TRAVEL[sec] || META_TRAVEL.core;
+      n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]]];
     }
   })();
-  /* REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a corridor can be
-     walked from either end, and why there is more than one route anywhere. The
-     four doors are the exception: nothing leads TO a door, you are already in
-     one of them. */
+
+  /* ---- 7. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
+     can be walked from either end, and why there is more than one route
+     anywhere. The doors are the exception: nothing leads TO a door, you are
+     already standing in one. */
   for(const e of edges){
     const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]];
     if(!A || !B) continue;
     if(A.kind !== 'start' && A.req.indexOf(e[1]) < 0) A.req.push(e[1]);
     if(B.kind !== 'start' && B.req.indexOf(e[0]) < 0) B.req.push(e[0]);
   }
+  META_TREE_UNPLACED = unplaced;
 })();
+
 function metaCost(n){ return n && n.cost !== undefined ? n.cost : 1; }
 function metaTotalCost(){ let t=0; for(const n of META_NODES) t += metaCost(n); return t; }
 /* a node whose every mod does nothing for this weapon — still walkable, but the
@@ -7401,6 +7477,7 @@ function metaSpokeCol(id){
 function metaNodeRadius(n){ return META_NODE_R[n.kind] || 14; }
 function metaKindName(n){
   return n.kind === 'start' ? 'STARTING POINT'
+       : n.kind === 'legend' ? 'LEGENDARY'
        : n.kind === 'keystone' ? 'KEYSTONE'
        : n.kind === 'notable' ? 'NOTABLE'
        : n.kind === 'travel' ? 'PATH' : 'MINOR';
@@ -7524,10 +7601,10 @@ function renderTree(){
       `opacity="${lock?0.55:1}"/>`+
       (isStart ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+
                  `fill="#20160a" font-family="Titan One">✦</text>`
-       : n.kind === 'keystone' || n.kind === 'notable'
+       : n.kind === 'legend' || n.kind === 'keystone' || n.kind === 'notable'
          ? `<text x="${n.x}" y="${n.y+9}" text-anchor="middle" font-size="26" `+
            `fill="${has?'#12181d':col}" font-family="Titan One">`+
-           `${n.kind==='keystone'?'★':'◆'}</text>` : '')+
+           `${n.kind==='legend'?'❖':n.kind==='keystone'?'★':'◆'}</text>` : '')+
       `</g>`);
   }
   /* cluster names, pushed outward from the middle of the map */
@@ -18278,7 +18355,18 @@ function resetRun(demo){
   navBuild();
   player = newPlayer();
   syncStats();
-  if(!demo){ applyMetaTree(player); applyFavPerks(); }
+  if(!demo){
+    applyMetaTree(player); applyFavPerks();
+    /* WHAT THE TREE STARTED YOU WITH. A legendary node does not hand over a
+       number, it hands over a BRICK — so it is applied here, once, where a real
+       run begins, and never in newPlayer or on the bench's preview heroes. */
+    for(const g of (player.metaGrants || [])){
+      const u = UPGRADES.find(x=>SPELL_GRANT[x.id] === g);
+      if(!u) continue;
+      try { if(u.req && !u.req()) continue; } catch(e){ continue; }
+      try { applyPick(u, 'common'); } catch(e){}
+    }
+  }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   rollRoster();

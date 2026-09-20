@@ -1241,22 +1241,35 @@ the mace in the red, the axe in the green, the staff in the blue — and each ha
 out of the middle that pays its own attribute. Your own beginning costs you **3 to 4** points
 and costs everybody else **15 to 24**.
 
-### Highways and pockets
+### A lattice, not a wheel
 
-**The map used to join cluster to cluster, and that was backwards.** Every journey ran
-*through* somebody else's cluster, so a lightning build walking to the far side collected
-increased physical damage on the way — and paid a point for each node of it. You were charged
-for stats you did not want in order to reach the ones you did.
+Five rings of **hubs**, each joined to its neighbours around its own ring *and* to the nearest
+hubs on the rings either side of it — so every hub has three to five ways out and there is
+never a gap you can see but cannot cross. A hub is either a plain **junction** (one travel
+node, one attribute, nothing else) or a **cluster**. A **lane** between two hubs is a short
+chain of travel nodes, and it attaches to whichever node of a cluster is nearest the other
+end — so a cluster with four lanes meeting it has four ways in, and walking *through* one is a
+real option rather than an impossibility.
 
-**Now the roads carry you and the clusters hang off them.** A road is a long run of nodes
-that pay **one attribute and nothing else**, so you can cross the entire map on dexterity
-alone and arrive with nothing in your build you did not choose:
+**Seven hundred and seventy nodes**, and nothing in it is hand-placed. Hubs come off a ring
+table, clusters come off a template library, and both are picked by a hash of where they are:
+the map is identical every time you open it, and adding a weapon, a spell or a damage type
+extends it without anybody moving a coordinate.
+
+| | |
+|---|--:|
+| nodes | **770** |
+| of which plain lane | **482** |
+| clusters | **74** |
+| notables / keystones / legendaries | **20 / 17 / 8** |
+| the whole tree, in points | **859** |
+| what the ceiling buys you of it | **7%** |
 
 ### Three countries
 
-The map is cut into three wedges, and **what lives in a wedge belongs to it**. No road carries
-a label saying which attribute it pays — it pays the attribute of the **ground it is standing
-on**, so a ring changes colour exactly where the border is and the map colours itself.
+The map is cut into three wedges, and what lives in a wedge belongs to it. No lane carries a
+label saying which attribute it pays — it pays the attribute of the **ground it stands on**,
+so a ring changes colour exactly where the border is and the map colours itself.
 
 | | | |
 |---|---|---|
@@ -1264,58 +1277,39 @@ on**, so a ring changes colour exactly where the border is and the map colours i
 | **GREEN — DEXTERITY** | the axe | criticals, speed, bleed and poison, everything that lingers |
 | **BLUE — INTELLIGENCE** | the staff | spells, the elements, the cold and the storm |
 
-Conversion is in all three, because every build has something worth converting.
+Conversion is in all three, because every build has something worth converting. Your own third
+costs **21 to 22** points to its keystones; somebody else's costs **27 to 28**.
 
-**The inner and middle rings are cut at every border.** Laid whole, they made the countries
-decoration: half a lap of the inner ring was eight points and from anywhere on it you could
-take any spoke outward, which put every prize on the map within two points of every door.
-Cut, the only road between countries is the **outer ring**, and going the long way round that
-is a journey you can feel. Your own third of the map is **16 to 19** points to its abilities;
-somebody else's is **24 to 30**.
+### What a cluster is
 
-| Attribute | Longest unbroken run | How far it spans | Road nodes |
-|---|--:|--:|--:|
-| **STRENGTH** | **67** nodes | 3046 px | 51 |
-| **DEXTERITY** | **56** | 2723 px | 43 |
-| **INTELLIGENCE** | **48** | 2666 px | 40 |
+**One or two kinds of stat and nothing else** — a cluster you can read at a glance and want or
+not want. QUENCHED is fire resistance and cold resistance. THE EMBER WELL is fire resistance
+and increased fire. HEFT is two flat physical nodes. Most of the library **repeats**: the same
+three fire nodes turn up in three places around the blue country, the way the same small wheel
+turns up all over the tree this is borrowed from, so the library stays short and the map stays
+big. Two copies never stand within 1200px of each other.
 
-A road node is worth **2** of its attribute — a fifth of a real node. Walking across the map
-is never *nothing*, and it is never as good as arriving. Road nodes sit a **median 210px**
-apart and you cross at most **five** with no choice in them before the next junction; the map
-this replaced ran 119px and seven, which read as a queue of identical dots.
+Five shapes, and the shape changes what buying in costs you: a **ring** (the prize touches
+every other node), a **wheel** (it touches all of them), a **fan** (no ring; every leaf hangs
+off the hub alone), an **arc** (open, so there is a long way round and a short way), and a
+**chain** (a tendril with the prize at the far end).
 
-**A door opens three ways.** Each one fans into two short branches of its own — two nodes
-long, dead ends, weapon-flavoured — either side of the way into its own beginning, plus its
-private road. Two exits is not a decision; you take both. Four is.
+### What is on it
 
-**No two pockets are the same object.** A cluster says what *shape* it is, and the shape
-changes what buying into it costs you: a **ring** (the prize touches every other node), a
-**wheel** (it touches all of them — one step in, the rest is yours to leave), a **fan** (no
-ring at all; every leaf hangs off the hub alone), an **arc** (open, so there is a long way
-round and a short way), or a **chain** (a tendril with the prize at the far end, so the whole
-cluster is the price of it).
-
-**The roads talk to each other.** Rings and spokes on their own make a grid of big empty quads
-with two ways round each; a cross-link is an extra edge between two road nodes of different
-roads that are near each other — never across a border, never along one road. And the stride
-is not a ruler: each segment picks its own step out of a hash of where it is, so some
-stretches are three short hops and the next is one long reach.
-
-**A cluster is a POCKET.** It hangs off a single short spur and has no other way in or out,
-so **nothing ever routes through one**. Knock any cluster out of the map entirely and every
-other cluster is still reachable from every door — which means skipping a cluster you do not
-want costs you exactly nothing. That is the whole rework in one sentence.
-
-The cheapest walk to any keystone, from any door, passes through **zero** other clusters, and
-**89 to 94% of it is road**. You take the highway out, step into the pocket you came for,
-and step back.
-
-**Three hundred and forty-three nodes**, in bands: four doors in the dead centre, four
-openings around them, twelve clusters between the first and second ring, eight between the
-second and third, eight abilities outside the third, and four corners further out still.
-**The rim is where the good stuff is** — the twelve keystones all sit on the outside,
-**thirteen to thirty-four points** from your door depending on whose country it is in, so
-one of them is a real journey and two of them is your whole ceiling.
+- **Every conversion the pipeline allows.** Ten legal pairs, both forms of each, generated
+  from `CONV_ORDER` — so the day a damage type is added, every conversion involving it has a
+  node on the map without another line of data. Each pair is *guaranteed* a site: left to the
+  random fill, four of the ten never landed anywhere.
+- **A weapon's own nodes.** `+0.1 flat damage — Sword only`, `+4% increased spell damage —
+  Staff only`. Generated from `WEAPON_KEYS`, and the panel greys them out for anybody else.
+- **The strange ones**, which change what a build *is* rather than what its numbers are:
+  RUNEBLOOD (a heart for every 5 intelligence, and 15% less hearts otherwise), VOIDCALL (all
+  your lightning arrives as chaos), THE SOUR SUN (your fireballs are not made of fire any
+  more), FROSTBOUND (nothing you swing is made of metal any more), THE OPEN GUARD (you wear no
+  armour at all and nothing cast at you lands properly).
+- **Eight legendaries, five points each**, on the outermost ring: *Born With Brickbane*, *Born
+  With Block Freeze*, one for every spell — and what they hand over is not a number but a
+  **brick**. You begin the run already holding it. Generated from `SPELL_KEYS`.
 
 **The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
 WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
@@ -1323,9 +1317,10 @@ Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increas
 Volley rate`. A tree that only ever says *+5% damage* has no opinions; a node that names one
 of your bricks makes you re-read the map every time the deck hands you something new.
 
-**Resistance is everywhere.** Every crossing has a ward, every ring-B cluster carries one,
-every corner stacks them, and **every step of armour or core corridor is +1% to all three** —
-so a long walk in any direction leaves you a little harder to burn, freeze and shock.
+**Resistance is everywhere, and paired.** QUENCHED is fire *and* cold, TEMPERED is cold
+*and* lightning, GROUNDED is lightning *and* suppression — the elemental wells give you the
+resistance and the damage of the same element together, and WARDING gives a little of all
+three.
 
 **One currency you can see: skill points.** They come from two places, and both are
 *derived* — nothing is stored as a counter:
@@ -1362,8 +1357,8 @@ collects about 15× what a death at wave 15 does; banked raw, the early runs thi
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 444 points and you can never hold more than 60.** That is the whole design:
-at most **14%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+**The tree costs 859 points and you can never hold more than 60.** That is the whole design:
+at most **7%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
 412 nodes — 116 small ones in clusters, 12 notables, 12 keystones, and 268 steps of corridor
 between them.
 

@@ -904,3 +904,93 @@ And **poison is chaos damage over time**, the way bleed is physical and burn is 
 increased chaos damage as well as increased damage over time, it pays the monster's chaos
 resistance, and the dose you are carrying is reduced by yours — which is the first thing in
 the game that makes chaos resistance worth a brick on its own.
+
+---
+
+## Eighth pass — the lattice
+
+The seventh-pass map was rings with pockets hanging off them, and it showed. Clusters had one
+way in, borders had gaps you could see but not cross, and the whole thing read as a diagram of
+a tree rather than a tree. This pass throws the road/pocket model away.
+
+### Hubs and lanes
+
+Five rings of **hubs**. Every hub joins its neighbours around its own ring, the nearest hub on
+the ring outside it, *and* the nearest hub on the ring inside it — that last one is what
+leaves no hub with a single way out and turns a wheel-with-spokes into a web.
+
+A hub is either a plain **junction** (one travel node, one attribute) or a **cluster**. A
+**lane** is a short chain of travel nodes between two hubs, and it attaches to whichever node
+of a cluster is nearest the other end. So a cluster with four lanes meeting it has four ways
+in, you enter where you arrive, and routing *through* one is an ordinary move.
+
+That kills the old "nothing routes through a pocket" invariant — deliberately. The property
+that actually mattered was never "a cluster is a dead end", it was **"there is always a way
+round"**, and that is what `roads.js` asserts now: knock out every node of any cluster and
+every other cluster is still reachable. Clusters average **2.6 ways in** and not one of the 74
+has fewer than two.
+
+### Nothing is placed by hand
+
+Hubs come off a ring table. Clusters come off a template library. Both are chosen by a hash of
+where they are, so the map is identical every time and **adding a weapon, a spell or a damage
+type extends it without anybody moving a coordinate** — which is the thing that was asked for
+and the thing the old hand-placed 36 could never do.
+
+- Every legal conversion pair gets a cluster, generated from `CONV_ORDER`.
+- Every weapon gets a cluster of its own nodes, generated from `WEAPON_KEYS`.
+- Every spell gets a five-point legendary on the outer ring, generated from `SPELL_KEYS`.
+
+The one-of-a-kind things claim their sites first, deepest first, each taking the free hub in
+its own country whose hash is lowest. Then the repeatables fill a share of what is left, and
+whatever is still free **stays a junction**. That last clause is most of the map.
+
+### Three things the generator got wrong, and how
+
+**Four conversions were nowhere.** Left to the random fill, `cv_phys_shock` and
+`cv_frost_chaos` (and their gain-as-extra twins) never landed on a hub at all — the promise
+"every damage type can be converted" was true of the *stat table* and false of the *map*.
+Templates can now be marked `must`, and those claim a site before the dice are rolled.
+`nodes.js` checks the map, not the table.
+
+**The same cluster four times in one corner.** Picked purely by hash, WHETSTONE turned up four
+times within one screen and the red country read as a copy-paste. A template already standing
+within 1500px is off the list; the closest pair of copies is now 1825px apart.
+
+**Packing clusters onto every other hub left nowhere to walk.** At 46% density the longest run
+of plain attribute nodes in the green country fell to 24, and a country stopped being
+something you could cross without shopping. 40% density, and most of the map is lane again.
+
+### The budget, again
+
+A tree 2.4× bigger means sixty points buy a much better sixty. A stay-at-home strength build
+came in at **×6.37 total power** against a declared ×2.60 — and almost all of it was one
+thing: **flat damage on a weapon whose base is 1.** Three flat nodes and a weapon oath tripled
+the base of every swing before a single increase touched it.
+
+Flat damage is the deck's job. Sharpened Blade hands over half a point at common and eight at
+legendary *because it is one brick*; a tree node you can buy four copies of hands over a tenth.
+That, one attribute per lane node instead of two, and a 15% trim of the repeatable groups —
+which are not one node each, they are four — put it at **×2.38**.
+
+| | seventh pass | eighth pass |
+|---|--:|--:|
+| nodes | 343 | **770** |
+| of which lane | 128 | **482** |
+| clusters | 38 | **74** |
+| tree cost | 373 | **859** |
+| a lane node is worth | 2 attribute | **1 attribute** |
+| flat physical, per node | 0.4 | **0.08** |
+| stay-at-home power | ×2.48 | **×2.38** |
+
+### And two more tests that were lying
+
+`meta.js` asserted that rebalancing a node moved the hero by `0.99 − 0.04`, with the `0.04`
+typed in. The node it names is no longer worth 0.04 and was never going to be forever; the
+delta now comes off the node's own old value, which is the only version of this test that
+survives a rebalance — the exact thing it exists to allow.
+
+`roads.js` asserted a flat "at least 28 nodes in the longest single-attribute run". That number
+moves every time the library grows, and chasing it down each time is a ratchet rather than a
+test. It is a proportion now: a country's biggest walkable piece must be a real share of the
+lanes it has, and never under twenty nodes whatever else changes.
