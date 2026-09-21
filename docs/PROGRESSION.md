@@ -1381,3 +1381,57 @@ doors (the mace's, from 27 degrees between its tightest pair to 46). The 24-degr
 caught by the prize-distance test rather than by it. Said here because a test that cannot fail
 is worse than no test, and a test that passes for a reason other than the one it claims is the
 same thing wearing a hat.
+
+---
+
+## Thirteenth pass — a deck that knows what you are
+
+Two rules, both of them about not wasting a player's screen.
+
+### Only conversions you can use
+
+The gate on every physical conversion brick was `!isCaster()`. Which is nearly right and
+completely wrong: a staff casts fire so it has no physical *from its weapon*, but Guardian
+Brick, Brick Blaster, Bomb Volley, Bladestorm and Blade Vortex are all physical, so a staff
+carrying any of them deals physical and was refused all seven of those cards anyway. And in
+the other direction nothing was gated at all — a sword hero with no fire on the map was shown
+FIRE TO CHAOS as often as anything else.
+
+`dealtTypes()` answers the question properly, off three things:
+
+| the weapon in your hands | a staff casts fire, everything else swings physical |
+| every spell in your book | the Storm Brick is lightning whatever you are holding |
+| what you already convert into | take Brand Iron and you *now* deal fire |
+
+That third row is the one that makes it a mechanic rather than a filter: a chain is built one
+link at a time, and FIRE TO CHAOS becomes a real card the moment something of yours makes fire
+and not a moment before. `CONV_ORDER` is downhill-only, so one sweep in order closes the whole
+chain — no fixpoint loop needed.
+
+A spell key *is* its damage source (`convFrom('chain') === 'shock'`), so the one table that
+already says what a source is made of answers this too; adding a spell tomorrow needs no line
+here.
+
+### What you threw back
+
+A brick rerolled away is weighted to a fifth of its chance for 3 to 5 waves, rolled per brick.
+**Scarce, not banned** — and the test says so in both directions, because both failure modes
+are real: a ban turns the reroll into a way to delete cards from a run, and no penalty at all
+means the reroll does not work.
+
+A weight cannot be asserted from one draw, so the probe draws four hundred screens either side
+of the expiry: a shunned brick turns up on 1.0% of them and an ordinary one on 4.5%.
+
+### What the tests caught
+
+Three things, none of which the eye would have:
+
+- `wave` is an **object**, `{ n, state, t, … }`, not a number. `wave + dur` is
+  `"[object Object]3"` and every comparison against it is false — the feature would have done
+  nothing at all, silently, and the only tell would have been a reroll that did not work.
+- The `banned` break-build — filtering shunned bricks out of the candidate list instead of
+  weighting them — passes every assertion about rarity and about the reroll *appearing* to
+  work. It is caught only by the one that insists a shunned brick still turns up sometimes.
+- Ten break-builds in total, and the one worth keeping is `casterGate`: it restores the old
+  `!isCaster()` gate exactly, and the probe names the case that was broken all along — a staff
+  carrying Bomb Volley.

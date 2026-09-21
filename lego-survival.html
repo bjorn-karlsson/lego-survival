@@ -1820,6 +1820,48 @@ function convSplit(source){
   for(const pt of parts) share[pt.type] = total > 0 ? pt.amount/total : 0;
   return { from, kind, share, mul: plain > 0 ? total/plain : 1 };
 }
+/* ===================== WHAT CAN THIS HERO ACTUALLY DEAL? =====================
+   A conversion out of a type you have no source of is a card that does nothing,
+   and the deck was full of them: a sword hero with no fire anywhere was shown
+   FIRE TO CHAOS, and a staff hero carrying Bomb Volley — which deals PHYSICAL —
+   was refused every physical conversion in the game, because the gate was the
+   crude one, "is this a caster".
+
+   The real question is what your kit puts out. The weapon in your hands, every
+   spell in your book, and then anything you ALREADY turn one of those into: a
+   sword that has bought Brand Iron deals fire, so FIRE TO CHAOS is a real card
+   for it now and was not before. Closed over the conversions, so a chain can be
+   built one link at a time and never before the link it hangs off exists. */
+function dealtTypes(){
+  const out = {};
+  if(!player) return out;
+  const add = t=>{ if(t) out[t] = true; };
+  /* the weapon in your hands */
+  if(isCaster()) add(convFrom(weapon.elem || 'fire'));
+  else add('phys');
+  /* a mace running SLAM OF THE ELEMENTS cycles through all three, so it has a
+     source of every one of them, not just whichever is loaded this second */
+  if(isSlammer()){
+    add('phys');
+    if(player.slam && player.slam.elem > 0)
+      for(const e of SLAM_ELEMS) add(convFrom('slam'+e));
+  }
+  /* and every spell you are carrying. A spell key IS its damage source, so the
+     one table that says what a source is made of answers this too. */
+  for(const k of SPELL_KEYS) if(spellHas(k)) add(convFrom(k));
+  /* ...and anything you already turn one of those into. CONV_ORDER is downhill
+     only, so one sweep in order closes the whole chain. */
+  const c = player.conv;
+  if(c && c.on) for(const a of CONV_ORDER){
+    if(!out[a]) continue;
+    for(const b of CONV_ORDER)
+      if((c.conv[a] && c.conv[a][b] > 0) || (c.gain[a] && c.gain[a][b] > 0)) add(b);
+  }
+  return out;
+}
+/* ...and the one-line question every conversion brick asks before it is offered */
+function canDeal(t){ return !!dealtTypes()[t]; }
+
 /* ===================== WHAT AN AILMENT IS OWED =====================
    AN AILMENT BELONGS TO WHAT LANDED, NOT TO WHAT FIRED IT. This was the one
    half of conversion that never got written: the fireball called burnEnemy
@@ -2366,6 +2408,28 @@ let upgradeMode = 'wave';
 let forcedRarity = null;   /* a chest promises the rarity its lid is painted */
 let pendingPicks = [];
 let rerollsUsed = 0;
+/* ---- WHAT YOU THREW BACK ----------------------------------------------------
+   Paying studs to get rid of three bricks and being shown one of them again on
+   the next screen is the reroll not working. A brick you rerolled away goes
+   SCARCE for a few waves: it is still in the pool, still reachable if the draw
+   has nothing else to offer, but it is weighted down to a fifth of its usual
+   chance. Scarce, not banned — a brick you rejected at wave 4 because you had
+   no fire yet may be exactly what you want at wave 9, and banning it outright
+   would make the reroll a way to delete cards from your run. */
+const SHUN_MIN = 3, SHUN_MAX = 5;   /* waves it stays scarce, rolled per brick */
+const SHUN_WEIGHT = 0.2;            /* ...and what its chance is worth meanwhile */
+let shunned = {};                   /* upgrade id -> the wave it comes back in full */
+function shunCards(list){
+  for(const k in shunned) if(shunned[k] <= wave.n) delete shunned[k];
+  for(const c of list || []){
+    if(!c || !c.t) continue;
+    const dur = SHUN_MIN + Math.floor(Math.random()*(SHUN_MAX - SHUN_MIN + 1));
+    /* the longer of the two, so rerolling the same brick twice does not shorten
+       the sulk it is already in */
+    shunned[c.t.id] = Math.max(shunned[c.t.id] || 0, wave.n + dur);
+  }
+}
+function shunMul(id){ return (shunned[id] || 0) > wave.n ? SHUN_WEIGHT : 1; }
 let screenRerolls = 0;
 let runTime = 0, retPulse = 0, redFlash = 0;
 let seed = 1;
@@ -5548,77 +5612,84 @@ const UPGRADES = [
      it where it is and adds a second helping on top, which is why it is worth
      less per point. ---- */
   { id:'convfire', name:'Emberforge', icon:'pyro', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to FIRE — it stops `+
       `meeting armour and starts meeting fire resistance, and it takes your increased `+
       `fire damage with it${convOwnTag('phys','fire')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'fire', c.v); } },
   { id:'convfrost', name:'Rimeblade', icon:'snow', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to COLD — past armour, `+
       `into frost resistance, scaling with everything that makes your cold hurt`+
       `${convOwnTag('phys','frost')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'frost', c.v); } },
   { id:'convshock', name:'Galvanise', icon:'zapper', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to LIGHTNING — past `+
       `armour, into lightning resistance${convOwnTag('phys','shock')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'shock', c.v); } },
   { id:'convchaos', name:'The Unmaking', icon:'prismdn', cls:'OFFENSE', minRar:'rare',
+    req:()=>canDeal('fire'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your FIRE damage CONVERTED to CHAOS — chaos is neither `+
       `physical nor elemental, so nothing in the game resists it${convOwnTag('fire','chaos')}`,
     apply:c=>{ convAdd(player.conv, 'fire', 'chaos', c.v); } },
   { id:'gainchaos', name:'Creeping Blight', icon:'bane', cls:'OFFENSE', minRar:'rare',
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA CHAOS — the physical `+
       `stays where it is, and a hit carrying chaos can leave a dose of poison behind`+
       `${convOwnTag('phys','chaos', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'chaos', c.v); } },
   { id:'gainfire', name:'Catalyst', icon:'prism', cls:'OFFENSE', minRar:'rare',
+    req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your COLD damage as EXTRA FIRE — the cold is not `+
       `touched, and a frost build starts burning things too${convOwnTag('frost','fire', true)}`,
     apply:c=>{ convGain(player.conv, 'frost', 'fire', c.v); } },
   { id:'convsf', name:'Stormfrost', icon:'snow', cls:'OFFENSE', minRar:'rare',
+    req:()=>canDeal('shock'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your LIGHTNING damage CONVERTED to COLD — and it keeps `+
       `your increased lightning on the way${convOwnTag('shock','frost')}`,
     apply:c=>{ convAdd(player.conv, 'shock', 'frost', c.v); } },
   { id:'convff', name:'Fulminate', icon:'pyro', cls:'OFFENSE', minRar:'rare',
+    req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your COLD damage CONVERTED to FIRE — stack it under `+
       `Stormfrost and a storm bolt arrives as fire carrying all three increases`+
       `${convOwnTag('frost','fire')}`,
     apply:c=>{ convAdd(player.conv, 'frost', 'fire', c.v); } },
   { id:'convrot', name:'Rotgale', icon:'bane', cls:'OFFENSE', minRar:'epic',
+    req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your COLD damage CONVERTED to CHAOS — out of the `+
       `elements entirely, where nothing resists it${convOwnTag('frost','chaos')}`,
     apply:c=>{ convAdd(player.conv, 'frost', 'chaos', c.v); } },
   { id:'gainshock', name:'Static Charge', icon:'zapper', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA LIGHTNING — the `+
       `physical stays where it is and the lightning is added on top`+
       `${convOwnTag('phys','shock', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'shock', c.v); } },
   { id:'gainfrost', name:'Hoarfrost', icon:'icecube', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA COLD — and every `+
       `hit starts chilling what it lands on${convOwnTag('phys','frost', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'frost', c.v); } },
   { id:'gainpf', name:'Brand Iron', icon:'flame', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA FIRE`+
       `${convOwnTag('phys','fire', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'fire', c.v); } },
   { id:'gainrot', name:'Sour Ending', icon:'bane', cls:'OFFENSE', minRar:'epic',
+    req:()=>canDeal('fire'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your FIRE damage as EXTRA CHAOS — a fire build `+
       `that leaves poison behind it${convOwnTag('fire','chaos', true)}`,
@@ -9369,7 +9440,7 @@ function pickChoices(mode){
       if(!cands.length) return null;
     }
     /* favourite bricks are drawn heavier on the ONE weighted slot, never guaranteed */
-    const wOf = u => (weighted && favSet.has(u.id)) ? FAV_WEIGHT : 1;
+    const wOf = u => ((weighted && favSet.has(u.id)) ? FAV_WEIGHT : 1) * shunMul(u.id);
     let total = 0;
     for(const u of cands) total += wOf(u);
     let r = Math.random()*total, t = cands[cands.length-1];
@@ -10931,6 +11002,7 @@ function doReroll(){
   rerollsUsed++;
   screenRerolls++;
   SFX.pick();
+  shunCards(choices);          /* before the redraw, or it shuns what it just drew */
   pickChoices(upgradeMode);
   renderCards();
 }
@@ -19117,7 +19189,7 @@ function resetRun(demo){
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave';
-  rerollsUsed = 0; screenRerolls = 0;
+  rerollsUsed = 0; screenRerolls = 0; shunned = {};
   clogReset();
   buildGround(); buildProps();
   navBuild();

@@ -678,6 +678,17 @@ that take you straight to a cap stay scarce even here.
 **Generous Smith** *increases* the heart chance rather than adding to it — it caps at
 **+200% increased**, which is ×3 the base, or 3.00% a monster.
 
+### What you threw back
+
+**A brick you paid studs to reroll away goes scarce for 3 to 5 waves** — rolled per brick, so
+they do not all come back at once. Paying to get rid of three cards and being shown one of
+them on the very next screen is the reroll not working.
+
+**Scarce, not banned.** It is still in the pool and weighted to a fifth of its usual chance,
+which measures out at roughly 1% of screens against 4.5%. Banning it outright would turn the
+reroll into a way to *delete* cards from a run, and a brick you rejected at wave 4 for having
+no fire yet may be exactly what you want at wave 9.
+
 ### The mystery chest
 
 Rarer than an epic reward roll and commoner than a legendary one — about **3 a run**,
@@ -1690,6 +1701,23 @@ lightning, increased cold *and* increased fire.
 
 **Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
 you half of each, never a hero dealing 160% of their own damage.
+
+### You are only offered conversions you can use
+
+**A conversion out of a type you have no source of is a card that does nothing**, and the deck
+was full of them. A sword hero with no fire anywhere was shown FIRE TO CHAOS; a staff hero
+carrying Bomb Volley — which deals *physical* — was refused every physical conversion in the
+game, because the gate was the crude one, *"is this a caster"*.
+
+What a hero can deal is now read off their kit: **the weapon in their hands, every spell in
+their book**, and then **anything they already turn one of those into**. The weapon, because a
+staff casts fire and a sword swings physical. The spellbook, because the Storm Brick is
+lightning, Block Freeze is cold and Brickbane is chaos whatever you are holding. And the
+conversions already bought, because *that is how a chain gets built*: take Brand Iron and you
+now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a moment earlier.
+
+A mace running Slam of the Elements is credited with all three, because it cycles through
+them.
 
 ### An ailment belongs to what landed
 
