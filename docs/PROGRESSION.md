@@ -1435,3 +1435,67 @@ Three things, none of which the eye would have:
 - Ten break-builds in total, and the one worth keeping is `casterGate`: it restores the old
   `!isCaster()` gate exactly, and the probe names the case that was broken all along — a staff
   carrying Bomb Volley.
+
+---
+
+## Fourteenth pass — one rule for five ailments, and the axe gets its own
+
+### The bug, and how much bigger it was than it looked
+
+*"Shock chance is only for storm bolt."* True — and the same was true of three of the other
+four. An ailment was a property of the **spell that threw it** rather than of the **damage
+type**, and each one had been written into its own call site:
+
+| | where it came from | what that meant |
+|---|---|---|
+| SHOCK | the Storm Brick, via a stat called *"chance for a storm bolt to SHOCK"* | convert a whole build into lightning and you cannot shock with any of it |
+| IGNITE | the staff's bolt and the ember | a sword converted entirely to fire burned nothing |
+| CHILL | Block Freeze | same |
+| BLEED | any *melee* source | Brick Blaster is physical and never opened a wound |
+| POISON | the chaos that landed, wherever from | **correct** |
+
+Poison was the odd one out because it was written last, after conversion existed. Every other
+one is now poison's rule, in one place — `applyAilments`, called once from `hitEnemy`, which is
+the only place that knows what a hit actually arrived as. Six call sites lost their private
+ailment code.
+
+Two design decisions worth recording:
+
+- **Nothing is quietly buffed.** Base chance is zero for four of five, chaos keeps its 35%
+  dose, and a crit still opens a wound half the time. The old Storm Brick stat became
+  **Afflict**, one chance added to all five and capped at 75% — a cap because a build that
+  ignites, chills, shocks, bleeds and poisons every hit is not a build, it is a status bar.
+- **The sources that ARE their element keep their certainty.** A fireball that did not ignite
+  would not be a fireball. `AIL_NATIVE` is the whole of that exception, and it is still scaled
+  by how much of the element survived your own conversions.
+
+### Reaving
+
+The axe was the only weapon whose legendary was somebody else's. Its stats say what it should
+be — 10% base crit against the sword's 5%, 210% multiplier against 150% — and then `bleed: 0.45`
+locks it out of the one tree that crit feeds. So the legendary makes critting itself the
+engine: every critical throws the axe, it reaps up to three more bodies, each bounce rolls its
+own crit, and it comes back. You cannot swing while it is away.
+
+Rank two pays off the 0.45 directly: a bleeding body costs the blade none of its bounces.
+Rank one reaps 4 off a ring of nine; rank two over the same ring, bleeding, reaps all nine.
+
+### What the tests caught
+
+- **`wave` is an object**, caught last pass — this pass, `syncStats()` derives `critBase` from
+  the weapon, so a probe that set `critBase = 1` *before* calling it measured the sword's
+  natural 5% and reported "a critical does not open a wound". Set derived stats after the
+  thing that derives them.
+- **`enemiesNear` reads a spatial grid rebuilt once a frame.** A probe that places monsters by
+  hand and immediately asks what is near finds nothing, and calls a working blade broken. The
+  fix is in the probe (let a frame run), and it is worth writing down: in a real fight the grid
+  is always current, because the blade is thrown from inside a swing, mid-frame.
+- **A statistical assertion on a rare card is a coin toss.** The reroll test watched one brick;
+  when the reroll happened to throw back a spell card at 1.3% of screens, four hundred draws at
+  a fifth of that expects *one* appearance, and zero is ordinary luck rather than a ban. It
+  watches all three now, over two thousand draws.
+- **The guard against a bounce throwing a second blade was invisible for the right reason.**
+  The 0.55s cooldown masks it on a short flight. The probe had to be moved to the longest
+  flight the game can produce — rank two over a field that is already bleeding — and it now
+  asserts *first* that the blade was out longer than the cooldown, so it cannot pass by
+  measuring nothing.

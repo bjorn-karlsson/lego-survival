@@ -207,6 +207,30 @@ The mace is the one that never leaves contact, so it carries the most of both.
 **The staff gets +8% to every resistance** instead. It stands in the fire it starts, and it
 is the one weapon that cannot answer a burning floor by walking out of it.
 
+### 🪓 Reaving — *what the axe does that nothing else can*
+
+Every other weapon had a legendary that changed what it **is** — the sword whirls, the mace
+slams the elements, the staff scatters embers. The axe borrowed the sword's.
+
+The axe's identity is in two numbers: **twice a sword's crit chance and a far bigger
+multiplier**, paid for with a bleed multiplier of **0.45** that locks it out of the one tree its
+crits would otherwise feed. So the payoff for critting *is* the mechanic.
+
+> **Reaving** — *legendary, axe only.* Every **critical** throws the axe. It reaps through up
+> to **3** more bodies within 320px, each for **70%** of the critical that threw it and each
+> able to crit on its own, and comes back. **You cannot swing while it is away.**
+
+That last line is the whole cost, and it gets worse the more attack speed you stack — which is
+the tension the axe was missing. One critical throws one axe: a 0.55s cooldown is what stops a
+whirl being a wall of them, and a bounce can never start a second blade.
+
+> **Rank two** — the blade leaves a **BLEEDING** body for free. Reaping one costs it none of its
+> three bounces, so a wound is a longer harvest — and the axe's own terrible 45% bleed becomes
+> the thing you build around.
+
+Measured: rank one reaps 4 bodies off a ring of nine; rank two over the same ring, bleeding,
+reaps all 9.
+
 ### ⛰️ The ground slam — *what a mace does instead*
 
 A mace hero does not swing. They drive the head into the floor and a **fault** opens in
@@ -1718,6 +1742,36 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
+
+### Every ailment, one rule
+
+**An ailment is a property of the damage TYPE, not of the spell that threw it.** That was true
+of exactly one of the five. The rest were each written into their own call site, and what you
+got was arbitrary:
+
+| | before | now |
+|---|---|---|
+| **SHOCK** | only off the Storm Brick, from a chance called *"chance for a storm bolt to SHOCK"* | any hit that lands as lightning |
+| **IGNITE** | only off the staff's bolt and the ember | any hit that lands as fire |
+| **CHILL** | only off Block Freeze | any hit that lands as cold |
+| **BLEED** | only off a *melee* source, so a physical spell never opened one | any hit that lands as physical |
+| **POISON** | rolled off how much of the hit arrived as chaos, wherever it came from | unchanged — this one was always right |
+
+A hero who had converted a whole build into lightning could not shock anything with any of it.
+Now every one of them is poison's rule: the chance rides on the share of the hit that arrived
+as that type, and the ailment lands on the part of the damage that actually *was* that type.
+
+**Nothing is quietly buffed.** The base chance is zero for four of the five, chaos keeps the
+dose it always had, and a critical still opens a wound half the time. What turns the rest on is
+**Afflict** — one stat, added to all five, capped at **75%**. Because it is one stat it works on
+whatever your damage has *become*, which is the whole point.
+
+**Except the sources that ARE their element.** A fireball that did not set things alight would
+not be a fireball, Block Freeze without the chill is a damage spell with a silly name, and a
+mace that paid a legendary for Slam of the Elements bought the ailments, not a chance at them.
+Those stay certainties — scaled, as ever, by how much of them survived your conversions.
+
+A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangles at **×1.9**.
 
 ### An ailment belongs to what landed
 
