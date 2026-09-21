@@ -1499,3 +1499,55 @@ Rank one reaps 4 off a ring of nine; rank two over the same ring, bleeding, reap
   flight the game can produce — rank two over a field that is already bleeding — and it now
   asserts *first* that the blade was out longer than the cooldown, so it cannot pass by
   measuring nothing.
+
+---
+
+## Fifteenth pass — the axe swings twice, and stacks become a thing
+
+### The backswing
+
+The axe ran the sword's three-step combo with different numbers, which is the one place a
+weapon's feel actually lives. It swings twice now: a 0.20s forward chop, then a 0.33s **270°
+backswing** out of it at spin reach, always a critical on the first body it touches.
+
+Two decisions inside that:
+
+- **Only the first body.** A 270° sweep that crit everything in it is a legendary, not a combo
+  step. `s.crited` is consumed once per swing, and the break-build that removes it reports four
+  identical crits where there should be one and three ordinary hits.
+- **A combo is a table row.** `SWING_COMBO` and `SWING_STEPS` replaced the `p.combo === 2`
+  branch, so the fifth weapon swings differently by being written down. The sword's three steps
+  are now data too, and the test asserts they are unchanged.
+
+The guaranteed critical is not decoration: Reaving fires on criticals, so the rhythm of the
+weapon and the trigger of its legendary are the same beat.
+
+### Momentum, and why it is not a momentum system
+
+The interesting part of this pass is what is *not* in it. `HERO_STACKS` is a table of named,
+self-expiring counters — a cap, a decay, what one stack is worth, and optionally which weapons
+may carry it — and nothing in the machinery knows what momentum is. `stackMod('atk')` sums
+across every live kind; a consumer never learns which exist.
+
+The test proves that by inventing two stacks that are not momentum (`testrage`, `testcalm`),
+asserting the cap, the bleed, the clock refresh, the weapon gate and the summing on *those*,
+and only then asking the real swing about the real one. If any of the machinery had needed the
+word "momentum", that half of the test could not have been written.
+
+**It bleeds, it does not drop.** One falls off every 2s without a new one, rather than the lot
+at once. A cliff is a thing you avoid; a bleed is a thing you play with. The break-build that
+zeroes the count on expiry is caught by an assertion that reads the *shape* of the decay —
+`[4,0,0,0,0]` against `[4,3,2,2,1]` — rather than the end state, which both produce.
+
+**Built by connecting, once a swing.** Per-body would make one step into a crowd the whole
+ramp. Both failure modes have their own break-build: per-body, and free-on-every-swing.
+
+The whirl **reads** momentum's reach and never builds it, because a spin that fed the ramp it
+benefits from would sit at six stacks for ever.
+
+### Where the numbers are read
+
+Momentum is not poured into `p.atkRate`. It is read at the point of use, in `startSwing`,
+because a stack that changed a pool would have to be taken back out again and that is exactly
+where double counting starts — the same rule that made attributes derived rather than written
+back in the sixth pass.

@@ -1840,6 +1840,81 @@ function convSplit(source){
   for(const pt of parts) share[pt.type] = total > 0 ? pt.amount/total : 0;
   return { from, kind, share, mul: plain > 0 ? total/plain : 1 };
 }
+/* ===================== STACKS THE HERO CARRIES =====================
+   A NAMED, SELF-EXPIRING COUNTER WITH A CAP AND A DECAY, and what one stack is
+   WORTH read out of the same table that declares it. Momentum is the first,
+   but nothing in here knows what momentum is: a rage that builds as you take
+   damage, a focus that builds as you stand still, a brand that builds on one
+   body — all of them are a row in this table and a line at the place that feeds
+   them, not a mechanic of their own with its own timer to forget to tick.
+
+   THE DECAY BLEEDS, it does not drop. Losing six stacks the instant you miss
+   is a cliff, and a cliff is a thing you avoid rather than a thing you play
+   with: one falls off every `decay` seconds you go without adding another, so
+   dropping out of a fight costs you the ramp gradually and a single miss costs
+   you almost nothing. */
+const HERO_STACKS = {
+  momentum: {
+    name:'MOMENTUM', col:'#e0a81a',
+    max:6, decay:2.0,
+    /* what ONE stack is worth. Whoever cares reads it by name — there is no
+       central applier, because a stack that changed a pool would have to be
+       un-applied and that is how double-counting starts. */
+    mods:{ atk:0.08, reach:0.04 },
+    only:['axe'],
+  },
+};
+function stackDef(id){ return HERO_STACKS[id] || null; }
+/* is this hero even allowed to carry it? */
+function stackAllows(id){
+  const d = stackDef(id);
+  if(!d) return false;
+  if(d.only && (!weapon || d.only.indexOf(weapon.id) < 0)) return false;
+  return true;
+}
+function stackOf(id){
+  const p = player, st = p && p.stacks && p.stacks[id];
+  return (st && st.n > 0 && stackAllows(id)) ? st.n : 0;
+}
+function stackAdd(id, n){
+  const p = player, d = stackDef(id);
+  if(!p || !d || !stackAllows(id)) return 0;
+  if(!p.stacks) p.stacks = {};
+  const st = p.stacks[id] || (p.stacks[id] = { n:0, t:0 });
+  st.n = Math.min(d.max, st.n + (n || 1));
+  st.t = d.decay;                 /* the clock restarts every time one lands */
+  return st.n;
+}
+function stackClear(id){
+  const p = player;
+  if(p && p.stacks && p.stacks[id]){ p.stacks[id].n = 0; p.stacks[id].t = 0; }
+}
+/* WHAT EVERY LIVE STACK IS WORTH, summed, by mod name. One call, so a consumer
+   never has to know which stacks exist — only what it wants paid in. */
+function stackMod(key){
+  const p = player;
+  if(!p || !p.stacks) return 0;
+  let v = 0;
+  for(const id in p.stacks){
+    const n = stackOf(id);
+    if(!n) continue;
+    const m = stackDef(id).mods;
+    if(m && m[key]) v += m[key] * n;
+  }
+  return v;
+}
+function stackTick(dt){
+  const p = player;
+  if(!p || !p.stacks) return;
+  for(const id in p.stacks){
+    const st = p.stacks[id], d = stackDef(id);
+    if(!st || !d || st.n <= 0) continue;
+    if(!stackAllows(id)){ st.n = 0; st.t = 0; continue; }
+    st.t -= dt;
+    if(st.t <= 0){ st.n--; st.t = d.decay; }   /* one at a time, never a cliff */
+  }
+}
+
 /* ===================== EVERY AILMENT, ONE RULE =====================
    AN AILMENT IS A PROPERTY OF THE DAMAGE TYPE, NOT OF THE SPELL THAT THREW IT.
    That was true of exactly one of the five. The rest were each written into
@@ -2704,6 +2779,8 @@ function newPlayer(){
     /* REAVING: the rank, the fuse while the axe is away, and the cooldown that
        stops a whirl throwing one every frame */
     reave:0, reaveT:0, reaveCd:0,
+    /* every self-expiring counter the hero carries, by name */
+    stacks:{},
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
     attr:{ str:0, int:0, dex:0 },
     incCritMult:0,
@@ -3773,7 +3850,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   }
   /* the incoming number is already (base + flat) × increased × more */
   let d = Math.max(0, dmg);
-  const crit = !opts.noCrit && Math.random() < critChance();
+  const crit = opts.forceCrit ? true : (!opts.noCrit && Math.random() < critChance());
   if(crit) d *= critMult();
   if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
@@ -11163,6 +11240,7 @@ function updatePlayer(dt){
      projectile keeps topping this up while it is out */
   p.reaveT = Math.max(0, (p.reaveT || 0) - dt);
   p.reaveCd = Math.max(0, (p.reaveCd || 0) - dt);
+  stackTick(dt);
   if(p.fortuneT>0){
     p.fortuneT -= dt;
     if(p.fortuneT<=0) p.fortuneMul = 1;
@@ -11227,7 +11305,9 @@ function updatePlayer(dt){
     /* the legs keep working under the crouch, whether or not you are walking */
     p.walk += dt*16;
     p.swing = null;                       /* the whirl and a swing are exclusive */
-    const reach = weapon.reach + p.reach;
+    /* the whirl READS momentum's reach but never builds it: a spin that fed
+       the ramp it benefits from would sit at six stacks for ever */
+    const reach = weapon.reach * (1 + stackMod('reach')) + p.reach;
     const dmg = swordDamage([WHIRL_MUL]);
     for(const en of enemiesNear(p.x, p.y, reach + 80)){
       if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
@@ -11325,8 +11405,17 @@ function updatePlayer(dt){
             s.hit.add(en);
             /* the spin is a MORE multiplier, and how big it is is the weapon's */
             const dmg = physDamage(s.spin ? [weapon.spin] : null);
+            /* THE BACKSWING IS A CERTAINTY on the first body it reaches, and
+               only the first: a 270-degree sweep that crit everything it
+               touched would be a legendary, not a combo step. */
+            const sure = s.crit && !s.crited;
+            if(sure) s.crited = true;
             hitEnemy(en, dmg, Math.atan2(en.y-p.y,en.x-p.x),
-                     (s.spin?300:210)*weapon.kb, 'sword', {spin:s.spin});
+                     210*(s.kb || 1)*weapon.kb, 'sword', { spin:s.spin, forceCrit:sure });
+            /* MOMENTUM IS BUILT BY CONNECTING, once per swing however many
+               bodies are in the arc — otherwise one step into a crowd is the
+               whole ramp and the mechanic is a formality. */
+            if(!s.gained){ s.gained = true; stackAdd('momentum', 1); }
             if(s.spin) addShake(0.12);
           }
         }
@@ -11936,18 +12025,41 @@ function updatePSpikes(dt){
     pspikes = pspikes.filter(sp=>!sp.dead);
   }
 }
+/* ---- WHAT A WEAPON'S COMBO LOOKS LIKE -------------------------------------
+   The sword's is three: a sweep out, a sweep back, and a full spin. The AXE
+   swings twice — a fast forward chop, then a slow 270-degree BACKSWING on the
+   way out of it, which costs more time, reaches further and is ALWAYS a
+   critical on the first body it touches. Two hits read as tap-TAP instead of
+   tap-tap-TAP, and the guaranteed critical is what Reaving is waiting for: the
+   rhythm of the weapon and its legendary are the same thing.
+   A row here is a whole combo, so a fifth weapon swings differently by being
+   written down rather than by adding a branch to startSwing. */
+const SWING_STEPS = {
+  lo:   { dur:0.20, arc:[-1.50,  1.15], reach:'reach',     kb:1.0 },
+  hi:   { dur:0.20, arc:[ 1.50, -1.15], reach:'reach',     kb:1.0 },
+  spin: { dur:0.34, arc:[ 0,  TAU*0.95],reach:'spinReach', kb:1.43, spin:true },
+  /* out of the chop and all the way round behind you */
+  back: { dur:0.33, arc:[ 2.45, -2.25], reach:'spinReach', kb:2.0, spin:true, crit:true },
+};
+const SWING_COMBO = { _:['lo','hi','spin'], axe:['lo','back'] };
+function comboSteps(){ return SWING_COMBO[weapon && weapon.id] || SWING_COMBO._; }
 function startSwing(aim){
   const p = player;
   if(reaveOut()) return;      /* it is not in your hands */
-  p.combo = p.comboTimer>0 ? (p.combo+1)%3 : 0;
+  const steps = comboSteps();
+  p.combo = p.comboTimer>0 ? (p.combo+1)%steps.length : 0;
   p.comboTimer = 0.85;
-  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();   /* chill and curses both slow the swing */
+  /* MOMENTUM SHORTENS THE SWING. It is read here rather than poured into
+     p.atkRate because a stack that changed a pool would have to be taken back
+     out again, and that is where double counting starts. */
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) / (1 + stackMod('atk')) * curseSwingMul();
   retPulse = 1;
-  const spin = p.combo===2;
-  const s = { t:0, dur: spin?0.34:0.2, spin, hit:new Set(), hitP:new Set(), aim };
-  if(spin){ s.from = aim; s.to = aim + TAU*0.95; s.reach = weapon.spinReach + p.reach; }
-  else if(p.combo===0){ s.from = aim-1.5; s.to = aim+1.15; s.reach = weapon.reach + p.reach; }
-  else { s.from = aim+1.5; s.to = aim-1.15; s.reach = weapon.reach + p.reach; }
+  const step = SWING_STEPS[steps[p.combo]] || SWING_STEPS.lo;
+  const base = (weapon[step.reach] || weapon.reach) * (1 + stackMod('reach'));
+  const s = { t:0, dur:step.dur, spin:!!step.spin, kb:step.kb || 1,
+              crit:!!step.crit, hit:new Set(), hitP:new Set(), aim,
+              from: aim + step.arc[0], to: aim + step.arc[1],
+              reach: base + p.reach };
   s.cur = s.from;
   p.swing = s;
   SFX.swing();
@@ -17784,6 +17896,38 @@ function drawHero(c){
     whirlA: wh, elite:false, phase:0 });
   c.globalAlpha = 1;
   drawPlayerWeapon(c);
+  drawHeroStacks(c, p);
+}
+/* WHAT YOU ARE CARRYING, over your own head. A ramp you cannot see is a ramp
+   you cannot play around, so every live stack is one chevron in its own colour,
+   and the one nearest falling off fades as its clock runs down. Written against
+   the TABLE, so a second kind of stack is drawn by existing. */
+function drawHeroStacks(c, p){
+  if(!p || !p.stacks) return;
+  const rows = [];
+  for(const id in p.stacks){
+    const n = stackOf(id);
+    if(n > 0) rows.push({ d:stackDef(id), n, t:p.stacks[id].t });
+  }
+  if(!rows.length) return;
+  c.save();
+  let y = p.y - 62;
+  for(const r of rows){
+    const w = 7, gap = 3, total = r.n*w + (r.n-1)*gap;
+    for(let i=0;i<r.n;i++){
+      /* the last one is the one about to go, and it says so */
+      const fading = (i === r.n-1) ? clamp(r.t / Math.max(0.01, r.d.decay), 0.25, 1) : 1;
+      const x = p.x - total/2 + i*(w+gap);
+      c.globalAlpha = 0.9*fading;
+      c.fillStyle = r.d.col;
+      c.beginPath();
+      c.moveTo(x, y+4); c.lineTo(x + w/2, y - 3); c.lineTo(x + w, y + 4);
+      c.lineTo(x + w/2, y + 1); c.closePath(); c.fill();
+    }
+    y -= 10;
+  }
+  c.globalAlpha = 1;
+  c.restore();
 }
 /* A shade: a hooded minifig torso with nothing under it but a wisp. It hovers,
    so it gets a small floating offset and a faint pool of shadow instead of feet.

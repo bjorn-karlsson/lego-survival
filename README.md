@@ -207,6 +207,44 @@ The mace is the one that never leaves contact, so it carries the most of both.
 **The staff gets +8% to every resistance** instead. It stands in the fire it starts, and it
 is the one weapon that cannot answer a burning floor by walking out of it.
 
+### 🪓 The backswing — *what an axe swing is*
+
+The axe used to run the sword's three-step combo with different numbers. It swings **twice**
+now:
+
+| | | |
+|---|--:|---|
+| **the chop** | 0.20s | forward, ordinary reach |
+| **the backswing** | 0.33s | **270°** out of the chop and all the way round behind you, at spin reach, and **always a critical on the first body it touches** |
+
+*tap-TAP* instead of *tap-tap-TAP* — and the guaranteed critical is what **Reaving** is waiting
+for, so the rhythm of the weapon and its legendary are the same thing. Only the *first* body:
+a 270° sweep that crit everything in it would be a legendary, not a combo step.
+
+A weapon's combo is a row in a table, so a fifth weapon swings differently by being written
+down rather than by adding a branch.
+
+### ⚡ Momentum — *and stacks in general*
+
+**Every swing that connects builds a stack.** Six at most, each worth **+8% attack speed and
++4% reach**, and one falls off every **2 seconds** you go without adding another. Once per
+swing however many bodies are in the arc — one step into a crowd being the whole ramp would
+make it a formality. At six stacks the axe swings **48% faster** and reaches a third further.
+
+It bleeds, it does not drop. Losing six stacks the instant you miss is a cliff, and a cliff is
+a thing you *avoid* rather than a thing you play with; bleeding one at a time means dropping
+out of a fight costs the ramp gradually and a single miss costs almost nothing.
+
+**The system underneath knows nothing about momentum.** `HERO_STACKS` is a table of named,
+self-expiring counters — a cap, a decay, a list of what one stack is *worth*, and optionally
+which weapons may carry it. A rage that builds as you take damage, a focus that builds as you
+stand still, a brand that builds on one body: each is a row here and one line at the place that
+feeds it, rather than a mechanic of its own with its own timer to forget to tick. Whoever cares
+reads `stackMod('atk')` and never learns which stacks exist.
+
+Every live stack is a chevron over your own head, in its own colour, and the one about to fall
+off fades as its clock runs down — a ramp you cannot see is a ramp you cannot play around.
+
 ### 🪓 Reaving — *what the axe does that nothing else can*
 
 Every other weapon had a legendary that changed what it **is** — the sword whirls, the mace
