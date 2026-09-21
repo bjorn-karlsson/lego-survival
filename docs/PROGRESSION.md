@@ -1071,3 +1071,140 @@ holding every node it legally can — none of the sword's four is buyable or eve
 
 It surfaced because the ninth pass made those nodes part of a lane that continues, instead of
 the stub it used to be. The bug was older than the change that exposed it.
+
+---
+
+## Tenth pass — shapes, icons, and nothing on top of anything
+
+> *"You got nodes that are overlapping i dont like that. Furthermore, you seem to only have
+> triangles all the time... please add some icons to the already existing nodes, for all
+> attribute nodes add a small + symbol and their respective color. Make the skill tree
+> interesting, not just nodes everywhere."*
+
+Three complaints, and the first one was not what it looked like.
+
+### "The nodes are overlapping"
+
+They were not. The closest pair of node circles on the ninth-pass map was **14px clear**, and
+the assertion that says so had been passing for two passes. So either the assertion was wrong
+or it was measuring the wrong thing, and it was the second: it measured node circles, and a
+player does not see node circles. They see the whole picture. Measured on what is actually
+drawn, on the same map:
+
+| | ninth pass |
+|---|--:|
+| node circles overlapping | 0 |
+| **edges drawn through an unrelated node** | **23** |
+| **nodes standing inside a foreign cluster's blot** | **25** |
+| **cluster names printed over a node** | **15** |
+
+All three are "overlapping" to anybody looking at the screen, and none of them was a node
+circle. The lesson is the one this project keeps relearning: **an assertion has to read the
+surface the player reads.** A node-radius test is a proxy for "does this look clean", and the
+proxy passed while the thing it stood for was plainly broken in a screenshot.
+
+The fixes, in the order the picture needed them:
+
+- **An edge through a node.** Straight node-against-node shoving never sees this one — the two
+  ends of the edge are far away and the node sitting on top of it is touching nothing at all.
+  The layout pass now also shoves a node off any edge it is standing on. And a slip road off
+  the highway picks the cluster node it can reach *without* crossing another node of that
+  cluster, instead of the nearest one full stop.
+- **The blot.** It was a fixed circle round where the cluster was *asked* to go. After the
+  layout pass settled, that was the wrong place and the wrong size, and it shaded whatever
+  highway ran past — and a stretch of road inside a shop's shadow reads as part of the shop.
+  It is measured off where the nodes ended up now, then pulled in until it holds nothing that
+  is not its own and touches no other blot.
+- **The name.** It went straight out from the middle of the map and landed where it landed.
+  Twenty-four directions are tried at two distances each now, and the first that lands on no
+  node and no other name wins. All 98 find one.
+- **And room to grow into.** A six-node figure with its prize hung off the end reaches half
+  again as far as the circle it was drawn on, and two of them on neighbouring rim sites grew
+  into each other. A cluster is never drawn wider than the gap to the site beside it.
+
+### "Only triangles"
+
+True, and the cause was one line. Every template held **three** minors, and a cluster placed
+its minors on a circle — and three points on a circle is a triangle. Ring, wheel and arc all
+came out the same shape because the shape had nothing to work with.
+
+So the **figure decides how many nodes there are**, not the list of stats. The stats are dealt
+round the figure and repeat if the figure is the longer of the two, which is what a six-node
+arc of *Smoulder, Rimebite, Arcing, Smoulder, Rimebite, Arcing* is for — and repeating a minor
+inside one group is what the tree this is borrowed from does everywhere.
+
+Ten figures instead of five: **ring, wheel, arc, crescent, diamond, line, chain, hook, star,
+pair.** And a repeated group whose neighbour within 1100px already wears its shape takes the
+next one along, so THE MACE'S OATH reads differently in each of the three places it lands.
+
+| cluster size | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|--:|--:|--:|--:|--:|--:|
+| ninth pass | 33 | 33 | 32 | — | — | — |
+| tenth pass | 6 | 8 | 18 | 25 | 30 | 11 |
+
+One thing fell out of writing it: `layout` returns the points, and the count is read back off
+*that* rather than off the number that asked for it. A diamond has four corners and a pair has
+two however many were requested, and the first break-build written against this pass — every
+figure forced back to three nodes — crashed the page reaching for a point that was never put
+down. The figure is the authority now.
+
+### "Add some icons"
+
+Every node wears a picture, and the picture is **read off the stat** rather than typed in
+beside it — `metaIconKey` maps a stat name to one of the drawings the bricks and the upgrade
+cards already use, with the conversions and the per-weapon stats matched by pattern. A stat
+written tomorrow arrives with an icon already on it, and a stat written *without* one fails a
+test rather than quietly drawing a fallback: the break-build that deletes `incFrost` from the
+table is caught by name.
+
+The road wears a plus in the colour of the country it runs through and nothing else, because
+that is the whole of what a travel node does.
+
+Rank became the frame rather than the glyph — a keystone wears a broken ring, a legendary a
+whole second one — which freed the middle of the disc for the picture.
+
+One trap: the icons are 24-unit drawings and the obvious way to place one is a nested `<svg>`
+with a `viewBox`. The DOM comes out perfectly correct and Chrome renders it the size of a
+county, inside a tree that is already being scaled. A `<g>` with a `transform` does the same
+job and behaves.
+
+### What it cost to check
+
+`shapes.js`, and ten break-builds. Every assertion in it was proved to fail against a map
+deliberately broken in the matching way: every figure back to three nodes, every cluster a
+ring, the blot back to a fixed circle, the name placed blind, the edge-clearance force
+removed, nothing drawn on a node at all, every plus the same colour, a stat with no icon, a
+star with nothing in its middle, and the layout pass back to every node against every other.
+
+That last one is a performance break, and it is in there because this pass caused it: 1187
+nodes against each other, forty passes deep, is 56 million sums between opening the game and
+seeing the title. It cost **3.7 seconds**. The neighbours worth shoving against are gathered
+once off a 300px grid instead — nothing can reach further than the two movement caps plus the
+widest pair of circles, which is well inside the window — and the map that comes out is
+identical, node for node, at **0.67 seconds**.
+
+| | ninth pass | tenth pass |
+|---|--:|--:|
+| nodes | 990 | **1187** |
+| of which highway | 677 | 677 |
+| clusters | 98 | 98 |
+| distinct figures | 5 | **10** |
+| literal triangles | 37 | **0** |
+| edges through a node | 23 | **0** |
+| names over a node | 15 | **0** |
+| tree cost | 1072 | **1269** |
+| layout time | 3700ms | **670ms** |
+
+### One thing that was not asked for
+
+`roads.js` had an assertion that a weapon's own country is at least 15% cheaper to its prizes
+than anybody else's, and the axe came out at 14% — a real regression, or so it looked. It was
+not. Averaging every prize in your own country against every prize abroad measures *how deep
+your country's prizes sit* as much as it measures distance, and green held two of the four
+keystones pinned to the outermost ring while red and blue held one each.
+
+Measured the way the design actually means it — **one prize at a time**, whoever lives in its
+country against whoever does not — every single prize on the map is nearer to its own, by
+22.0 points against 26.9. The assertion was rewritten to say that instead, and proved to fail
+against a build where all four doors open in the same place. The keystone distribution was
+evened up anyway, because two of four in one country is still lopsided.

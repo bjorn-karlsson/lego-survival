@@ -1306,10 +1306,31 @@ three fire nodes turn up in three places around the blue country, the way the sa
 turns up all over the tree this is borrowed from, so the library stays short and the map stays
 big. Two copies never stand within 1200px of each other.
 
-Five shapes, and the shape changes what buying in costs you: a **ring** (the prize touches
-every other node), a **wheel** (it touches all of them), a **fan** (no ring; every leaf hangs
-off the hub alone), an **arc** (open, so there is a long way round and a short way), and a
-**chain** (a tendril with the prize at the far end).
+**Ten shapes**, and the shape changes what buying in costs you:
+
+| | |
+|---|---|
+| **ring** | a closed loop of five or six; the prize touches every other one |
+| **wheel** | the same loop, but the prize touches all of them |
+| **arc** | an open bow of four to six, bulging outward, prize inside it — a long way round and a short way |
+| **crescent** | a deeper bow with both ends curled in |
+| **diamond** | four corners round the prize |
+| **line** | a straight run of three or four with the prize past the end |
+| **chain** | the same run, zig-zagged |
+| **hook** | an L: out, then a turn along the ring |
+| **star** | no loop at all; every leaf hangs off the prize alone |
+| **pair** | two nodes and the prize, and that is the whole group |
+
+**The figure decides how many nodes there are**, not the list of stats — the stats are dealt
+round it and repeat if the figure is the longer of the two, which is what a six-node arc of
+*Smoulder, Rimebite, Arcing, Smoulder, Rimebite, Arcing* is for. Before that every template
+held three minors and three points on a circle is a triangle, so the whole map was triangles.
+Sizes now run from two nodes to seven.
+
+**And no cluster wears the same figure as one within reach of it.** A repeated group whose
+neighbour already has its shape takes the next one along, so THE MACE'S OATH reads differently
+in each of the three places it lands. A cluster is also never drawn wider than the gap to the
+site beside it.
 
 ### What is on it
 
@@ -1454,6 +1475,46 @@ downside**:
 
 A tree of pure upgrades is a ratchet; a tree of trade-offs is a set of builds. That is why
 people still open Path of Exile's tree after ten years.
+
+### What a node looks like
+
+**Every node wears a picture**, and the picture is read off the stat rather than typed in
+beside it, so a stat written tomorrow arrives with an icon already on it. They are the same
+drawings the bricks and the upgrade cards use: a flame in the tree and a flame on the card
+that gave it to you are the same flame. Fire is a flame, cold is a snowflake, lightning a
+bolt, chaos a vortex, poison and bleed a bane, spells a rune, crit a target, armour a shield,
+health a heart, speed a boot. A conversion wears the type it *arrives* as, because that is
+the half of it you will spend the rest of the tree scaling.
+
+**The road wears a plus in the colour of the country it runs through** — red, green or blue —
+and nothing else, because that is the whole of what a travel node does. From across the map
+the three countries read as three countries and the highways read as highways.
+
+Rank is the frame: a **notable** is a bigger disc, a **keystone** wears a broken ring round
+it, a **legendary** a whole second one.
+
+### And nothing sits on anything
+
+Four things a player can see, all measured rather than eyeballed, all of them at zero:
+
+- **No two node circles overlap.** The closest pair on the map is 17px clear.
+- **No edge is drawn through a node it does not belong to.** This is most of what *"the nodes
+  are overlapping"* turned out to be — the circles were clear of each other and a line ran
+  straight over them. Twenty-three did. The layout pass shoves a node off any edge it is
+  standing on, and a slip road off the highway picks the node it can reach without crossing
+  another one of that cluster's.
+- **A cluster's blot holds its own nodes and nothing else.** It used to be a fixed circle
+  drawn round where the cluster was *asked* to go; after the layout pass settled it was in
+  the wrong place and the wrong size, and it shaded whatever highway ran past — a stretch of
+  road inside a shop's shadow reads as part of the shop. It is now measured off where the
+  nodes ended up and pulled in clear of everything else, including every other blot.
+- **Every cluster name is readable.** Twenty-four directions are tried at two distances each,
+  and the first that lands on no node and no other name wins. All 98 find one.
+
+Laying all of that out is a node against every other node, forty passes deep. Done the obvious
+way that is 56 million sums between opening the game and seeing the title, and it cost three
+and a half seconds; the neighbours worth shoving against are gathered once off a grid instead,
+and it costs 0.7.
 
 **Hover anything to read it.** Every node lists exactly what it gives, good and bad, and a
 node whose stat does nothing for the weapon you are on says so rather than selling it to

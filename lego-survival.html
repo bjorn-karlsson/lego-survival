@@ -6414,6 +6414,56 @@ function metaModGood(m){
    THREE COUNTRIES still: red STRENGTH, green DEXTERITY, blue INTELLIGENCE. A
    lane pays the attribute of the ground it crosses, so it colours itself, and a
    template says which country it belongs to and how deep it may sit. */
+/* ---- WHAT A NODE LOOKS LIKE ----------------------------------------------
+   Every node on the map wears a picture, and the picture is read off the stat
+   the node gives rather than typed in beside it, so a stat written tomorrow
+   arrives with an icon already on it.  The drawings themselves are the ones the
+   bricks and the upgrade cards already use: fire is the same flame in the tree
+   as it is on the card that gave it to you.  The road is the exception — a
+   travel node wears a PLUS in the colour of the country it runs through, which
+   is the whole of what it does. */
+const META_ICON_EXACT = {
+  incMelee:'sword', flatPhys:'sword', incAll:'burst', moreAll:'burst',
+  incSpell:'arcane', incCast:'tempo', incAtk:'tempo', boltR:'range',
+  incCrit:'target', critMult:'target', reach:'range',
+  incDot:'bane', bleedChance:'bane', bleedShare:'bane', poisonDot:'bane',
+  incElem:'prism', flatElem:'prism', incFire:'flame', incFrost:'snow',
+  incShock:'bolt', incChaos:'vortex', shockChance:'zapper',
+  fireRes:'ward', frostRes:'ward', shockRes:'ward', chaosRes:'ward', allRes:'ward',
+  armour:'shield', incArmour:'shieldplus', suppress:'shield',
+  hearts:'heartplus', incHp:'heart', moreHp:'heart', regen:'regen', incRegen:'regen',
+  leech:'tide', leechRate:'tide', heartDrop:'gift', incCritMult:'target',
+  speed:'boot', roll:'roll', magnet:'magnet', studs:'coin', xp:'xp',
+  str:'fist', dex:'boot', int:'arcane', ember:'ember', spellCap:'prism',
+  orbitDmg:'orbit', orbitR:'orbit', orbitSpd:'orbit',
+  blastDmg:'blaster', blastPierce:'blaster', blastRate:'blaster',
+  chainDmg:'chain', chainFork:'fork', chainRate:'chain',
+  stormDmg:'boomerang', stormSize:'boomerang', stormRate:'boomerang',
+  vortexDmg:'vortex', vortexR:'vortex', vortexRate:'vortex',
+  freezeR:'freeze', freezeRate:'icecube',
+  bombDmg:'bomb', bombCluster:'bomblets', bombR:'bomb', bombRate:'bomb',
+  baneDmg:'bane', baneR:'bane', baneRate:'bane',
+  slamDmg:'fist', slamArc:'fist', slamRange:'fist',
+  tollDelay:'clock', reroll:'split', noReroll:'nofav', chestCards:'gift',
+  bankMul:'coin', noRegen:'nofav', noArmour:'nofav', lessSpell:'ward',
+  heartsPerInt:'heartplus', grant:'totem',
+};
+/* a conversion wears the type it ARRIVES as: that is the half of it you will
+   spend the rest of the tree scaling */
+const CONV_ICON = { phys:'sword', shock:'bolt', frost:'snow', fire:'flame', chaos:'vortex' };
+const WEAP_ICON = { sword:'sword', axe:'spin', mace:'fist', staff:'arcane' };
+function metaIconKey(n){
+  if(!n) return 'burst';
+  if(n.kind === 'start') return 'totem';
+  const k = (n.mods && n.mods.length) ? n.mods[0][0] : '';
+  if(!k) return 'burst';
+  if(META_ICON_EXACT[k]) return META_ICON_EXACT[k];
+  const cv = /^(?:cv|gn)_([a-z]+)_([a-z]+)$/.exec(k);
+  if(cv) return CONV_ICON[cv[2]] || 'prism';
+  const w = /^(?:dmg|inc)_(.+)$/.exec(k);
+  if(w) return WEAP_ICON[w[1]] || 'sword';
+  return 'burst';
+}
 const META_SPOKES = [
   { id:'war',   name:'WARFARE',   col:'#ff8a4a' },
   { id:'prec',  name:'PRECISION', col:'#ffd166' },
@@ -6706,7 +6756,9 @@ const META_KEYSTONES = [
     minors:[['Hawk-eyed','incCrit',0.08],['Merciless','critMult',0.18],['Clear Sight','allRes',0.04]],
     keystone:{ name:'Hoarder', note:'the run pays double into the tree, and hits softer',
                mods:[['bankMul',2],['incAll',-0.20]] } },
-  { id:'k_veng',  name:'THE ROT',      sp:'aff', home:'dex', d:[4,4], shape:'fan',
+  /* one keystone per country is pinned to the outermost ring and no more: green
+     held two of the four and read as the long country to build in */
+  { id:'k_veng',  name:'THE ROT',      sp:'aff', home:'dex', d:[3,4], shape:'fan',
     minors:[['Pestilent','incDot',0.08],['Corrosive','poisonDot',0.4],['Inured','chaosRes',0.06]],
     keystone:{ name:'Vengeance', note:'what you have already hurt hurts far more; nothing you meet fresh does',
                mods:[['incDot',0.50],['bleedShare',0.06],['incCrit',-0.60]] } },
@@ -6894,57 +6946,138 @@ const RING_AT = [0, 5, 12, 22, 34];
     s.site = fits[(hash(s.ring*911 + s.j*131 + (gi++)) % fits.length)];
   }
 
-  /* ---- 5. THE CLUSTERS THEMSELVES. Five shapes, and the shape decides what
-     buying into one costs you. */
-  const shapeChain = (ids, closed)=>{
-    for(let i=0;i<ids.length-1;i++) add(ids[i], ids[i+1]);
-    if(closed && ids.length > 2) add(ids[ids.length-1], ids[0]);
+  /* ---- 5. THE CLUSTERS THEMSELVES. TEN SHAPES, and the shape is a drawing
+     rather than a list: an arc of six bent around a notable, a straight run of
+     four, a diamond, a hook, a pair. Every one of them used to come out a
+     triangle because every template held three minors and three points on a
+     circle is a triangle — so the SHAPE decides how many nodes there are now,
+     and the template's stats are dealt round them.
+     And no cluster wears the same figure as one within reach of it: a repeated
+     group takes the next shape along instead, which is why THE MACE'S OATH
+     reads differently in each of the three places it lands. */
+  const SHAPE_N = { pair:[2,2], line:[3,4], chain:[3,5], hook:[4,5], arc:[4,6],
+                    cresc:[4,5], ring:[5,6], wheel:[4,6], diamond:[4,4], star:[5,6] };
+  const SHAPE_RING = ['ring','arc','wheel','line','diamond','cresc','chain','hook','star','pair'];
+  const SHAPE_ALIAS = { fan:'star' };
+  /* WHERE THE NODES OF A FIGURE GO, in cluster feet: u is straight out from the
+     middle of the map, v is along the ring. Written once, here, so a new shape
+     is an entry in this function and nothing anywhere else. `hub` is where the
+     prize sits and `toHub` is what touches it. */
+  const layout = (shape, n, r, seed)=>{
+    const P = [], L = [], toHub = [];
+    let hub = [0, 0];
+    const put = (u, v)=> P.push([u, v]);
+    const run = (closed)=>{ for(let i=0;i<n-1;i++) L.push([i, i+1]);
+                            if(closed && n > 2) L.push([n-1, 0]); };
+    const bow = (half, rad)=>{ for(let i=0;i<n;i++){
+      const a = -half + 2*half*(n === 1 ? 0.5 : i/(n-1));
+      put(Math.cos(a)*rad(i), Math.sin(a)*rad(i)); } };
+    if(shape === 'pair'){
+      put(0, -r*0.85); put(0, r*0.85); L.push([0,1]);
+      hub = [r*1.25, 0]; toHub.push(0, 1);
+    } else if(shape === 'line' || shape === 'chain'){
+      const radial = !!(seed & 1), amp = shape === 'chain' ? r*0.34 : 0;
+      for(let i=0;i<n;i++){
+        const t = (n === 1 ? 0 : (i/(n-1) - 0.5)*2) * r, w = (i % 2 ? amp : -amp);
+        if(radial) put(t, w); else put(w, t);
+      }
+      run(false);
+      hub = radial ? [r*1.62, 0] : [0, r*1.62];
+      toHub.push(n-1);
+    } else if(shape === 'hook'){
+      const k = Math.ceil(n/2);
+      for(let i=0;i<k;i++) put(-r*0.6, -r + r*(k < 2 ? 0 : i/(k-1)));
+      for(let i=k;i<n;i++) put(-r*0.6 + r*1.25*((i-k+1)/(n-k)), r*0.06);
+      run(false);
+      hub = [r*0.95, -r*0.95]; toHub.push(0, n-1);
+    } else if(shape === 'arc'){
+      bow(Math.PI*0.42, ()=>r); run(false);
+      hub = [-r*0.42, 0]; toHub.push(0, n-1);
+    } else if(shape === 'cresc'){
+      bow(Math.PI*0.64, i=>(i === 0 || i === n-1) ? r*0.72 : r); run(false);
+      hub = [-r*0.46, 0]; toHub.push(0, n >> 1, n-1);
+    } else if(shape === 'diamond'){
+      put(r, 0); put(0, r); put(-r, 0); put(0, -r); run(true);
+      toHub.push(0, 1, 2, 3);
+    } else if(shape === 'star'){
+      for(let i=0;i<n;i++){ const a = (i/n)*TAU + (seed % 7)/7;
+        const rr = r*(0.84 + 0.17*(i % 3)); put(Math.cos(a)*rr, Math.sin(a)*rr); }
+      for(let i=0;i<n;i++) toHub.push(i);
+    } else {                                        /* ring and wheel */
+      for(let i=0;i<n;i++){ const a = (i/n)*TAU + (seed % 9)/9;
+        put(Math.cos(a)*r, Math.sin(a)*r); }
+      run(true);
+      if(shape === 'wheel'){ for(let i=0;i<n;i++) toHub.push(i); }
+      else for(let i=0;i<n;i+=2) toHub.push(i);
+    }
+    return { P, L, hub, toHub };
   };
+  /* HOW MUCH ROOM EACH ONE HAS. A six-node figure with its prize hung off the
+     end reaches half again as far as the circle it was drawn on, and two of
+     them on neighbouring rim sites grew into each other: an edge of one ran
+     clean through a node of the other. So a cluster is never drawn wider than
+     the gap to the nearest occupied site beside it. */
+  const REACH = { line:1.7, chain:1.7, hook:1.45, pair:1.4, star:1.15 };
+  const taken = sites.filter(o=>o.site);
+  for(const s of taken){
+    let g = Infinity;
+    for(const o of taken) if(o !== s) g = Math.min(g, Math.hypot(o.x-s.x, o.y-s.y));
+    s.gap = isFinite(g) ? g : 900;
+  }
   let cn = 0;
+  const drawn = [];
   for(const s of sites){
     if(!s.site) continue;
     const t = s.site, uniq = !!(t.notable || t.keystone || t.legend);
+    const mid = t.legend || t.keystone || t.notable;
+    let shape = SHAPE_ALIAS[t.shape] || t.shape || 'ring';
+    if(!SHAPE_N[shape]) shape = 'ring';
+    const near = drawn.filter(o=>Math.hypot(o.x-s.x, o.y-s.y) < 1500);
+    const k0 = hash(s.ring*577 + s.j*8191 + t.id.length*13);
+    for(let k=0; k<SHAPE_RING.length; k++){
+      if(!near.some(o=>o.shape === shape)) break;
+      shape = SHAPE_RING[(k0 + k) % SHAPE_RING.length];
+    }
+    /* a star with nothing in the middle is eight nodes joined to nobody */
+    if(shape === 'star' && !mid) shape = 'ring';
+    const span = SHAPE_N[shape];
+    const n0 = span[0] + hash(s.ring*101 + s.j*97 + shape.length*31) % (span[1] - span[0] + 1);
+    const base = t.r || (s.ring <= 1 ? 84 : s.ring === 2 ? 94 : 106);
     const c = { id:t.id + (uniq ? '' : '@' + (cn++)), tpl:t.id, name:t.name, sp:t.sp,
-                x:s.x, y:s.y, deg:s.deg, ring:s.ring, rim:s.rim, shape:t.shape || 'ring',
-                r: t.r || (s.ring <= 1 ? 84 : s.ring === 2 ? 94 : 106),
+                x:s.x, y:s.y, deg:s.deg, ring:s.ring, rim:s.rim, shape:shape,
+                r: Math.round(Math.max(54, Math.min(152, base * (0.56 + 0.135*n0),
+                     (s.gap || 900) * 0.44 / (REACH[shape] || 1.2)))),
                 at: RING_AT[s.ring] || 0, nodes:[], centre:null };
     META_CLUSTERS.push(c); META_CLUSTER_BY_ID[c.id] = c;
     s.cluster = c;
-    const shape = (c.shape === 'fan' && !uniq) ? 'ring' : c.shape;
+    drawn.push({ x:s.x, y:s.y, shape:shape });
     const out = Math.atan2(c.y - CY, c.x - CX), tan = out + Math.PI/2;
-    const n0 = t.minors.length;
-    t.minors.forEach((row, i)=>{
-      let x, y;
-      if(shape === 'chain'){
-        const tt = -1 + (i / Math.max(1, n0)) * 1.7;
-        const w = ((i % 2) ? 0.26 : -0.26) * c.r;
-        x = c.x + Math.cos(tan)*c.r*tt + Math.cos(out)*w;
-        y = c.y + Math.sin(tan)*c.r*tt + Math.sin(out)*w;
-      } else {
-        const a = -Math.PI/2 + (i / n0) * TAU + (c.deg*Math.PI/180)*0.4;
-        x = c.x + Math.cos(a)*c.r; y = c.y + Math.sin(a)*c.r;
-      }
+    const G = layout(shape, n0, c.r, hash(s.ring*31 + s.j*7 + 11));
+    /* THE FIGURE DECIDES, not the number that asked for it. A diamond has four
+       corners and a pair has two however many were requested, and reading the
+       count back off the drawing is what stops a mismatched pair of numbers
+       reaching for a point that was never put down. */
+    const cnt = G.P.length;
+    const W = p=>[ Math.round(c.x + Math.cos(out)*p[0] + Math.cos(tan)*p[1]),
+                   Math.round(c.y + Math.sin(out)*p[0] + Math.sin(tan)*p[1]) ];
+    for(let i=0;i<cnt;i++){
+      /* the stats go round the figure, repeating if the figure is the longer of
+         the two — two of the same node in one group is what PoE does everywhere
+         and it is how a six-node arc is worth walking into */
+      const row = t.minors[i % t.minors.length], q = W(G.P[i]);
       c.nodes.push(push({ id:c.id+'_'+i, kind:'minor', spoke:c.sp, cl:c.id, name:row[0],
-        x:Math.round(x), y:Math.round(y), at:c.at, cost:1,
-        mods:[[row[1], row[2]]], req:[] }).id);
-    });
-    if(shape === 'fan'){ /* leaves touch the hub and nothing else */ }
-    else if(shape === 'chain') shapeChain(c.nodes, false);
-    else shapeChain(c.nodes, shape !== 'arc');
-    const mid = t.legend || t.keystone || t.notable;
+        x:q[0], y:q[1], at:c.at, cost:1, mods:[[row[1], row[2]]], req:[] }).id);
+    }
+    for(const e of G.L) if(c.nodes[e[0]] && c.nodes[e[1]]) add(c.nodes[e[0]], c.nodes[e[1]]);
     if(mid){
       const kind = t.legend ? 'legend' : t.keystone ? 'keystone' : 'notable';
-      const cx = shape === 'chain' ? Math.round(c.x + Math.cos(tan)*c.r*1.3) : c.x;
-      const cy = shape === 'chain' ? Math.round(c.y + Math.sin(tan)*c.r*1.3) : c.y;
+      const q = W(G.hub);
       const n = push({ id:c.id+'_C', kind, spoke:c.sp, cl:c.id, name:mid.name, note:mid.note,
-        x:cx, y:cy, at: Math.max(c.at, mid.at || 0),
+        x:q[0], y:q[1], at: Math.max(c.at, mid.at || 0),
         cost: mid.cost || (kind === 'legend' ? 5 : kind === 'keystone' ? 3 : 2),
         mods:mid.mods, req:[] });
       c.centre = n.id;
-      if(shape === 'chain') add(c.nodes[c.nodes.length-1], n.id);
-      else if(shape === 'wheel' || shape === 'fan') for(const id of c.nodes) add(id, n.id);
-      else if(shape === 'arc'){ add(c.nodes[0], n.id); add(c.nodes[c.nodes.length-1], n.id); }
-      else for(let i=0;i<c.nodes.length;i+=2) add(c.nodes[i], n.id);
+      for(const i of G.toHub) if(c.nodes[i]) add(c.nodes[i], n.id);
     }
   }
 
@@ -6971,12 +7104,27 @@ const RING_AT = [0, 5, 12, 22, 34];
     }
     c.ways = picked.length;
     for(const ln of picked){
-      let best = null, bd = Infinity;
+      /* the nearest node of the cluster, UNLESS the way in would be drawn
+         straight through another one of them. A slip road laid over the prize
+         in the middle reads as the prize being on the road. */
+      const own = c.nodes.concat(c.centre ? [c.centre] : []).map(id=>META_BY_ID[id]);
+      const clean = (n)=>{
+        const ex = n.x-ln.x, ey = n.y-ln.y, L2 = ex*ex + ey*ey;
+        if(L2 < 1) return true;
+        return !own.some(o=>{
+          if(o === n) return false;
+          const t = ((o.x-ln.x)*ex + (o.y-ln.y)*ey)/L2;
+          if(t <= 0.02 || t >= 0.98) return false;
+          return Math.hypot(o.x-(ln.x+ex*t), o.y-(ln.y+ey*t)) < (META_NODE_R[o.kind]||14) + 26;
+        });
+      };
+      let best = null, bd = Infinity, any = null, ad = Infinity;
       for(const id of c.nodes){
         const n = META_BY_ID[id], d = Math.hypot(n.x-ln.x, n.y-ln.y);
-        if(d < bd){ bd = d; best = n; }
+        if(d < ad){ ad = d; any = n; }
+        if(d < bd && clean(n)){ bd = d; best = n; }
       }
-      if(best) add(ln.id, best.id);
+      if(best || any) add(ln.id, (best || any).id);
     }
   }
   const byHome = {};
@@ -7028,22 +7176,77 @@ const RING_AT = [0, 5, 12, 22, 34];
        cluster could not move at all, so a lane node that landed on one had
        nowhere to go and the two stayed on top of each other. */
     for(const n of META_NODES) if(n.kind !== 'start') home[n.id] = [n.x, n.y];
-    for(let pass=0; pass<26; pass++) for(const n of META_NODES){
+    /* AND A LINE DRAWN THROUGH A NODE READS AS A NODE ON THAT LINE. Plain
+       node-against-node shoving never sees that one: the two ends of the edge
+       are far away and the node sitting on top of it is touching nothing at
+       all. Twenty-three edges ran clean through an unrelated node, which is
+       most of what "the nodes overlap" turned out to mean. The pairs worth
+       testing are worked out once, with room for everything to move, because
+       every edge against every node on every pass is a million sums a load. */
+    const seg = [];
+    for(const e of edges){
+      const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]];
+      if(A && B && A !== B) seg.push([A, B]);
+    }
+    /* AND ONLY WHAT IS NEAR. Every node against every other node, forty times
+       over, is fifty-six million sums between opening the game and seeing the
+       title — so the neighbours worth shoving against are gathered once off a
+       grid. Nothing can reach further than the two caps plus the widest pair of
+       circles, which is well inside the window. */
+    const CELL = 300, grid = {};
+    for(const n of META_NODES){
+      const k = ((n.x/CELL)|0)+','+((n.y/CELL)|0);
+      (grid[k] = grid[k] || []).push(n);
+    }
+    const near = {};
+    for(const n of META_NODES){
+      const gx = (n.x/CELL)|0, gy = (n.y/CELL)|0, list = [];
+      for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++){
+        const cell = grid[(gx+i)+','+(gy+j)];
+        if(!cell) continue;
+        for(const o of cell)
+          if(o !== n && Math.hypot(o.x-n.x, o.y-n.y) < 260) list.push(o);
+      }
+      near[n.id] = list;
+    }
+    const cand = {};
+    for(const n of META_NODES){
+      const list = [];
+      for(const sg of seg){
+        if(sg[0] === n || sg[1] === n) continue;
+        if(n.x < Math.min(sg[0].x, sg[1].x) - 170 || n.x > Math.max(sg[0].x, sg[1].x) + 170) continue;
+        if(n.y < Math.min(sg[0].y, sg[1].y) - 170 || n.y > Math.max(sg[0].y, sg[1].y) + 170) continue;
+        list.push(sg);
+      }
+      cand[n.id] = list;
+    }
+    for(let pass=0; pass<40; pass++) for(const n of META_NODES){
       if(!home[n.id]) continue;
       let mx = 0, my = 0;
-      for(const o of META_NODES){
-        if(o === n) continue;
+      for(const o of near[n.id]){
         const dx = n.x-o.x, dy = n.y-o.y, need = R(n)+R(o)+18, d = Math.hypot(dx, dy);
         if(d >= need) continue;
         const a = d < 0.01 ? ((n.x*7 + n.y*13) % 628)/100 : Math.atan2(dy, dx);
         mx += Math.cos(a)*(need-d)*0.5; my += Math.sin(a)*(need-d)*0.5;
+      }
+      for(const sg of cand[n.id]){
+        const a = sg[0], b = sg[1];
+        const ex = b.x-a.x, ey = b.y-a.y, L2 = ex*ex + ey*ey;
+        if(L2 < 1) continue;
+        const t = ((n.x-a.x)*ex + (n.y-a.y)*ey)/L2;
+        if(t <= 0.02 || t >= 0.98) continue;            /* past an end is not through it */
+        const dx = n.x - (a.x + ex*t), dy = n.y - (a.y + ey*t);
+        const d = Math.hypot(dx, dy), need = R(n) + 14;
+        if(d >= need) continue;
+        const ang = d < 0.01 ? Math.atan2(-ey, ex) : Math.atan2(dy, dx);
+        mx += Math.cos(ang)*(need-d)*0.7; my += Math.sin(ang)*(need-d)*0.7;
       }
       if(!mx && !my) continue;
       n.x = Math.round(n.x + mx); n.y = Math.round(n.y + my);
       /* a MINOR may give more ground than it used to: a door's branch tip and a
          cluster node landed on each other and sixteen pixels was not enough to
          part them */
-      const cap = n.kind === 'travel' ? 44 : n.kind === 'minor' ? 28 : 20;
+      const cap = n.kind === 'travel' ? 62 : n.kind === 'minor' ? 40 : 26;
       const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
       if(od > cap){ n.x = Math.round(h[0] + ox/od*cap); n.y = Math.round(h[1] + oy/od*cap); }
     }
@@ -7059,6 +7262,78 @@ const RING_AT = [0, 5, 12, 22, 34];
       n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]]];
     }
   })();
+
+  /* ---- 8b. THE BLOT AND THE NAME. The faint disc behind a cluster used to be
+     a fixed circle drawn round where the cluster was ASKED to go; after the
+     nudge it was in the wrong place and the wrong size, and it swallowed
+     whatever highway ran past — a stretch of road inside a shop's shadow reads
+     as part of the shop. So the blot is measured off where the nodes actually
+     ended up, and then pulled in until it holds nothing that is not its own and
+     touches no other blot.
+     The name goes wherever there is room. Twenty-four directions are tried, at
+     two distances each, and the first that lands on no node and no other name
+     wins; if there is nowhere at all it goes unwritten rather than on top of
+     something you are trying to read. */
+  {
+    const R = n=> META_NODE_R[n.kind] || 14;
+    for(const c of META_CLUSTERS){
+      const ns = c.nodes.concat(c.centre ? [c.centre] : [])
+                        .map(id=>META_BY_ID[id]).filter(Boolean);
+      if(!ns.length){ c.hr = 0; c.hx = c.x; c.hy = c.y; continue; }
+      let sx = 0, sy = 0;
+      for(const n of ns){ sx += n.x; sy += n.y; }
+      c.hx = Math.round(sx/ns.length); c.hy = Math.round(sy/ns.length);
+      let rr = 0;
+      for(const n of ns) rr = Math.max(rr, Math.hypot(n.x-c.hx, n.y-c.hy) + R(n));
+      rr += 24;
+      for(const n of META_NODES){
+        if(n.cl === c.id) continue;
+        rr = Math.min(rr, Math.hypot(n.x-c.hx, n.y-c.hy) - R(n) - 10);
+      }
+      c.hr = Math.round(rr);
+    }
+    /* shrinking only ever takes away, so one sweep settles it */
+    for(let i=0;i<META_CLUSTERS.length;i++) for(let j=i+1;j<META_CLUSTERS.length;j++){
+      const a = META_CLUSTERS[i], b = META_CLUSTERS[j];
+      if(a.hr <= 0 || b.hr <= 0) continue;
+      const d = Math.hypot(a.hx-b.hx, a.hy-b.hy) - 10;
+      if(a.hr + b.hr <= d) continue;
+      const k = Math.max(0, d) / (a.hr + b.hr);
+      a.hr = Math.floor(a.hr*k); b.hr = Math.floor(b.hr*k);
+    }
+    const CH = 17.5, boxes = [];
+    for(const c of META_CLUSTERS){
+      const w = Math.max(60, c.name.length*CH);
+      const base = Math.atan2(c.hy - CY, c.hx - CX);
+      const local = META_NODES.filter(n=>Math.hypot(n.x-c.hx, n.y-c.hy) < Math.max(c.hr, 60) + 520);
+      let best = null;
+      for(let k=0; k<24 && !best; k++){
+        const a = base + Math.ceil(k/2)*(k % 2 ? 1 : -1)*(Math.PI/12);
+        const u = Math.cos(a), v = Math.sin(a);
+        const anch = u > 0.3 ? 'start' : u < -0.3 ? 'end' : 'middle';
+        for(const off of [Math.max(c.hr, 40) + 48, Math.max(c.hr, 40) + 92]){
+          const lx = c.hx + u*off;
+          const ly = c.hy + v*off + (v > 0.3 ? 26 : v < -0.3 ? -6 : 10);
+          const x0 = anch === 'start' ? lx : anch === 'end' ? lx - w : lx - w/2;
+          const box = [x0 - 10, ly - 27, x0 + w + 10, ly + 9];
+          let bad = false;
+          for(const n of local){
+            const rr = R(n);
+            if(n.x + rr > box[0] && n.x - rr < box[2] &&
+               n.y + rr > box[1] && n.y - rr < box[3]){ bad = true; break; }
+          }
+          if(!bad) for(const o of boxes)
+            if(o[0] < box[2] && o[2] > box[0] && o[1] < box[3] && o[3] > box[1]){ bad = true; break; }
+          if(bad) continue;
+          best = { lx:Math.round(lx), ly:Math.round(ly), anch:anch, box:box };
+          break;
+        }
+      }
+      if(!best){ c.lx = null; continue; }
+      c.lx = best.lx; c.ly = best.ly; c.lanch = best.anch;
+      boxes.push(best.box);
+    }
+  }
 
   /* ---- 9. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
      can be walked from either end, and why there is more than one route
@@ -7581,10 +7856,14 @@ function renderTree(){
                  `stroke-dasharray="26 26" pointer-events="none"/>`);
     }
   }
-  /* a faint blot behind each cluster, so a GROUP of nodes reads as one thing */
-  for(const c of META_CLUSTERS)
-    parts.push(`<circle cx="${c.x}" cy="${c.y}" r="${(c.r||92)+42}" fill="${metaSpokeCol(c.sp)}" `+
-               `opacity="0.055" pointer-events="none"/>`);
+  /* a faint blot behind each cluster, so a GROUP of nodes reads as one thing.
+     Its middle and its size are measured off where the nodes ended up and
+     pulled in clear of everything else, so it never shades a stretch of road. */
+  for(const c of META_CLUSTERS){
+    if(!(c.hr > 26)) continue;
+    parts.push(`<circle cx="${c.hx}" cy="${c.hy}" r="${c.hr}" fill="${metaSpokeCol(c.sp)}" `+
+               `opacity="0.06" pointer-events="none"/>`);
+  }
   /* EVERY EDGE IS DRAWN, so you can see the whole walk before you pay for it */
   for(const n of META_NODES){
     for(const rid of n.req){
@@ -7618,34 +7897,52 @@ function renderTree(){
        — that is how eight regions read as eight regions from across the map */
     const stroke = refundable ? '#ff8a6a' : has ? '#fff' : can ? col : col;
     const sop = has || can ? 1 : lock ? 0.3 : 0.45;
+    /* WHAT IS ON IT, drawn rather than described. The road wears a plus in the
+       colour of the country it runs through and nothing else — that is all a
+       travel node does. Everything else wears the picture of the thing it
+       gives, and it is the same drawing the brick or the card uses, so a
+       flame in the tree and a flame on a card are the same flame.
+       Rank is the frame: a keystone gets a broken ring round it, a legendary a
+       whole second one. */
+    const glyph = n.kind === 'travel'
+      ? `<path d="M${n.x-8} ${n.y} h16 M${n.x} ${n.y-8} v16" fill="none" `+
+        `stroke="${has?'#0d1218':col}" stroke-width="5" stroke-linecap="round" `+
+        `opacity="${has?1:0.9}" pointer-events="none"/>`
+      : isStart
+        ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+
+          `fill="#20160a" font-family="Titan One" pointer-events="none">✦</text>`
+        : (()=>{ const z = n.kind === 'legend' ? 40 : n.kind === 'keystone' ? 36
+                        : n.kind === 'notable' ? 32 : 26, k = z/24;
+            /* a GROUP with a transform and not a nested <svg>: the icons are
+               drawn on a 24-square like every other icon in the game, and a
+               nested viewport inside the one the tree is already scaling comes
+               out of Chrome the size of a county */
+            return `<g transform="translate(${(n.x-z/2).toFixed(1)},${(n.y-z/2).toFixed(1)}) `+
+              `scale(${k.toFixed(4)})" fill="none" stroke="${has?'#0d1218':col}" `+
+              `stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" `+
+              `opacity="${lock?0.7:1}" pointer-events="none">`+
+              `${ICONS[metaIconKey(n)]||''}</g>`; })();
+    const frame = n.kind === 'legend'
+      ? `<circle cx="${n.x}" cy="${n.y}" r="${rr+10}" fill="none" stroke="${stroke}" `+
+        `stroke-width="3" stroke-opacity="${sop*0.75}" pointer-events="none"/>`
+      : n.kind === 'keystone'
+        ? `<circle cx="${n.x}" cy="${n.y}" r="${rr+8}" fill="none" stroke="${stroke}" `+
+          `stroke-width="3" stroke-dasharray="7 9" stroke-opacity="${sop*0.75}" `+
+          `pointer-events="none"/>` : '';
     parts.push(`<g class="tnode${lock?' locked':''}" data-node="${n.id}">`+
       `<circle cx="${n.x}" cy="${n.y}" r="${rr+22}" fill="transparent"/>`+
       `<circle cx="${n.x}" cy="${n.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
       `stroke-width="${refundable?9:has?7:4}" stroke-opacity="${sop}" `+
-      `opacity="${lock?0.55:1}"/>`+
-      (isStart ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+
-                 `fill="#20160a" font-family="Titan One">✦</text>`
-       : n.kind === 'legend' || n.kind === 'keystone' || n.kind === 'notable'
-         ? `<text x="${n.x}" y="${n.y+9}" text-anchor="middle" font-size="26" `+
-           `fill="${has?'#12181d':col}" font-family="Titan One">`+
-           `${n.kind==='legend'?'❖':n.kind==='keystone'?'★':'◆'}</text>` : '')+
+      `opacity="${lock?0.55:1}"/>`+ frame + glyph +
       `</g>`);
   }
-  /* cluster names, pushed outward from the middle of the map */
+  /* cluster names, in whatever clear spot the build found for them */
   for(const c of META_CLUSTERS){
-    /* pushed away from the middle of the map, unless the cluster asks for a
-       direction of its own — the inner ones would otherwise sit on the corridor
-       you came in along, which is the one thing on screen you are looking at */
-    const dx = c.x - TREE_VIEW.cx, dy = c.y - TREE_VIEW.cy, d = Math.hypot(dx, dy);
-    const off = (c.r||92) + 62;
-    const a = c.lab !== undefined ? c.lab*Math.PI/180 : d < 1 ? -Math.PI/2 : Math.atan2(dy, dx);
-    const u = Math.cos(a), v = Math.sin(a);
-    const lx = c.x + u*off, ly = c.y + v*off;
-    parts.push(`<text x="${Math.round(lx)}" y="${Math.round(ly)}" fill="${metaSpokeCol(c.sp)}" `+
+    if(c.lx === null || c.lx === undefined) continue;
+    parts.push(`<text x="${c.lx}" y="${c.ly}" fill="${metaSpokeCol(c.sp)}" `+
       `font-size="30" font-family="Titan One" opacity="0.92" pointer-events="none"`+
       ` stroke="rgba(4,7,10,.92)" stroke-width="7" paint-order="stroke"`+
-      ` text-anchor="${u > 0.3 ? 'start' : u < -0.3 ? 'end' : 'middle'}"`+
-      ` dy="${v > 0.3 ? 28 : v < -0.3 ? -8 : 10}">${esc(c.name)}</text>`);
+      ` text-anchor="${c.lanch}">${esc(c.name)}</text>`);
   }
   parts.push('</svg>');
 
