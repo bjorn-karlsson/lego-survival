@@ -1208,3 +1208,99 @@ country against whoever does not — every single prize on the map is nearer to 
 22.0 points against 26.9. The assertion was rewritten to say that instead, and proved to fail
 against a build where all four doors open in the same place. The keystone distribution was
 evened up anyway, because two of four in one country is still lopsided.
+
+---
+
+## Eleventh pass — plain
+
+> *"There are still some attribute nodes that go 'over' other nodes, or some of the lines do at
+> least, i dont like that, keep everything plain... there are really too many attribute nodes in
+> a row sometimes, please remove a few, do longer lines... some nodes only got like 2 upgrades,
+> like FULMINATE, it doesnt make sense."*
+
+Three complaints again, and this time all three were exactly what they looked like.
+
+### The lines
+
+The tenth pass asserted that no edge runs *through* a node, and that was true. It was also the
+wrong bar. Measured against what a player sees:
+
+| | tenth pass |
+|---|--:|
+| edges through the middle of a node | 0 |
+| **edges passing within 12px of one** | **4** (one of them 1px) |
+| **edges within 20px** | **~15** |
+| **pairs of lines crossing each other** | **45** |
+
+A line shaving the edge of a circle reads as touching it, and a line crossing another line is
+the thing "keep everything plain" is asking about. Both are now zero, and there are tests for
+both. Four things got them there:
+
+- **The clearance went from `R+14` to `R+26`**, and the line gives way too: shoving only the
+  node that is standing on an edge asks one end of the problem to solve all of it, and a
+  cluster's prize can barely move. Letting the two ends of the lane bow away halves what the
+  node has to find.
+- **Slip roads are picked after the layout pass, not before.** Chosen before it, every one of
+  them was aimed at where its two ends were about to stop being, and a dozen ended up laid
+  across a lane. Chosen last, against final positions, a way in can be *refused* — three
+  sweeps, each worse than the last: no crossing and no grazing, then crossing allowed, then
+  anything, and an untidy way in is only ever taken to get a cluster to two ways in at all.
+- **A cluster is never grown wide enough to touch the road.** How far a figure reaches per unit
+  of radius is asked of the figure — laid out once at a notional hundred and measured — rather
+  than read off a table of guesses, because while it was a table fourteen lanes still ran across
+  a cluster's own lines.
+- **And if the middle of the quad is not the roomiest part of it, the site moves.** The quads
+  are not squares: a hub wanders off its ring and the lane between two of them bows, so the
+  point half way between four corners can sit far closer to one wall than another. A cluster
+  that would not fit there had nowhere to go but over the road. It walks away from the nearest
+  lane until there is room. That one change took the crossings from 15 to 4.
+
+The last one was two door branches drawn over each other in the middle of the map — the one
+place everybody looks. Two doors in the red country both reached for the same pair of inner
+hubs; they take the next hub along now.
+
+### The queues
+
+LANE_STEP went from 215 to 392, and a lane is capped at **four** attribute nodes between two
+junctions. A lane that would need a fifth does not get one, it gets longer jumps — which is the
+same note from two passes ago, *"it's okay to jump long distances sometimes"*, finally applied
+to the spacing rather than to the connections.
+
+That had a consequence worth writing down, because it is the kind that only a test finds. A
+longer jump is also *fewer* nodes, and the highway's length in points is the only thing keeping
+the outer keystones apart. With the map at its old size, one walk round the rim collected
+**every keystone on it** for 55 points against a ceiling of 60. So the rings grew by half —
+1180, 2230, 3380, 4590, 5830 — and the node count came back while the jumps stayed long. The
+map is bigger and reads emptier, which is what was asked for; it is not cheaper.
+
+### FULMINATE
+
+Nothing holds fewer than four nodes now. Two stats with a name over them is not a group worth
+leaving the road for, and fourteen clusters were that small. The stats repeat round the figure
+to fill it.
+
+| | tenth pass | eleventh pass |
+|---|--:|--:|
+| nodes | 1187 | **1126** |
+| of which highway | 677 | 592 |
+| median jump along a lane | 215px | **336px** |
+| longest run with no junction | 6 | **4** |
+| clusters under four nodes | 14 | **0** |
+| edges within 20px of a node | ~15 | **0** |
+| crossed lines | 45 | **0** |
+| neighbouring clusters sharing a figure | 9 | **0** |
+| worst highway detour | 3 points | **0** |
+| tree cost | 1269 | **1208** |
+
+### What it cost to check
+
+Seventeen break-builds, five of them new: the lane cap removed, the slip roads picked before
+the layout pass again, the cluster pinned to the dead centre of its quad at whatever size its
+figure wants, the doors taking the nearest hubs whatever they cross, and the minimum group size
+back down to two. Each one trips the assertion it is aimed at and nothing else fires spuriously.
+
+One old assertion was loosened and should be recorded as such: the clearance test used to ask
+whether an edge passed through a node's *centre* circle. It now asks for 20px of daylight. That
+is a tightening of the bar, not a loosening — but the number 20 is a judgement, and the honest
+version of it is: the worst edge on the map clears by 24px, and the test exists to catch a
+return to 1px rather than to police the difference between 20 and 24.

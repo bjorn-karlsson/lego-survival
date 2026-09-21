@@ -1250,9 +1250,19 @@ hubs on the rings either side of it. **Every hub is a travel node and so is ever
 between them** — the whole of it is one connected piece that pays nothing but attributes. You
 can cross the map in any direction without buying a single point of somebody else's build.
 
-That is the rule everything else hangs off, and it is measured: the 677 lane nodes are **one**
+That is the rule everything else hangs off, and it is measured: the 592 lane nodes are **one**
 connected component, and in each country almost every attribute node it owns is in a single
-walkable piece (269 of 270 in the red, 205 of 205 in the blue, 201 of 202 in the green).
+walkable piece (230 of 231 in the red, 164 of 165 in the blue, 194 of 196 in the green). Every
+one of the 180 door-to-prize pairs is reachable on the highway alone, and the worst of them
+costs **nothing** extra for staying on it.
+
+**The jumps are long.** A junction is a decision and the road between two of them should not
+be a queue: no more than **four** attribute nodes ever sit between one junction and the next,
+and the median jump is 336px. A lane that would need a fifth does not get one — it gets longer
+jumps, because jumping a long way sometimes is the point of a road. The map itself grew by half
+to pay for that: a longer jump is also *fewer* nodes, and the highway's length in points is the
+only thing keeping the outer keystones apart — shortened, one walk round the rim collected
+every keystone on it for 55 points against a ceiling of 60.
 
 **Clusters never sit on it.** They go in the empty middle of a quad — between two rings and
 two radial lanes — and join the road by two or three **connectors**, each from a different
@@ -1319,18 +1329,24 @@ big. Two copies never stand within 1200px of each other.
 | **chain** | the same run, zig-zagged |
 | **hook** | an L: out, then a turn along the ring |
 | **star** | no loop at all; every leaf hangs off the prize alone |
-| **pair** | two nodes and the prize, and that is the whole group |
+| **vee** | a bracket of four with the prize in the notch |
 
 **The figure decides how many nodes there are**, not the list of stats — the stats are dealt
 round it and repeat if the figure is the longer of the two, which is what a six-node arc of
 *Smoulder, Rimebite, Arcing, Smoulder, Rimebite, Arcing* is for. Before that every template
 held three minors and three points on a circle is a triangle, so the whole map was triangles.
-Sizes now run from two nodes to seven.
+**Nothing holds fewer than four**: two stats with a name over them is not a group worth leaving
+the road for. Sizes run four to seven.
 
-**And no cluster wears the same figure as one within reach of it.** A repeated group whose
-neighbour already has its shape takes the next one along, so THE MACE'S OATH reads differently
-in each of the three places it lands. A cluster is also never drawn wider than the gap to the
-site beside it.
+**And no cluster wears the same figure as one within reach of it** — not one pair on the whole
+map does. A group whose neighbour already has its shape takes the next one along, so THE MACE'S
+OATH reads differently in each of the three places it lands.
+
+**How wide a figure has to be, and how far it reaches, are asked of the figure** rather than of
+a table: it is laid out once at a notional hundred and measured, so six on a ring and six along
+a line get the radii they each need and a new shape brings its own answer. If the site cannot
+hold it, the cluster carries fewer nodes, or wears a different figure, or the site itself walks
+away from the nearest lane until there is room.
 
 ### What is on it
 
@@ -1508,6 +1524,13 @@ Four things a player can see, all measured rather than eyeballed, all of them at
   the wrong place and the wrong size, and it shaded whatever highway ran past — a stretch of
   road inside a shop's shadow reads as part of the shop. It is now measured off where the
   nodes ended up and pulled in clear of everything else, including every other blot.
+- **No edge passes within 20px of a node it does not touch either.** "Through the middle" is
+  the version a computer notices; what a player sees is a line shaving the edge of a circle.
+  The worst on the map clears by 24px.
+- **No two lines cross.** Forty-five pairs did. Most were a lane laid over a cluster that had
+  grown wide enough to reach it; the rest were slip roads chosen before the layout pass settled,
+  so they were aimed at where their two ends were about to stop being. Slip roads are picked
+  last now, against final positions, and a way in can be refused for crossing something.
 - **Every cluster name is readable.** Twenty-four directions are tried at two distances each,
   and the first that lands on no node and no other name wins. All 98 find one.
 
@@ -1515,6 +1538,11 @@ Laying all of that out is a node against every other node, forty passes deep. Do
 way that is 56 million sums between opening the game and seeing the title, and it cost three
 and a half seconds; the neighbours worth shoving against are gathered once off a grid instead,
 and it costs 0.7.
+
+Every one of those is a test, and every one of them was proved to fail against a map broken in
+the matching way — the figures forced back to three nodes, the blot back to a fixed circle, the
+name placed blind, the slip roads picked before the layout pass, the cluster pinned to the dead
+centre of its quad however close the road is.
 
 **Hover anything to read it.** Every node lists exactly what it gives, good and bad, and a
 node whose stat does nothing for the weapon you are on says so rather than selling it to

@@ -6499,17 +6499,27 @@ function metaSectorAt(x, y){
 const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int' };
 /* THE RINGS. Radius, how many hubs sit on it, and how far round it they are
    turned so no two rings line up. */
+/* THE RINGS, AND WHY THEY ARE THIS BIG. The map grew by half when the lanes
+   did. A longer jump between travel nodes is what a highway should look like,
+   but on a map of the old size it is also FEWER travel nodes, and the highway's
+   length in points is the only thing keeping the outer keystones apart: shorten
+   it and one walk round the rim collected every keystone on it for 55 points
+   against a ceiling of 60. So the distance went up and the count stayed put. */
 const META_RINGS = [
-  { r:760,  n:12, phase:0  },
-  { r:1440, n:18, phase:10 },
-  { r:2180, n:24, phase:5  },
-  { r:2960, n:30, phase:8  },
-  { r:3760, n:36, phase:3  },
+  { r:1180, n:12, phase:0  },
+  { r:2230, n:18, phase:10 },
+  { r:3380, n:24, phase:5  },
+  { r:4590, n:30, phase:8  },
+  { r:5830, n:36, phase:3  },
 ];
 const HUB_JIT   = 0.055;  /* how far a hub wanders off its ring */
 const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next */
-const LANE_STEP = 215;    /* how far apart travel nodes sit along a lane */
-const LANE_VARY = 0.34;   /* and how much that wanders, per lane */
+/* HOW FAR APART TRAVEL NODES SIT ALONG A LANE. Long, and it wanders a lot:
+   six of them shoulder to shoulder between two junctions reads as a queue
+   rather than a road, and the point of a highway is the LENGTH of the jump
+   between one decision and the next. */
+const LANE_STEP = 392;
+const LANE_VARY = 0.46;   /* and how much that wanders, per lane */
 /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
   str: ['Strength',     'str', 1],
@@ -6853,7 +6863,12 @@ const RING_AT = [0, 5, 12, 22, 34];
     laid[key] = 1;
     const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy);
     const vary = 1 + jit(an.x*7 + an.y*13 + bn.x*3, LANE_VARY);
-    const steps = Math.max(1, Math.round(len / (LANE_STEP*vary)));
+    /* FOUR BETWEEN TWO JUNCTIONS AND NO MORE. LANE_STEP decides how long a jump
+       usually is; this decides how many there can be in a row, which is the
+       thing you actually see. A long lane past the cap does not get a fifth
+       node, it gets longer jumps — and jumping a long way sometimes is the
+       point of a road. */
+    const steps = Math.min(5, Math.max(1, Math.round(len / (LANE_STEP*vary))));
     let prev = an;
     for(let i=1;i<steps;i++){
       const t = i/steps, ang = Math.atan2(dy, dx) + Math.PI/2;
@@ -6955,10 +6970,14 @@ const RING_AT = [0, 5, 12, 22, 34];
      And no cluster wears the same figure as one within reach of it: a repeated
      group takes the next shape along instead, which is why THE MACE'S OATH
      reads differently in each of the three places it lands. */
-  const SHAPE_N = { pair:[2,2], line:[3,4], chain:[3,5], hook:[4,5], arc:[4,6],
+  /* FOUR IS THE SMALLEST GROUP WORTH LEAVING THE ROAD FOR. A two-node cluster
+     is a pair of stats with a name over it, not a decision — FULMINATE offered
+     exactly two and read as an accident. Nothing has fewer than four now, and
+     the stats repeat round the figure to fill it. */
+  const SHAPE_N = { vee:[4,4], line:[4,5], chain:[4,5], hook:[4,5], arc:[4,6],
                     cresc:[4,5], ring:[5,6], wheel:[4,6], diamond:[4,4], star:[5,6] };
-  const SHAPE_RING = ['ring','arc','wheel','line','diamond','cresc','chain','hook','star','pair'];
-  const SHAPE_ALIAS = { fan:'star' };
+  const SHAPE_RING = ['ring','arc','wheel','line','diamond','cresc','chain','hook','star','vee'];
+  const SHAPE_ALIAS = { fan:'star', pair:'vee' };
   /* WHERE THE NODES OF A FIGURE GO, in cluster feet: u is straight out from the
      middle of the map, v is along the ring. Written once, here, so a new shape
      is an entry in this function and nothing anywhere else. `hub` is where the
@@ -6972,9 +6991,12 @@ const RING_AT = [0, 5, 12, 22, 34];
     const bow = (half, rad)=>{ for(let i=0;i<n;i++){
       const a = -half + 2*half*(n === 1 ? 0.5 : i/(n-1));
       put(Math.cos(a)*rad(i), Math.sin(a)*rad(i)); } };
-    if(shape === 'pair'){
-      put(0, -r*0.85); put(0, r*0.85); L.push([0,1]);
-      hub = [r*1.25, 0]; toHub.push(0, 1);
+    if(shape === 'vee'){
+      /* a chevron: two arms meeting at a point, the prize in the notch */
+      put(-r*0.55, -r*0.95); put(r*0.45, -r*0.45);
+      put(r*0.45,   r*0.45); put(-r*0.55,  r*0.95);
+      run(false);
+      hub = [-r*1.05, 0]; toHub.push(0, 3);
     } else if(shape === 'line' || shape === 'chain'){
       const radial = !!(seed & 1), amp = shape === 'chain' ? r*0.34 : 0;
       for(let i=0;i<n;i++){
@@ -7017,12 +7039,47 @@ const RING_AT = [0, 5, 12, 22, 34];
      them on neighbouring rim sites grew into each other: an edge of one ran
      clean through a node of the other. So a cluster is never drawn wider than
      the gap to the nearest occupied site beside it. */
-  const REACH = { line:1.7, chain:1.7, hook:1.45, pair:1.4, star:1.15 };
   const taken = sites.filter(o=>o.site);
+  /* HOW FAR THE ROAD IS. Every edge laid so far is lane, and a cluster grown
+     wide enough to touch one has its own lines crossing it — which is what
+     thirty-five crossed lines on the map turned out to be. The quad's middle is
+     the room it has; the lane around the quad is the wall. */
+  const wallAt = (x, y)=>{
+    let w = Infinity, wx = x, wy = y;
+    for(const e of edges){
+      const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]];
+      if(!A || !B) continue;
+      const ex = B.x-A.x, ey = B.y-A.y, L2 = ex*ex + ey*ey;
+      let t = L2 < 1 ? 0 : ((x-A.x)*ex + (y-A.y)*ey)/L2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = A.x + ex*t, py = A.y + ey*t, d = Math.hypot(x-px, y-py);
+      if(d < w){ w = d; wx = px; wy = py; }
+    }
+    return { d: isFinite(w) ? w : 900, x:wx, y:wy };
+  };
+  /* AND IF THE MIDDLE OF THE QUAD IS NOT THE ROOMIEST PART OF IT, MOVE. The
+     quads are not squares — a hub wanders off its ring and the lane between two
+     of them bows — so the point half way between four corners can sit far
+     closer to one wall than another, and a cluster that will not fit there had
+     nowhere to go but over the road. Walk away from the nearest lane until
+     there is room, and no further than a quarter of the gap to the next site. */
+  for(const s of taken){
+    const sx = s.x, sy = s.y;
+    for(let k=0;k<11;k++){
+      const w = wallAt(s.x, s.y);
+      if(w.d > 300) break;
+      const dx = s.x-w.x, dy = s.y-w.y, d = Math.hypot(dx, dy) || 1;
+      const nx = Math.round(s.x + dx/d*34), ny = Math.round(s.y + dy/d*34);
+      if(Math.hypot(nx-sx, ny-sy) > 270) break;
+      if(wallAt(nx, ny).d <= w.d) break;
+      s.x = nx; s.y = ny;
+    }
+  }
   for(const s of taken){
     let g = Infinity;
     for(const o of taken) if(o !== s) g = Math.min(g, Math.hypot(o.x-s.x, o.y-s.y));
     s.gap = isFinite(g) ? g : 900;
+    s.wall = wallAt(s.x, s.y).d;
   }
   let cn = 0;
   const drawn = [];
@@ -7030,29 +7087,87 @@ const RING_AT = [0, 5, 12, 22, 34];
     if(!s.site) continue;
     const t = s.site, uniq = !!(t.notable || t.keystone || t.legend);
     const mid = t.legend || t.keystone || t.notable;
-    let shape = SHAPE_ALIAS[t.shape] || t.shape || 'ring';
-    if(!SHAPE_N[shape]) shape = 'ring';
-    const near = drawn.filter(o=>Math.hypot(o.x-s.x, o.y-s.y) < 1500);
-    const k0 = hash(s.ring*577 + s.j*8191 + t.id.length*13);
-    for(let k=0; k<SHAPE_RING.length; k++){
-      if(!near.some(o=>o.shape === shape)) break;
-      shape = SHAPE_RING[(k0 + k) % SHAPE_RING.length];
-    }
-    /* a star with nothing in the middle is eight nodes joined to nobody */
-    if(shape === 'star' && !mid) shape = 'ring';
-    const span = SHAPE_N[shape];
-    const n0 = span[0] + hash(s.ring*101 + s.j*97 + shape.length*31) % (span[1] - span[0] + 1);
     const base = t.r || (s.ring <= 1 ? 84 : s.ring === 2 ? 94 : 106);
+    const seed = hash(s.ring*31 + s.j*7 + 11);
+    /* HOW WIDE A FIGURE HAS TO BE, and HOW FAR IT REACHES, both asked of the
+       figure itself rather than of a table. Six points on a ring and six along
+       a line want completely different radii for the same gap between nodes,
+       and a line hangs its prize half again past the circle it was drawn on
+       while a ring does not — so lay the thing out at a hundred and measure it.
+       A table of guesses per shape goes stale the day a shape is added, and
+       while it was a table, fourteen lanes still ran across a cluster's own
+       lines. */
+    const roomFor = (sh, k)=>{
+      const g = layout(sh, k, 100, seed), pts = g.P.slice();
+      if(mid) pts.push(g.hub);
+      let mn = Infinity;
+      for(let a=0;a<pts.length;a++) for(let b=a+1;b<pts.length;b++)
+        mn = Math.min(mn, Math.hypot(pts[a][0]-pts[b][0], pts[a][1]-pts[b][1]));
+      return isFinite(mn) && mn > 1 ? 100*82/mn : 60;
+    };
+    const roomAt = (sh, k)=>{
+      const g = layout(sh, k, 100, seed);
+      let f = 0;
+      for(const p of g.P) f = Math.max(f, Math.hypot(p[0], p[1]));
+      if(mid) f = Math.max(f, Math.hypot(g.hub[0], g.hub[1]));
+      f = Math.max(0.2, f/100);
+      return Math.min(152, (s.gap || 900) * 0.46 / f, ((s.wall || 900) - 62) / f);
+    };
+    /* WHICH FIGURE, AND HOW BIG. The template's own shape first; then the one
+       next door has it, or it will not fit where this cluster stands, and it
+       takes the next along. A shape that has to be squeezed until its own lines
+       run over the road is the wrong shape for that site — which is the last
+       handful of crossed lines on the map, all of them in the small quads near
+       the middle. */
+    const nearby = drawn.filter(o=>Math.hypot(o.x-s.x, o.y-s.y) < 1500);
+    const k0 = hash(s.ring*577 + s.j*8191 + t.id.length*13);
+    const first = SHAPE_N[SHAPE_ALIAS[t.shape] || t.shape] ? (SHAPE_ALIAS[t.shape] || t.shape) : 'ring';
+    const order = [first];
+    for(let k=0;k<SHAPE_RING.length;k++){
+      const sh = SHAPE_RING[(k0 + k) % SHAPE_RING.length];
+      if(order.indexOf(sh) < 0) order.push(sh);
+    }
+    const sizeOf = (sh)=>{
+      const sp = SHAPE_N[sh];
+      let k = sp[0] + hash(s.ring*101 + s.j*97 + sh.length*31) % (sp[1] - sp[0] + 1);
+      while(k > sp[0] && roomFor(sh, k) > roomAt(sh, k)) k--;
+      return k;
+    };
+    let shape = first, n0 = 0, taboo = true;
+    for(const relax of [0, 1]){       /* fussy sweep, then take what fits */
+      for(const sh of order){
+        /* a star with nothing in the middle is leaves joined to nobody */
+        if(sh === 'star' && !mid) continue;
+        if(!relax && nearby.some(o=>o.shape === sh)) continue;
+        const k = sizeOf(sh);
+        if(roomFor(sh, k) > roomAt(sh, k)) continue;
+        shape = sh; n0 = k; taboo = false; break;
+      }
+      if(!taboo) break;
+    }
+    if(taboo){
+      /* NOWHERE NEAR ENOUGH ROOM FOR ANYTHING — the small quads at the very
+         middle. Take whichever figure overflows its site by the least rather
+         than whichever the template happened to name. */
+      let bestOver = Infinity;
+      for(const sh of order){
+        if(sh === 'star' && !mid) continue;
+        const k = sizeOf(sh), over = roomFor(sh, k) / Math.max(1, roomAt(sh, k));
+        if(over < bestOver){ bestOver = over; shape = sh; n0 = k; }
+      }
+      if(!n0){ shape = (first === 'star' && !mid) ? 'ring' : first; n0 = SHAPE_N[shape][0]; }
+    }
+    let want = roomFor(shape, n0), roomHas = roomAt(shape, n0);
     const c = { id:t.id + (uniq ? '' : '@' + (cn++)), tpl:t.id, name:t.name, sp:t.sp,
                 x:s.x, y:s.y, deg:s.deg, ring:s.ring, rim:s.rim, shape:shape,
-                r: Math.round(Math.max(54, Math.min(152, base * (0.56 + 0.135*n0),
-                     (s.gap || 900) * 0.44 / (REACH[shape] || 1.2)))),
+                r: Math.round(Math.max(want,
+                     Math.min(152, base * (0.56 + 0.135*n0), roomHas))),
                 at: RING_AT[s.ring] || 0, nodes:[], centre:null };
     META_CLUSTERS.push(c); META_CLUSTER_BY_ID[c.id] = c;
     s.cluster = c;
     drawn.push({ x:s.x, y:s.y, shape:shape });
     const out = Math.atan2(c.y - CY, c.x - CX), tan = out + Math.PI/2;
-    const G = layout(shape, n0, c.r, hash(s.ring*31 + s.j*7 + 11));
+    const G = layout(shape, n0, c.r, seed);
     /* THE FIGURE DECIDES, not the number that asked for it. A diamond has four
        corners and a pair has two however many were requested, and reading the
        count back off the drawing is what stops a mismatched pair of numbers
@@ -7081,56 +7196,10 @@ const RING_AT = [0, 5, 12, 22, 34];
     }
   }
 
-  /* ---- 6. AND HOW YOU GET OFF THE HIGHWAY INTO ONE. Two or three CONNECTORS
-     per cluster, each from a different stretch of lane, each landing on the
-     cluster node nearest it. Two is the number that matters: one connector is a
-     pocket you must come back out of the way you went in, and the whole point
-     is that you leave the road, take what you came for and rejoin it further
-     on. A cluster on the rim gets one, because there is no further on. */
-  const travelNodes = ()=> META_NODES.filter(n=>n.kind === 'travel');
-  const lanePool = travelNodes();
-  for(const c of META_CLUSTERS){
-    const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
-    const near = lanePool
-      .map(n=>({ n, d:Math.hypot(n.x-c.x, n.y-c.y) }))
-      .filter(o=>o.d < 900)
-      .sort((a,b)=>a.d-b.d);
-    const picked = [];
-    for(const o of near){
-      if(picked.length >= want) break;
-      /* a second connector off the same few feet of road is not a second way in */
-      if(picked.some(p2=>Math.hypot(p2.x-o.n.x, p2.y-o.n.y) < 420)) continue;
-      picked.push(o.n);
-    }
-    c.ways = picked.length;
-    for(const ln of picked){
-      /* the nearest node of the cluster, UNLESS the way in would be drawn
-         straight through another one of them. A slip road laid over the prize
-         in the middle reads as the prize being on the road. */
-      const own = c.nodes.concat(c.centre ? [c.centre] : []).map(id=>META_BY_ID[id]);
-      const clean = (n)=>{
-        const ex = n.x-ln.x, ey = n.y-ln.y, L2 = ex*ex + ey*ey;
-        if(L2 < 1) return true;
-        return !own.some(o=>{
-          if(o === n) return false;
-          const t = ((o.x-ln.x)*ex + (o.y-ln.y)*ey)/L2;
-          if(t <= 0.02 || t >= 0.98) return false;
-          return Math.hypot(o.x-(ln.x+ex*t), o.y-(ln.y+ey*t)) < (META_NODE_R[o.kind]||14) + 26;
-        });
-      };
-      let best = null, bd = Infinity, any = null, ad = Infinity;
-      for(const id of c.nodes){
-        const n = META_BY_ID[id], d = Math.hypot(n.x-ln.x, n.y-ln.y);
-        if(d < ad){ ad = d; any = n; }
-        if(d < bd && clean(n)){ bd = d; best = n; }
-      }
-      if(best || any) add(ln.id, (best || any).id);
-    }
-  }
   const byHome = {};
   for(const wk of WEAPON_KEYS)
     (byHome[META_HOME[wk]||'str'] = byHome[META_HOME[wk]||'str'] || []).push(wk);
-  /* ---- 7. THE DOORS. One per weapon, in its own country, spread evenly across
+  /* ---- 6. THE DOORS. One per weapon, in its own country, spread evenly across
      it so two weapons sharing a country do not share a beginning. FOUR WAYS OUT
      AND NONE OF THEM STOPS: each is a lane to a different hub of the inner ring,
      and the first node of each carries the weapon's own flavour instead of a
@@ -7141,7 +7210,7 @@ const RING_AT = [0, 5, 12, 22, 34];
     const span = ((t - f) + 360) % 360;
     list.forEach((wk, i)=>{
       const deg = f + span * ((i + 1) / (list.length + 1));
-      const a = deg*Math.PI/180, R = 430;
+      const a = deg*Math.PI/180, R = 670;
       const W = WEAPONS[wk];
       const st = { id:'st_'+wk, weap:wk, name:'THE '+((W && W.name) || wk).toUpperCase(),
                    deg:((deg%360)+360)%360,
@@ -7151,8 +7220,31 @@ const RING_AT = [0, 5, 12, 22, 34];
         cl:null, x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
       /* the four nearest hubs of the inner ring, and a flavoured first step on
          each — four beginnings, four continuations */
-      const near = ringHubs(0).slice().sort((p,q)=>
+      const sorted = ringHubs(0).slice().sort((p,q)=>
         Math.abs(((p.deg-deg+540)%360)-180) - Math.abs(((q.deg-deg+540)%360)-180));
+      /* THE FOUR NEAREST THAT DO NOT CROSS. Two doors sit close enough together
+         in the red country that both reached for the same pair of inner hubs,
+         and their ways out were drawn over each other in the middle of the map
+         — the one place everybody looks. Take the next hub along instead. */
+      const crossesAny = (ax, ay, bx, by)=>{
+        for(const e of edges){
+          const P1 = META_BY_ID[e[0]], P2 = META_BY_ID[e[1]];
+          if(!P1 || !P2) continue;
+          const d = (P2.y-P1.y)*(bx-ax) - (P2.x-P1.x)*(by-ay);
+          if(Math.abs(d) < 1e-9) continue;
+          const ua = ((P2.x-P1.x)*(ay-P1.y) - (P2.y-P1.y)*(ax-P1.x))/d;
+          const ub = ((bx-ax)*(ay-P1.y) - (by-ay)*(ax-P1.x))/d;
+          if(ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) return true;
+        }
+        return false;
+      };
+      const near = [];
+      for(const pass of [0, 1]) for(const h of sorted){
+        if(near.length >= 4) break;
+        if(near.indexOf(h) >= 0) continue;
+        if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
+        near.push(h);
+      }
       const flavour = META_BRANCH[wk] || META_BRANCH._;
       near.slice(0, 4).forEach((h, k)=>{
         const row = flavour[k % flavour.length];
@@ -7166,7 +7258,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       });
     });
   }
-  /* ---- 8. THE NUDGE. A lane laid straight through a cluster node reads as a
+  /* ---- 7. THE NUDGE. A lane laid straight through a cluster node reads as a
      node belonging to it, and clicking for one and getting the other is the
      kind of bug nobody reports. Shove what can move, a little, and never far. */
   (function relax(){
@@ -7224,7 +7316,12 @@ const RING_AT = [0, 5, 12, 22, 34];
       if(!home[n.id]) continue;
       let mx = 0, my = 0;
       for(const o of near[n.id]){
-        const dx = n.x-o.x, dy = n.y-o.y, need = R(n)+R(o)+18, d = Math.hypot(dx, dy);
+        /* TWO NODES OF THE SAME GROUP WANT MORE AIR THAN TWO STRANGERS. The
+           figure is laid out with room in it, but a figure squeezed into a
+           narrow site and then shoved about arrives at the bare minimum and
+           reads as a huddle. Inside a cluster the minimum is wider. */
+        const dx = n.x-o.x, dy = n.y-o.y, d = Math.hypot(dx, dy),
+              need = R(n)+R(o)+18 + ((n.cl && n.cl === o.cl) ? 22 : 0);
         if(d >= need) continue;
         const a = d < 0.01 ? ((n.x*7 + n.y*13) % 628)/100 : Math.atan2(dy, dx);
         mx += Math.cos(a)*(need-d)*0.5; my += Math.sin(a)*(need-d)*0.5;
@@ -7236,17 +7333,29 @@ const RING_AT = [0, 5, 12, 22, 34];
         const t = ((n.x-a.x)*ex + (n.y-a.y)*ey)/L2;
         if(t <= 0.02 || t >= 0.98) continue;            /* past an end is not through it */
         const dx = n.x - (a.x + ex*t), dy = n.y - (a.y + ey*t);
-        const d = Math.hypot(dx, dy), need = R(n) + 14;
+        const d = Math.hypot(dx, dy), need = R(n) + 26;
         if(d >= need) continue;
         const ang = d < 0.01 ? Math.atan2(-ey, ex) : Math.atan2(dy, dx);
         mx += Math.cos(ang)*(need-d)*0.7; my += Math.sin(ang)*(need-d)*0.7;
+        /* AND THE LINE GIVES WAY TOO. Shoving only the node standing on the
+           edge asks one end of the problem to solve all of it, and a cluster's
+           prize can barely move; letting the two ends of the lane bow away
+           halves what the node has to find. */
+        for(const end of sg){
+          if(!home[end.id]) continue;
+          const bx = Math.cos(ang)*(need-d)*-0.22, by = Math.sin(ang)*(need-d)*-0.22;
+          end.x = Math.round(end.x + bx); end.y = Math.round(end.y + by);
+          const eh = home[end.id], ex2 = end.x-eh[0], ey2 = end.y-eh[1];
+          const ed = Math.hypot(ex2, ey2), ecap = end.kind === 'travel' ? 70 : end.kind === 'minor' ? 48 : 34;
+          if(ed > ecap){ end.x = Math.round(eh[0] + ex2/ed*ecap); end.y = Math.round(eh[1] + ey2/ed*ecap); }
+        }
       }
       if(!mx && !my) continue;
       n.x = Math.round(n.x + mx); n.y = Math.round(n.y + my);
       /* a MINOR may give more ground than it used to: a door's branch tip and a
          cluster node landed on each other and sixteen pixels was not enough to
          part them */
-      const cap = n.kind === 'travel' ? 62 : n.kind === 'minor' ? 40 : 26;
+      const cap = n.kind === 'travel' ? 70 : n.kind === 'minor' ? 48 : 34;
       const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
       if(od > cap){ n.x = Math.round(h[0] + ox/od*cap); n.y = Math.round(h[1] + oy/od*cap); }
     }
@@ -7263,7 +7372,94 @@ const RING_AT = [0, 5, 12, 22, 34];
     }
   })();
 
-  /* ---- 8b. THE BLOT AND THE NAME. The faint disc behind a cluster used to be
+  /* ---- 8. AND HOW YOU GET OFF THE HIGHWAY INTO ONE. Two or three CONNECTORS
+     per cluster, each from a different stretch of lane. Two is the number that
+     matters: one connector is a pocket you must come back out of the way you
+     went in, and the whole point is that you leave the road, take what you came
+     for and rejoin it further on. A cluster on the rim gets one, because there
+     is no further on.
+     THIS RUNS AFTER THE NUDGE, and that is the whole of why. Chosen before it,
+     every slip road was aimed at where its two ends were about to stop being,
+     and a dozen of them ended up laid across a lane. Chosen here, against final
+     positions, a way in can be REFUSED for crossing another line or for passing
+     too close to a node that is nothing to do with it. */
+  {
+    const lanePool = META_NODES.filter(n=>n.kind === 'travel');
+    const RAD = n=> META_NODE_R[n.kind] || 14;
+    /* everything already laid: every lane, every line inside a cluster, every
+       way out of a door */
+    const seg = [];
+    for(const e of edges){
+      const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]];
+      if(A && B) seg.push([A, B]);
+    }
+    const crosses = (a, b)=>{
+      for(const sg of seg){
+        const P1 = sg[0], P2 = sg[1];
+        if(P1 === a || P1 === b || P2 === a || P2 === b) continue;
+        if(Math.min(P1.x, P2.x) > Math.max(a.x, b.x) || Math.max(P1.x, P2.x) < Math.min(a.x, b.x)) continue;
+        if(Math.min(P1.y, P2.y) > Math.max(a.y, b.y) || Math.max(P1.y, P2.y) < Math.min(a.y, b.y)) continue;
+        const d = (P2.y-P1.y)*(b.x-a.x) - (P2.x-P1.x)*(b.y-a.y);
+        if(Math.abs(d) < 1e-9) continue;
+        const ua = ((P2.x-P1.x)*(a.y-P1.y) - (P2.y-P1.y)*(a.x-P1.x))/d;
+        const ub = ((b.x-a.x)*(a.y-P1.y) - (b.y-a.y)*(a.x-P1.x))/d;
+        if(ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) return true;
+      }
+      return false;
+    };
+    const grazes = (a, b)=>{
+      const ex = b.x-a.x, ey = b.y-a.y, L2 = ex*ex + ey*ey;
+      if(L2 < 1) return true;
+      for(const o of META_NODES){
+        if(o === a || o === b) continue;
+        const t = ((o.x-a.x)*ex + (o.y-a.y)*ey)/L2;
+        if(t <= 0.02 || t >= 0.98) continue;
+        if(Math.hypot(o.x-(a.x+ex*t), o.y-(a.y+ey*t)) < RAD(o) + 22) return true;
+      }
+      return false;
+    };
+    for(const c of META_CLUSTERS){
+      const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
+      const mine = c.nodes.map(id=>META_BY_ID[id]).filter(Boolean);
+      /* every lane node near enough, against every node of the cluster, cheapest
+         clean pair first — and a way in that crosses or grazes is not clean */
+      const pairs = [];
+      for(const ln of lanePool){
+        const dc = Math.hypot(ln.x-c.x, ln.y-c.y);
+        if(dc > 950) continue;
+        for(const n of mine) pairs.push({ ln:ln, n:n, d:Math.hypot(n.x-ln.x, n.y-ln.y) });
+      }
+      pairs.sort((a, b)=>a.d - b.d);
+      const picked = [];
+      /* THREE SWEEPS, EACH WORSE THAN THE LAST, and a cluster takes the best it
+         can get rather than being left with no way in. Crossing another line is
+         untidy; being drawn through a node that has nothing to do with either
+         end is the thing this whole pass exists to stop, so it is given up
+         last. */
+      for(const pass of [0, 1, 2]){
+        /* and an untidy way in is only ever worth it to get a cluster to TWO.
+           A third one that has to be drawn across a lane buys nothing: two is
+           already the difference between a pocket and somewhere you pass
+           through. */
+        const cap = pass ? Math.min(want, 2) : want;
+        for(const o of pairs){
+          if(picked.length >= cap) break;
+          /* a second connector off the same few feet of road is not a second way in */
+          if(picked.some(p2=>Math.hypot(p2.ln.x-o.ln.x, p2.ln.y-o.ln.y) < 420)) continue;
+          if(picked.some(p2=>p2.ln === o.ln)) continue;
+          if(pass < 2 && grazes(o.ln, o.n)) continue;
+          if(pass < 1 && crosses(o.ln, o.n)) continue;
+          picked.push(o);
+          seg.push([o.ln, o.n]);
+        }
+        if(picked.length >= cap) break;
+      }
+      c.ways = picked.length;
+      for(const o of picked) add(o.ln.id, o.n.id);
+    }
+  }
+
+  /* ---- 9. THE BLOT AND THE NAME. The faint disc behind a cluster used to be
      a fixed circle drawn round where the cluster was ASKED to go; after the
      nudge it was in the wrong place and the wrong size, and it swallowed
      whatever highway ran past — a stretch of road inside a shop's shadow reads
@@ -7335,7 +7531,7 @@ const RING_AT = [0, 5, 12, 22, 34];
     }
   }
 
-  /* ---- 9. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
+  /* ---- 10. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
      can be walked from either end, and why there is more than one route
      anywhere. The doors are the exception: nothing leads TO a door, you are
      already standing in one. */
