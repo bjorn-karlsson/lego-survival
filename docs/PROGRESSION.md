@@ -994,3 +994,80 @@ survives a rebalance — the exact thing it exists to allow.
 moves every time the library grows, and chasing it down each time is a ratchet rather than a
 test. It is a proportion now: a country's biggest walkable piece must be a real share of the
 lanes it has, and never under twenty nodes whatever else changes.
+
+---
+
+## Ninth pass — the highway rule
+
+The eighth pass put clusters ON the lattice: a lane ran hub to hub, and where a hub held a
+cluster the lane terminated on one of its nodes. It made clusters properly connected — three
+or four ways in — and it broke the thing that matters more. **To travel past a cluster you had
+to buy into it.** The road went through the shop.
+
+### One rule, and everything follows from it
+
+> **Every hub is a travel node, every lane node between them is a travel node, and the whole
+> of it is one connected piece.**
+
+Clusters go in the **empty middle of a quad** — between two rings and two radial lanes, where
+nothing else is — and join the road by **connectors**: two or three short edges, each from a
+different stretch of lane, each landing on the cluster node nearest it. One connector is a
+pocket you must leave the way you came. Two makes a cluster a **detour**: off the road, take
+what you came for, back on further along. A cluster on the outer rim gets one, because there
+is no further along.
+
+### The measurement that says it worked
+
+Not "the clusters look attached" — the property, on the real graph, for every door and every
+prize:
+
+| | |
+|---|--:|
+| lane nodes | 677 |
+| in the largest connected piece of them | **677** |
+| largest walkable single-attribute piece, per country | **269 / 205 / 201** of 270 / 205 / 202 |
+| prizes reachable on the highway alone | **180 of 180** |
+| worst extra cost of staying on it | **3 points** |
+| mean extra cost | **0.29** |
+| lane nodes with one way out | **0** |
+
+Cutting through a cluster is still sometimes the cheapest path by a point or two, and that is
+fine — PoE is the same. What is not fine is being *forced* to, and that is what the
+`blocked` count being zero means.
+
+### And the doors
+
+Four ways out of a door was right; two of them ending after two nodes was not. Each of the
+four is a lane to a different hub of the inner ring now, and the first node of each carries
+the weapon's own flavour instead of a plain attribute — so the beginnings are still different
+and none of them stops. The rule is: **a dead end is allowed on the rim and nowhere else.**
+
+### What it cost to check
+
+The break-build that matters here swaps either end of every lane for a nearby cluster node —
+which is exactly the eighth-pass map — and it trips four assertions at once: the highway
+splits into pieces, four prizes become unreachable without walking through somebody else's
+cluster, the detour cost doubles, and every door's ways out stop dead. Three more breaks cover
+the connectors and the doors on their own.
+
+| | eighth pass | ninth pass |
+|---|--:|--:|
+| nodes | 770 | **990** |
+| of which highway | 482 | **677** |
+| clusters | 74 | **98** |
+| tree cost | 859 | **1072** |
+| stay-at-home power | ×2.38 | **×2.27** |
+
+### Hidden is not owned
+
+A door's four first steps carry the weapon's own flavour and belong to it alone. The map has
+always drawn somebody else's nowhere — and that was the whole of the enforcement. The graph
+walked straight through them, so the axe could path round the inner ring and quietly buy the
+sword's Edge Work, invisibly, out of a node it could never see.
+
+`metaMine` is the rule now, and it is in both places that matter: `metaCanBuy` refuses one,
+and `metaConnected` will not path through one. Asked of the game's own surface — the axe
+holding every node it legally can — none of the sword's four is buyable or even connected.
+
+It surfaced because the ninth pass made those nodes part of a lane that continues, instead of
+the stub it used to be. The bug was older than the change that exposed it.

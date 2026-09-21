@@ -6467,21 +6467,21 @@ const META_TRAVEL = {
   int: ['Intelligence', 'int', 1],
   core:['Resolve',      'str', 2],
 };
-/* WHAT A DOOR FANS INTO. Two short chains per weapon, two nodes each, dead ends
-   — so the first decision of a run is which of them you can afford. Keyed by
-   weapon with a fallback, so a new weapon gets a beginning whether or not
-   anybody writes one for it. */
+/* WHAT A DOOR'S FOUR FIRST STEPS ARE. One per way out, and each one continues
+   into the lattice rather than stopping — a dead end anywhere but the rim is a
+   mistake. Keyed by weapon with a fallback, so a new weapon gets a beginning
+   whether or not anybody writes one for it. */
 const META_BRANCH = {
-  sword:[[['Edge Work','incMelee',0.03],['Footwork','incAtk',0.03]],
-         [['Sidestep','speed',0.03],['Parry','armour',3]]],
-  mace: [[['Heft','slamDmg',0.4],['Set Stance','armour',3]],
-         [['Thick Skin','incHp',0.03],['Follow Up','incMelee',0.03]]],
-  axe:  [[['Quick Hands','incAtk',0.04],['Openings','incCrit',0.04]],
-         [['Bloodletting','bleedChance',0.04],['Light Feet','speed',0.03]]],
-  staff:[[['First Words','incSpell',0.03],['Kindle','incElem',0.03]],
-         [['Clear Mind','incCast',0.04],['Wards','allRes',0.03]]],
-  _:    [[['First Steps','incAll',0.02],['Grip','incAtk',0.03]],
-         [['Footing','incHp',0.03],['Guard','armour',3]]],
+  sword:[['Edge Work','incMelee',0.03],['Footwork','incAtk',0.03],
+         ['Sidestep','speed',0.03],['Parry','armour',3]],
+  mace: [['Heft','slamDmg',0.4],['Set Stance','armour',3],
+         ['Thick Skin','incHp',0.03],['Follow Up','incMelee',0.03]],
+  axe:  [['Quick Hands','incAtk',0.04],['Openings','incCrit',0.04],
+         ['Bloodletting','bleedChance',0.04],['Light Feet','speed',0.03]],
+  staff:[['First Words','incSpell',0.03],['Kindle','incElem',0.03],
+         ['Clear Mind','incCast',0.04],['Wards','allRes',0.03]],
+  _:    [['First Steps','incAll',0.02],['Grip','incAtk',0.03],
+         ['Footing','incHp',0.03],['Guard','armour',3]],
 };
 const META_STARTS = [];
 let META_TREE_UNPLACED = [];
@@ -6769,7 +6769,11 @@ const RING_AT = [0, 5, 12, 22, 34];
                     h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ (h >>> 16)) >>> 0; };
   const jit = (n, amt)=> ((hash(n) % 2000)/1000 - 1) * amt;
 
-  /* ---- 1. THE HUBS. Every one of them is a place; what it HOLDS comes next. */
+  /* ---- 1. THE HUBS, AND THEY ARE ALL LANE. Every hub is a travel node and
+     nothing else. That is the rule the whole map now hangs off: the HIGHWAY is
+     every hub and every lane between them, it is one connected piece, and it
+     pays nothing but attributes. You can go anywhere on it without buying a
+     single point of somebody else's build. */
   const hubs = [];
   META_RINGS.forEach((R, ri)=>{
     for(let j=0;j<R.n;j++){
@@ -6777,26 +6781,92 @@ const RING_AT = [0, 5, 12, 22, 34];
       const deg = R.phase + j*step + jit(ri*997 + j*31 + 7, HUB_SWING*step);
       const rad = R.r * (1 + jit(ri*613 + j*57 + 3, HUB_JIT));
       const a = deg*Math.PI/180;
-      hubs.push({ ring:ri, j, deg:((deg%360)+360)%360, r:rad,
-                  x:Math.round(CX + Math.cos(a)*rad), y:Math.round(CY + Math.sin(a)*rad),
-                  sec:metaSectorOf(deg), site:null, node:null });
+      const x = Math.round(CX + Math.cos(a)*rad), y = Math.round(CY + Math.sin(a)*rad);
+      const sec = metaSectorOf(deg), use = META_TRAVEL[sec] || META_TRAVEL.core;
+      hubs.push({ ring:ri, j, deg:((deg%360)+360)%360, r:rad, x, y, sec,
+        node: push({ id:'h'+ri+'_'+j, kind:'travel', spoke:sec, cl:null, road:'hub',
+          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] }) });
     }
   });
   const ringHubs = ri=> hubs.filter(h=>h.ring === ri);
 
-  /* ---- 2. WHAT SITS ON THEM. The one-of-a-kind things claim their sites
-     first, deepest and dearest before the rest, and each takes the free hub in
-     its own country whose hash is lowest — deterministic, so the map is the
-     same every time, and self-arranging, so adding a template needs no
-     coordinate from anybody. */
+  /* ---- 2. THE LANES. Around each ring, and out to the rings either side. Both
+     ends are hubs, every node between them is a travel node, and no cluster is
+     ever ON one — which is what makes the highway something you can follow past
+     everything you do not want. */
+  const laneAt = [];
+  const laid = {};
+  const lane = (an, bn, key)=>{
+    if(!an || !bn || an === bn || laid[key]) return;
+    laid[key] = 1;
+    const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy);
+    const vary = 1 + jit(an.x*7 + an.y*13 + bn.x*3, LANE_VARY);
+    const steps = Math.max(1, Math.round(len / (LANE_STEP*vary)));
+    let prev = an;
+    for(let i=1;i<steps;i++){
+      const t = i/steps, ang = Math.atan2(dy, dx) + Math.PI/2;
+      const px = an.x + dx*t + Math.cos(ang)*jit(an.x + i*71, 26);
+      const py = an.y + dy*t + Math.sin(ang)*jit(an.y + i*97, 26);
+      const sec = metaSectorAt(px, py), use = META_TRAVEL[sec] || META_TRAVEL.core;
+      const n = push({ id:'ln'+laneAt.length, kind:'travel', spoke:sec, cl:null, road:key,
+        name:use[0], x:Math.round(px), y:Math.round(py), at:0, cost:1,
+        mods:[[use[1], use[2]]], req:[] });
+      laneAt.push(n);
+      add(prev.id, n.id); prev = n;
+    }
+    add(prev.id, bn.id);
+  };
+  META_RINGS.forEach((R, ri)=>{
+    const hs = ringHubs(ri);
+    for(let j=0;j<hs.length;j++) lane(hs[j].node, hs[(j+1)%hs.length].node, 'r'+ri+'_'+j);
+  });
+  const nearestOn = (ri, deg)=>{
+    let best = null, bd = Infinity;
+    for(const h of ringHubs(ri)){
+      const d = Math.abs(((h.deg - deg + 540) % 360) - 180);
+      if(d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  for(let ri=0; ri<META_RINGS.length-1; ri++){
+    for(const h of ringHubs(ri)){
+      const o = nearestOn(ri+1, h.deg);
+      if(o) lane(h.node, o.node, 'x'+ri+'_'+h.j+'_'+o.j);
+    }
+    for(const h of ringHubs(ri+1)){
+      const o = nearestOn(ri, h.deg);
+      if(o) lane(o.node, h.node, 'x'+ri+'_'+o.j+'_'+h.j);
+    }
+  }
+
+  /* ---- 3. THE SITES. A cluster goes in the EMPTY MIDDLE of a quad — between
+     two rings and two radial lanes — never on a lane itself, and the band beyond
+     the last ring holds the rim. That is what leaves the highway clear. */
+  const sites = [];
+  META_RINGS.forEach((R, ri)=>{
+    const hs = ringHubs(ri), out = META_RINGS[ri+1];
+    for(let j=0;j<hs.length;j++){
+      const a = hs[j].deg, b = hs[(j+1)%hs.length].deg;
+      const mid = a + (((b - a) + 360) % 360)/2;
+      const rad = (out ? (R.r + out.r)/2 : R.r + 470) * (1 + jit(ri*331 + j*47, 0.05));
+      const ang = (mid + jit(ri*77 + j*911, 4)) * Math.PI/180;
+      sites.push({ ring:ri, j, deg:((mid%360)+360)%360, rim:!out,
+        x:Math.round(CX + Math.cos(ang)*rad), y:Math.round(CY + Math.sin(ang)*rad),
+        sec:metaSectorOf(mid), site:null });
+    }
+  });
+
+  /* ---- 4. WHAT SITS ON THEM. One-of-a-kind first, deepest and dearest before
+     the rest, each taking the free site in its own country whose hash is lowest
+     — deterministic, so the map is the same every time, and self-arranging, so
+     adding a template needs no coordinate from anybody. */
   const claim = (tpl)=>{
     let best = null, bh = Infinity;
-    for(const h of hubs){
-      if(h.site) continue;
-      if(h.sec !== tpl.home) continue;
-      if(h.ring < tpl.d[0] || h.ring > tpl.d[1]) continue;
-      const k = hash(h.ring*7919 + h.j*104729 + tpl.id.length*31);
-      if(k < bh){ bh = k; best = h; }
+    for(const s of sites){
+      if(s.site || s.sec !== tpl.home) continue;
+      if(s.ring < tpl.d[0] || s.ring > tpl.d[1]) continue;
+      const k = hash(s.ring*7919 + s.j*104729 + tpl.id.length*31);
+      if(k < bh){ bh = k; best = s; }
     }
     if(best) best.site = tpl;
     return !!best;
@@ -6810,44 +6880,36 @@ const RING_AT = [0, 5, 12, 22, 34];
      map because of this line: left to the random fill, four of the ten pairs
      never landed anywhere at all. */
   for(const t of META_GROUPS) if(t.must && !claim(t)) unplaced.push(t.id);
-  /* ...then the repeatable groups take a share of what is left, and everything
-     still free stays a JUNCTION: one travel node, one attribute, and a long
-     empty lane either side of it. That is what you walk on. */
   let gi = 0;
-  for(const h of hubs){
-    if(h.site) continue;
-    /* MOST OF THE MAP IS LANE. Packing clusters onto every other hub leaves no
-       room to walk: the longest run of plain attribute nodes fell to twenty-four
-       and a country stopped being something you could cross without shopping. */
-    if(hash(h.ring*31 + h.j*17 + 5) % 100 >= 40) continue;      /* stays a junction */
-    let fits = META_GROUPS.filter(g=>g.home === h.sec && h.ring >= g.d[0] && h.ring <= g.d[1]);
+  for(const s of sites){
+    if(s.site) continue;
+    if(hash(s.ring*31 + s.j*17 + 5) % 100 >= 62) continue;   /* the quad stays empty */
+    let fits = META_GROUPS.filter(g=>g.home === s.sec && s.ring >= g.d[0] && s.ring <= g.d[1]);
     if(!fits.length) continue;
     /* NOT THE ONE NEXT DOOR. Picked purely by hash, the same three fire nodes
-       turned up four times in one corner of the map and the country read as a
-       copy-paste. A template already standing within sight is off the list. */
-    const near = fits.filter(g=>!hubs.some(o=>o.site && o.site.id === g.id
-      && Math.hypot(o.x-h.x, o.y-h.y) < 1500));
+       turned up four times in one corner and the country read as a copy-paste. */
+    const near = fits.filter(g=>!sites.some(o=>o.site && o.site.id === g.id
+      && Math.hypot(o.x-s.x, o.y-s.y) < 1500));
     if(near.length) fits = near;
-    h.site = fits[(hash(h.ring*911 + h.j*131 + (gi++)) % fits.length)];
+    s.site = fits[(hash(s.ring*911 + s.j*131 + (gi++)) % fits.length)];
   }
 
-  /* ---- 3. THE CLUSTERS. Five shapes, and the shape decides what buying into
-     one costs you. A lane arrives at whichever node is nearest it, so a cluster
-     with three lanes on it has three ways in and walking through is a choice. */
+  /* ---- 5. THE CLUSTERS THEMSELVES. Five shapes, and the shape decides what
+     buying into one costs you. */
   const shapeChain = (ids, closed)=>{
     for(let i=0;i<ids.length-1;i++) add(ids[i], ids[i+1]);
     if(closed && ids.length > 2) add(ids[ids.length-1], ids[0]);
   };
   let cn = 0;
-  for(const h of hubs){
-    if(!h.site) continue;
-    const t = h.site, uniq = !!(t.notable || t.keystone || t.legend);
+  for(const s of sites){
+    if(!s.site) continue;
+    const t = s.site, uniq = !!(t.notable || t.keystone || t.legend);
     const c = { id:t.id + (uniq ? '' : '@' + (cn++)), tpl:t.id, name:t.name, sp:t.sp,
-                x:h.x, y:h.y, deg:h.deg, ring:h.ring, shape:t.shape || 'ring',
-                r: t.r || (h.ring <= 1 ? 86 : h.ring === 2 ? 98 : 112),
-                at: RING_AT[h.ring] || 0, nodes:[], centre:null };
+                x:s.x, y:s.y, deg:s.deg, ring:s.ring, rim:s.rim, shape:t.shape || 'ring',
+                r: t.r || (s.ring <= 1 ? 84 : s.ring === 2 ? 94 : 106),
+                at: RING_AT[s.ring] || 0, nodes:[], centre:null };
     META_CLUSTERS.push(c); META_CLUSTER_BY_ID[c.id] = c;
-    h.cluster = c;
+    s.cluster = c;
     const shape = (c.shape === 'fan' && !uniq) ? 'ring' : c.shape;
     const out = Math.atan2(c.y - CY, c.x - CX), tan = out + Math.PI/2;
     const n0 = t.minors.length;
@@ -6885,135 +6947,87 @@ const RING_AT = [0, 5, 12, 22, 34];
       else for(let i=0;i<c.nodes.length;i+=2) add(c.nodes[i], n.id);
     }
   }
-  /* a hub with nothing on it is one travel node: the lane's own vertex */
-  for(const h of hubs){
-    if(h.cluster) continue;
-    const use = META_TRAVEL[h.sec] || META_TRAVEL.core;
-    h.node = push({ id:'j'+h.ring+'_'+h.j, kind:'travel', spoke:h.sec, cl:null, road:'hub',
-      name:use[0], x:h.x, y:h.y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
-  }
-  /* ---- 4. THE LANES. Around each ring, and out to the ring beyond it. A lane
-     starts and ends at whichever node of a hub is nearest the other end, so a
-     cluster is entered where you arrive at it rather than at one appointed
-     door. Nothing is cut at a border: the countries are far enough apart on a
-     map this size that the walk between them is a journey on its own, and a
-     wall you can see but not cross was the worst thing on the old map. */
-  const endOf = (h, tx, ty)=>{
-    if(!h.cluster) return h.node;
-    let best = null, bd = Infinity;
-    const ids = h.cluster.nodes.concat(h.cluster.centre ? [h.cluster.centre] : []);
-    for(const id of ids){
-      const n = META_BY_ID[id], d = (n.x-tx)*(n.x-tx) + (n.y-ty)*(n.y-ty);
-      if(d < bd){ bd = d; best = n; }
-    }
-    return best;
-  };
-  const laneAt = [];
-  const laid = {};
-  const lane = (A, B, key)=>{
-    if(laid[key]) return;
-    laid[key] = 1;
-    const an = endOf(A, B.x, B.y), bn = endOf(B, A.x, A.y);
-    if(!an || !bn || an === bn) return;
-    const dx = bn.x - an.x, dy = bn.y - an.y, len = Math.hypot(dx, dy);
-    /* this lane's own stride, so nothing on the map is evenly spaced */
-    const vary = 1 + jit(an.x*7 + an.y*13 + bn.x*3, LANE_VARY);
-    const steps = Math.max(1, Math.round(len / (LANE_STEP*vary)));
-    let prev = an;
-    for(let i=1;i<steps;i++){
-      const t = i/steps;
-      const px = an.x + dx*t + Math.cos(Math.atan2(dy,dx)+Math.PI/2)*jit(an.x+i*71, 26);
-      const py = an.y + dy*t + Math.sin(Math.atan2(dy,dx)+Math.PI/2)*jit(an.y+i*97, 26);
-      const sec = metaSectorAt(px, py), use = META_TRAVEL[sec] || META_TRAVEL.core;
-      const n = push({ id:'ln'+laneAt.length, kind:'travel', spoke:sec, cl:null, road:key,
-        name:use[0], x:Math.round(px), y:Math.round(py), at:0, cost:1,
-        mods:[[use[1], use[2]]], req:[] });
-      laneAt.push(n);
-      add(prev.id, n.id); prev = n;
-    }
-    add(prev.id, bn.id);
-  };
-  /* round every ring */
-  META_RINGS.forEach((R, ri)=>{
-    const hs = ringHubs(ri);
-    for(let j=0;j<hs.length;j++) lane(hs[j], hs[(j+1)%hs.length], 'r'+ri+'_'+j);
-  });
-  /* ...and outward. Every hub reaches the nearest hub on the ring beyond it AND
-     the nearest on the ring inside it, which is what leaves no hub with one way
-     out and makes the whole thing a web rather than a wheel with spokes. */
-  const nearestOn = (ri, deg)=>{
-    let best = null, bd = Infinity;
-    for(const h of ringHubs(ri)){
-      const d = Math.abs(((h.deg - deg + 540) % 360) - 180);
-      if(d < bd){ bd = d; best = h; }
-    }
-    return best;
-  };
-  for(let ri=0; ri<META_RINGS.length-1; ri++){
-    for(const h of ringHubs(ri)){
-      const o = nearestOn(ri+1, h.deg);
-      if(o) lane(h, o, 'x'+ri+'_'+h.j+'_'+o.j);
-    }
-    for(const h of ringHubs(ri+1)){
-      const o = nearestOn(ri, h.deg);
-      if(o) lane(o, h, 'x'+ri+'_'+o.j+'_'+h.j);
-    }
-  }
 
-  /* ---- 5. THE DOORS. One per weapon, in its own country, spread evenly across
-     it so two weapons sharing a country do not share a beginning. Each opens
-     four ways: two short branches of its own and the two nearest hubs of the
-     inner ring. */
+  /* ---- 6. AND HOW YOU GET OFF THE HIGHWAY INTO ONE. Two or three CONNECTORS
+     per cluster, each from a different stretch of lane, each landing on the
+     cluster node nearest it. Two is the number that matters: one connector is a
+     pocket you must come back out of the way you went in, and the whole point
+     is that you leave the road, take what you came for and rejoin it further
+     on. A cluster on the rim gets one, because there is no further on. */
+  const travelNodes = ()=> META_NODES.filter(n=>n.kind === 'travel');
+  const lanePool = travelNodes();
+  for(const c of META_CLUSTERS){
+    const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
+    const near = lanePool
+      .map(n=>({ n, d:Math.hypot(n.x-c.x, n.y-c.y) }))
+      .filter(o=>o.d < 900)
+      .sort((a,b)=>a.d-b.d);
+    const picked = [];
+    for(const o of near){
+      if(picked.length >= want) break;
+      /* a second connector off the same few feet of road is not a second way in */
+      if(picked.some(p2=>Math.hypot(p2.x-o.n.x, p2.y-o.n.y) < 420)) continue;
+      picked.push(o.n);
+    }
+    c.ways = picked.length;
+    for(const ln of picked){
+      let best = null, bd = Infinity;
+      for(const id of c.nodes){
+        const n = META_BY_ID[id], d = Math.hypot(n.x-ln.x, n.y-ln.y);
+        if(d < bd){ bd = d; best = n; }
+      }
+      if(best) add(ln.id, best.id);
+    }
+  }
   const byHome = {};
-  for(const wk of WEAPON_KEYS) (byHome[META_HOME[wk]||'str'] = byHome[META_HOME[wk]||'str'] || []).push(wk);
+  for(const wk of WEAPON_KEYS)
+    (byHome[META_HOME[wk]||'str'] = byHome[META_HOME[wk]||'str'] || []).push(wk);
+  /* ---- 7. THE DOORS. One per weapon, in its own country, spread evenly across
+     it so two weapons sharing a country do not share a beginning. FOUR WAYS OUT
+     AND NONE OF THEM STOPS: each is a lane to a different hub of the inner ring,
+     and the first node of each carries the weapon's own flavour instead of a
+     plain attribute. The branches that used to hang off a door were two nodes
+     long and then nothing, and a dead end anywhere but the rim is a mistake. */
   for(const sec of Object.keys(byHome)){
     const list = byHome[sec], f = META_MAP.sector[sec][0], t = META_MAP.sector[sec][1];
     const span = ((t - f) + 360) % 360;
     list.forEach((wk, i)=>{
       const deg = f + span * ((i + 1) / (list.length + 1));
-      /* OUT WHERE THE LATTICE BEGINS, not in the hole at the middle. Four
-         doors within two hundred pixels of the centre of a map four thousand
-         across are four doors on top of each other, and the middle of this map
-         is meant to be empty the way the middle of the one it is borrowed from
-         is empty. */
       const a = deg*Math.PI/180, R = 430;
       const W = WEAPONS[wk];
       const st = { id:'st_'+wk, weap:wk, name:'THE '+((W && W.name) || wk).toUpperCase(),
                    deg:((deg%360)+360)%360,
                    x:Math.round(CX + Math.cos(a)*R), y:Math.round(CY + Math.sin(a)*R) };
       META_STARTS.push(st);
-      push({ id:st.id, kind:'start', weap:wk, name:st.name, spoke:'core', cl:null,
-             x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
-      /* two branches of its own: two nodes out, dead ends, and you cannot have
-         both and the road as well on the points a first run hands you */
-      const br = META_BRANCH[wk] || META_BRANCH._;
-      br.forEach((chain, bi)=>{
-        const ba = (deg + (bi ? 38 : -38)) * Math.PI/180;
-        let prev = st.id;
-        chain.forEach((row, k)=>{
-          const rr = R + 120 + k*140;
-          const n = push({ id:st.id+'_b'+bi+'_'+k, kind:'minor',
-            spoke:metaSectorOf(deg + (bi ? 38 : -38)), cl:null, start:wk, name:row[0],
-            x:Math.round(CX + Math.cos(ba)*rr), y:Math.round(CY + Math.sin(ba)*rr),
-            at:0, cost:1, mods:[[row[1], row[2]]], req:[] });
-          add(prev, n.id); prev = n.id;
-        });
-      });
-      /* and out onto the lattice, at the two inner hubs nearest the door */
+      const door = push({ id:st.id, kind:'start', weap:wk, name:st.name, spoke:'core',
+        cl:null, x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
+      /* the four nearest hubs of the inner ring, and a flavoured first step on
+         each — four beginnings, four continuations */
       const near = ringHubs(0).slice().sort((p,q)=>
         Math.abs(((p.deg-deg+540)%360)-180) - Math.abs(((q.deg-deg+540)%360)-180));
-      for(const h of near.slice(0, 2)) lane({ x:st.x, y:st.y, node:META_BY_ID[st.id] }, h,
-                                            'door_'+wk+'_'+h.ring+'_'+h.j);
+      const flavour = META_BRANCH[wk] || META_BRANCH._;
+      near.slice(0, 4).forEach((h, k)=>{
+        const row = flavour[k % flavour.length];
+        const fa = Math.atan2(h.y - st.y, h.x - st.x);
+        const fx = Math.round(st.x + Math.cos(fa)*180), fy = Math.round(st.y + Math.sin(fa)*180);
+        const n = push({ id:st.id+'_s'+k, kind:'minor', spoke:metaSectorAt(fx, fy),
+          cl:null, start:wk, name:row[0], x:fx, y:fy, at:0, cost:1,
+          mods:[[row[1], row[2]]], req:[] });
+        add(door.id, n.id);
+        lane(n, h.node, 'door_'+wk+'_'+k);
+      });
     });
   }
-
-  /* ---- 6. THE NUDGE. A lane laid straight through a cluster node reads as a
+  /* ---- 8. THE NUDGE. A lane laid straight through a cluster node reads as a
      node belonging to it, and clicking for one and getting the other is the
      kind of bug nobody reports. Shove what can move, a little, and never far. */
   (function relax(){
     const R = n=> META_NODE_R[n.kind] || 14;
     const home = {};
-    for(const n of META_NODES) if(n.kind === 'travel' || n.kind === 'minor') home[n.id] = [n.x, n.y];
+    /* EVERYTHING BUT A DOOR MAY GIVE A LITTLE. A prize in the middle of a
+       cluster could not move at all, so a lane node that landed on one had
+       nowhere to go and the two stayed on top of each other. */
+    for(const n of META_NODES) if(n.kind !== 'start') home[n.id] = [n.x, n.y];
     for(let pass=0; pass<26; pass++) for(const n of META_NODES){
       if(!home[n.id]) continue;
       let mx = 0, my = 0;
@@ -7029,7 +7043,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       /* a MINOR may give more ground than it used to: a door's branch tip and a
          cluster node landed on each other and sixteen pixels was not enough to
          part them */
-      const cap = n.kind === 'minor' ? 28 : 40;
+      const cap = n.kind === 'travel' ? 44 : n.kind === 'minor' ? 28 : 20;
       const h = home[n.id], ox = n.x-h[0], oy = n.y-h[1], od = Math.hypot(ox, oy);
       if(od > cap){ n.x = Math.round(h[0] + ox/od*cap); n.y = Math.round(h[1] + oy/od*cap); }
     }
@@ -7046,7 +7060,7 @@ const RING_AT = [0, 5, 12, 22, 34];
     }
   })();
 
-  /* ---- 7. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
+  /* ---- 9. REQ IS THE ADJACENCY, BOTH WAYS. That is the whole reason a lane
      can be walked from either end, and why there is more than one route
      anywhere. The doors are the exception: nothing leads TO a door, you are
      already standing in one. */
@@ -7192,6 +7206,11 @@ function metaNextPoint(m){
 }
 function metaHas(id, m){ m = m || metaCur(); return m.nodes.indexOf(id) >= 0; }
 function metaLocked(n, m){ m = m || metaCur(); return (m.best.wave||0) < (n.at||0); }
+/* IS THIS NODE EVEN YOURS? A door's four first steps carry the weapon's own
+   flavour and belong to it alone. The map hides somebody else's — but hiding is
+   not owning: until this existed they were invisible and still buyable, because
+   the graph walked straight through them. */
+function metaMine(n, wk){ return !n || !n.start || n.start === (wk || metaWeapon()); }
 /* ---- THE GRAPH. You cannot drop points anywhere you like: a node has to touch
    something you already hold, and everything you hold has to trace back to the
    start. That is what makes a tree a tree rather than a shopping list. ---- */
@@ -7200,12 +7219,17 @@ function metaConnected(id, m, extra){
   const n = META_BY_ID[id];
   if(!n) return false;
   if(n.kind === 'start') return n.id === metaStartId();
-  for(const r of n.req) if(metaHas(r, m) || (extra && extra.indexOf(r) >= 0)) return true;
+  if(!metaMine(n)) return false;                 /* another door's first step */
+  for(const r of n.req){
+    if(!metaMine(META_BY_ID[r])) continue;       /* ...and you cannot path through one */
+    if(metaHas(r, m) || (extra && extra.indexOf(r) >= 0)) return true;
+  }
   return false;
 }
 function metaCanBuy(n, m){
   m = m || metaCur();
   if(!n || n.kind === 'start') return false;   /* you are standing in it already */
+  if(!metaMine(n)) return false;               /* somebody else's beginning */
   if(metaHas(n.id, m) || metaLocked(n, m)) return false;
   if(metaPointsLeft(m) < metaCost(n)) return false;
   return metaConnected(n.id, m, [metaStartId()]);

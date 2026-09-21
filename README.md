@@ -1243,27 +1243,44 @@ and costs everybody else **15 to 24**.
 
 ### A lattice, not a wheel
 
-Five rings of **hubs**, each joined to its neighbours around its own ring *and* to the nearest
-hubs on the rings either side of it — so every hub has three to five ways out and there is
-never a gap you can see but cannot cross. A hub is either a plain **junction** (one travel
-node, one attribute, nothing else) or a **cluster**. A **lane** between two hubs is a short
-chain of travel nodes, and it attaches to whichever node of a cluster is nearest the other
-end — so a cluster with four lanes meeting it has four ways in, and walking *through* one is a
-real option rather than an impossibility.
+### The highway
 
-**Seven hundred and seventy nodes**, and nothing in it is hand-placed. Hubs come off a ring
+Five rings of **hubs**, each joined to its neighbours around its own ring *and* to the nearest
+hubs on the rings either side of it. **Every hub is a travel node and so is every lane node
+between them** — the whole of it is one connected piece that pays nothing but attributes. You
+can cross the map in any direction without buying a single point of somebody else's build.
+
+That is the rule everything else hangs off, and it is measured: the 677 lane nodes are **one**
+connected component, and in each country almost every attribute node it owns is in a single
+walkable piece (269 of 270 in the red, 205 of 205 in the blue, 201 of 202 in the green).
+
+**Clusters never sit on it.** They go in the empty middle of a quad — between two rings and
+two radial lanes — and join the road by two or three **connectors**, each from a different
+stretch of it. Two is the number that matters: one connector is a pocket you must leave the
+way you came, and the point is to leave the road, take what you came for, and rejoin it
+further along. A cluster on the outer rim gets one, because there is no further along.
+
+**Every prize on the map can be reached using the highway and nothing but its own cluster**,
+and doing it that way costs at most **3** extra points against cutting through whatever
+happens to be in the way — mean 0.29. Nothing is ever standing in a doorway.
+
+**A door opens four ways and none of them stops.** Each is a lane to a different hub of the
+inner ring, and the first node of each carries the weapon's own flavour instead of a plain
+attribute.
+
+**Nine hundred and ninety nodes**, and nothing in it is hand-placed. Hubs come off a ring
 table, clusters come off a template library, and both are picked by a hash of where they are:
 the map is identical every time you open it, and adding a weapon, a spell or a damage type
 extends it without anybody moving a coordinate.
 
 | | |
 |---|--:|
-| nodes | **770** |
-| of which plain lane | **482** |
-| clusters | **74** |
+| nodes | **990** |
+| of which highway | **677** |
+| clusters | **98** |
 | notables / keystones / legendaries | **20 / 17 / 8** |
-| the whole tree, in points | **859** |
-| what the ceiling buys you of it | **7%** |
+| the whole tree, in points | **1072** |
+| what the ceiling buys you of it | **6%** |
 
 ### Three countries
 
@@ -1277,8 +1294,8 @@ so a ring changes colour exactly where the border is and the map colours itself.
 | **GREEN — DEXTERITY** | the axe | criticals, speed, bleed and poison, everything that lingers |
 | **BLUE — INTELLIGENCE** | the staff | spells, the elements, the cold and the storm |
 
-Conversion is in all three, because every build has something worth converting. Your own third
-costs **21 to 22** points to its keystones; somebody else's costs **27 to 28**.
+Conversion is in all three, because every build has something worth converting. Your own third is
+markedly cheaper to its keystones than anybody else's.
 
 ### What a cluster is
 
@@ -1357,8 +1374,8 @@ collects about 15× what a death at wave 15 does; banked raw, the early runs thi
 reward would feel *worse*. The square root compresses that to about 4×. It banks what you
 **collected**, not what you are holding, so rerolling never costs you twice.
 
-**The tree costs 859 points and you can never hold more than 60.** That is the whole design:
-at most **7%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+**The tree costs 1072 points and you can never hold more than 60.** That is the whole design:
+at most **6%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
 412 nodes — 116 small ones in clusters, 12 notables, 12 keystones, and 268 steps of corridor
 between them.
 
