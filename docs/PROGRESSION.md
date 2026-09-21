@@ -1551,3 +1551,67 @@ Momentum is not poured into `p.atkRate`. It is read at the point of use, in `sta
 because a stack that changed a pool would have to be taken back out again and that is exactly
 where double counting starts — the same rule that made attributes derived rather than written
 back in the sixth pass.
+
+---
+
+## Sixteenth pass — rage, and three things that were wrong in the fiction
+
+### Three fixes first
+
+- **Blademaster was offered to the axe.** The whirl is the spin held down, and the axe has no
+  spin in its combo any more — it chops and backswings. The gate reads the combo table
+  (`comboSteps().indexOf('spin') >= 0`) rather than a list of weapon names, so a fifth weapon
+  opts in by having a spin rather than by being remembered here.
+- **The axe had no opening hand of its own.** Sword & Steel — flat damage, swing rate, reach —
+  is a *sword's*, and it was the only melee favourite an axe could take, which made the crit
+  weapon open like the balanced one. **Reaver's Edge**: +40% increased critical chance, +25%
+  critical damage, +1 to the Momentum ceiling. The two swinging hands are now mutually
+  exclusive by a flag, and a test walks every favourite's brick list to prove none of them
+  points at a card that does not exist — which caught `chainshock`, renamed two passes ago,
+  still sitting in the Storm Brick's hand.
+- **A conversion is not weapon-locked, and the card said it was.** `SWORD AXE MACE` under
+  Emberforge is what you get when the tag row asks the gate once per weapon: those are the
+  weapons that deal physical *with nothing else equipped*. The rule is "you need a source of
+  physical damage", which a staff carrying Bomb Volley or the Guardian Brick has, so the card
+  says **needs PHYSICAL damage** now. Same field drives the gate and the tag, so they cannot
+  drift.
+
+### Rage
+
+The interesting part is that it is a second row in the stacks table and one new field.
+Momentum falls off one at a time; rage sits still for a grace and then pours:
+
+```js
+rage: { max:30, grace:2.0, rate:10, frac:true, mob:true, mods:{ moreDmg:0.01 } }
+```
+
+That is the whole of *"you lose 10 rage every second if you have not been hit or gained rage in
+the past 2 seconds"*. Nothing gains it by default — ceiling 30, generation zero — so a hero
+buys it (Warpath, Spite, Deep Well; three groups and a notable in the red country) and a
+monster is given it (the `WRATHFUL` wave modifier).
+
+**Monsters needed the helpers to take an entity.** `stackOf(id, ent)`, `stackAdd(id, n, ent)`,
+`stackTick(dt, ent)`, `stackMod(key, ent)` — defaulting to the hero, so nothing that already
+called them changed. A raging monster hits harder through one line in `playerDamage`, which is
+the single place every monster attack passes, so contact, rings and thrown things all pay it
+without any of those call sites learning that rage exists.
+
+### The bug that would have shipped silently
+
+There was **already a `rageMul()`** — the rage *brick*, the drop that doubles your damage for a
+few seconds. Declaring a second function by the same name does not error: the later one simply
+wins, so `calcDamage` called the pickup's version, the counter multiplied nothing, and *every
+test that did not read a real damage number passed*. The definitional assertions were all
+green; only `physDamage()` before and after 30 rage caught it.
+
+The new one is `rageMore()`. And the character sheet row for the pickup now says **Rage brick**,
+because two things called rage in the same UI is a defect even when the code is right.
+
+### One more shape of test bug
+
+The `ragebleeds` break — swap the pour for a one-at-a-time bleed — passed at first. The break
+left `st.t = d.decay`, which is `undefined` for rage, so every comparison against the clock was
+false and the counter drained *a point a frame*: faster than the thing it was meant to slow
+down. The break was rewritten to fall back to `d.grace`, and the real code got the same
+fallback, because a row with neither field would have done exactly that in production while
+looking like it worked.

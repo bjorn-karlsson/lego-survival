@@ -153,6 +153,8 @@
   .wreq b{font-family:'Fredoka';font-size:8.5px;font-weight:700;letter-spacing:.7px;
     color:#5a6b57;background:rgba(90,107,87,.15);border:1px solid rgba(90,107,87,.35);
     border-radius:5px;padding:1px 5px}
+  /* a conversion is not weapon-locked; it needs a SOURCE, and the row says which */
+  .wreq.need b{color:#6a4a2a;background:rgba(224,168,26,.16);border-color:rgba(224,168,26,.45)}
   .card{width:216px;background:#f4f1ea;border:3px solid #1b2a34;border-radius:16px;padding:16px 16px 30px;cursor:pointer;
     color:#1b2a34;transition:transform .14s, box-shadow .14s;position:relative;box-shadow:0 8px 0 rgba(0,0,0,.35)}
   .card:hover{transform:translateY(-10px) rotate(-1.2deg);box-shadow:0 18px 0 rgba(0,0,0,.35)}
@@ -1863,57 +1865,105 @@ const HERO_STACKS = {
     mods:{ atk:0.08, reach:0.04 },
     only:['axe'],
   },
+  /* RAGE. The other decay shape, and the reason the table has two: momentum
+     falls off ONE AT A TIME, rage sits still for a grace and then pours away.
+     "You lose 10 rage every second if you have not been hit or gained rage in
+     the past 2 seconds" is a sentence, and `grace` and `rate` are that sentence.
+     It is FRACTIONAL, because you gain it a fifth of a point at a time.
+     NOTHING GAINS RAGE BY DEFAULT. The ceiling is 30 and the generation is
+     zero: a hero buys the generation, and a monster is given it. That is what
+     makes it a build rather than a thing that happens to everybody. */
+  rage: {
+    name:'RAGE', col:'#ff4a3c',
+    max:30, grace:2.0, rate:10, frac:true, mob:true,
+    mods:{ moreDmg:0.01 },      /* +1% MORE attack damage a point */
+  },
 };
 function stackDef(id){ return HERO_STACKS[id] || null; }
-/* is this hero even allowed to carry it? */
-function stackAllows(id){
+/* IS THIS ENTITY ALLOWED TO CARRY IT? A weapon gate is the hero's; a monster
+   may carry whatever its row says is `mob`, and carries nothing unless
+   something has turned it on. */
+function stackAllows(id, ent){
   const d = stackDef(id);
   if(!d) return false;
+  if(ent && ent !== player) return !!(d.mob && ent.stackOn && ent.stackOn[id]);
   if(d.only && (!weapon || d.only.indexOf(weapon.id) < 0)) return false;
   return true;
 }
-function stackOf(id){
-  const p = player, st = p && p.stacks && p.stacks[id];
-  return (st && st.n > 0 && stackAllows(id)) ? st.n : 0;
+/* THE CEILING, which is the table's plus whatever the hero has bought. Kept
+   here rather than in the table so a brick or a tree node raises it without
+   anything else learning that ceilings can move. */
+function stackCap(id, ent){
+  const d = stackDef(id);
+  if(!d) return 0;
+  const o = (ent || player);
+  return d.max + ((o && o.stackMax && o.stackMax[id]) || 0);
 }
-function stackAdd(id, n){
-  const p = player, d = stackDef(id);
-  if(!p || !d || !stackAllows(id)) return 0;
-  if(!p.stacks) p.stacks = {};
-  const st = p.stacks[id] || (p.stacks[id] = { n:0, t:0 });
-  st.n = Math.min(d.max, st.n + (n || 1));
-  st.t = d.decay;                 /* the clock restarts every time one lands */
+function stackOf(id, ent){
+  const o = ent || player, st = o && o.stacks && o.stacks[id];
+  return (st && st.n > 0 && stackAllows(id, o)) ? st.n : 0;
+}
+function stackAdd(id, n, ent){
+  const o = ent || player, d = stackDef(id);
+  if(!o || !d || !stackAllows(id, o)) return 0;
+  if(!o.stacks) o.stacks = {};
+  const st = o.stacks[id] || (o.stacks[id] = { n:0, t:0 });
+  st.n = Math.min(stackCap(id, o), st.n + (n === undefined ? 1 : n));
+  /* the clock restarts every time one lands, whichever shape the decay is */
+  st.t = (d.grace !== undefined) ? d.grace : d.decay;
   return st.n;
 }
-function stackClear(id){
-  const p = player;
-  if(p && p.stacks && p.stacks[id]){ p.stacks[id].n = 0; p.stacks[id].t = 0; }
+function stackClear(id, ent){
+  const o = ent || player;
+  if(o && o.stacks && o.stacks[id]){ o.stacks[id].n = 0; o.stacks[id].t = 0; }
 }
 /* WHAT EVERY LIVE STACK IS WORTH, summed, by mod name. One call, so a consumer
    never has to know which stacks exist — only what it wants paid in. */
-function stackMod(key){
-  const p = player;
-  if(!p || !p.stacks) return 0;
+function stackMod(key, ent){
+  const o = ent || player;
+  if(!o || !o.stacks) return 0;
   let v = 0;
-  for(const id in p.stacks){
-    const n = stackOf(id);
+  for(const id in o.stacks){
+    const n = stackOf(id, o);
     if(!n) continue;
     const m = stackDef(id).mods;
     if(m && m[key]) v += m[key] * n;
   }
   return v;
 }
-function stackTick(dt){
-  const p = player;
-  if(!p || !p.stacks) return;
-  for(const id in p.stacks){
-    const st = p.stacks[id], d = stackDef(id);
+/* TWO DECAY SHAPES, and which one a stack has is a row in the table:
+     · `decay`         — one falls off every N seconds. A bleed, not a cliff.
+     · `grace` + `rate` — sit still for N seconds, then pour away at R a second.
+   A third shape is a third pair of fields here and nothing anywhere else. */
+function stackTick(dt, ent){
+  const o = ent || player;
+  if(!o || !o.stacks) return;
+  for(const id in o.stacks){
+    const st = o.stacks[id], d = stackDef(id);
     if(!st || !d || st.n <= 0) continue;
-    if(!stackAllows(id)){ st.n = 0; st.t = 0; continue; }
+    if(!stackAllows(id, o)){ st.n = 0; st.t = 0; continue; }
     st.t -= dt;
-    if(st.t <= 0){ st.n--; st.t = d.decay; }   /* one at a time, never a cliff */
+    if(st.t > 0) continue;
+    if(d.grace !== undefined){
+      st.n = Math.max(0, st.n - d.rate*dt);
+      if(!d.frac) st.n = Math.floor(st.n);
+    } else {
+      /* one at a time, never a cliff. The fallback is not decoration: a row
+         with neither field would set the clock to undefined, every comparison
+         against it would be false, and the counter would drain a point A FRAME
+         while looking like it was working. */
+      st.n--; st.t = (d.decay !== undefined) ? d.decay : 1;
+    }
   }
 }
+/* WHAT RAGE IS WORTH, as a MORE multiplier on attack damage. A MORE, because
+   rage is not an increase you pool with the rest of your bricks — it is the
+   thing on top of them, and thirty of it is a third again. */
+/* NOT rageMul — that name was already taken by the rage BRICK, the drop that
+   doubles your damage for a few seconds, and a second function by the same name
+   simply replaced it: the counter multiplied nothing and every test of it that
+   did not read a real damage number passed. */
+function rageMore(ent){ return 1 + stackMod('moreDmg', ent); }
 
 /* ===================== EVERY AILMENT, ONE RULE =====================
    AN AILMENT IS A PROPERTY OF THE DAMAGE TYPE, NOT OF THE SPELL THAT THREW IT.
@@ -2779,8 +2829,12 @@ function newPlayer(){
     /* REAVING: the rank, the fuse while the axe is away, and the cooldown that
        stops a whirl throwing one every frame */
     reave:0, reaveT:0, reaveCd:0,
-    /* every self-expiring counter the hero carries, by name */
-    stacks:{},
+    /* every self-expiring counter the hero carries, by name, and what the
+       hero has bought on top of each one's own ceiling */
+    stacks:{}, stackMax:{ momentum:0, rage:0 },
+    /* HOW MUCH RAGE A HIT IS WORTH, taking one and landing one. Both start at
+       nothing: rage is a build you buy into, not a thing that happens to you. */
+    rageOnHurt:0, rageOnHit:0,
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
     attr:{ str:0, int:0, dex:0 },
     incCritMult:0,
@@ -3921,6 +3975,9 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      whatever did get through hurt more. */
   if(!mix) mix = { [convFrom(source)]: 1 };
   d *= shockMulOn(e);
+  /* A MONSTER'S OWN RAGE, if something gave it any. Same shape as the hero's:
+     hurt it and it gets angrier, leave it alone and the anger pours away. */
+  if(e.rageOnHurt > 0 && !opts.drain) stackAdd('rage', e.rageOnHurt, e);
   /* REAVING. A critical throws the axe, and the axe is not thrown BY the axe —
      a bounce rolls its own critical and hits like one, but it cannot start a
      second blade or one crit would fill the screen with them. */
@@ -4584,6 +4641,10 @@ function incCapTag(kind, el){
 }
 function calcDamage(base, kind, more){
   let d = base * (1 + incTotal(kind)) * moreTotal();
+  /* RAGE IS ATTACK DAMAGE. A MORE multiplier on top of everything else, and
+     only on what you SWING — it is the melee build's own ramp, which is the
+     whole reason it exists. */
+  if(kind === 'melee') d *= rageMore();
   if(more) for(const m of more) d *= m;
   return Math.max(0, d);
 }
@@ -5005,6 +5066,10 @@ function playerDamage(n, src, elem, spell){
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   const isSpell = (spell === undefined) ? !!elem : spell;
   let d = n;
+  /* A RAGING MONSTER HITS HARDER, and it is read off the ATTACKER — so every
+     way a monster can reach you, contact or ring or thrown thing, pays it
+     without any of those call sites learning that rage exists. */
+  if(src && src.stacks) d *= rageMore(src);
   if(elem) d *= elemTake(elem) * elemPower(src);
   /* shock leaves you open — hits against a shocked hero crit */
   let scrit = false, supp = false;
@@ -5030,6 +5095,10 @@ function playerDamage(n, src, elem, spell){
   d *= weaponLessTaken();
   n = Math.max(0.05, Math.round(d*100)/100);
   logTaken(n, src, elem, supp, scrit);
+  /* RAGE IS BUILT BY BEING HIT, if you have bought any reason for it to be.
+     After mitigation and after the log, so a hit that was evaded or suppressed
+     away to nothing still counts as a hit — being swung at is the trigger. */
+  if(p.rageOnHurt > 0) stackAdd('rage', p.rageOnHurt);
   if(elem) applyAilment(elem, src);
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
@@ -5276,6 +5345,16 @@ const WAVE_MODS = [
     apply:e=>{ e.maxHp = Math.ceil(e.maxHp*1.30); e.hp = e.maxHp; } },
   { id:'brutal',  name:'BRUTAL',     col:'#ff5a4a', tip:'monsters deal 25% more damage',
     apply:e=>{ e.dmg = Math.max(1, Math.round(e.dmg*1.25)); } },
+  /* THE ONE THING THAT GIVES A MONSTER RAGE. Nothing has it by default — the
+     ceiling is thirty and the generation is nothing — so a wave that rolls this
+     is a wave where hurting something makes it worse, and where killing it fast
+     is worth more than chipping at it. */
+  { id:'wrathful',name:'WRATHFUL',   col:'#ff4a3c',
+    tip:'hurting a monster enrages it — up to +30% damage, and it cools off if you leave it',
+    apply:e=>{ e.stackOn = Object.assign({}, e.stackOn, { rage:true });
+               e.stacks = e.stacks || {};
+               e.stackMax = e.stackMax || {};
+               e.rageOnHurt = (e.rageOnHurt || 0) + 3; } },
   { id:'swift',   name:'SWIFT',      col:'#9fe8ff', tip:'monsters move 18% faster',
     apply:e=>{ e.speed *= 1.18; } },
   { id:'frenzied',name:'FRENZIED',   col:'#ffd166', tip:'monsters attack 25% faster',
@@ -5776,84 +5855,84 @@ const UPGRADES = [
      it where it is and adds a second helping on top, which is why it is worth
      less per point. ---- */
   { id:'convfire', name:'Emberforge', icon:'pyro', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to FIRE — it stops `+
       `meeting armour and starts meeting fire resistance, and it takes your increased `+
       `fire damage with it${convOwnTag('phys','fire')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'fire', c.v); } },
   { id:'convfrost', name:'Rimeblade', icon:'snow', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to COLD — past armour, `+
       `into frost resistance, scaling with everything that makes your cold hurt`+
       `${convOwnTag('phys','frost')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'frost', c.v); } },
   { id:'convshock', name:'Galvanise', icon:'zapper', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your PHYSICAL damage CONVERTED to LIGHTNING — past `+
       `armour, into lightning resistance${convOwnTag('phys','shock')}`,
     apply:c=>{ convAdd(player.conv, 'phys', 'shock', c.v); } },
   { id:'convchaos', name:'The Unmaking', icon:'prismdn', cls:'OFFENSE', minRar:'rare',
-    req:()=>canDeal('fire'),
+    need:'fire', req:()=>canDeal('fire'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your FIRE damage CONVERTED to CHAOS — chaos is neither `+
       `physical nor elemental, so nothing in the game resists it${convOwnTag('fire','chaos')}`,
     apply:c=>{ convAdd(player.conv, 'fire', 'chaos', c.v); } },
   { id:'gainchaos', name:'Creeping Blight', icon:'bane', cls:'OFFENSE', minRar:'rare',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA CHAOS — the physical `+
       `stays where it is, and a hit carrying chaos can leave a dose of poison behind`+
       `${convOwnTag('phys','chaos', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'chaos', c.v); } },
   { id:'gainfire', name:'Catalyst', icon:'prism', cls:'OFFENSE', minRar:'rare',
-    req:()=>canDeal('frost'),
+    need:'frost', req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your COLD damage as EXTRA FIRE — the cold is not `+
       `touched, and a frost build starts burning things too${convOwnTag('frost','fire', true)}`,
     apply:c=>{ convGain(player.conv, 'frost', 'fire', c.v); } },
   { id:'convsf', name:'Stormfrost', icon:'snow', cls:'OFFENSE', minRar:'rare',
-    req:()=>canDeal('shock'),
+    need:'shock', req:()=>canDeal('shock'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your LIGHTNING damage CONVERTED to COLD — and it keeps `+
       `your increased lightning on the way${convOwnTag('shock','frost')}`,
     apply:c=>{ convAdd(player.conv, 'shock', 'frost', c.v); } },
   { id:'convff', name:'Fulminate', icon:'pyro', cls:'OFFENSE', minRar:'rare',
-    req:()=>canDeal('frost'),
+    need:'frost', req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your COLD damage CONVERTED to FIRE — stack it under `+
       `Stormfrost and a storm bolt arrives as fire carrying all three increases`+
       `${convOwnTag('frost','fire')}`,
     apply:c=>{ convAdd(player.conv, 'frost', 'fire', c.v); } },
   { id:'convrot', name:'Rotgale', icon:'bane', cls:'OFFENSE', minRar:'epic',
-    req:()=>canDeal('frost'),
+    need:'frost', req:()=>canDeal('frost'),
     calc:m=>({v: byRar(m, CONV_CARD)}),
     desc:c=>`${Math.round(c.v*100)}% of your COLD damage CONVERTED to CHAOS — out of the `+
       `elements entirely, where nothing resists it${convOwnTag('frost','chaos')}`,
     apply:c=>{ convAdd(player.conv, 'frost', 'chaos', c.v); } },
   { id:'gainshock', name:'Static Charge', icon:'zapper', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA LIGHTNING — the `+
       `physical stays where it is and the lightning is added on top`+
       `${convOwnTag('phys','shock', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'shock', c.v); } },
   { id:'gainfrost', name:'Hoarfrost', icon:'icecube', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA COLD — and every `+
       `hit starts chilling what it lands on${convOwnTag('phys','frost', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'frost', c.v); } },
   { id:'gainpf', name:'Brand Iron', icon:'flame', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>canDeal('phys'),
+    need:'phys', req:()=>canDeal('phys'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your PHYSICAL damage as EXTRA FIRE`+
       `${convOwnTag('phys','fire', true)}`,
     apply:c=>{ convGain(player.conv, 'phys', 'fire', c.v); } },
   { id:'gainrot', name:'Sour Ending', icon:'bane', cls:'OFFENSE', minRar:'epic',
-    req:()=>canDeal('fire'),
+    need:'fire', req:()=>canDeal('fire'),
     calc:m=>({v: byRar(m, GAIN_CARD)}),
     desc:c=>`GAIN ${Math.round(c.v*100)}% of your FIRE damage as EXTRA CHAOS — a fire build `+
       `that leaves poison behind it${convOwnTag('fire','chaos', true)}`,
@@ -6476,9 +6555,13 @@ const UPGRADES = [
     },
     apply:c=>{ player.chain.fork = Math.min(CHAIN_FORK_MAX, (player.chain.fork||0) + 1); } },
   { id:'blademaster', name:'Blademaster', icon:'spin', cls:'OFFENSE', minRar:'legendary',
-    /* the whirl IS the swing held down — a staff has no swing to hold, and a
-       mace has traded its swing for the ground slam */
-    req:()=>!isCaster() && !isSlammer() && player.blademaster < WHIRL_MAX,
+    /* THE WHIRL IS THE SPIN HELD DOWN, so a weapon with no spin in its combo
+       has nothing to hold. A staff does not swing, a mace has traded its swing
+       for the ground slam, and the AXE swings twice — a chop and a backswing —
+       which is its own rhythm, with its own legendary to go with it. Asked of
+       the combo table, so a fifth weapon opts in by having a spin. */
+    req:()=>!isCaster() && !isSlammer() && comboSteps().indexOf('spin') >= 0
+            && player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
     desc:c=> player.blademaster===0
       ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
@@ -6488,6 +6571,31 @@ const UPGRADES = [
       : `The whirl carries you: ${Math.round(WHIRL_SLOW[2]*100)}% move speed while spinning, `+
         `and ${Math.round(WHIRL_DEFLECT[2]*100)}% of incoming missiles are batted away. Still no rolling.`,
     apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
+  /* RAGE, AND THE BRICK THAT TURNS IT ON. Nothing generates rage by default —
+     the ceiling is thirty and the generation is nothing — so this is the card
+     that makes it a build at all, and the tree deepens it afterwards. */
+  { id:'ragehit', name:'Warpath', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, [0.5, 0.8, 1.2, 1.8, 2.6])}),
+    desc:c=>`Your swings build RAGE: +${c.v.toFixed(1)} a hit (now `+
+      `${(player.rageOnHit||0).toFixed(1)}). Every point of rage is `+
+      `+${Math.round(HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage, to a ceiling of `+
+      `${stackCap('rage')} — and it pours away at ${HERO_STACKS.rage.rate} a second once you `+
+      `have gone ${HERO_STACKS.rage.grace}s without landing or taking one`,
+    apply:c=>{ player.rageOnHit += c.v; } },
+  { id:'ragehurt', name:'Spite', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, [0.6, 1.0, 1.5, 2.2, 3.2])}),
+    desc:c=>`Being hit builds RAGE: +${c.v.toFixed(1)} a hit taken (now `+
+      `${(player.rageOnHurt||0).toFixed(1)}) — what is done to you is worth `+
+      `${Math.round(HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage a point`,
+    apply:c=>{ player.rageOnHurt += c.v; } },
+  { id:'ragemax', name:'Deep Well', icon:'force', cls:'OFFENSE', minRar:'rare',
+    req:()=>(player.rageOnHit > 0 || player.rageOnHurt > 0),
+    calc:m=>({v: byRar(m, [4, 6, 8, 12, 16])}),
+    desc:c=>`+${c.v} maximum RAGE (now ${stackCap('rage')}) — a deeper well to fill, `+
+      `and ${Math.round(c.v*HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage at the top of it`,
+    apply:c=>{ player.stackMax.rage += c.v; } },
   /* THE AXE'S OWN. Every other weapon had a legendary that changed what it IS
      — the sword whirls, the mace slams the elements, the staff scatters embers
      — and the axe borrowed the sword's. */
@@ -6608,6 +6716,11 @@ const META_STATS = {
   bleedShare: { n:'of the hit bleeds',            pct:1, w:(p,v)=>{ p.bleedShareFlat += v; } },
   poisonDot:  { n:'poison damage a second',              w:(p,v)=>{ p.baneDotFlat += v; } },
   ailChance:  { n:'chance to leave an ailment',   pct:1, w:(p,v)=>{ p.ailChanceFlat += v; } },
+  /* ---- RAGE. Generation is bought, the ceiling is bought, and neither of them
+     exists until you walk to it. ---- */
+  rageHit:    { n:'RAGE when you land a hit',            w:(p,v)=>{ p.rageOnHit  += v; } },
+  rageHurt:   { n:'RAGE when you are hit',               w:(p,v)=>{ p.rageOnHurt += v; } },
+  rageMax:    { n:'maximum RAGE',                        w:(p,v)=>{ p.stackMax.rage += v; } },
   /* elements */
   incElem:    { n:'increased elemental damage',   pct:1, w:(p,v)=>{ p.inc.elem += v; } },
   incFire:    { n:'increased fire damage',        pct:1, w:(p,v)=>{ p.inc.fire += v; } },
@@ -6786,6 +6899,7 @@ const META_ICON_EXACT = {
   incDot:'bane', bleedChance:'bane', bleedShare:'bane', poisonDot:'bane',
   incElem:'prism', flatElem:'prism', incFire:'flame', incFrost:'snow',
   incShock:'bolt', incChaos:'vortex', ailChance:'bane',
+  rageHit:'fist', rageHurt:'shield', rageMax:'force',
   fireRes:'ward', frostRes:'ward', shockRes:'ward', chaosRes:'ward', allRes:'ward',
   armour:'shield', incArmour:'shieldplus', suppress:'shield',
   hearts:'heartplus', incHp:'heart', moreHp:'heart', regen:'regen', incRegen:'regen',
@@ -6978,6 +7092,16 @@ const META_GROUPS = [
     minors:[['Cruelty','critMult',0.08],['Savagery','critMult',0.07]] },
   { id:'fleet', name:'FLEET',       sp:'swift',home:'dex', d:[0,3], shape:'chain',
     minors:[['Fleet','speed',0.04],['Vaulting','roll',0.11]] },
+  /* ---- RAGE ON THE MAP. Red country: it is a melee ramp built out of being
+     hit and hitting back, which is what strength is for. Two groups of
+     generation, then the ceiling — and the deep well is the notable, because a
+     well you cannot fill is worth nothing. ---- */
+  { id:'warpath',name:'WARPATH',    sp:'war', home:'str', d:[1,3], shape:'chain', must:true,
+    minors:[['Warpath','rageHit',0.2],['Follow Through','rageHit',0.2],['Bloodlust','rageHit',0.15]] },
+  { id:'spite',  name:'SPITE',      sp:'vit', home:'str', d:[1,4], shape:'chain', must:true,
+    minors:[['Spite','rageHurt',0.2],['Grudge','rageHurt',0.2],['Scar','rageHurt',0.15]] },
+  { id:'wellrg', name:'THE DEEP WELL',sp:'war',home:'str',d:[2,4], shape:'arc', must:true,
+    minors:[['Deeper','rageMax',2],['Deeper Still','rageMax',2],['Wider','rageHit',0.15]] },
   { id:'quick', name:'QUICKDRAW',   sp:'swift',home:'dex', d:[0,3], shape:'ring',
     minors:[['Quick Hands','incAtk',0.04],['Wild Swing','incAtk',0.035],['Reflexes','incAtk',0.03]] },
   { id:'venom', name:'VENOM',       sp:'aff', home:'dex', d:[1,4], shape:'ring',
@@ -7062,6 +7186,11 @@ const META_NOTABLES = [
   { id:'n_war',   name:'FURY',         sp:'war', home:'str', d:[2,3], shape:'ring',
     minors:[['Warlust','incAll',0.03],['Brutality','incMelee',0.05],['Ironhide','fireRes',0.06]],
     notable:{ name:'Warmonger', mods:[['incMelee',0.08],['incAtk',0.04]] } },
+  /* the far end of the rage road: the ceiling you walk all that way for */
+  { id:'n_rage',  name:'THE RED MIST', sp:'war', home:'str', d:[3,4], shape:'cresc',
+    minors:[['Seething','rageHit',0.2],['Simmering','rageHurt',0.2],['Boiling','rageMax',2]],
+    notable:{ name:'The Red Mist', note:'a deeper well, and more reason to fill it',
+              mods:[['rageMax',5],['rageHit',0.2],['rageHurt',0.2]] } },
   { id:'n_break', name:'THE BREAKER',   sp:'arm', home:'str', d:[1,2], shape:'wheel',
     minors:[['Shockplate','shockRes',0.05],['Braced','armour',4],['Deadweight','slamDmg',0.5]],
     notable:{ name:'Breaker', mods:[['slamRange',0.12],['armour',5]] } },
@@ -8683,6 +8812,9 @@ const FAV_PERKS = {
   sword: { lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
     apply(p){ p.flatPhys += 1; p.inc.atk += 0.09;
       p.reachFlat += 8; } },
+  axe: { lines:['+40% increased critical chance', '+25% critical damage',
+                '+1 to the maximum stack of MOMENTUM'],
+    apply(p){ p.incCrit += 0.40; p.critMultFlat += 25; p.stackMax.momentum += 1; } },
   slam: { lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
                  '+15% slam range'],
     apply(p){ p.slam.flat += 1; p.slam.arcFlat += 20*Math.PI/180; p.slam.rangeInc += 0.15; } },
@@ -8733,14 +8865,21 @@ const FAVOURITES = [
   /* `melee` and `cast` gate a favourite to the weapons that can actually use it:
      there is no point weighting the reward roll toward bricks you will never be
      offered. A favourite with neither flag suits any weapon. */
-  { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, swing:true,
+  { id:'sword',   name:'Sword & Steel',icon:'sword', melee:true, swing:true, noaxe:true,
     ids:['dmg','aspd','reach','crit','critpow','bladem','moredmg'] },
+  /* THE AXE'S OWN OPENING HAND. Sword & Steel is a sword's — flat damage, swing
+     rate, reach — and it was the only melee hand an axe could take, which made
+     the crit weapon open like the balanced one. This leans on what the axe
+     actually is: it crits twice as often and twice as hard, its backswing is a
+     certain critical, and Reaving turns every critical into a thrown axe. */
+  { id:'axe',     name:'Reaver\u2019s Edge', icon:'spin', melee:true, swing:true, axe:true,
+    ids:['crit','critpow','reave','aspd','bleedchance','bleedpow','banedotinc','moredmg'] },
   /* the mace's own opening hand — Sword & Steel for a weapon with no sword */
   { id:'slam',    name:'Earthshaker',  icon:'fist',  melee:true, slam:true,
     ids:['slampow','slamarc','slamrange','slamspd','dmg','aspd','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
   { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
-  { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','chainshock','eleminc','shockinc','orbm'] },
+  { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','ailchance','eleminc','shockinc','orbm'] },
   { id:'storm',   name:'Bladestorm',   icon:'storm', melee:true, ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',melee:true, ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','freezf','eleminc','elemflat'] },
@@ -8779,8 +8918,14 @@ function brickWeapons(u){
   return out;
 }
 /* the little row under a card: nothing when it works with everything, the
-   names when it does not */
+   names when it does not — and for a conversion, what it actually NEEDS.
+   A conversion out of physical is not a melee card. It was tagged SWORD AXE
+   MACE because those are the weapons that happen to deal physical with nothing
+   else equipped, and that reads as a weapon lock when the real rule is "you
+   need a source of physical damage" — which a staff carrying Bomb Volley, or
+   Bladestorm, or the Guardian Brick has. Say the rule. */
 function weaponTagHtml(u){
+  if(u.need) return `<div class="wreq need"><b>needs ${CONV_NAME[u.need]} damage</b></div>`;
   const list = brickWeapons(u);
   if(list.length >= WEAPON_KEYS.length) return '';
   return `<div class="wreq">${list.map(n=>`<b>${n}</b>`).join('')}</div>`;
@@ -8793,6 +8938,10 @@ function favAllowed(f){
      use to one that does not */
   if(f.slam && !isSlammer()) return false;
   if(f.swing && isSlammer()) return false;
+  /* and the two swinging hands are not interchangeable: Sword & Steel is the
+     sword's opening and Reaver's Edge is the axe's */
+  if(f.axe && !(weapon && weapon.id === 'axe')) return false;
+  if(f.noaxe && weapon && weapon.id === 'axe') return false;
   return true;
 }
 function setFavourite(id){
@@ -9311,7 +9460,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
-  { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainshock','chainfork'] },
+  { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
   { name:'BOMB VOLLEY',     ids:['bombplus','bombpow','bombarea','bombcd','cluster'] },
@@ -10782,7 +10931,7 @@ function renderCharSheet(){
     sRow('Fortune', p.fortuneT>0 ? `×${p.fortuneMul} · ${Math.ceil(p.fortuneT)}s` : '—',
       p.fortuneT>0 ? `studs and XP ×${p.fortuneMul}, and ×${fortuneRarity().toFixed(2)} rarity find`
         : 'a fortune brick doubles studs and XP and leans the reward roll'),
-    sRow('Rage', p.rageT>0 ? `×${p.rageMul} · ${Math.ceil(p.rageT)}s` : '—',
+    sRow('Rage brick', p.rageT>0 ? `×${p.rageMul} · ${Math.ceil(p.rageT)}s` : '—',
       p.rageT>0 ? 'MORE damage, on top of everything else' : 'a rage brick doubles all your damage'),
     sRow('Ward', p.wardT>0 ? `×${p.wardN} · ${Math.ceil(p.wardT)}s` : '—',
       p.wardT>0 ? `+${wardArmour()} armour and +${Math.round(wardRes()*100)}% to every resistance`
@@ -11414,8 +11563,13 @@ function updatePlayer(dt){
                      210*(s.kb || 1)*weapon.kb, 'sword', { spin:s.spin, forceCrit:sure });
             /* MOMENTUM IS BUILT BY CONNECTING, once per swing however many
                bodies are in the arc — otherwise one step into a crowd is the
-               whole ramp and the mechanic is a formality. */
-            if(!s.gained){ s.gained = true; stackAdd('momentum', 1); }
+               whole ramp and the mechanic is a formality. RAGE is the same
+               rule: once a swing, not once a body. */
+            if(!s.gained){
+              s.gained = true;
+              stackAdd('momentum', 1);
+              if(p.rageOnHit > 0) stackAdd('rage', p.rageOnHit);
+            }
             if(s.spin) addShake(0.12);
           }
         }
@@ -12421,6 +12575,7 @@ function enemyCasterMove(e, dt, toP, dP, far, near){
   return {x:Math.cos(toP+Math.PI/2)*e.speed*e.strafe*0.7, y:Math.sin(toP+Math.PI/2)*e.speed*e.strafe*0.7};
 }
 function updateEnemy(e, dt){
+  if(e.stacks) stackTick(dt, e);
   if(e.state==='build'){
     e.buildT += dt/0.55;
     if(e.buildT>=1){ e.state='active'; addDust(e.x,e.y,4); SFX.build(); }
@@ -17907,12 +18062,30 @@ function drawHeroStacks(c, p){
   const rows = [];
   for(const id in p.stacks){
     const n = stackOf(id);
-    if(n > 0) rows.push({ d:stackDef(id), n, t:p.stacks[id].t });
+    if(n > 0) rows.push({ id, d:stackDef(id), n, t:p.stacks[id].t });
   }
   if(!rows.length) return;
   c.save();
   let y = p.y - 62;
   for(const r of rows){
+    if(r.d.frac){
+      /* A COUNTER, NOT A COUNT. Thirty chevrons is a fence; a bar and a number
+         is a thing you can read while something is chasing you — and it drains
+         visibly the moment the grace runs out, which is the mechanic. */
+      const w = 46, h = 5, x = p.x - w/2;
+      const full = Math.max(1, stackCap(r.id, p));
+      c.globalAlpha = 0.85;
+      c.fillStyle = 'rgba(8,12,16,0.62)';
+      roundRect(c, x-1, y-2, w+2, h+2, 3); c.fill();
+      c.fillStyle = r.d.col;
+      roundRect(c, x, y-1, Math.max(1, w*clamp(r.n/full, 0, 1)), h, 2); c.fill();
+      c.globalAlpha = 1;
+      c.font = '700 8px Fredoka'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillStyle = r.d.col;
+      c.fillText(Math.round(r.n)+'', p.x, y - 7);
+      y -= 15;
+      continue;
+    }
     const w = 7, gap = 3, total = r.n*w + (r.n-1)*gap;
     for(let i=0;i<r.n;i++){
       /* the last one is the one about to go, and it says so */

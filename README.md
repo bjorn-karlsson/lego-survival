@@ -103,6 +103,18 @@ for the elemental one.
 Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
 comparison against the sword.
 
+### 🪓 Each weapon swings its own way
+
+The sword sweeps twice and spins; the **axe chops and then backswings**; the mace does not swing
+at all, it slams; the staff casts. A combo is a row in a table, and **Blademaster — the whirl —
+is offered only to a weapon whose combo has a spin in it to hold down**, which is read off that
+table rather than off a list of weapon names. The axe has its own rhythm and its own legendary
+to go with it.
+
+Each swinging weapon also has its own opening hand: **Sword & Steel** for the sword (flat
+damage, swing rate, reach), **Reaver's Edge** for the axe (critical chance, critical damage, a
+deeper Momentum), **Earthshaker** for the mace.
+
 ### 🩸 Elements & ailments
 
 Fire, frost and lightning all stack, on you and on them, and **the fifth stack breaks
@@ -237,10 +249,37 @@ out of a fight costs the ramp gradually and a single miss costs almost nothing.
 
 **The system underneath knows nothing about momentum.** `HERO_STACKS` is a table of named,
 self-expiring counters — a cap, a decay, a list of what one stack is *worth*, and optionally
-which weapons may carry it. A rage that builds as you take damage, a focus that builds as you
-stand still, a brand that builds on one body: each is a row here and one line at the place that
-feeds it, rather than a mechanic of its own with its own timer to forget to tick. Whoever cares
-reads `stackMod('atk')` and never learns which stacks exist.
+which weapons may carry it. Whoever cares reads `stackMod('atk')` and never learns which stacks
+exist. **Rage** is the second row in that table, and it needed one new field.
+
+### 🔴 Rage
+
+> **You gain more attack damage. You lose 10 rage every second if you have not been hit or
+> gained rage in the past 2 seconds.**
+
+That sentence is `grace: 2` and `rate: 10` in the table and nothing else anywhere. It is the
+*other* decay shape: momentum falls off one at a time, rage sits still for a grace and then
+pours away.
+
+**Nothing gains rage by default.** The ceiling is **30** and the generation is **nothing** — a
+hero buys it and a monster is given it, which is what makes it a build rather than something
+that happens to everybody. Every point is **+1% MORE attack damage**, so a full well is ×1.30
+on what you swing, and on nothing you cast: rage is the melee build's own ramp.
+
+| | |
+|---|---|
+| **Warpath** / **Spite** | bricks: your swings, or the hits you take, build rage |
+| **Deep Well** | +4 to +16 maximum rage, offered once you generate any |
+| **WARPATH**, **SPITE**, **THE DEEP WELL** | three groups in the red country, at +0.2 a hit |
+| **The Red Mist** | the notable at the far end: +5 maximum and generation both ways |
+
+**And a monster can carry it.** The `WRATHFUL` wave modifier turns it on: hurt something and it
+gets angrier, up to +30% damage, and it cools off if you leave it alone. Same table, same
+decay, same tick — the only thing the monster side needed was for the stack helpers to take an
+entity instead of assuming the hero.
+
+Rage is fractional, because you gain a fifth of a point at a time. It is drawn as a bar with a
+number rather than as chevrons: thirty chevrons is a fence.
 
 Every live stack is a chevron over your own head, in its own colour, and the one about to fall
 off fades as its clock runs down — a ramp you cannot see is a ramp you cannot play around.
