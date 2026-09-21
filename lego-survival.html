@@ -1600,7 +1600,13 @@ const VENOM_SHARE = 0.45;    /* of the gobbet's damage, per bite */
    chaos can leave a dose behind. */
 const CONV_ORDER = ['phys','shock','frost','fire','chaos'];
 const CONV_NAME  = { phys:'PHYSICAL', shock:'LIGHTNING', frost:'COLD', fire:'FIRE', chaos:'CHAOS' };
-const CONV_COL   = { phys:'#cfd6dd', shock:'#ffe95a', frost:'#bfe3ff', fire:'#ff8a3c', chaos:'#8ede4a' };
+/* ONE PALETTE FOR DAMAGE, and everything that shows you a number reads it from
+   here: the figure that floats off a monster, the charts in the combat log, the
+   cards. WHITE is plain physical and every type owns a colour of its own, so a
+   converted hit wears the colour of what it ARRIVED as — which is the only way
+   to watch a conversion work without opening a menu and doing arithmetic. */
+const CONV_COL   = { phys:'#ffffff', shock:'#ffe23d', frost:'#6fb7ff',
+                     fire:'#ff4a3c', chaos:'#b46aff' };
 const CONV_RANK  = CONV_ORDER.reduce((o,k,i)=>{ o[k] = i; return o; }, {});
 /* THE TWO WAYS TO WRITE ONE, and the only two anything uses. Keeping them here
    rather than letting every brick poke at the object means the legality rule is
@@ -1814,6 +1820,29 @@ function convSplit(source){
   for(const pt of parts) share[pt.type] = total > 0 ? pt.amount/total : 0;
   return { from, kind, share, mul: plain > 0 ? total/plain : 1 };
 }
+/* ===================== WHAT AN AILMENT IS OWED =====================
+   AN AILMENT BELONGS TO WHAT LANDED, NOT TO WHAT FIRED IT. This was the one
+   half of conversion that never got written: the fireball called burnEnemy
+   because it was a fireball, so a hero converting every point of fire into
+   chaos still set things alight — and a burn ticks as FIRE, through a path that
+   deliberately skips the pipeline so a wound is not re-converted every tick.
+   The result was a build that had converted all of its fire still dealing fire.
+
+   The chaos poison in hitEnemy always got this right: it rolls off how much of
+   the hit actually WAS chaos. This is that rule, named, for the other five.
+
+   A magnitude simply scales. A count of STACKS cannot be fractional, so the
+   remainder is rolled — half a chill is one chill half the time, which is
+   unbiased and does not quietly round a 40% conversion away to nothing. */
+function ailShare(source, type){
+  const sp = convSplit(source);
+  return (sp && sp.share[type]) || 0;
+}
+function ailStacks(n, share){
+  const v = n * share;
+  const whole = Math.floor(v);
+  return whole + (Math.random() < v - whole ? 1 : 0);
+}
 /* WHAT YOU ALREADY HAVE OF THIS PAIR, so a second copy of a brick says so.
    Conversions out of one type are SHARED when they total more than all of it,
    and a card that quietly does nothing is the worst card in the deck — so when
@@ -1899,9 +1928,23 @@ function emberTarget(from, src, taken){
 function burnCap(){
   return EBURN_MAX * (BURN_CAP_MUL[(player && player.ember) || 0] || 1);
 }
-/* what colour each lingering damage drips its numbers in — green for the rot,
-   red for a wound. One entry per ailment, so a third one cannot forget. */
-const DOT_COL = { bane:'#8ede4a', bleed:'#ff4a54', burn:'#ff9a3c' };
+/* WHAT A WOUND DRIPS IN: a darker, dimmer relative of the type that opened it,
+   so a tick never shouts as loud as the blow that started it. Dark red for a
+   bleed, orange for a burn, dark green for the rot — and LIGHT green belongs to
+   lifesteal alone, which is the one number on the screen that is good news.
+   One entry per ailment, so a third one cannot forget. */
+const DOT_COL = { bane:'#4f9e3a', poison:'#4f9e3a', bleed:'#a3222b', burn:'#ff9a3c' };
+const LEECH_COL = '#8ede4a';
+/* WHAT COLOUR A NUMBER IS. A wound keeps its own, because a tick is a different
+   KIND of event from a blow and reads better for being dimmer. Everything else
+   wears whatever the hit mostly ARRIVED as — which is how you watch a
+   conversion work without opening a menu and doing arithmetic. */
+function dmgColour(source, mix){
+  if(DOT_COL[source]) return DOT_COL[source];
+  let best = null, bv = -1;
+  for(const k in (mix || {})) if(mix[k] > bv){ bv = mix[k]; best = k; }
+  return CONV_COL[best] || CONV_COL[convFrom(source)] || '#ffffff';
+}
 /* A run used to end up casting all seven at once, which meant every build was
    the same build with different pacing. Four is a CHOICE: the bricks that would
    hand you a fifth stop being offered, and everything that deepens the four you
@@ -2287,6 +2330,12 @@ window.addEventListener('mousedown', e=>{
     /* the combat log swallows its own clicks — poking a tab must not also
        swing the sword at whatever is standing behind the panel */
     if(clogHit(e.clientX, e.clientY)){
+      if(clogClearAt(e.clientX, e.clientY)){
+        clogReset();
+        clogPush(CLOG_EVT, null, 'log cleared', '#9fdc7e');
+        SFX.pick();
+        return;
+      }
       const t = clogTabAt(e.clientX, e.clientY);
       if(t >= 0){ clogView = t; SFX.pick(); }
       return;
@@ -3576,6 +3625,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
   let split = null;
+  /* WHAT THE NUMBER IS MADE OF, as shares that add to one. Everything after the
+     mitigation loop is a multiplier on the whole, so the shares survive it and
+     the floating figure and the by-type chart can both read the same answer
+     rather than each guessing. */
+  let mix = null;
   /* CONVERSION IS A PROPERTY OF THE HIT, not of the wound it leaves. A bleed, a
      burn and a poison were all built the moment they were inflicted; running
      them back through the pipeline on every tick would convert the same damage
@@ -3610,7 +3664,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     if(asSpell && e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
     split = convSplit(source);
     d *= split.mul;                      /* what conversion did to the SIZE */
-    let tot = 0;
+    let tot = 0; const by = {};
     for(const k of CONV_ORDER){
       const sh = split.share[k];
       if(!(sh > 0)) continue;
@@ -3626,18 +3680,25 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       if(el) part *= (1 - enemyRes(e, el));
       /* a BURNT body takes every fire harder, whatever built the fire */
       if(k === 'fire') part *= burntMul(e);
+      by[k] = part;
       tot += part;
     }
     d = tot;
+    if(tot > 0){ mix = {}; for(const k in by) if(by[k] > 0) mix[k] = by[k]/tot; }
   }
   /* SHOCK is a multiplier ON THE BODY, so it applies to every source alike and
      after mitigation — being shocked does not help you through armour, it makes
      whatever did get through hurt more. */
+  if(!mix) mix = { [convFrom(source)]: 1 };
   d *= shockMulOn(e);
   /* BLEED rolls off the damage that ACTUALLY landed, after armour, so a swing
      that barely got through barely bleeds. Ticks never re-roll it. */
-  if(MELEE_SOURCES.has(source) && !opts.quiet && Math.random() < bleedChance(crit, source))
-    bleedEnemy(e, d);
+  /* AND A BLEED IS THE PHYSICAL THAT LANDED. Convert a swing entirely into
+     fire and it opens no wound: there is no physical damage left to bleed. */
+  const physShare = mix.phys || 0;
+  if(MELEE_SOURCES.has(source) && !opts.quiet && physShare > 0
+     && Math.random() < bleedChance(crit, source) * physShare)
+    bleedEnemy(e, d * physShare);
   /* CHAOS LEAVES A DOSE. Physical can open a wound; chaos is the poison-shaped
      one, and the odds ride on how much of the hit actually WAS chaos. */
   if(split && split.share.chaos > 0 && !opts.quiet && !opts.drain
@@ -3669,15 +3730,21 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
        number over the fight it is quietly winning, and it drips in the colour
        of whatever is doing the killing */
     if(Math.random() < 0.4)
-      addDmg(e.x, e.y-30*e.scale, fmtHp(d), DOT_COL[source] || DOT_COL.bane, 13);
+      addDmg(e.x, e.y-30*e.scale, fmtHp(d), dmgColour(source, mix), 13);
   } else {
-    addSparks(e.x, e.y-18*e.scale, 5, crit?'#ffd166':'#fff2b0');
+    /* THE NUMBER IS THE COLOUR OF WHAT LANDED. A crit is the same colour and
+       simply bigger — gold for every critical told you it was a crit and
+       nothing else, and what a hit is MADE OF is the thing worth reading at a
+       glance. A hit split across types wears the colour of the largest share;
+       the TYPES tab in the log has the exact split. */
+    const col = dmgColour(source, mix);
+    addSparks(e.x, e.y-18*e.scale, 5, crit?col:'#fff2b0');
     addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
-      suppressed?'#9fd4ff' : crit?'#ffd166':'#ffffff', crit?21:16);
+      col, crit?23:16);
     addShake(crit?0.13:0.08);
     SFX.hit();
   }
-  logDealt(e, d, source, crit, suppressed);
+  logDealt(e, d, source, crit, suppressed, mix);
   if(e.hp<=0) killEnemy(e, source);
 }
 /* LIFESTEAL. A chance, then a share, then the per-swing ceiling — and it is
@@ -3692,7 +3759,7 @@ function leechFrom(d){
   const heal = Math.min(d * p.leech, p.maxHp * LEECH_HIT_CAP, p.maxHp - p.hp);
   if(heal <= 0.005) return;
   p.hp = Math.round((p.hp + heal)*100)/100;
-  addDmg(p.x, p.y - 58, '+'+fmtHp(heal), '#8ede4a', 14);
+  addDmg(p.x, p.y - 58, '+'+fmtHp(heal), LEECH_COL, 14);
   clogRun.leeched = (clogRun.leeched||0) + heal;
 }
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
@@ -3813,7 +3880,8 @@ function zeroShatter(e){
       if(e2 === e || e2.dead || e2.state !== 'active') continue;
       if(dist(e2, e) > rr + hitR(e2)) continue;
       e2.slowT = Math.max(e2.slowT, p.freeze.dur);
-      chillEnemy(e2, freezeChill());
+      const zsh = ailStacks(freezeChill(), ailShare('frost', 'frost'));
+      if(zsh > 0) chillEnemy(e2, zsh);
       freezeSolid(e2, true);
       hitEnemy(e2, dmg, angTo(e, e2), 30, 'frost', {});
     }
@@ -11164,14 +11232,19 @@ function updatePlayer(dt){
          damage and lays chill stacks, and the fifth stack freezes solid on its
          own. Absolute Zero just skips straight to that. */
       const fdmg = frostDamage();
+      /* THE CHILL IS THE COLD THAT LANDED. A pulse whose every point of cold has
+         been converted into fire is a fire pulse: it burns, it does not chill,
+         and it certainly does not freeze. */
+      const csh = ailShare('frost', 'frost');
       for(const en of enemiesNear(p.x, p.y, rr + 80)){
         if(en.dead || en.state!=='active') continue;
         if(dist(en,p) < rr + hitR(en)){
           en.slowT = Math.max(en.slowT, dur);
-          chillEnemy(en, freezeChill());
+          const nch = ailStacks(freezeChill(), csh);
+          if(nch > 0) chillEnemy(en, nch);
           hitEnemy(en, fdmg, angTo(p,en), 40, 'frost', {});
           /* Absolute Zero: quiet, because the pulse is already shouting */
-          if(fz.stun){ freezeSolid(en, true); addSparks(en.x, en.y-16, 6, '#ffffff'); }
+          if(fz.stun && csh > 0){ freezeSolid(en, true); addSparks(en.x, en.y-16, 6, '#ffffff'); }
           cnt++;
           addSparks(en.x, en.y-16, 3, FX.friend.frost);
         }
@@ -11283,7 +11356,11 @@ function updatePlayer(dt){
           /* the SHOCK goes on before the hit, the way the fireball lights a body
              before it strikes it — so a bolt that finishes something off still
              shocked it, and a shocked body takes the bolt's own hit harder */
-          if(Math.random() < chainShockChance()) shockEnemy(n2.e, 1);
+          /* the shock is the lightning that landed */
+          if(Math.random() < chainShockChance()){
+            const nsh = ailStacks(1, ailShare('chain', 'shock'));
+            if(nsh > 0) shockEnemy(n2.e, nsh);
+          }
           hitEnemy(n2.e, dmg, angTo({x:n2.fx,y:n2.fy}, n2.e), 0, 'chain', {spin:true});
         };
         if(n2.depth===0) fire(); else schedule(n2.depth*CHAIN_JUMP_GAP, fire);
@@ -11540,9 +11617,17 @@ function updatePSpikes(dt){
           const ed = sp.dmg*SLAM_ELEM_SHARE;
           hitEnemy(en, ed, a2, 0, 'slam'+sp.el, {spin:true, quiet:false});
           if(!en.dead && en.state==='active'){
-            if(sp.el==='fire')  burnEnemy(en, ed);
-            if(sp.el==='frost') chillEnemy(en, 1);
-            if(sp.el==='shock') shockEnemy(en, 1);
+            /* and the ailment the element brings is only as big as the element
+               that survived the hero's own conversions */
+            const el2 = sp.el === 'fire' ? 'fire' : sp.el === 'frost' ? 'frost' : 'shock';
+            const ssh = ailShare('slam'+sp.el, el2);
+            if(ssh > 0){
+              if(sp.el==='fire')  burnEnemy(en, ed*ssh);
+              else {
+                const n3 = ailStacks(1, ssh);
+                if(n3 > 0) (sp.el==='frost' ? chillEnemy : shockEnemy)(en, n3);
+              }
+            }
           }
         } else {
           hitEnemy(en, sp.dmg, a2, 160*weapon.kb, 'slam', {spin:true});
@@ -14093,8 +14178,10 @@ function updateProjectiles(dt){
         pr.dead = true;
         addSparks(t2.x, t2.y-16, 6, '#ffb02e');
         /* the fire goes on first, exactly as the bolt does, so a body the ember
-           finishes off still dies burning — and the chain carries its depth */
-        burnEnemy(t2, pr.dmg, pr.depth);
+           finishes off still dies burning — and the chain carries its depth. It
+           is also only as much fire as actually arrived as fire. */
+        const esh = ailShare('fire', 'fire');
+        if(esh > 0) burnEnemy(t2, pr.dmg*esh, pr.depth);
         hitEnemy(t2, pr.dmg, angTo(pr, t2), 40, 'fire', {});
       }
     }
@@ -14132,10 +14219,14 @@ function updateProjectiles(dt){
         addRing(pr.x, pr.y, 4, 220, pr.r*0.6, '#ffd166', 4, 0.3);
         addSparks(pr.x, pr.y, 10, '#ff9a3c');
         addShake(0.1); SFX.boomSmall();
+        /* THE FIRE IT LEAVES IS THE FIRE THAT LANDED. Convert every point of
+           it into chaos and the bolt sets nothing alight — which is the whole
+           point of having converted it. */
+        const fshare = ailShare('fire', 'fire');
         for(const e of enemies){
           if(e.dead || e.state!=='active') continue;
           if(dist(e, pr) > pr.r + (e.r||12)) continue;
-          burnEnemy(e, pr.dmg);
+          if(fshare > 0) burnEnemy(e, pr.dmg*fshare);
           hitEnemy(e, pr.dmg, angTo(pr, e), 140, 'fire', {});
         }
         /* everything breakable inside the burst takes a hit */
@@ -17807,8 +17898,8 @@ const CLOG_MAX = 200;        /* lines kept per tab */
 const CLOG_SHOW = 15;        /* lines drawn */
 const CLOG_MERGE = 0.45;     /* seconds within which repeat hits fold into one line */
 const CLOG_WINDOW = 5;       /* seconds the DPS meters average over */
-const CLOG_OUT = 0, CLOG_IN = 1, CLOG_EVT = 2, CLOG_DPS = 3;
-const CLOG_TABS = ['DEALT', 'TAKEN', 'EVENTS', 'DPS'];
+const CLOG_OUT = 0, CLOG_IN = 1, CLOG_EVT = 2, CLOG_DPS = 3, CLOG_TYPE = 4;
+const CLOG_TABS = ['DEALT', 'TAKEN', 'EVENTS', 'DPS', 'TYPES'];
 /* PER-ABILITY DPS OVER A MINUTE. The run totals answer "what did the most
    damage all run", which flatters whatever you picked first and buries a spell
    that only came online at wave 30. This answers the balance question instead —
@@ -17865,20 +17956,25 @@ let clogView = CLOG_OUT;
 let clogLines = [[], [], []];         /* one scrollback per tab */
 let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
 let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
+let clogType = {};                    /* ...and by what the damage was MADE OF */
+/* the one character that keeps the by-type buckets out of the by-source chart */
+const DPS_TYPE = '~';
 let clogKills = {};                   /* run kill counts by monster */
 let clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
 let clogAilAcc = 0;
 let clogTabRects = [];                /* filled in by the renderer, read by the mouse */
+let clogClearRect = null;
 function clogReset(){
   clogLines = [[], [], []];
   clogOutW = []; clogInW = []; clogSrc = {}; clogFrom = {}; clogKills = {}; clogDps = {};
+  clogType = {};
   clogRun = { dealt:0, taken:0, kills:0, elites:0, bosses:0, hits:0, crits:0, evaded:0, blocked:0, leeched:0 };
   clogAilAcc = 0;
 }
 function clogToggle(){
   clogOn = !clogOn;
   if(clogOn) clogPush(CLOG_EVT, null, 'combat log on — click a tab, L to hide', '#9fdc7e');
-  else clogTabRects = [];
+  else { clogTabRects = []; clogClearRect = null; }
 }
 function clogCycle(){
   if(!clogOn){ clogToggle(); return; }
@@ -17920,10 +18016,21 @@ function clogRate(arr){
 }
 /* The totals are always kept — switching the log on mid-wave should not hand
    you an empty ledger — but the text lines cost nothing while it is off. */
-function logDealt(e, d, source, crit, suppressed){
+function logDealt(e, d, source, crit, suppressed, mix){
   clogRun.dealt += d; clogRun.hits++; if(crit) clogRun.crits++;
   clogSrc[source] = (clogSrc[source]||0) + d;
   dpsAdd(source, d);
+  /* AND THE SAME DAMAGE AGAIN, BY WHAT IT WAS MADE OF. The DEALT tab and the
+     DPS chart answer "which of my spells is doing the work", which is not the
+     same question as "what am I actually dealing" — and once conversion exists
+     the second one is the one a build is built around. Same buckets, same
+     rolling window, keys marked so the two charts never mix. */
+  if(mix) for(const k in mix){
+    const part = d * mix[k];
+    if(!(part > 0)) continue;
+    clogType[k] = (clogType[k] || 0) + part;
+    dpsAdd(DPS_TYPE + k, part);
+  }
   clogOutW.push({ t: runTime, d }); clogTrim(clogOutW);
   if(!clogOn) return;
   const name = e.bname || e.type;
@@ -17998,18 +18105,28 @@ function clogTabAt(x, y){
    the sword at whatever is standing behind it. */
 /* one colour per damage source, held steady across the whole run so a bar and
    its sparkline are the same thing at a glance */
+/* A SOURCE THAT IS ALSO A TYPE WEARS THE TYPE'S COLOUR. The by-source chart
+   and the by-type chart sit one tab apart, and a fireball drawn orange beside a
+   FIRE row drawn red reads as two different things. Everything that has an
+   obvious type takes it from the one palette; the rest keep a colour of their
+   own, because a spell is not a damage type. */
 const DPS_COLS = {
-  sword:'#cfd6dd', storm:'#9fe8ff', vortex:'#b98cff', orbit:'#ffd166', blaster:'#ffe9b0',
-  chain:'#9ad8ff', bomb:'#ffb04a', bane:'#9fdc7e', fire:'#ff8a3c', frost:'#bfe3ff',
-  burn:'#ff6a1a', bleed:'#ff5a5a', poison:'#7fd44a', ember:'#ffb02e', whirl:'#e6e6e6'
+  sword:CONV_COL.phys, slam:CONV_COL.phys, storm:'#9fe8ff', vortex:'#b98cff',
+  orbit:'#ffd166', blaster:'#ffe9b0', bomb:'#ffb04a', whirl:'#e6e6e6',
+  chain:CONV_COL.shock, fire:CONV_COL.fire, frost:CONV_COL.frost, bane:DOT_COL.bane,
+  burn:DOT_COL.burn, bleed:DOT_COL.bleed, poison:DOT_COL.bane, ember:'#ffb02e',
+  slamfire:CONV_COL.fire, slamfrost:CONV_COL.frost, slamshock:CONV_COL.shock
 };
 const CLOG_DPS_ROWS = 9;      /* sources listed; the rest fold into ONE row */
 const CLOG_DPS_ROWH = 26;
 /* how many rows the chart will draw, so the panel can be the right height
    before a single one of them is drawn */
-function dpsRowCount(){
+function dpsRowCount(typed){
   let n = 0;
-  for(const k in clogDps) if(dpsOf(k) > 0.0001) n++;
+  for(const k in clogDps){
+    if((k.charAt(0) === DPS_TYPE) !== !!typed) continue;
+    if(dpsOf(k) > 0.0001) n++;
+  }
   return Math.min(n, CLOG_DPS_ROWS);
 }
 function dpsColour(k){
@@ -18022,8 +18139,15 @@ function dpsColour(k){
    and a sixty-second sparkline so a spell that has gone quiet looks different
    from one that never fired. Everything is drawn from dpsSeries(), so the
    picture and the number can never disagree. */
-function drawDpsTab(c, x, y, w, panelBottom){
-  const keys = Object.keys(clogDps);
+/* TYPED is the same chart asked a different question. By SOURCE it says which
+   of your spells is doing the work; by TYPE it says what you are actually
+   dealing, which is not the same thing at all the moment a conversion is in
+   play — a staff converting all of its fire to chaos shows one fire source and
+   nothing but chaos damage. */
+function drawDpsTab(c, x, y, w, panelBottom, typed){
+  const label = k=> typed ? (CONV_NAME[k.slice(1)] || k.slice(1)) : k;
+  const colour = k=> typed ? (CONV_COL[k.slice(1)] || '#ffffff') : dpsColour(k);
+  const keys = Object.keys(clogDps).filter(k=>(k.charAt(0) === DPS_TYPE) === !!typed);
   const rows = keys.map(k=>({ k, dps: dpsOf(k) })).filter(r=>r.dps > 0.0001)
                    .sort((a,b)=> b.dps - a.dps);
   const win = dpsWindow();
@@ -18034,7 +18158,7 @@ function drawDpsTab(c, x, y, w, panelBottom){
   c.fillStyle = '#8e9aa4';
   c.fillText('last '+Math.round(win)+'s'+(win < CLOG_DPS_WIN ? ' (filling)' : ''), x+118, y);
   c.textAlign = 'right';
-  c.fillText(rows.length+' source'+(rows.length===1?'':'s'), x+w-12, y);
+  c.fillText(rows.length+(typed?' type':' source')+(rows.length===1?'':'s'), x+w-12, y);
   c.textAlign = 'left';
   y += 14;
   c.strokeStyle = 'rgba(150,170,190,0.2)'; c.lineWidth = 1;
@@ -18042,7 +18166,7 @@ function drawDpsTab(c, x, y, w, panelBottom){
   y += 12;
   if(!rows.length){
     c.font = '600 11px Fredoka'; c.fillStyle = '#5f6b75';
-    c.fillText('nothing has dealt damage yet', x+12, y);
+    c.fillText(typed ? 'nothing has landed yet' : 'nothing has dealt damage yet', x+12, y);
     return y + 14;
   }
   /* fold the tail into one row rather than dropping it — a build with twelve
@@ -18059,9 +18183,10 @@ function drawDpsTab(c, x, y, w, panelBottom){
   const barX = x + 96, barW = w - 96 - 68;
   for(const r of list){
     if(y + CLOG_DPS_ROWH > panelBottom - 4) break;
-    const col = r.tail ? '#7c8a80' : dpsColour(r.k);
+    const col = r.tail ? '#7c8a80' : colour(r.k);
+    const nm = r.tail ? r.k : label(r.k);
     c.font = '700 11px Fredoka'; c.fillStyle = col;
-    c.fillText(r.k.length > 13 ? r.k.slice(0,12)+'…' : r.k, x+12, y+6);
+    c.fillText(nm.length > 13 ? nm.slice(0,12)+'…' : nm, x+12, y+6);
     /* the share bar */
     c.fillStyle = 'rgba(255,255,255,0.07)';
     roundRect(c, barX, y+1, barW, 10, 5); c.fill();
@@ -18096,7 +18221,8 @@ function drawDpsTab(c, x, y, w, panelBottom){
     y += CLOG_DPS_ROWH;
   }
   c.font = '600 9px Fredoka'; c.fillStyle = '#5f6b75';
-  c.fillText('bar = share of the best · line = this source, second by second', x+12, y+4);
+  c.fillText(typed ? 'bar = share of the best · line = this type, second by second'
+                   : 'bar = share of the best · line = this source, second by second', x+12, y+4);
   return y + 14;
 }
 function clogHit(x, y){
@@ -18104,17 +18230,23 @@ function clogHit(x, y){
   const p0 = clogTabRects[0].panel;
   return x>=p0.x && x<=p0.x+p0.w && y>=p0.y && y<=p0.y+p0.h;
 }
+function clogClearAt(x, y){
+  const r = clogClearRect;
+  return !!(r && x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h);
+}
 function renderCombatLog(){
-  if(!clogOn){ clogTabRects = []; return; }
+  if(!clogOn){ clogTabRects = []; clogClearRect = null; return; }
   /* four tabs need a little more width than three did, or EVENTS runs into DPS */
-  const w = 348, x = cw - w - 14, top = 108;
+  const w = 386, x = cw - w - 14, top = 108;
   const bottom = ch - 96;
   /* the breakdown wraps, so the panel has to have room for the extra lines */
-  /* the DPS tab is sized to the sources it actually has, not to the most it
-     could ever show — an empty half-panel below five rows reads as a bug */
+  /* the two chart tabs are sized to the rows they actually have, not to the
+     most they could ever show — an empty half-panel below five rows reads as
+     a bug */
+  const chart = clogView===CLOG_DPS || clogView===CLOG_TYPE;
   const h = Math.min(bottom - top,
-    clogView===CLOG_DPS ? 132 + Math.max(1, dpsRowCount())*CLOG_DPS_ROWH
-                        : 156 + CLOG_SHOW*14);
+    chart ? 106 + Math.max(1, dpsRowCount(clogView===CLOG_TYPE))*CLOG_DPS_ROWH
+          : 156 + CLOG_SHOW*14);
   ctx.save();
   ctx.fillStyle = 'rgba(10,14,19,0.80)';
   roundRect(ctx, x, top, w, h, 10); ctx.fill();
@@ -18126,6 +18258,21 @@ function renderCombatLog(){
   ctx.font = '600 10px Fredoka'; ctx.fillStyle = '#8e9aa4';
   ctx.textAlign = 'right'; ctx.fillText('L to hide', x+w-12, y);
   ctx.textAlign = 'left';
+  /* ---- CLEAR. Everything in here is a record of the run so far, and half of
+     reading a record is being able to start a fresh one: pull a build together,
+     wipe it, fight one wave and see what THAT wave did. ---- */
+  {
+    const bw = 50, bh = 17, bx = x+w-12-52-bw, by = y-9;
+    clogClearRect = { x:bx, y:by, w:bw, h:bh, panel:{ x, y:top, w, h } };
+    const hot = mouse && mouse.x >= bx && mouse.x <= bx+bw && mouse.y >= by && mouse.y <= by+bh;
+    ctx.fillStyle = hot ? 'rgba(255,138,106,0.26)' : 'rgba(255,255,255,0.07)';
+    roundRect(ctx, bx, by, bw, bh, 6); ctx.fill();
+    ctx.strokeStyle = hot ? 'rgba(255,138,106,0.8)' : 'rgba(150,170,190,0.28)';
+    ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.font = '700 9px "Titan One"'; ctx.fillStyle = hot ? '#ffb9a4' : '#93a0ab';
+    ctx.textAlign = 'center'; ctx.fillText('CLEAR', bx+bw/2, by+bh/2+0.5);
+    ctx.textAlign = 'left';
+  }
   y += 16;
   /* ---- the tabs ---- */
   clogTabRects = [];
@@ -18168,8 +18315,8 @@ function renderCombatLog(){
     }
     y += 16;
     y = clogBreakdown(ctx, 'HURT BY', clogFrom, clogRun.taken, x+12, y, '#ff8a6a', w-30);
-  } else if(clogView===CLOG_DPS){
-    y = drawDpsTab(ctx, x, y, w, top + h);
+  } else if(clogView===CLOG_DPS || clogView===CLOG_TYPE){
+    y = drawDpsTab(ctx, x, y, w, top + h, clogView===CLOG_TYPE);
     ctx.globalAlpha = 1; ctx.restore();
     return;
   } else {

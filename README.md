@@ -1674,6 +1674,30 @@ lightning, increased cold *and* increased fire.
 **Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
 you half of each, never a hero dealing 160% of their own damage.
 
+### An ailment belongs to what landed
+
+**Convert every point of your fire into chaos and your fireball sets nothing alight.** This
+is the half of conversion that is easy to forget to write, and for a while it was missing:
+the bolt called for an ignite because it was a *fireball*, not because any fire had actually
+arrived — and a burn ticks as **fire**, down a path that deliberately skips the pipeline so
+a wound is not re-converted on every tick. A build that had converted all of its fire away
+was still dealing fire.
+
+Every ailment now rides on the share of the hit that actually arrived as its type, which is
+the rule the chaos poison always followed:
+
+| | |
+|---|---|
+| **Ignite** | the fire that landed — half converted is half the burn, all converted is none |
+| **Chill / freeze** | the cold that landed |
+| **Shock** | the lightning that landed |
+| **Bleed** | the **physical** that landed — a swing converted entirely to fire opens no wound |
+| **Poison** | the chaos that landed (this one was always right) |
+
+A magnitude simply scales. A count of *stacks* cannot be fractional, so the remainder is
+rolled — half a chill is one chill half the time, which is unbiased and does not quietly
+round a 40% conversion away to nothing.
+
 ### Chaos
 
 **Neither physical nor elemental**, and the rules follow from exactly that:
@@ -1908,6 +1932,27 @@ what it costs the wave budget, and what it pays out. The at-this-wave numbers ru
 the same wave curve, monster level and difficulty the spawner uses, so they are what you
 would actually meet rather than the table's raw base.
 
+### Every number is the colour of what it is
+
+**One palette, read everywhere a number is drawn.** White is plain physical, and every type
+owns a colour of its own — so a converted hit wears the colour of what it *arrived* as, and
+you can watch a conversion work without opening a menu and doing arithmetic.
+
+| | | | |
+|---|---|---|---|
+| ⬜ **Physical** | `#ffffff` | 🟥 **Fire** | `#ff4a3c` |
+| 🟦 **Cold** | `#6fb7ff` | 🟪 **Chaos** | `#b46aff` |
+| 🟨 **Lightning** | `#ffe23d` | 🟩 **Lifesteal** | `#8ede4a` |
+
+A wound keeps a dimmer relative of the type that opened it — **dark red** for a bleed,
+**orange** for a burn, **dark green** for the rot — because a tick is a different *kind* of
+event from a blow and reads better for being quieter.
+
+**A critical is the same colour and simply bigger.** Gold for every critical told you it was
+a critical and nothing else; what a hit is *made of* is the thing worth reading at a glance.
+A hit split across types wears the colour of its largest share, and the TYPES tab has the
+exact split.
+
 ### The DPS tab — <kbd>L</kbd>, then the fourth tab
 
 The run totals answer *"what did the most damage all run"*, which flatters whatever you
@@ -1928,6 +1973,23 @@ the array and silently writes a *property* rather than a slot — a roll that lo
 cleared thirty buckets and cleared two. Sources past the ninth fold into one `+N more` row rather than being dropped,
 so the rows still add up to the total printed above.
 
+### The TYPES tab — *what am I actually dealing?*
+
+The same chart asked a different question. **DPS** says which of your spells is doing the
+work; **TYPES** says what you are actually dealing — and the moment a conversion is in play
+those stop being the same question. A staff running 45% fire-to-chaos shows one `fire`
+source on the DPS tab and three rows on this one, because the fireball's chaos half also
+leaves a dose behind.
+
+Same buckets, same rolling minute, same sparklines. The two charts always total the same
+damage; they are two readings of one number.
+
+### Clearing it
+
+**CLEAR**, in the panel's title row, wipes every tab, both sets of totals and all sixty
+seconds of both charts. Half of reading a record is being able to start a fresh one: pull a
+build together, wipe it, fight one wave and see what *that* wave did.
+
 ---
 
 ## Controls
@@ -1941,7 +2003,7 @@ so the rows still add up to the total printed above.
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
-| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** |
+| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
 | <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
