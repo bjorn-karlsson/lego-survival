@@ -1237,9 +1237,26 @@ staff's.
 dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
 is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
 swings, the staff's is focus and warding. Each door sits in its own country — the sword and
-the mace in the red, the axe in the green, the staff in the blue — and each has a private road
-out of the middle that pays its own attribute. Your own beginning costs you **3 to 4** points
-and costs everybody else **15 to 24**.
+the mace in the red, the axe in the green, the staff in the blue.
+
+### Four beginnings, and all four are on the map
+
+Each door **fans into four paths of three flavoured nodes** — a sword's edge, its footwork,
+its guard, its opening — before the plain attribute road takes over. One flavoured node and
+then a corridor made the beginning of a build a formality: you pressed a button and then
+walked. Three is a small decision of its own, which of the four directions you commit to
+before the map opens.
+
+**And every door's paths are open to everybody.** You still *begin* at your own one, and
+nothing paths through somebody else's door — so a sword hero reaching the staff's beginning
+has to come at it from the far end, up the lane it hangs off. Your own costs you **3**
+points; it costs everybody else **5 to 13**, averaging more than double. Leaning into the
+beginning next door is a real option, the way it is in the tree this is borrowed from; four
+beginnings that only one weapon could ever touch were four quarters of the middle of the map
+wasted.
+
+The doors you did not choose are drawn dimmed, so you can see where the axe begins and what
+hangs off it without being able to start there.
 
 ### A lattice, not a wheel
 
@@ -1950,8 +1967,14 @@ event from a blow and reads better for being quieter.
 
 **A critical is the same colour and simply bigger.** Gold for every critical told you it was
 a critical and nothing else; what a hit is *made of* is the thing worth reading at a glance.
-A hit split across types wears the colour of its largest share, and the TYPES tab has the
-exact split.
+
+**A hit made of two things says two numbers.** Twenty per cent of your physical gained as
+extra cold is a real part of every swing, and rolled into one figure in the colour of the
+bigger half it was invisible everywhere but a chart in a panel — so a 137 swing with that
+brick now reads `137` in white with `27.4` in blue stacked above it. Biggest first, each one
+a little smaller than the one below. A part too small to read stays folded into the largest
+rather than littering the screen, and whatever was folded in is *added back* to it, so the
+figures on the screen always total the damage the monster actually took.
 
 ### The DPS tab — <kbd>L</kbd>, then the fourth tab
 

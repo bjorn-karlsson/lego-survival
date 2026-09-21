@@ -1935,6 +1935,11 @@ function burnCap(){
    One entry per ailment, so a third one cannot forget. */
 const DOT_COL = { bane:'#4f9e3a', poison:'#4f9e3a', bleed:'#a3222b', burn:'#ff9a3c' };
 const LEECH_COL = '#8ede4a';
+/* WHEN A SPLIT HIT IS WORTH TWO NUMBERS. Below either of these a part is folded
+   into the figure above it: four numbers off one swing, two of them unreadable,
+   is worse than one number that is nearly right. */
+const DMG_SPLIT_MIN = 0.4;      /* a part this small cannot be read anyway */
+const DMG_SPLIT_SHARE = 0.06;   /* ...nor can one this thin a slice of the hit */
 /* WHAT COLOUR A NUMBER IS. A wound keeps its own, because a tick is a different
    KIND of event from a blow and reads better for being dimmer. Everything else
    wears whatever the hit mostly ARRIVED as — which is how you watch a
@@ -3732,15 +3737,44 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     if(Math.random() < 0.4)
       addDmg(e.x, e.y-30*e.scale, fmtHp(d), dmgColour(source, mix), 13);
   } else {
-    /* THE NUMBER IS THE COLOUR OF WHAT LANDED. A crit is the same colour and
-       simply bigger — gold for every critical told you it was a crit and
-       nothing else, and what a hit is MADE OF is the thing worth reading at a
-       glance. A hit split across types wears the colour of the largest share;
-       the TYPES tab in the log has the exact split. */
-    const col = dmgColour(source, mix);
-    addSparks(e.x, e.y-18*e.scale, 5, crit?col:'#fff2b0');
-    addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
-      col, crit?23:16);
+    /* THE NUMBER IS THE COLOUR OF WHAT LANDED, and a hit made of two things
+       says TWO numbers. Twenty per cent of your physical gained as extra cold
+       is a real part of every swing, and rolled into one figure in the colour
+       of the bigger half it was invisible — the only place it showed was a
+       chart in a panel most of a fight never has open.
+       A crit is the same colour and simply bigger: gold for every critical told
+       you it was a critical and nothing else, and what a hit is MADE OF is the
+       thing worth reading at a glance. */
+    const parts = [];
+    for(const k of CONV_ORDER){
+      const sh = mix[k];
+      if(!(sh > 0)) continue;
+      const part = d * sh;
+      /* a sliver is noise: a part too small to read as its own figure stays
+         folded into the one above it rather than littering the screen */
+      if(part < DMG_SPLIT_MIN || sh < DMG_SPLIT_SHARE) continue;
+      parts.push({ k, part });
+    }
+    const lead = dmgColour(source, mix);
+    addSparks(e.x, e.y-18*e.scale, 5, crit?lead:'#fff2b0');
+    if(parts.length < 2){
+      addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
+        lead, crit?23:16);
+    } else {
+      /* biggest first, and each one stacked a little above the last so they
+         read as one blow split rather than as several blows */
+      parts.sort((a, b)=> b.part - a.part);
+      let shown = 0;
+      for(const pt of parts) shown += pt.part;
+      /* whatever was too small to name is put back on the largest part, so the
+         figures on the screen still add up to the damage the monster took */
+      parts[0].part += d - shown;
+      parts.forEach((pt, i)=>{
+        addDmg(e.x + (i ? (i%2 ? 16 : -16) : 0), e.y-34*e.scale - i*17,
+          (i === 0 ? (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'') : '') + fmtHp(pt.part),
+          CONV_COL[pt.k], crit ? (i ? 19 : 23) : (i ? 14 : 16));
+      });
+    }
     addShake(crit?0.13:0.08);
     SFX.hit();
   }
@@ -6599,17 +6633,52 @@ const META_TRAVEL = {
    into the lattice rather than stopping — a dead end anywhere but the rim is a
    mistake. Keyed by weapon with a fallback, so a new weapon gets a beginning
    whether or not anybody writes one for it. */
+/* ---- THE FOUR WAYS OUT OF A DOOR, and what is on each of them.
+   FOUR PATHS OF THREE, not four single nodes. One flavoured step and then a
+   plain attribute road made the beginning of a build read as a formality: you
+   pressed a button and then walked. Three steps is a small decision of its own
+   — which of the four directions do you commit to before the map opens up —
+   and it is the shape the tree this is borrowed from uses for every class.
+
+   AND EVERY DOOR'S PATHS ARE OPEN TO EVERYBODY. You still BEGIN at your own
+   one, and nothing paths through somebody else's door, but a sword hero who
+   walks all the way round to the staff's beginning may buy what is on it. Four
+   beginnings on one map that only one weapon could ever touch were four
+   quarters of the middle of the map wasted. */
 const META_BRANCH = {
-  sword:[['Edge Work','incMelee',0.03],['Footwork','incAtk',0.03],
-         ['Sidestep','speed',0.03],['Parry','armour',3]],
-  mace: [['Heft','slamDmg',0.4],['Set Stance','armour',3],
-         ['Thick Skin','incHp',0.03],['Follow Up','incMelee',0.03]],
-  axe:  [['Quick Hands','incAtk',0.04],['Openings','incCrit',0.04],
-         ['Bloodletting','bleedChance',0.04],['Light Feet','speed',0.03]],
-  staff:[['First Words','incSpell',0.03],['Kindle','incElem',0.03],
-         ['Clear Mind','incCast',0.04],['Wards','allRes',0.03]],
-  _:    [['First Steps','incAll',0.02],['Grip','incAtk',0.03],
-         ['Footing','incHp',0.03],['Guard','armour',3]],
+  /* RED IS TWO BEGINNINGS, not one. The sword and the mace both live in the red
+     country, so a build that never leaves it can walk into twenty-four cheap
+     opening nodes where green and blue get twelve — which put a stay-at-home
+     red build over the power budget the moment these paths grew from one node
+     to three. Red's openings are the smaller ones because red has twice as many
+     of them; the flat physical node went altogether, for the reason it always
+     goes: flat damage on a weapon whose base is one is a multiplier in
+     disguise. */
+  sword:[
+    [['Edge Work','incMelee',0.025],  ['Keen Edge','incMelee',0.03],   ['Swordsman','incMelee',0.04]],
+    [['Footwork','incAtk',0.025],     ['Quickstep','incAtk',0.03],     ['Sidestep','speed',0.03]],
+    [['Parry','armour',2],            ['Bracing','armour',3],          ['Guard Stance','fireRes',0.04]],
+    [['Opening','incCrit',0.035],     ['First Blood','bleedChance',0.03],['Cruel Edge','critMult',0.08]]],
+  mace: [
+    [['Heft','slamDmg',0.3],          ['Overhead','slamDmg',0.4],      ['Wide Fault','slamRange',0.06]],
+    [['Set Stance','armour',2],       ['Plated','incArmour',0.05],     ['Read the Room','suppress',0.025]],
+    [['Thick Skin','incHp',0.025],    ['Hale','incHp',0.03],           ['Knitting','incRegen',0.10]],
+    [['Follow Up','incMelee',0.025],  ['Momentum','incMelee',0.03],    ['Heavy Hands','incAtk',0.025]]],
+  axe:  [
+    [['Quick Hands','incAtk',0.04],   ['Flurry','incAtk',0.04],        ['Light Feet','speed',0.04]],
+    [['Openings','incCrit',0.04],     ['Precision','incCrit',0.05],    ['Savagery','critMult',0.10]],
+    [['Bloodletting','bleedChance',0.04],['Gutting','bleedShare',0.03],['Septic','incDot',0.05]],
+    [['Surefoot','speed',0.03],       ['Vaulting','roll',0.10],        ['Warpaint','frostRes',0.05]]],
+  staff:[
+    [['First Words','incSpell',0.03], ['Second Words','incSpell',0.04],['Cadence','incCast',0.04]],
+    [['Kindle','incElem',0.03],       ['Smoulder','incFire',0.05],     ['Charged','flatElem',0.06]],
+    [['Clear Mind','incCast',0.04],   ['Widening','boltR',0.06],       ['Resonant','incSpell',0.03]],
+    [['Wards','allRes',0.03],         ['Attunement','allRes',0.03],    ['Bookish','int',5]]],
+  _:    [
+    [['First Steps','incAll',0.02],   ['Onward','incAll',0.02],        ['Grip','incAtk',0.03]],
+    [['Footing','incHp',0.03],        ['Rooted','incHp',0.03],         ['Regrowth','incRegen',0.10]],
+    [['Guard','armour',3],            ['Braced','armour',4],           ['Warded','allRes',0.03]],
+    [['Reach','reach',4],             ['Follow','speed',0.03],         ['Focus','incCrit',0.04]]],
 };
 const META_STARTS = [];
 let META_TREE_UNPLACED = [];
@@ -7277,6 +7346,13 @@ const RING_AT = [0, 5, 12, 22, 34];
     const list = byHome[sec], f = META_MAP.sector[sec][0], t = META_MAP.sector[sec][1];
     const span = ((t - f) + 360) % 360;
     list.forEach((wk, i)=>{
+      /* EVENLY ACROSS THE COUNTRY, and no further apart than that. Pushing the
+         sword and the mace out towards the edges of the red wedge gave their
+         fans more room and put each of them within 25 degrees of a border —
+         two of red's own prizes came out nearer to the axe than to either of
+         the weapons that live there, and the sword's own beginning stopped
+         being meaningfully its own. The fan is spread by the fan, not by
+         moving the door it hangs off. */
       const deg = f + span * ((i + 1) / (list.length + 1));
       const a = deg*Math.PI/180, R = 670;
       const W = WEAPONS[wk];
@@ -7306,23 +7382,47 @@ const RING_AT = [0, 5, 12, 22, 34];
         }
         return false;
       };
+      /* AND THE FOUR WAYS OUT FAN. Picked purely by which hub is nearest, all
+         four pointed the same way — the door is inside the ring, so everything
+         on it is "outward" — and a beginning that opens four ways in a 50
+         degree slice is one way with three spares. Each is kept at least 38
+         degrees off the ones already taken, nearest first, so the fan opens
+         properly and still reaches for what is close. */
+      const bearing = h=> Math.atan2(h.y - st.y, h.x - st.x);
+      const apart = (a2, b2)=> Math.abs(((a2 - b2 + Math.PI*3) % (Math.PI*2)) - Math.PI);
       const near = [];
-      for(const pass of [0, 1]) for(const h of sorted){
+      for(const gap of [0.48, 0.31, 0]) for(const pass of [0, 1]){
+        for(const h of sorted){
+          if(near.length >= 4) break;
+          if(near.indexOf(h) >= 0) continue;
+          if(gap > 0 && near.some(o=>apart(bearing(o), bearing(h)) < gap)) continue;
+          if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
+          near.push(h);
+        }
         if(near.length >= 4) break;
-        if(near.indexOf(h) >= 0) continue;
-        if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
-        near.push(h);
       }
       const flavour = META_BRANCH[wk] || META_BRANCH._;
       near.slice(0, 4).forEach((h, k)=>{
-        const row = flavour[k % flavour.length];
+        /* THREE STEPS, not one. They are laid along the way to the hub this
+           path is aimed at, so the beginning of a build is a short walk you
+           chose rather than a button you pressed — and the lane picks up where
+           they stop, so the road still continues and nothing dead-ends. */
+        const path = flavour[k % flavour.length];
         const fa = Math.atan2(h.y - st.y, h.x - st.x);
-        const fx = Math.round(st.x + Math.cos(fa)*180), fy = Math.round(st.y + Math.sin(fa)*180);
-        const n = push({ id:st.id+'_s'+k, kind:'minor', spoke:metaSectorAt(fx, fy),
-          cl:null, start:wk, name:row[0], x:fx, y:fy, at:0, cost:1,
-          mods:[[row[1], row[2]]], req:[] });
-        add(door.id, n.id);
-        lane(n, h.node, 'door_'+wk+'_'+k);
+        const span = Math.min(470, Math.max(330, Math.hypot(h.x - st.x, h.y - st.y) * 0.66));
+        let prev = door;
+        path.forEach((row, j)=>{
+          const t = (j + 1) / (path.length + 0.35);
+          const off = ((j % 2) ? 1 : -1) * (j === 0 ? 0 : 26);
+          const fx = Math.round(st.x + Math.cos(fa)*span*t + Math.cos(fa + Math.PI/2)*off);
+          const fy = Math.round(st.y + Math.sin(fa)*span*t + Math.sin(fa + Math.PI/2)*off);
+          const n = push({ id:st.id+'_s'+k+'_'+j, kind:'minor', spoke:metaSectorAt(fx, fy),
+            cl:null, start:wk, name:row[0], x:fx, y:fy, at:0, cost:1,
+            mods:[[row[1], row[2]]], req:[] });
+          add(prev.id, n.id);
+          prev = n;
+        });
+        lane(prev, h.node, 'door_'+wk+'_'+k);
       });
     });
   }
@@ -7745,11 +7845,6 @@ function metaNextPoint(m){
 }
 function metaHas(id, m){ m = m || metaCur(); return m.nodes.indexOf(id) >= 0; }
 function metaLocked(n, m){ m = m || metaCur(); return (m.best.wave||0) < (n.at||0); }
-/* IS THIS NODE EVEN YOURS? A door's four first steps carry the weapon's own
-   flavour and belong to it alone. The map hides somebody else's — but hiding is
-   not owning: until this existed they were invisible and still buyable, because
-   the graph walked straight through them. */
-function metaMine(n, wk){ return !n || !n.start || n.start === (wk || metaWeapon()); }
 /* ---- THE GRAPH. You cannot drop points anywhere you like: a node has to touch
    something you already hold, and everything you hold has to trace back to the
    start. That is what makes a tree a tree rather than a shopping list. ---- */
@@ -7757,18 +7852,21 @@ function metaConnected(id, m, extra){
   m = m || metaCur();
   const n = META_BY_ID[id];
   if(!n) return false;
+  /* EVERY DOOR'S PATHS ARE OPEN TO EVERYBODY, and the DOOR is the thing that
+     is not. You begin in yours; nothing walks through anybody else's. So the
+     staff's first steps are buyable by a sword hero — from the far end, the
+     long way round the ring they hang off, which is the whole price of them. */
   if(n.kind === 'start') return n.id === metaStartId();
-  if(!metaMine(n)) return false;                 /* another door's first step */
   for(const r of n.req){
-    if(!metaMine(META_BY_ID[r])) continue;       /* ...and you cannot path through one */
+    const rn = META_BY_ID[r];
+    if(rn && rn.kind === 'start' && r !== metaStartId()) continue;
     if(metaHas(r, m) || (extra && extra.indexOf(r) >= 0)) return true;
   }
   return false;
 }
 function metaCanBuy(n, m){
   m = m || metaCur();
-  if(!n || n.kind === 'start') return false;   /* you are standing in it already */
-  if(!metaMine(n)) return false;               /* somebody else's beginning */
+  if(!n || n.kind === 'start') return false;   /* a door is where you begin, never a purchase */
   if(metaHas(n.id, m) || metaLocked(n, m)) return false;
   if(metaPointsLeft(m) < metaCost(n)) return false;
   return metaConnected(n.id, m, [metaStartId()]);
@@ -8057,8 +8155,10 @@ function metaTipHtml(n, m){
   }).join('');
   const cl = META_CLUSTER_BY_ID[n.cl];
   let foot;
-  if(n.kind === 'start') foot = n.id === metaStartId() ? 'where this weapon begins'
-                                                       : 'another weapon starts here';
+  if(n.kind === 'start') foot = n.id === metaStartId()
+      ? 'where this weapon begins'
+      : 'another weapon begins here — you cannot step through it, but what hangs '
+        + 'off it is yours to walk to the long way';
   else if(metaHas(n.id, m)) foot = treeRefund ? (metaCanRefund(n.id, m) ? 'click to refund'
                                                  : 'holds up a branch — refund those first')
                                               : 'taken';
@@ -8134,10 +8234,11 @@ function renderTree(){
       const r = META_BY_ID[rid];
       if(!r) continue;
       if(r.kind !== 'start' && r.id > n.id) continue;       /* draw each edge once */
-      if(r.kind === 'start' && r.id !== startId) continue;  /* other weapons' doors stay shut */
-      /* ...and so do the branches behind them. Drawn, they are four pairs of
-         nodes floating in the middle of the map wired to nothing visible. */
-      if((n.start && n.start !== wk) || (r.start && r.start !== wk)) continue;
+      /* A DOOR THAT IS NOT YOURS OPENS FOR NOBODY, so the step it leads to is
+         not drawn joined to it — the only way into somebody else's beginning is
+         from the far end, and the picture has to say so. Everything else about
+         those paths is drawn like any other part of the map. */
+      if(r.kind === 'start' && r.id !== startId) continue;
       const live = metaHas(n.id, m) && (metaHas(rid, m) || rid === startId);
       parts.push(`<line x1="${r.x}" y1="${r.y}" x2="${n.x}" y2="${n.y}" `+
         `stroke="${live ? metaSpokeCol(n.spoke) : 'rgba(255,255,255,.20)'}" `+
@@ -8149,12 +8250,14 @@ function renderTree(){
     const col = metaSpokeCol(n.spoke);
     const isStart = n.kind === 'start';
     const mine = isStart && n.id === startId;
-    if(isStart && !mine) continue;                 /* one door, yours */
-    if(n.start && n.start !== wk) continue;        /* another door's branches */
     const has = mine || metaHas(n.id, m);
     const lock = !isStart && metaLocked(n, m);
     const can  = !isStart && metaCanBuy(n, m);
     const rr = metaNodeRadius(n);
+    /* somebody else's door is drawn, dimmed: you can see where the axe begins
+       and what hangs off it, and you can walk to those nodes the long way — you
+       simply cannot start there or step through it */
+    const shut = isStart && !mine;
     const fill = has ? (isStart ? '#ffd76e' : col) : 'rgba(16,21,26,.95)';
     const refundable = treeRefund && has && !isStart && metaCanRefund(n.id, m);
     /* an unowned node still wears the colour of the ground it stands on, faintly
@@ -8174,7 +8277,8 @@ function renderTree(){
         `opacity="${has?1:0.9}" pointer-events="none"/>`
       : isStart
         ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+
-          `fill="#20160a" font-family="Titan One" pointer-events="none">✦</text>`
+          `fill="${mine ? '#20160a' : '#8e9aa4'}" font-family="Titan One" `+
+          `opacity="${mine ? 1 : 0.5}" pointer-events="none">✦</text>`
         : (()=>{ const z = n.kind === 'legend' ? 40 : n.kind === 'keystone' ? 36
                         : n.kind === 'notable' ? 32 : 26, k = z/24;
             /* a GROUP with a transform and not a nested <svg>: the icons are
@@ -8197,7 +8301,7 @@ function renderTree(){
       `<circle cx="${n.x}" cy="${n.y}" r="${rr+22}" fill="transparent"/>`+
       `<circle cx="${n.x}" cy="${n.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
       `stroke-width="${refundable?9:has?7:4}" stroke-opacity="${sop}" `+
-      `opacity="${lock?0.55:1}"/>`+ frame + glyph +
+      `opacity="${lock?0.55:shut?0.38:1}"/>`+ frame + glyph +
       `</g>`);
   }
   /* cluster names, in whatever clear spot the build found for them */

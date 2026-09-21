@@ -1304,3 +1304,80 @@ whether an edge passed through a node's *centre* circle. It now asks for 20px of
 is a tightening of the bar, not a loosening — but the number 20 is a judgement, and the honest
 version of it is: the worst edge on the map clears by 24px, and the test exists to catch a
 return to 1px rather than to police the difference between 20 and 24.
+
+---
+
+## Twelfth pass — two numbers, and four beginnings
+
+### A hit made of two things says two numbers
+
+The eleventh pass gave every number the colour of what it arrived as, and picked the largest
+share when a hit was split. That is fine for a conversion, which moves damage from one type to
+another — but **gain as extra** does not move anything. Twenty per cent of your physical gained
+as cold is a real part of every swing that the screen simply never mentioned: one white figure,
+and the cold only ever visible as a row in a chart in a panel.
+
+Each part that is worth reading gets a figure of its own now, biggest first, stacked. Two
+thresholds decide what is worth reading — 0.4 damage, or 6% of the hit — because four numbers
+off one swing, two of them unreadable, is worse than one number that is nearly right. What
+falls under them is *added back to the largest part*, so the figures on the screen always total
+the damage the monster took. That last bit is the one a test caught: dropping the slivers
+instead of putting them back is invisible in a two-part hit and only shows up when a third,
+tiny part exists, which is exactly the case the probe now builds.
+
+### Four beginnings, and all four on the map
+
+Two passes ago this project added `metaMine` and wrote *"hidden is not owned"*: a door's first
+steps belonged to that weapon, the map drew nobody else's, and the graph refused to walk
+through them. That was the right fix for the bug it fixed — they were invisible and still
+buyable — but it was the wrong rule. Four beginnings that only one weapon could ever touch are
+four quarters of the middle of the map wasted, and the middle of the map is where everybody
+looks first.
+
+`metaMine` is gone. What replaced it is narrower and is the thing that actually matters: **a
+door is where you begin, not ground you own.** `metaConnected` returns true for a start node
+only if it is yours, so nothing paths through anybody else's — which means the only way into
+the staff's beginning, for a sword, is from the far end, up the lane it hangs off.
+
+Measured: your own beginning is 3 points away; it is 5 to 13 for everybody else, averaging more
+than double. The nearest neighbour paying 5 is the mechanic working, not a leak — leaning into
+the beginning next door is a real option.
+
+The assertion that guarded the old rule was rewritten rather than deleted, and it is now three
+questions instead of one:
+
+| | |
+|---|---|
+| standing on any neighbour, another weapon **can** buy it | it is not walled off |
+| standing in its own door and nothing else, it **cannot** | nothing paths through a foreign door |
+| **holding** the foreign door — which an old save can claim — it still cannot | a door is not ground |
+
+That third row is the one that keeps the guard honest. Without it the check that refuses a
+foreign door as a stepping stone is dead code: you can never buy one, so you can never hold one
+— *unless a save written under different rules says you do.*
+
+### Three steps, not one
+
+Each of a door's four ways out is three flavoured nodes now rather than one. 12 nodes per
+weapon, 48 on the map, and the fan is spread deliberately: the door sits *inside* the innermost
+ring, so every hub on it is "outward", and picked nearest-first all four ways left within a
+fifty degree slice. Each way is now kept at least 27 degrees off the ones already taken.
+
+Two things fell out of that, both caught by tests rather than by eye:
+
+- **Red went over the power budget.** The sword and the mace both live in the red country, so
+  a build that never leaves it walks into *twenty-four* cheap opening nodes where green and
+  blue get twelve — ×2.66 against a ceiling of ×2.60. Red's openings are the smaller ones
+  now, and the flat physical node went altogether, for the reason flat damage always goes:
+  on a weapon whose base is one it is a multiplier in disguise.
+- **Spreading the two red doors apart made it worse, not better.** Pushing the sword and the
+  mace out towards the edges of their wedge gave the fans room and put each within 25 degrees
+  of a border; two of red's own prizes came out nearer to the axe than to either weapon that
+  lives there. The doors went back to evenly spaced and the fan is spread by the fan.
+
+One honest note on the fan assertion: the spread rule measurably moves only one of the four
+doors (the mace's, from 27 degrees between its tightest pair to 46). The 24-degree floor in
+`roads.js` is a floor, not a proof of the feature, and the break-build that removes the rule is
+caught by the prize-distance test rather than by it. Said here because a test that cannot fail
+is worse than no test, and a test that passes for a reason other than the one it claims is the
+same thing wearing a hat.
