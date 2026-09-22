@@ -1997,3 +1997,101 @@ Twenty-four breaks for `poe4`, 53 tests green, wave-50 soak clean.
 `ember` failed once inside a full suite run and has not reproduced in fifteen tries since. Its
 assertions are wall-clock ones — *did the chain settle within ten seconds* — which is the same
 shape as the `stacks` flake fixed last pass. Recorded rather than guessed at.
+
+## Twenty-first pass — the contest, and six beginnings
+
+### A dodge you cannot answer
+
+A shade evaded 32% of your hits. Nothing in the game moved that number — no brick, no node, no
+weapon — which makes it either irrelevant or infuriating and never interesting. PoE's shape is
+two ratings pulling against each other, and the whole reason it works is that both halves are
+things you can buy.
+
+Three decisions worth writing down:
+
+**It is checked on attacks and never on spells.** A swing has to find a body that is moving; a
+fireball arrives where it was aimed. That one line is what makes accuracy a melee stat, gives the
+staff a reason not to want it, and keeps the caster's damage exactly as reliable as it was. A
+damage-over-time tick does not re-roll either — the wound was landed when it was opened.
+
+**A monster's two ratings are derived, not authored.** Forty rows is forty chances to forget one,
+and a stat nobody can predict is a stat nobody plays around. A body dodges because it is fast and
+small; `evade` on a row is the shade's own gift on top of that. The test walks the whole roster
+and asserts every monster has both and neither is absurd.
+
+**Nothing scales with the wave.** This is the deliberate departure from PoE, where accuracy is a
+treadmill: monster evasion climbs with level and you buy accuracy every ten levels to stand
+still. A wave-50 monster here is already dangerous for three reasons. A monster's evasion is a
+property of what it *is*, so the stat is a choice made once rather than a tax paid forever.
+
+Evasion on the hero starts at zero on purpose — armour is the defence you begin with, evasion is
+the one you choose — so a hero who buys none is missed by nothing, exactly as before this existed.
+
+### The fixtures that had been zeroing a field that no longer exists
+
+`e.evade = 0` appears in fifteen test fixtures, next to `e.armour = 0` and `e.suppress = 0`, for
+the same reason: a probe measuring bleed should not have its answer eaten by a dodge. The field is
+`e.evasion` now, so every one of those lines was zeroing nothing, and spawned imps — which are
+fast and small, so they dodge well — started slipping the swings those probes were measuring.
+
+`stacks` caught it: "no single body took a certain critical" on the axe's *guaranteed* backswing
+crit, because the guaranteed crit had missed. Every fixture in the suite now zeroes both.
+
+### Six doors
+
+Four weapons is not a symmetrical number: red held two doors, green one, blue one. Worse, every
+door sat inside a 670px circle round the middle of a 6,000px map, so the six ways into the tree
+were one tangle. Two more doors — a bow in green and a wand in blue, neither of which exists as a
+weapon yet — and the circle pushed out to 900.
+
+An unfinished door gets a hollow dashed ring, a tooltip that says what it is, and **one short
+spur** instead of a fan. Three more ways of three would be nine nodes nobody can ever take, in
+exactly the part of the map that could least afford them. `soonfans` is the break.
+
+And the fan itself went from four ways to three. Every exit from a door inside the ring points
+outward, so the fourth was a spare.
+
+### Two numbers that had to move together
+
+Moving the doors out broke the fan geometry: at 670 a fan of 330–470px stopped in open ground,
+and at 900 the same fan walked its last node past the hub it was aimed at and laid its line across
+the ring's own edges. Three crossings. The fan is a *fraction* of the way there now and never a
+fixed distance.
+
+Then `roads` reported a red keystone cheaper from the axe's door than from either red door. The
+doors had been spread evenly across their wedge, which put one 27 degrees from a border.
+`DOOR_SPREAD` pulls the pair in towards the middle of their own country; at 0.70 they are 38
+degrees apart, 593px, and every corner of the map is cheapest from a door that lives in it.
+
+### Two thresholds that were measuring the wrong thing
+
+`meta` asserted a keystone's cost spread across the four doors was at least **4 points**. With
+`LANE_STEP` at 560 the whole map is fewer points across and every spread shrank with it — which
+says nothing about whether the countries still mean anything. It is a *proportion* now.
+
+And beside it, the claim itself with no threshold in it at all: **the cheapest way to a corner is
+a door that lives in that corner's country.** That is either true or it is not, it needs no
+number, and it is what the spread was always standing in for.
+
+`roads` and `nodes` had the same shape of problem — "four ways" and "every weapon has a flat
+damage node" were descriptions of the old tree, not rules. Both restated.
+
+### The card that would not run off the screen, and could not be tested
+
+The tree's own pane stops 330px short of the window, so no node is ever near the right edge and
+the flip that keeps the tooltip on screen cannot be reached by moving a real mouse. The handler
+reads `ev.clientX`, so the corner it was written for is reachable by *sending* one.
+
+The first version of that test dispatched three corner moves and measured once — and the last of
+the three was the bottom left, which fits whatever the code does. A card that had run a thousand
+pixels off the right edge two moves earlier came back inside before anybody looked. It measures
+after each corner now.
+
+### And a coin flip that had been sitting in poe4 since it was written
+
+"A real late-game hit cannot shock a boss" failed once in a suite run. The ailment chance is
+capped at 75%, so a single hit says that one time in four. The same file had already fixed this
+exact shape for its magnitude cases three sections earlier and missed it here. Twelve tries, take
+the most any of them landed.
+
+23 breaks for `acc`, 54 tests green, wave-50 soak clean.

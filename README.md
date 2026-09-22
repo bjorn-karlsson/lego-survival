@@ -1851,6 +1851,64 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
 
+### Accuracy and evasion
+
+**A flat dodge chance is a number you cannot answer.** A shade evaded 32% of your hits and
+nothing in the game changed that — it was either irrelevant or infuriating. PoE's shape is two
+ratings pulling against each other, so investing in either is real and neither ever wins:
+
+```
+chance to hit = accuracy / (accuracy + (evasion / 4)^0.8)
+```
+
+floored at **15%**, because a fight you cannot win by any margin is not a fight.
+
+**It is an attack thing.** A swing has to find a body that is moving; a fireball arrives where
+it was aimed. Accuracy is checked on attacks and never on spells, which is what makes it a melee
+stat and gives the staff a reason not to want it. A damage-over-time tick never re-rolls either
+— the wound was landed when it was opened.
+
+| | accuracy | vs an ordinary body | vs a hard dodger |
+|---|--:|--:|--:|
+| **SWORD** | 370 | 94.2% | 87.0% |
+| **AXE** | 310 | 93.1% | 84.9% |
+| **STAFF** | 236 | 91.2% | 81.1% |
+| **MACE** | 214 | 90.3% | 79.5% |
+
+The sword is the precise one. The mace is a lump of iron on a stick: it hits hardest and least
+often, and misses one swing in five against something quick unless it buys accuracy.
+
+**A monster's two ratings are derived, not authored.** The roster is forty rows and hand-writing
+a number into each is forty chances to forget one — and a stat nobody can predict is a stat
+nobody plays around. A body dodges because it is **fast** and **small**: a skeleton slips a
+swing, a stone golem does not, and `evade` on a row is the shade's own gift on top of that.
+
+**And nothing here scales with the wave.** PoE's accuracy is a treadmill — monster evasion climbs
+with level, so you buy accuracy every ten levels to stand still. A wave-50 monster here is
+already dangerous for three reasons; it does not need to also be harder to hit. A monster's
+evasion is a property of *what it is*, so accuracy is a choice made once rather than a tax.
+
+**Evasion is the defence you choose.** Armour is the one you begin with; evasion starts at
+**zero**, so a hero who never buys any is never missed by anything — exactly as it was before
+this existed. It does nothing against a **spell**: armour and suppression are what stand in
+front of those.
+
+**Dexterity is the attribute for both**, on top of everything it already did: **+2 accuracy** and
+**+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
+busiest of the three now, which is what it is in the game this borrows from.
+
+### Buffs on the left, ailments on the right
+
+One list of everything bad was already in the corner doing its job. What was missing was the
+other half: a hero carrying three charges, a rage well and a fortune had no way to see any of it
+except the chevrons over their own head, which say *how many* and never what they are worth.
+
+Two columns now — **BUFFS** on the left, where your eye already goes for your own health bar, and
+**AILMENTS** on the right, where the thing happening *to* you belongs. Every row says what the
+stack is actually paying (`FRENZY ×3 · +12% MORE dmg`), and a row too long for its pill drops its
+extras one at a time rather than running off the end. Both columns are built from data — the
+stack table, the curse table, the element list — so a fourth charge arrives in here by existing.
+
 ### How big was the hit?
 
 **Three of the five ailments already scaled with the hit and two did not.** A bleed ticks for a
@@ -1922,6 +1980,48 @@ the ramp gradually instead of all at once.
 does — and a build that does all three gets all three. Like rage, **nobody gains them by
 default**: the ceiling is three and the generation is zero until a brick or a node hands it
 over. That is what keeps them a build rather than a thing that happens to everyone.
+
+### Six beginnings
+
+**Four weapons is not a symmetrical number.** Red held two doors, green one and blue one, so the
+map had a crowded side and a bare one — and every door sat inside a 670px circle round the
+middle, which is why the start of the tree read as one tangle rather than six places you could
+begin.
+
+Two more doors, one in green and one in blue, and the circle they stand on is pushed out to
+**900px**: six doors, two to a country, none of them within **590px** of another. Two of them
+are **not finished** — there is no bow and no wand in the game yet — so they are drawn hollow
+and dashed, they say so when you hover them, and they carry one short spur each instead of a
+full fan. A door that is *coming* is worth more on the map than a gap where one should be: it
+tells you the shape of the thing, which is the whole point of a tree you can see all of at once.
+
+**Three ways out of a door, not four.** Every exit from a door inside the ring points outward,
+so a fourth was one way out with three spares — twelve nodes inside one 50-degree slice, in the
+one part of the map that could least afford them.
+
+**Longer roads with fewer stops.** A road is worth walking when the jump between one decision
+and the next is long; six attribute nodes shoulder to shoulder is a queue, and a queue is a toll.
+`LANE_STEP` went from **392** to **560** and the cap from five stops to four. The map went from
+1,200 nodes to 983 and the median gap between stops is **456px**, so skipping a block of them to
+reach something is a real choice.
+
+**And no node prints a number nobody can read.** `+0.04 flat physical damage` is a real 4% on a
+weapon whose base is one, and it reads like a rounding error — the *unit* was the problem, not
+the value. No tree node prints a raw figure under **0.2** now; where the honest value is smaller
+it is sold as a percentage instead, which is the same strength in a unit you can act on. (A card
+may still hand over a small flat number: by then you have a built hero to add it to, and the card
+says what it does to your actual damage.)
+
+### The card comes to you
+
+Reading a node meant looking away to a panel 900px to the right and then back to find where you
+were — twice per node, on a map with a thousand of them. **The card follows the cursor** now, and
+flips to the other side rather than running off the edge of the window. The panel keeps what it
+is actually good at: what you have spent, and what the tree is giving you.
+
+**And the three country washes are a toggle, off by default.** Three coloured wedges and three
+dashed borders across the whole map is a lot of ink for a thing you need to know once. `COUNTRIES`
+turns them on, and it is remembered.
 
 ### Five more sentences in the tree
 

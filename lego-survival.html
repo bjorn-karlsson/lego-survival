@@ -393,6 +393,16 @@
   .treewrap svg{display:block;width:100%;height:100%;max-height:100%}
   .treeside{flex:0 0 330px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;
     padding-right:4px}
+  /* THE CARD COMES TO YOU. Reading a node meant looking away to a panel 900px
+     to the right and then back to find where you were -- twice per node, on a
+     map with twelve hundred of them. It follows the cursor now, and the panel
+     keeps what it is actually good at: what you have SPENT. */
+  #treeTip{position:fixed;z-index:60;pointer-events:none;opacity:0;
+    transition:opacity .07s linear;max-width:330px;
+    background:rgba(9,13,17,.97);border:2px solid rgba(255,255,255,.18);
+    border-radius:11px;padding:10px 12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.6)}
+  #treeTip.on{opacity:1}
   .tnode{cursor:pointer}
   .tnode.locked{cursor:not-allowed}
   .tinfo{background:rgba(9,13,17,.46);border:2px solid rgba(255,255,255,.12);
@@ -652,6 +662,8 @@
   </div>
 </div>
 
+<div id="treeTip" class="tinfo"></div>
+
 <div id="treeScreen" class="overlay hidden">
   <div class="sheet tree">
     <div class="sheethead">
@@ -666,6 +678,7 @@
       <span id="treeZoomLbl">100%</span>
       <button id="respecBtn" class="tbtn">REFUND MODE</button>
       <button id="clearBtn" class="tbtn gray">CLEAR ALL</button>
+      <button id="treeSecBtn" class="tbtn gray">COUNTRIES</button>
       <button id="treeOffBtn" class="tbtn gray"></button>
       <button id="treeCloseBtn" class="tbtn gray">CLOSE</button>
       <span id="treeNote"></span>
@@ -797,6 +810,57 @@ const ORBIT_MAX_N = 15;                   /* guardian bricks in the ring */
 const BLAST_MAX_N = 40;                   /* bricks per volley */
 const BLAST_MAX_SHOTS = 40;               /* projectiles per volley, shards included */
 const FREEZE_MIN_RATE = 2.2;
+/* ===================== ACCURACY AND EVASION =====================
+   ONE CONTEST, NOT TWO ROLLS. A flat dodge chance -- which is what a shade had
+   -- is a number you cannot answer: it is either irrelevant or infuriating, and
+   nothing you can buy changes it. PoE's shape is two ratings pulling against
+   each other, so investing in either is real and neither ever wins outright:
+
+     chance to hit = accuracy / (accuracy + (evasion/4)^0.8)
+
+   floored, because a fight you cannot win by any margin is not a fight, and
+   capped at one because there is no such thing as more than certain.
+
+   IT IS AN ATTACK THING. A swing has to find the body; a fireball arrives where
+   it was aimed. So accuracy is checked on attacks and never on spells, which is
+   what makes it a melee stat and gives the staff a reason not to want it.
+
+   AND NOTHING HERE SCALES WITH THE WAVE. PoE's accuracy is a treadmill: monster
+   evasion climbs with level, so you buy accuracy every ten levels to stand
+   still. A wave-50 monster in this game is already dangerous for three reasons;
+   it does not need to also be harder to hit. A monster's evasion is a property
+   of WHAT IT IS, so the stat is a real choice made once rather than a tax. */
+const HIT_FLOOR = 0.15;   /* the worst any contest can go */
+function hitChance(acc, eva){
+  if(!(eva > 0)) return 1;
+  if(!(acc > 0)) return HIT_FLOOR;
+  return clamp(acc / (acc + Math.pow(eva/4, 0.8)), HIT_FLOOR, 1);
+}
+/* WHAT A MONSTER DODGES, DERIVED. The roster is forty rows and hand-writing a
+   rating into each is forty chances to forget one -- and a stat nobody can
+   predict is a stat nobody plays around. A body dodges because it is FAST and
+   SMALL: a skeleton slips a swing, a stone golem does not, and `evade` on a row
+   is the shade's own gift on top of that. */
+const EVA_BASE      = 200;    /* what an ordinary body is worth */
+const EVA_FROM_SKILL = 3;     /* what a row's own `evade` multiplies it by */
+const EVA_ELITE     = 1.25;
+const EVA_MAGIC     = 1.10;
+function mobEvasionOf(d){
+  if(!d) return 0;
+  const spd = d.speed || 60, sc = d.scale || 1;
+  const base = EVA_BASE * (spd / 80) / Math.max(0.6, sc);
+  return Math.round(base * (1 + (d.evade || 0) * EVA_FROM_SKILL));
+}
+/* AND WHAT IT HITS WITH. The mirror, so hero evasion is worth something: a fast
+   thing lands its swings, a lumbering one is easy to slip. A BOSS barely misses
+   -- dodging the wave-30 boss forever is not a defence, it is a stalemate. */
+const ACC_MOB_BASE  = 700;
+function mobAccuracyOf(d){
+  if(!d) return ACC_MOB_BASE;
+  const spd = d.speed || 60;
+  const k = (d.type === 'boss' || d.boss) ? 2.2 : 1;
+  return Math.round(ACC_MOB_BASE * (0.6 + spd/140) * k);
+}
 const EVADE_CAP = 0.55;                   /* no monster ever dodges more than this */
 const ZORB_SPD = 118;                     /* the storm orb drifts, it does not fly */
 const ZORB_SPIN = 2.1;                    /* rad/s, clockwise */
@@ -1433,7 +1497,13 @@ function mobRankMul(r){ return Math.pow(1 + MOB_LEVEL_STEP, r === undefined ? mo
 
    `bleed` is a MORE multiplier on the chance to bleed, which is why an axe —
    which crits constantly — is not also the best bleed weapon in the game: a
-   clean cut bleeds least, and a blunt one bleeds worst. */
+   clean cut bleeds least, and a blunt one bleeds worst.
+
+   `acc` is the same shape, on the accuracy pool. A sword is a precise thing and
+   finds what it is aimed at; an axe is a heavier arc; a mace is a lump of iron
+   on a stick and is the worst of the three at hitting something that does not
+   want to be hit. The staff barely swings at all, so its number is a courtesy
+   for the bare-handed opening of a caster's run. */
 const WEAPONS = {
   sword: { id:'sword', name:'SWORD', col:'#cfd6dd',
     blurb:'Balanced. Nothing it does is the best, and nothing it does is bad.',
@@ -1441,18 +1511,24 @@ const WEAPONS = {
     bleed:1.0, spin:1.40, kb:1.00, hold:'sword', throw:'blade',
     lessTaken:0.40, suppress:0.25, leech:0.06, leechChance:0.15,
     /* balanced, and the only weapon with a little of all three */
+    /* the precise one: it finds what it is aimed at */
+    acc:1.10,
     attr:{ str:10, int:4, dex:8 } },
   axe: { id:'axe', name:'AXE', col:'#e0a81a',
     blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
     dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
     bleed:0.45, spin:1.55, kb:1.15, hold:'axe', throw:'axe',
     lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20,
+    /* a heavier arc, and a little wilder for it */
+    acc:0.88,
     attr:{ str:8, int:0, dex:16 } },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
     blurb:'Does not swing \u2014 it SLAMS. A fault of stone teeth opens in front of you.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
     bleed:1.90, spin:1.30, kb:1.55, hold:'mace', throw:'mace',
     lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10,
+    /* a lump of iron on a stick. It hits hardest and least often */
+    acc:0.66,
     attr:{ str:20, int:0, dex:2 },
     /* THE MACE DOES NOT SWING. Its basic attack is the boss's own slam, turned
        around: it drives the head into the floor and a fan of stone tears up out
@@ -1472,6 +1548,8 @@ const WEAPONS = {
     incSpell:0.25, incElem:0.30, incAtk:0.20,
     /* it stands in the fire it starts, so it is a little harder to burn */
     res:0.08,
+    /* a courtesy for the bare-handed opening of a caster’s run */
+    acc:0.72,
     attr:{ str:0, int:22, dex:4 },
     boltSpd:520, boltR:46 }
 };
@@ -3146,6 +3224,7 @@ function newPlayer(){
        it started as, which is exactly what the game did before any of this. */
     conv: blankConv(),
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, cast:0, roll:0, regen:0, heart:0,
+          acc:0, eva:0,
           elem:0, fire:0, frost:0, shock:0, boltR:0,
           /* CHAOS IS NOT ELEMENTAL, so it gets its own increase and takes no
              part in the elemental one. That is the entire difference. */
@@ -3224,6 +3303,9 @@ function newPlayer(){
     /* EXPOSURE: the chance a hit strips the resistance of whatever it arrived
        as, and the radius a corpse spreads its ailments in. */
     exposeChanceFlat:0, exposeChance:0, prolifR:0, ailMagInc:0,
+    /* ACCURACY AND EVASION. Accuracy opens at ACC_BASE and is only ever added
+       to; evasion opens at NOTHING, because it is the defence you choose. */
+    accFlat:0, evaFlat:0,
     /* the tree's sentences. Each is a rule, not a pool, so each is a flag. */
     critAilAll:false, noCrit:false, ailFull:false,
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
@@ -4231,8 +4313,10 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     aimT:0, docile:false, wx:0, wy:0, wanderT:0, orbCd:0, vortCd:0, slowT:0,
     stuckT:0, avoidT:0, avoidA:0, _lx:x, _ly:y, golem:d.golem||null, stompT:-1, stunT:0, totCd:0,
     shade:d.shade||0, zorb:d.zorb||0,
-    /* elites are sharper dodgers, but evade is capped well under certainty */
-    evade: d.evade ? Math.min(EVADE_CAP, d.evade * (elite?1.25:1) * (magic?1.1:1)) : 0,
+    /* TWO RATINGS, DERIVED FROM WHAT IT IS. `evade` on the row is a gift on top
+       of the speed-and-size it already has, and an elite is a sharper dodger. */
+    evasion: Math.round(mobEvasionOf(d) * (elite?EVA_ELITE:1) * (magic?EVA_MAGIC:1)),
+    accuracy: Math.round(mobAccuracyOf(d) * (elite?1.15:1) * (magic?1.08:1)),
     mini:d.mini||null, touchElem:d.elem||null,
     path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1 };
   /* LAST, so a modifier multiplies the finished number rather than a base the
@@ -4283,12 +4367,15 @@ const KB_SCALE = 0.45;
 function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
-  /* EVADE: the shade's whole defence. It is rolled before anything else and it
-     takes the hit away entirely — no armour, no suppression, no chip damage. */
-  if(e.evade && Math.random() < e.evade){
-    addDmg(e.x, e.y-40*(e.scale||1), 'EVADED', '#c9b8e8', 14);
+  /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
+     a swing has to catch a body that is moving, a fireball arrives where it was
+     aimed. A tick or a drain is not a fresh swing and never re-rolls -- the
+     wound was already landed. */
+  if(isAttack(source) && !opts.quiet && !opts.drain && !opts.reave
+     && (e.evasion || 0) > 0 && Math.random() > heroHitChance(e)){
+    addDmg(e.x, e.y-40*(e.scale||1), 'MISS', '#c9b8e8', 14);
     clogRun.evaded++;
-    logEventK('ev|'+(e.bname||e.type), (e.bname||e.type)+' evaded your hit', '#c9b8e8');
+    logEventK('ev|'+(e.bname||e.type), (e.bname||e.type)+' slipped your swing', '#c9b8e8');
     addSparks(e.x, e.y-18, 4, '#9b45d6');
     e.flash = 0.25;
     return;
@@ -5073,6 +5160,29 @@ function calcDamage(base, kind, more){
 /* The weapon's own base plus every flat PHYSICAL brick. Nothing here knows or
    cares which weapon it is — that is the whole point. */
 function physBase(){ return weapon.dmg + player.flatPhys; }
+/* ---- WHAT THE HERO BRINGS TO THE CONTEST ----
+   Accuracy is a FLAT pool with its own increases, the way flat damage is, and
+   the weapon is a MORE multiplier over the whole thing. Evasion is the mirror
+   pointed the other way, and starts at NOTHING: armour is the defence you begin
+   with and evasion is the one you choose, so a hero who never buys any is never
+   missed by anything -- which is exactly how it was before this existed. */
+const ACC_BASE = 320;
+function accuracyValue(){
+  const p = player;
+  if(!p) return ACC_BASE;
+  const flat = ACC_BASE + (p.accFlat || 0) + dexOf()*ATTR_DEX_ACC;
+  return Math.max(0, flat * (1 + (p.inc.acc || 0)) * ((weapon && weapon.acc) || 1));
+}
+function evasionValue(){
+  const p = player;
+  if(!p) return 0;
+  return Math.max(0, (p.evaFlat || 0) * (1 + (p.inc.eva || 0) + dexOf()*ATTR_DEX_EVA));
+}
+/* what a hero actually lands against a body, and what a body lands on them */
+function heroHitChance(e){ return hitChance(accuracyValue(), (e && e.evasion) || 0); }
+function mobHitChance(src){
+  return hitChance((src && src.accuracy) || ACC_MOB_BASE, evasionValue());
+}
 function physDamage(more){ return calcDamage(physBase(), 'melee', more); }
 /* A WEAPON GRANTS INCREASES, and an increase sums into the pool it belongs to —
    it never gets its own multiplier. These are the three pools a weapon can pay
@@ -5099,8 +5209,19 @@ const ATTRS = [
   { id:'int', name:'INTELLIGENCE', short:'INT', col:'#5aa8ff',
     what:'+0.5% increased spell damage and +0.5% increased regeneration, each' },
   { id:'dex', name:'DEXTERITY',    short:'DEX', col:'#6ee06e',
-    what:'+0.3% increased critical chance, critical damage and attack speed, each' },
+    what:'+2 accuracy and +0.2% increased evasion, each — and +0.3% increased '+
+         'critical chance, critical damage and attack speed on top' },
 ];
+/* DEXTERITY IS NOW THE ACCURACY AND EVASION ATTRIBUTE, on top of everything it
+   already did. PoE's table reads "+20 accuracy per 10 DEX, +0.2% increased
+   evasion per DEX", and that is exactly the shape here -- a FLAT accuracy pool
+   and an INCREASE on evasion, which is why a dexterous hero hits reliably early
+   and a dexterous hero who has also bought evasion is hard to touch late.
+   The old three lines are untouched: dexterity still pays crit, crit multiplier
+   and attack speed. It is simply the busiest of the three now, which is what it
+   is in the game this borrows from. */
+const ATTR_DEX_ACC   = 2.0;     /* flat accuracy, per point: 20 per 10 DEX */
+const ATTR_DEX_EVA   = 0.002;   /* INCREASED evasion, per point */
 const ATTR_STR_DMG   = 0.005, ATTR_STR_HP    = 0.005;
 const ATTR_INT_SPELL = 0.005, ATTR_INT_REGEN = 0.005;
 const ATTR_DEX_CRIT  = 0.003, ATTR_DEX_CMULT = 0.003, ATTR_DEX_ATK = 0.003;
@@ -5496,6 +5617,17 @@ function playerDamage(n, src, elem, spell){
     applyAilment('fire', src);
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   const isSpell = (spell === undefined) ? !!elem : spell;
+  /* AND THE OTHER HALF OF THE CONTEST. Evasion is the defence you CHOOSE -- a
+     hero who has bought none has none and is hit by everything, which is what
+     happened before any of this existed. Attacks only, for the same reason the
+     hero's own swing is: a thrown rock still lands where it was thrown. */
+  if(!isSpell && evasionValue() > 0 && Math.random() > mobHitChance(src)){
+    addDmg(p.x, p.y-56, 'EVADED', '#c9b8e8', 16);
+    addSparks(p.x, p.y-18, 4, '#c9b8e8');
+    clogRun.evaded++;
+    p.invuln = IFRAME_T*0.5;
+    return;
+  }
   let d = n;
   /* A RAGING MONSTER HITS HARDER, and it is read off the ATTACKER — so every
      way a monster can reach you, contact or ring or thrown thing, pays it
@@ -5802,8 +5934,8 @@ const WAVE_MODS = [
     apply:e=>{ e.suppress = Math.min(0.75, (e.suppress||0) + 0.30); } },
   { id:'resist',  name:'RESISTANT',  col:'#8ac24a', tip:'monsters gain 35% resistance to every element',
     apply:e=>{ for(const el of ELEMENTS) e.res[el] = (e.res[el]||0) + 0.35; } },
-  { id:'slippery',name:'SLIPPERY',   col:'#c9b8e8', tip:'monsters evade 12% of your hits',
-    apply:e=>{ e.evade = Math.min(EVADE_CAP, (e.evade||0) + 0.12); } },
+  { id:'slippery',name:'SLIPPERY',   col:'#c9b8e8', tip:'monsters are twice as hard to hit',
+    apply:e=>{ e.evasion = Math.round((e.evasion||0) * 2); } },
   { id:'horde',   name:'HORDE',      col:'#ffb900', tip:'40% more monsters, each with 15% less health',
     budget:b=>Math.round(b*1.40),
     apply:e=>{ e.maxHp = Math.max(1, Math.ceil(e.maxHp*0.85)); e.hp = e.maxHp; } },
@@ -7068,6 +7200,45 @@ const UPGRADES = [
       `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
       `A deeper well for whichever of them you are actually filling`,
     apply:c=>{ for(const k of CHARGE_IDS) player.stackMax[k] += c.v; } },
+  /* ---- ACCURACY AND EVASION. Two sides of one contest, and two very
+     different cards: accuracy is a thing a melee hero eventually NEEDS, so it
+     is common and cheap; evasion is a thing nobody has any of, so the first one
+     you take is the whole of it. ---- */
+  { id:'acc', name:'True Edge', icon:'target', cls:'OFFENSE',
+    req:()=>!isCaster(),
+    calc:m=>({v: byRar(m, [40, 70, 110, 170, 260])}),
+    desc:c=>{
+      const was = accuracyValue();
+      player.accFlat += c.v; const now = accuracyValue(); player.accFlat -= c.v;
+      return `+${c.v} ACCURACY (${Math.round(was)} → ${Math.round(now)}). Only an ATTACK `+
+        `has to find its target — a spell arrives where it was aimed. Against a body `+
+        `that dodges hard you land ${Math.round(hitChance(was, 600)*100)}% of your swings; `+
+        `with this, ${Math.round(hitChance(now, 600)*100)}%`;
+    },
+    apply:c=>{ player.accFlat += c.v; } },
+  { id:'accinc', name:'Practised Hand', icon:'target', cls:'OFFENSE', minRar:'rare',
+    req:()=>!isCaster() && player.accFlat > 0,
+    calc:m=>({v: byRar(m, [0.10, 0.16, 0.24, 0.36, 0.50])}),
+    desc:c=>`${Math.round(c.v*100)}% increased ACCURACY — on the whole pool, `+
+      `including your dexterity and the weapon's own (now ${Math.round(accuracyValue())})`,
+    apply:c=>{ player.inc.acc += c.v; } },
+  { id:'eva', name:'Loose Footing', icon:'boot', cls:'DEFENSE',
+    calc:m=>({v: byRar(m, [60, 110, 180, 280, 420])}),
+    desc:c=>{
+      const was = evasionValue();
+      player.evaFlat += c.v; const now = evasionValue(); player.evaFlat -= c.v;
+      return `+${c.v} EVASION (${Math.round(was)} → ${Math.round(now)}). An ordinary `+
+        `monster's swing lands ${Math.round(hitChance(ACC_MOB_BASE, was)*100)}% of the time; `+
+        `with this, ${Math.round(hitChance(ACC_MOB_BASE, now)*100)}%. It does nothing at all `+
+        `against a SPELL — armour and suppression are what stand in front of those`;
+    },
+    apply:c=>{ player.evaFlat += c.v; } },
+  { id:'evainc', name:'Light on the Feet', icon:'boot', cls:'DEFENSE', minRar:'rare',
+    req:()=>player.evaFlat > 0,
+    calc:m=>({v: byRar(m, [0.12, 0.20, 0.30, 0.45, 0.65])}),
+    desc:c=>`${Math.round(c.v*100)}% increased EVASION — and your dexterity increases it `+
+      `too, ${Math.round(dexOf()*ATTR_DEX_EVA*100)}% of it so far (now ${Math.round(evasionValue())})`,
+    apply:c=>{ player.inc.eva += c.v; } },
   /* ---- EXPOSURE. The one damage increase that is not yours: it comes off the
      BODY, so it sits outside your own increased pool and outside the MORE
      ceiling with it — which is what makes it worth a card to a build that has
@@ -7221,6 +7392,12 @@ const META_STATS = {
   chargeKill: { n:'FRENZY charge when you kill',         w:(p,v)=>{ p.chargeKill += v; } },
   chargeCrit: { n:'POWER charge on a critical',          w:(p,v)=>{ p.chargeCrit += v; } },
   chargeHurt: { n:'ENDURANCE charge when you are hit',   w:(p,v)=>{ p.chargeHurt += v; } },
+  /* ---- THE CONTEST. Dexterity already pays into both of these; these are what
+     a build buys on top of it. ---- */
+  acc:        { n:'ACCURACY',                            w:(p,v)=>{ p.accFlat += v; } },
+  incAcc:     { n:'increased ACCURACY',           pct:1, w:(p,v)=>{ p.inc.acc += v; } },
+  eva:        { n:'EVASION',                             w:(p,v)=>{ p.evaFlat += v; } },
+  incEva:     { n:'increased EVASION',            pct:1, w:(p,v)=>{ p.inc.eva += v; } },
   chargeMax:  { n:'maximum of EVERY charge',
                 w:(p,v)=>{ for(const k of CHARGE_IDS) p.stackMax[k] += v; } },
   chargeAll:  { n:'of every charge, by every means',
@@ -7371,6 +7548,11 @@ for(const a of CONV_ORDER) for(const b of CONV_ORDER){
    own flat and its own increase without anybody remembering to add them. */
 for(const wk of WEAPON_KEYS){
   const W = WEAPONS[wk], cast = !!(W && W.cast), nm = (W && W.name) || wk;
+  /* NO FLAT WEAPON DAMAGE IN THE TREE ANY MORE. A weapon's base is around one,
+     so an honest minor node was "+0.1 damage" -- a real ten per cent, printed
+     as a number that reads like a rounding error. The writer is kept because it
+     is generated and costs nothing, and because a CARD can still hand over a
+     flat point meaningfully; the tree sells the increase instead. */
   META_STATS['dmg_'+wk] = {
     n:'flat '+(cast ? 'elemental' : 'physical')+' damage — '+nm+' only', only:[wk],
     w:(p,v)=>{ if(cast) p.flatElem += v; else p.flatPhys += v; } };
@@ -7442,6 +7624,7 @@ const META_ICON_EXACT = {
   /* the charges wear what EARNS them: a fist for the one you take, a blade for
      the one you kill for, a target for the one you crit for */
   chargeHurt:'shield', chargeKill:'sword', chargeCrit:'target',
+  acc:'target', incAcc:'target', eva:'boot', incEva:'boot',
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
@@ -7496,6 +7679,34 @@ function metaSectorAt(x, y){
 /* WHICH COUNTRY EACH WEAPON CALLS HOME. The one table to extend when a weapon
    is added: its door, its own nodes and its half of the map all follow. */
 const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int' };
+/* ==================== SIX BEGINNINGS, TWO PER COUNTRY ====================
+   FOUR WEAPONS IS NOT A SYMMETRICAL NUMBER. Red held two doors, green one and
+   blue one, so the map had a crowded side and a bare one and every door sat
+   inside a 670px circle round the middle — which is why the start of the tree
+   read as one tangle rather than six places you could begin.
+
+   Two more doors, one in green and one in blue, and the circle they all stand
+   on is pushed out to DOOR_R: six doors sixty degrees apart, each with its own
+   quarter of sky to fan into. Two of them are NOT FINISHED — there is no bow
+   and no wand in the game yet — so they are drawn, locked, and say so. A door
+   that is coming is worth more on the map than a gap where one should be: it
+   tells you the shape of the thing, which is the whole point of a tree you can
+   see all of at once. */
+const DOOR_R = 900;
+/* HOW WIDE THE TWO DOORS OF A COUNTRY STAND. 1 is dead even across the wedge;
+   below that they draw in towards the middle of their own country. Even spacing
+   put a door 27 degrees from a border and a red keystone came out cheaper from
+   the axe's door than from either of the two that live in red -- the countries
+   are not decoration and a prize of one has to be nearest to it. */
+const DOOR_SPREAD = 0.70;
+const META_DOORS = [
+  ...WEAPON_KEYS.map(wk=>({ id:wk, weap:wk, home:META_HOME[wk] || 'str',
+                            name:'THE ' + ((WEAPONS[wk] && WEAPONS[wk].name) || wk).toUpperCase() })),
+  { id:'bow',  weap:null, home:'dex', name:'THE BOW',
+    soon:'a bow is not built yet — this door is here so the map is the shape it will be' },
+  { id:'wand', weap:null, home:'int', name:'THE WAND',
+    soon:'a wand is not built yet — this door is here so the map is the shape it will be' },
+];
 /* THE RINGS. Radius, how many hubs sit on it, and how far round it they are
    turned so no two rings line up. */
 /* THE RINGS, AND WHY THEY ARE THIS BIG. The map grew by half when the lanes
@@ -7517,7 +7728,21 @@ const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next 
    six of them shoulder to shoulder between two junctions reads as a queue
    rather than a road, and the point of a highway is the LENGTH of the jump
    between one decision and the next. */
-const LANE_STEP = 392;
+/* LONGER JUMPS, FEWER STOPS. A road is worth walking when the jump between one
+   decision and the next is LONG -- six attribute nodes shoulder to shoulder is
+   a queue, and a queue is a toll. At 392 a lane across the map was four or five
+   stops; at 560 with a cap of three it is two or three, and skipping a block of
+   them to reach something is a real choice rather than an accounting exercise. */
+/* NO NODE SELLS A NUMBER NOBODY CAN READ. "+0.04 flat physical damage" is a
+   real 4% on a weapon whose base is one, and it reads like nothing at all --
+   the unit is the problem, not the value. So the rule is: a tree node never
+   prints a raw figure under this, and where the honest value is smaller it is
+   sold as a PERCENTAGE instead, which is the same strength in a unit a player
+   can act on. (A card may still hand over a small flat number: by the time you
+   are taking one you have a built hero to add it to, and the card says what it
+   does to your actual damage.) */
+const META_MIN_FLAT = 0.2;
+const LANE_STEP = 560;
 const LANE_VARY = 0.46;   /* and how much that wanders, per lane */
 /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
@@ -7568,7 +7793,7 @@ const META_BRANCH = {
     [['Surefoot','speed',0.03],       ['Vaulting','roll',0.10],        ['Warpaint','frostRes',0.05]]],
   staff:[
     [['First Words','incSpell',0.03], ['Second Words','incSpell',0.04],['Cadence','incCast',0.04]],
-    [['Kindle','incElem',0.03],       ['Smoulder','incFire',0.05],     ['Charged','flatElem',0.06]],
+    [['Kindle','incElem',0.03],       ['Smoulder','incFire',0.05],     ['Charged','incElem',0.045]],
     [['Clear Mind','incCast',0.04],   ['Widening','boltR',0.06],       ['Resonant','incSpell',0.03]],
     [['Wards','allRes',0.03],         ['Attunement','allRes',0.03],    ['Bookish','int',5]]],
   _:    [
@@ -7599,13 +7824,13 @@ const META_GROUPS = [
   { id:'whet',  name:'WHETSTONE',   sp:'war', home:'str', d:[0,3], shape:'ring',
     minors:[['Whetstone','incMelee',0.031],['Honing','incMelee',0.026],['Grindstone','incMelee',0.021]] },
   { id:'heft',  name:'HEFT',        sp:'war', home:'str', d:[0,2], shape:'chain',
-    minors:[['Heft','flatPhys',0.058],['Weight','flatPhys',0.044]] },
+    minors:[['Heft','incMelee',0.042],['Weight','incMelee',0.032]] },
   { id:'plate', name:'PLATING',     sp:'arm', home:'str', d:[0,3], shape:'ring',
     minors:[['Plated','armour',3],['Riveted','incArmour',0.06],['Banded','armour',3]] },
   { id:'hale',  name:'HALE',        sp:'vit', home:'str', d:[0,3], shape:'ring',
     minors:[['Hale','incHp',0.035],['Sturdy','incHp',0.03],['Thickset','incHp',0.025]] },
   { id:'mend',  name:'MENDING',     sp:'vit', home:'str', d:[1,4], shape:'arc',
-    minors:[['Mending','regen',0.010],['Recovery','incRegen',0.09],['Knitting','incRegen',0.07]] },
+    minors:[['Mending','incRegen',0.11],['Recovery','incRegen',0.09],['Knitting','incRegen',0.07]] },
   { id:'quench',name:'QUENCHED',    sp:'arm', home:'str', d:[1,4], shape:'chain',
     minors:[['Quenched','fireRes',0.06],['Rimeplate','frostRes',0.06]] },
   { id:'ground',name:'GROUNDED',    sp:'arm', home:'str', d:[1,4], shape:'chain',
@@ -7632,11 +7857,11 @@ const META_GROUPS = [
      generation, then the ceiling — and the deep well is the notable, because a
      well you cannot fill is worth nothing. ---- */
   { id:'warpath',name:'WARPATH',    sp:'war', home:'str', d:[1,3], shape:'chain', must:true,
-    minors:[['Warpath','rageHit',0.2],['Follow Through','rageHit',0.2],['Bloodlust','rageHit',0.15]] },
+    minors:[['Warpath','rageHit',0.2],['Follow Through','rageHit',0.2],['Bloodlust','rageHit',0.2]] },
   { id:'spite',  name:'SPITE',      sp:'vit', home:'str', d:[1,4], shape:'chain', must:true,
-    minors:[['Spite','rageHurt',0.2],['Grudge','rageHurt',0.2],['Scar','rageHurt',0.15]] },
+    minors:[['Spite','rageHurt',0.2],['Grudge','rageHurt',0.2],['Scar','rageHurt',0.2]] },
   { id:'wellrg', name:'THE DEEP WELL',sp:'war',home:'str',d:[2,4], shape:'arc', must:true,
-    minors:[['Deeper','rageMax',2],['Deeper Still','rageMax',2],['Wider','rageHit',0.15]] },
+    minors:[['Deeper','rageMax',2],['Deeper Still','rageMax',2],['Wider','rageHit',0.2]] },
   { id:'quick', name:'QUICKDRAW',   sp:'swift',home:'dex', d:[0,3], shape:'ring',
     minors:[['Quick Hands','incAtk',0.04],['Wild Swing','incAtk',0.035],['Reflexes','incAtk',0.03]] },
   { id:'venom', name:'VENOM',       sp:'aff', home:'dex', d:[1,4], shape:'ring',
@@ -7669,7 +7894,7 @@ const META_GROUPS = [
   { id:'ward',  name:'WARDING',     sp:'arc', home:'int', d:[0,4], shape:'ring',
     minors:[['Warding','allRes',0.03],['Attunement','allRes',0.03],['Sealed','allRes',0.03]] },
   { id:'kindle',name:'KINDLING',    sp:'elem',home:'int', d:[0,2], shape:'chain',
-    minors:[['Kindling','flatElem',0.08],['Charged','flatElem',0.06]] },
+    minors:[['Kindling','incElem',0.06],['Charged','incElem',0.045]] },
   { id:'embw',  name:'THE EMBER WELL', sp:'elem', home:'int', d:[1,4], shape:'chain',
     minors:[['Emberskin','fireRes',0.06],['Firebrand','incFire',0.06]] },
   { id:'frow',  name:'THE FROST WELL', sp:'elem', home:'int', d:[1,4], shape:'chain',
@@ -7709,7 +7934,7 @@ for(const wk of WEAPON_KEYS){
   const W = WEAPONS[wk], nm = ((W && W.name) || wk).toUpperCase();
   META_GROUPS.push({ id:'w_'+wk, name:'THE '+nm+"'S OATH", sp:'core',
     home: META_HOME[wk] || 'str', d:[0,3], shape:'fan', only:wk, must:true,
-    minors:[['Grip','dmg_'+wk, 0.1],['Practice','inc_'+wk, 0.04],['Drill','inc_'+wk, 0.03]] });
+    minors:[['Grip','inc_'+wk, 0.075],['Practice','inc_'+wk, 0.04],['Drill','inc_'+wk, 0.03]] });
 }
 /* ---- THE NOTABLES. One of each, ever, and each one sits in the middle of a
    cluster of its own kind. Deeper `d` means further out and dearer to reach. */
@@ -7734,12 +7959,12 @@ const META_NOTABLES = [
     notable:{ name:'Stonecutter', mods:[['incArmour',0.12],['suppress',0.05]] } },
   { id:'n_watch', name:'THE WATCH',     sp:'vit', home:'str', d:[2,4], shape:'ring',
     minors:[['Stoic','incHp',0.04],['Second Wind','incRegen',0.14],['Bulwark','armour',5]],
-    notable:{ name:'Warden', mods:[['incHp',0.08],['regen',0.02]] } },
+    notable:{ name:'Warden', mods:[['incHp',0.08],['incRegen',0.22]] } },
   { id:'n_hearth',name:'THE HEARTH',    sp:'vit', home:'str', d:[1,3], shape:'fan',
     minors:[['Hale','incHp',0.05],['Padded','heartDrop',0.10],['Knitting','incRegen',0.10]],
     notable:{ name:'Hearthkeeper', mods:[['incHp',0.06],['heartDrop',0.20]] } },
   { id:'n_arm',   name:'THE ARMOURY',   sp:'war', home:'str', d:[1,3], shape:'ring',
-    minors:[['Heft','flatPhys',0.08],['Plated','armour',3],['Whetstone','incMelee',0.04]],
+    minors:[['Heft','incMelee',0.055],['Plated','armour',3],['Whetstone','incMelee',0.04]],
     notable:{ name:'Quartermaster', mods:[['flatPhys',0.2],['armour',4]] } },
   /* green */
   { id:'n_axe',   name:'THE BERSERKER', sp:'swift',home:'dex', d:[1,2], shape:'wheel',
@@ -7780,7 +8005,7 @@ const META_NOTABLES = [
     minors:[['Smoulder','incFire',0.07],['Rimebite','incFrost',0.07],['Arcing','incShock',0.07]],
     notable:{ name:'Elementalist', mods:[['incElem',0.09],['allRes',0.04]] } },
   { id:'n_ember', name:'THE EMBER PATH',sp:'elem',home:'int', d:[0,2], shape:'chain',
-    minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.08],['Ward','allRes',0.03]],
+    minors:[['Tinder','incElem',0.03],['Charged','incElem',0.06],['Ward','allRes',0.03]],
     notable:{ name:'Firewalker', mods:[['incFire',0.10],['fireRes',0.06]] } },
 
   /* ==================== THE CHARGES, ONE COUNTRY EACH ====================
@@ -7841,11 +8066,22 @@ const META_NOTABLES = [
   /* ==================== AND TWO THAT WERE SIMPLY MISSING ====================
      Red had no node about ending a fight and green had none about surviving
      one, which is how a country reads as a one-note country. */
+  /* ==================== THE CONTEST ====================
+     Green's own, because dexterity already pays into both and a country that
+     hands you accuracy and evasion is a country that reads as the quick one. */
+  { id:'n_acc',   name:'THE TRUE EDGE', sp:'prec',home:'dex', d:[1,3], shape:'arc',
+    minors:[['Steady Hand','acc',60],['Sighting','incAcc',0.10],['Drilled','acc',50]],
+    notable:{ name:'True Edge', note:'a swing that finds what it was aimed at',
+              mods:[['acc',130],['incAcc',0.15]] } },
+  { id:'n_eva',   name:'THE SHADOW STEP',sp:'swift',home:'dex', d:[2,3], shape:'ring',
+    minors:[['Loose Footing','eva',90],['Sidestep','incEva',0.12],['Weaving','eva',80]],
+    notable:{ name:'Shadow Step', note:'the swing that never arrives',
+              mods:[['eva',220],['incEva',0.20]] } },
   /* GREEN, NOT RED, and not for flavour: green sat at x1.68 total power against
      red's x2.55, so a damage notable added to red is a node that breaks a
      ceiling and the same node added to green is a node that fixes a gap. */
   { id:'n_exec',  name:'THE HEADSMAN',  sp:'prec',home:'dex', d:[2,3], shape:'fan',
-    minors:[['Heavy Hands','flatPhys',0.08],['Follow Through','incAtk',0.04],['Weight Behind It','ailMag',0.20]],
+    minors:[['Heavy Hands','incMelee',0.055],['Follow Through','incAtk',0.04],['Weight Behind It','ailMag',0.20]],
     notable:{ name:'Headsman', note:'the whole weight of you behind one swing',
               mods:[['critMult',0.25],['ailMag',0.25]] } },
   { id:'n_quick', name:'THE SECOND SKIN',sp:'swift',home:'dex',d:[1,3], shape:'ring',
@@ -7953,7 +8189,7 @@ const META_KEYSTONES = [
   /* ...and the ending where you have no criticals at all. Everything else you
      own gets bigger, which is a real build and not a consolation. */
   { id:'k_over',  name:'THE OVERLOAD', sp:'elem',home:'int', d:[4,4], shape:'wheel',
-    minors:[['Surging','incElem',0.07],['Unfocused','incAll',0.04],['Raw','flatElem',0.10]],
+    minors:[['Surging','incElem',0.07],['Unfocused','incAll',0.04],['Raw','incElem',0.075]],
     keystone:{ name:'The Overload', note:'you cannot crit at all, and everything you do is far bigger',
                mods:[['noCrit',null],['moreAll',0.32],['incElem',0.25]] } },
 
@@ -8036,7 +8272,7 @@ const RING_AT = [0, 5, 12, 22, 34];
        thing you actually see. A long lane past the cap does not get a fifth
        node, it gets longer jumps — and jumping a long way sometimes is the
        point of a road. */
-    const steps = Math.min(5, Math.max(1, Math.round(len / (LANE_STEP*vary))));
+    const steps = Math.min(4, Math.max(1, Math.round(len / (LANE_STEP*vary))));
     let prev = an;
     for(let i=1;i<steps;i++){
       const t = i/steps, ang = Math.atan2(dy, dx) + Math.PI/2;
@@ -8365,8 +8601,7 @@ const RING_AT = [0, 5, 12, 22, 34];
   }
 
   const byHome = {};
-  for(const wk of WEAPON_KEYS)
-    (byHome[META_HOME[wk]||'str'] = byHome[META_HOME[wk]||'str'] || []).push(wk);
+  for(const d of META_DOORS) (byHome[d.home] = byHome[d.home] || []).push(d);
   /* ---- 6. THE DOORS. One per weapon, in its own country, spread evenly across
      it so two weapons sharing a country do not share a beginning. FOUR WAYS OUT
      AND NONE OF THEM STOPS: each is a lane to a different hub of the inner ring,
@@ -8376,7 +8611,8 @@ const RING_AT = [0, 5, 12, 22, 34];
   for(const sec of Object.keys(byHome)){
     const list = byHome[sec], f = META_MAP.sector[sec][0], t = META_MAP.sector[sec][1];
     const span = ((t - f) + 360) % 360;
-    list.forEach((wk, i)=>{
+    list.forEach((D, i)=>{
+      const wk = D.weap;
       /* EVENLY ACROSS THE COUNTRY, and no further apart than that. Pushing the
          sword and the mace out towards the edges of the red wedge gave their
          fans more room and put each of them within 25 degrees of a border —
@@ -8384,15 +8620,22 @@ const RING_AT = [0, 5, 12, 22, 34];
          the weapons that live there, and the sword's own beginning stopped
          being meaningfully its own. The fan is spread by the fan, not by
          moving the door it hangs off. */
-      const deg = f + span * ((i + 1) / (list.length + 1));
-      const a = deg*Math.PI/180, R = 670;
-      const W = WEAPONS[wk];
-      const st = { id:'st_'+wk, weap:wk, name:'THE '+((W && W.name) || wk).toUpperCase(),
+      /* SPREAD ACROSS THE COUNTRY, not squeezed into the middle of it. At
+         (i+1)/(n+1) two doors in a 110-degree wedge sat 37 degrees apart, which
+         is closer than any door is to a door in the next country -- the six
+         beginnings were three pairs. At (i+0.5)/n they are 55 apart and still
+         a comfortable 27 degrees clear of either border, which is the thing the
+         old even spacing was protecting. */
+      const deg = f + span * (0.5 + (((i + 0.5) / list.length) - 0.5) * DOOR_SPREAD);
+      const a = deg*Math.PI/180, R = DOOR_R;
+      const st = { id:'st_'+D.id, weap:wk, name:D.name, soon:D.soon || null,
                    deg:((deg%360)+360)%360,
                    x:Math.round(CX + Math.cos(a)*R), y:Math.round(CY + Math.sin(a)*R) };
-      META_STARTS.push(st);
-      const door = push({ id:st.id, kind:'start', weap:wk, name:st.name, spoke:'core',
-        cl:null, x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
+      /* ONLY A REAL WEAPON IS A PLACE YOU CAN BEGIN. metaStartId reads this
+         list; a door with no weapon behind it must never be the answer. */
+      if(wk) META_STARTS.push(st);
+      const door = push({ id:st.id, kind:'start', weap:wk, name:st.name, soon:st.soon,
+        spoke:'core', cl:null, x:st.x, y:st.y, at:0, cost:0, mods:[], req:[] });
       /* the four nearest hubs of the inner ring, and a flavoured first step on
          each — four beginnings, four continuations */
       const sorted = ringHubs(0).slice().sort((p,q)=>
@@ -8421,26 +8664,49 @@ const RING_AT = [0, 5, 12, 22, 34];
          properly and still reaches for what is close. */
       const bearing = h=> Math.atan2(h.y - st.y, h.x - st.x);
       const apart = (a2, b2)=> Math.abs(((a2 - b2 + Math.PI*3) % (Math.PI*2)) - Math.PI);
+      /* THREE, NOT FOUR, AND FURTHER APART. Four ways out of a door is one way
+         out with three spares: they all point outward because the door is
+         inside the ring, and twelve nodes inside one 50-degree slice is the
+         tangle at the middle of the map. Three, at least 40 degrees apart, is
+         a beginning you can read at a glance. */
+      const WAYS = 3;
       const near = [];
-      for(const gap of [0.48, 0.31, 0]) for(const pass of [0, 1]){
+      for(const gap of [0.72, 0.52, 0.34, 0]) for(const pass of [0, 1]){
         for(const h of sorted){
-          if(near.length >= 4) break;
+          if(near.length >= WAYS) break;
           if(near.indexOf(h) >= 0) continue;
           if(gap > 0 && near.some(o=>apart(bearing(o), bearing(h)) < gap)) continue;
           if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
           near.push(h);
         }
-        if(near.length >= 4) break;
+        if(near.length >= WAYS) break;
+      }
+      /* AN UNFINISHED DOOR IS A SIGN, NOT A ROAD. One short spur so it touches
+         the map and reads as a place, and nothing else: three more ways of three
+         would be nine nodes nobody can ever take, in the one part of the map
+         that could least afford them. It is placed AFTER crossesAny exists, and
+         uses it, because a spur laid straight through somebody else's road is
+         exactly the mess these six doors were spread out to stop. */
+      if(!wk){
+        const pick = sorted.find(h=>!crossesAny(st.x, st.y, h.x, h.y)) || sorted[0];
+        if(pick) lane(door, pick.node, 'soon_'+D.id);
+        return;
       }
       const flavour = META_BRANCH[wk] || META_BRANCH._;
-      near.slice(0, 4).forEach((h, k)=>{
+      near.slice(0, WAYS).forEach((h, k)=>{
         /* THREE STEPS, not one. They are laid along the way to the hub this
            path is aimed at, so the beginning of a build is a short walk you
            chose rather than a button you pressed — and the lane picks up where
            they stop, so the road still continues and nothing dead-ends. */
         const path = flavour[k % flavour.length];
         const fa = Math.atan2(h.y - st.y, h.x - st.x);
-        const span = Math.min(470, Math.max(330, Math.hypot(h.x - st.x, h.y - st.y) * 0.66));
+        /* SHORT OF THE RING, ALWAYS. The doors used to sit 670 from the middle
+           with the first ring at 1180, so a fan of 330-470px stopped in open
+           ground. At DOOR_R the gap is half that, and a fan that still reached
+           470 walked its last node out past the hub it was aimed at and laid
+           its line across the ring's own edges. It is a fraction of the way
+           there now and never a fixed distance. */
+        const span = Math.min(420, Math.hypot(h.x - st.x, h.y - st.y) * 0.58);
         let prev = door;
         path.forEach((row, j)=>{
           const t = (j + 1) / (path.length + 0.35);
@@ -9072,6 +9338,15 @@ const TREE_VIEW = (function(){
            cx:(x0+x1)/2, cy:(y0+y1)/2 };
 })();
 let treeOn = false, treePick = null, treeRefund = false, treeHover = null;
+/* the three country washes. Remembered like every other preference. */
+let treeSectors = false;
+try { treeSectors = localStorage.getItem('bb_treesec') === '1'; } catch(e){}
+function treeToggleSectors(){
+  treeSectors = !treeSectors;
+  try { localStorage.setItem('bb_treesec', treeSectors ? '1' : '0'); } catch(e){}
+  renderTree();
+  return treeSectors;
+}
 /* ZOOM AND PAN. A map this size at one zoom level is a picture of a tree rather
    than a thing you read. The view is one viewBox attribute, written straight
    onto the <svg> — re-rendering four hundred nodes on every wheel tick would
@@ -9167,7 +9442,8 @@ function metaSpokeCol(id){
 }
 function metaNodeRadius(n){ return META_NODE_R[n.kind] || 14; }
 function metaKindName(n){
-  return n.kind === 'start' ? 'STARTING POINT'
+  return (n.kind === 'start' && n.soon) ? 'NOT BUILT YET'
+       : n.kind === 'start' ? 'STARTING POINT'
        : n.kind === 'legend' ? 'LEGENDARY'
        : n.kind === 'keystone' ? 'KEYSTONE'
        : n.kind === 'notable' ? 'NOTABLE'
@@ -9185,7 +9461,8 @@ function metaTipHtml(n, m){
   }).join('');
   const cl = META_CLUSTER_BY_ID[n.cl];
   let foot;
-  if(n.kind === 'start') foot = n.id === metaStartId()
+  if(n.kind === 'start') foot = n.soon ? n.soon
+      : n.id === metaStartId()
       ? 'where this weapon begins'
       : 'another weapon begins here — you cannot step through it, but what hangs '
         + 'off it is yours to walk to the long way';
@@ -9222,7 +9499,10 @@ function renderTree(){
      able to tell where they are on the map without reading a single node — the
      red half is the sword and the mace, the green is the axe, the blue is the
      staff, and the roads through each pay that attribute. */
-  {
+  /* AND IT IS A TOGGLE NOW, OFF BY DEFAULT. Three coloured washes and three
+     dashed borders across the whole map is a lot of ink for a thing you need to
+     know once, and once you know it the map reads better without them. */
+  if(treeSectors){
     /* out to the furthest NODE and no further: painted to the corners of the
        viewBox, the countries bleed into the letterbox and the map looks like it
        is floating in the wrong place */
@@ -9327,11 +9607,21 @@ function renderTree(){
         ? `<circle cx="${n.x}" cy="${n.y}" r="${rr+8}" fill="none" stroke="${stroke}" `+
           `stroke-width="3" stroke-dasharray="7 9" stroke-opacity="${sop*0.75}" `+
           `pointer-events="none"/>` : '';
+    /* A DOOR THAT IS NOT BUILT YET is hollow and dashed: a place on the map that
+       is plainly a place, and plainly not open. Nothing else in the tree looks
+       like this, which is the point -- it should not be mistaken for a node you
+       have failed to unlock. */
+    const soon = n.kind === 'start' && n.soon
+      ? `<circle cx="${n.x}" cy="${n.y}" r="${rr+13}" fill="none" stroke="#9fb0bd" `+
+        `stroke-width="3" stroke-dasharray="9 11" stroke-opacity="0.5" pointer-events="none"/>`
+      : '';
     parts.push(`<g class="tnode${lock?' locked':''}" data-node="${n.id}">`+
       `<circle cx="${n.x}" cy="${n.y}" r="${rr+22}" fill="transparent"/>`+
-      `<circle cx="${n.x}" cy="${n.y}" r="${rr}" fill="${fill}" stroke="${stroke}" `+
-      `stroke-width="${refundable?9:has?7:4}" stroke-opacity="${sop}" `+
-      `opacity="${lock?0.55:shut?0.38:1}"/>`+ frame + glyph +
+      `<circle cx="${n.x}" cy="${n.y}" r="${rr}" `+
+      `fill="${n.soon ? 'rgba(20,26,32,0.85)' : fill}" `+
+      `stroke="${n.soon ? '#6d7b86' : stroke}" `+
+      `stroke-width="${refundable?9:has?7:4}" stroke-opacity="${n.soon ? 0.7 : sop}" `+
+      `opacity="${n.soon?0.62:lock?0.55:shut?0.38:1}"/>`+ soon + frame + glyph +
       `</g>`);
   }
   /* cluster names, in whatever clear spot the build found for them */
@@ -9354,11 +9644,12 @@ function renderTree(){
     <div class="tinfo" id="treeInfo">${treePick && META_BY_ID[treePick]
       ? metaTipHtml(META_BY_ID[treePick], m)
       : `<h4>${esc(weapon.name)} · ${esc(difficulty.name)}</h4>
-         <p>Hover a node to read it, click to take it. You can only take what
-         TOUCHES something you already hold, so where you start decides what is
-         cheap and what is a long walk.</p>
+         <p>Hover a node and its card follows your cursor; click to take it. You
+         can only take what TOUCHES something you already hold, so where you
+         start decides what is cheap and what is a long walk.</p>
          <div class="tmeta">Every weapon has its own tree on every difficulty — twelve
-         in all, one map, four doors set far apart.</div>`}</div>
+         in all, one map, six doors set far apart. Two of them are for weapons
+         that are not built yet.</div>`}</div>
     <div class="tbar"><b>${metaWavePoints(m)}</b> points from waves
       <i>${nextWave === null ? 'the ceiling of '+META_POINT_MAX+' is reached'
                              : 'your best is wave '+(m.best.wave||0)+' — clear wave '+
@@ -9383,10 +9674,27 @@ function renderTree(){
     treeBindView(svg);
   }
   const info = document.getElementById('treeInfo');
+  const tip = document.getElementById('treeTip');
+  /* KEPT INSIDE THE WINDOW. A card that runs off the right edge is a card you
+     scroll the page to read, and this one is fixed -- so it flips to the other
+     side of the cursor rather than growing a scrollbar. */
+  const place = (ev)=>{
+    if(!tip) return;
+    const w = tip.offsetWidth || 300, h = tip.offsetHeight || 140, pad = 14;
+    let x = ev.clientX + 18, y = ev.clientY + 18;
+    if(x + w + pad > window.innerWidth) x = ev.clientX - w - 18;
+    if(y + h + pad > window.innerHeight) y = Math.max(pad, ev.clientY - h - 18);
+    tip.style.left = Math.max(pad, x) + 'px';
+    tip.style.top = Math.max(pad, y) + 'px';
+  };
   for(const g of body.querySelectorAll('.tnode')){
     const id = g.dataset.node, n = META_BY_ID[id];
-    g.addEventListener('mouseenter', ()=>{ treeHover = id; if(info) info.innerHTML = metaTipHtml(n, m); });
+    g.addEventListener('mouseenter', ev=>{ treeHover = id;
+      if(tip){ tip.innerHTML = metaTipHtml(n, m); tip.classList.add('on'); place(ev); }
+      if(info) info.innerHTML = metaTipHtml(n, m); });
+    g.addEventListener('mousemove', place);
     g.addEventListener('mouseleave', ()=>{ treeHover = null;
+      if(tip) tip.classList.remove('on');
       if(info && treePick && META_BY_ID[treePick]) info.innerHTML = metaTipHtml(META_BY_ID[treePick], m); });
     g.addEventListener('click', ev=>{
       ev.stopPropagation();
@@ -9423,7 +9731,12 @@ function refreshTreeBtn(){
     (spent > 0 ? ` <i class="tspent">${spent} spent</i>` : '') +
     `<i class="twho">${esc(weapon.name)} \u00b7 ${esc(difficulty.name)}</i>`;
 }
+function treeTipHide(){
+  const t = document.getElementById('treeTip');
+  if(t) t.classList.remove('on');
+}
 function toggleTree(){
+  treeTipHide();
   const el = document.getElementById('treeScreen');
   if(!el) return;
   treeOn = !treeOn;
@@ -10833,6 +11146,24 @@ const STAT_PROBES = [
   { g:'AILMENT', k:'Increased magnitude', get:()=> ((player&&player.ailMagInc)||0)*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'brings the whole scale closer: the same hit counts for more, so smaller blows still chill and shock' },
+  /* ---- THE CONTEST, on the sheet, as a CHANCE and not a rating. Nobody can
+     read 840 against 420; everybody can read 87%. ---- */
+  { g:'ACCURACY', k:'Accuracy', get:()=> accuracyValue(), fmt:v=>Math.round(v)+'',
+    why:'attacks only \u2014 a spell arrives where it was aimed. The weapon is a MORE '+
+        'multiplier over the whole pool, and dexterity pays '+ATTR_DEX_ACC+' a point into it' },
+  { g:'ACCURACY', k:'vs an ordinary body', get:()=> hitChance(accuracyValue(), EVA_BASE)*100,
+    fmt:v=>v.toFixed(1)+'%',
+    why:'how often a swing lands on something of average speed and size. Fast small monsters '+
+        'dodge more and big slow ones barely dodge at all' },
+  { g:'ACCURACY', k:'vs a hard dodger', get:()=> hitChance(accuracyValue(), EVA_BASE*3)*100,
+    fmt:v=>v.toFixed(1)+'%',
+    why:'a shade, or anything under SLIPPERY. This is the number accuracy is bought for' },
+  { g:'EVASION', k:'Evasion', get:()=> evasionValue(), fmt:v=>Math.round(v)+'', zero:true,
+    why:'you start with NONE \u2014 armour is the defence you begin with, evasion is the one '+
+        'you choose. It does nothing against a spell' },
+  { g:'EVASION', k:'An ordinary swing lands', get:()=> hitChance(ACC_MOB_BASE, evasionValue())*100,
+    fmt:v=>v.toFixed(1)+'%',
+    why:'how often a monster\u2019s ATTACK finds you. A boss is far more accurate than this' },
   { g:'EXPOSURE', k:'Chance', get:()=> ((player&&player.exposeChance)||0)*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'per hit, per ELEMENT it arrived as \u2014 half a hit of fire exposes fire at half of this' },
@@ -11205,7 +11536,13 @@ function mobStatRows(key){
   add('BASE', 'Base damage', d.dmg + '');
   add('BASE', 'Move speed', Math.round(d.speed) + ' px/s');
   if(d.fire) add('BASE', 'Attack every', d.fire.toFixed(1) + 's');
-  if(d.evade) add('BASE', 'Evades', Math.round(d.evade*100) + '% of hits');
+  /* THE CONTEST, BOTH WAYS ROUND, and both of them in the numbers the hero
+     actually carries -- a rating on its own means nothing to anybody. */
+  { const ev = mobEvasionOf(d), ac = mobAccuracyOf(d);
+    add('BASE', 'Evasion', ev + '  (you hit ' + Math.round(hitChance(accuracyValue(), ev)*100) + '%)');
+    add('BASE', 'Accuracy', ac + (evasionValue() > 0
+        ? '  (it hits ' + Math.round(hitChance(ac, evasionValue())*100) + '%)'
+        : '  (you have no evasion)')); }
   if(d.shade) add('BASE', 'Shade', 'fades in and out of reach');
   if(d.golem) add('BASE', 'Golem kit', GOLEM_CONF[d.golem] ? GOLEM_CONF[d.golem].kit : d.golem);
   if(d.mini)  add('BASE', 'Mini', 'spawned by a '+d.mini+' golem');
@@ -20141,6 +20478,39 @@ function renderHUD(){
     ctx.fillStyle = `rgba(255,214,110,${a2})`;
     ctx.fillText('Click the game window once, then use WASD to move', cw/2, ch-118);
   }
+  /* ================== WHAT IS ON YOU, IN TWO COLUMNS ==================
+     One list of everything bad was already there and doing its job. What was
+     missing was the other half: a hero carrying three charges, a rage well and
+     a fortune had no way to see any of it except the chevrons over their own
+     head, which say how many and never what they are worth.
+     BUFFS on the left, AILMENTS on the right, because the left is where your
+     eye already goes for your own health bar and the right is where the thing
+     happening TO you belongs. Both columns are built from data -- the stack
+     table, the curse table, the element list -- so a fourth charge or a fifth
+     curse arrives in here by existing. */
+  const buffs = [];
+  for(const id in (p.stacks || {})){
+    const n = stackOf(id), d = stackDef(id);
+    if(!n || !d) continue;
+    /* WHAT IT IS WORTH, not how many there are -- the chevrons over your head
+       already say how many. Each row prints the thing the stack actually pays. */
+    const worth = [];
+    const m = d.mods || {};
+    if(m.moreAll)  worth.push('+'+Math.round(m.moreAll*n*100)+'% MORE dmg');
+    if(m.moreDmg)  worth.push('+'+Math.round(m.moreDmg*n*100)+'% MORE atk');
+    if(m.atk)      worth.push('+'+Math.round(m.atk*n*100)+'% atk spd');
+    if(m.crit)     worth.push('+'+Math.round(m.crit*n*100)+'% crit');
+    if(m.less)     worth.push('-'+Math.round(m.less*n*100)+'% dmg taken');
+    if(m.res)      worth.push('+'+Math.round(m.res*n*100)+'% res');
+    if(m.reach)    worth.push('+'+Math.round(m.reach*n*100)+'% reach');
+    buffs.push({ c:d.col, t:d.name+' \u00d7'+(d.frac ? Math.round(n) : n),
+                 more:worth });
+  }
+  if(p.rageT > 0)    buffs.push({ c:'#ff4a3c', t:'RAGE BRICK \u00d7'+p.rageMul+
+                                   ' \u00b7 '+Math.ceil(p.rageT)+'s' });
+  if(p.fortuneT > 0) buffs.push({ c:'#ffd166', t:'FORTUNE \u00d7'+p.fortuneMul+
+                                   ' studs & XP \u00b7 '+Math.ceil(p.fortuneT)+'s' });
+  if(p.magnetT > 0)  buffs.push({ c:'#9fd4ff', t:'MAGNET \u00b7 '+Math.ceil(p.magnetT)+'s' });
   /* active ailments, so you can see why you're slow / on fire / getting crit */
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
@@ -20156,15 +20526,47 @@ function renderHUD(){
       ails.push({c:CURSES[k].col, t:CURSES[k].name+(p.curseN[k]>1?' ×'+p.curseN[k]:'')+
         ' -'+Math.round(p.curse[k]*100)+'% · '+Math.ceil(p.curse.t)+'s'});
   }
-  ails.forEach((a,i)=>{
-    const ay = xpY + 24 + i*20;
+  /* TWO COLUMNS, and the right one only takes up room when there is something
+     in it: a clean hero shows one narrow list on the left and nothing else. */
+  const COL_W = 228, COL_GAP = 8, PILL = COL_W - 8, TXT_X = 22;
+  /* A ROW THAT RUNS OUT OF THE PILL is worse than a row that says less. The
+     extras are dropped one at a time until what is left fits, so the NAME and
+     the count are never the thing that gets cut. */
+  const fit = (a)=>{
+    ctx.font='700 11px Fredoka';
+    const room = PILL - TXT_X - 8;
+    let parts = (a.more || []).slice();
+    let t = a.t;
+    while(parts.length && ctx.measureText(t + ' \u00b7 ' + parts.join(' \u00b7 ')).width > room)
+      parts.pop();
+    return parts.length ? t + ' \u00b7 ' + parts.join(' \u00b7 ') : t;
+  };
+  const ROW0 = xpY + 44;
+  const column = (list, x)=>list.forEach((a, i)=>{
+    const ay = ROW0 + i*20;
     ctx.fillStyle = 'rgba(15,20,25,0.62)';
-    roundRect(ctx, 24, ay, 214, 17, 8); ctx.fill();
+    roundRect(ctx, x, ay, PILL, 17, 8); ctx.fill();
     ctx.fillStyle = a.c;
-    ctx.beginPath(); ctx.arc(35, ay+8.5, 5, 0, TAU); ctx.fill();
-    ctx.font='700 11px Fredoka'; ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.fillStyle = a.c; ctx.fillText(a.t, 46, ay+9);
+    ctx.beginPath(); ctx.arc(x + 11, ay+8.5, 5, 0, TAU); ctx.fill();
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle = a.c; ctx.fillText(fit(a), x + TXT_X, ay+9);
   });
+  /* the header sits over a brick field of any colour, so it carries its own
+     dark outline the way every other floating label in the game does */
+  const head = (txt, x, col)=>{
+    ctx.font='700 10px Fredoka'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.letterSpacing = '1.5px';
+    ctx.strokeStyle = 'rgba(12,16,20,0.85)'; ctx.lineWidth = 3;
+    ctx.strokeText(txt, x + 3, ROW0 - 12);
+    ctx.fillStyle = col; ctx.fillText(txt, x + 3, ROW0 - 12);
+    ctx.letterSpacing = '0px';
+  };
+  if(buffs.length){ head('BUFFS', 24, '#9fdc7e'); column(buffs, 24); }
+  if(ails.length){
+    const ax = 24 + (buffs.length ? COL_W + COL_GAP : 0);
+    head('AILMENTS', ax, '#ff8a6a');
+    column(ails, ax);
+  }
   ctx.textBaseline='middle';
   const autoSlot = (x, frac, iconFn, label)=>{
     ctx.fillStyle='rgba(15,20,25,0.6)';
@@ -20653,6 +21055,15 @@ document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.clic
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });
 document.getElementById('treeFitBtn').addEventListener('click', ()=>{ SFX.click(); treeFit(); });
+document.getElementById('treeSecBtn').addEventListener('click', ()=>{ SFX.click();
+  treeToggleSectors(); refreshTreeSecBtn(); });
+function refreshTreeSecBtn(){
+  const b = document.getElementById('treeSecBtn');
+  if(!b) return;
+  b.textContent = 'COUNTRIES';
+  b.classList.toggle('on', treeSectors);
+}
+refreshTreeSecBtn();
 /* REFUND MODE is a mode, not a button that eats your tree: turn it on, then
    click the nodes you want back, one at a time. Clearing the lot is its own
    button and says so. */
