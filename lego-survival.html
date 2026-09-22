@@ -2105,6 +2105,20 @@ const HERO_STACKS = {
 };
 /* the order the HUD draws them in, which is also the order they read in */
 const CHARGE_IDS = ['frenzy', 'power', 'endurance'];
+/* ---- WHERE GENERATION STOPS BEING WORTH ANYTHING ----
+   A card that fills a three-deep bar three at a time has nothing left to sell,
+   and one that fills it FOUR at a time is selling you a point that falls on the
+   floor. `Set Jaw` had no gate at all, so it kept turning up on the reward
+   screen for a hero who could not use another one of it -- which is a card
+   wasting one of your three choices, which is the most expensive kind of card
+   there is. The rule is the same for all four generators: you may buy up to
+   what the bar can hold and not one past it, and raising the bar unlocks the
+   card again, which is exactly the loop those two cards should have. */
+function chargeGenRoom(id, have){ return (have || 0) < stackCap(id); }
+/* ...and the ceilings themselves stop somewhere, because "+4 maximum of every
+   charge" offered for ever is a pool with no bottom. */
+const CHARGE_CAP_MAX = 9;
+const RAGE_CAP_MAX   = 80;
 function stackDef(id){ return HERO_STACKS[id] || null; }
 /* IS THIS ENTITY ALLOWED TO CARRY IT? A weapon gate is the hero's; a monster
    may carry whatever its row says is `mob`, and carries nothing unless
@@ -7146,7 +7160,7 @@ const UPGRADES = [
      the ceiling is thirty and the generation is nothing — so this is the card
      that makes it a build at all, and the tree deepens it afterwards. */
   { id:'ragehit', name:'Warpath', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>!isCaster() && player.rageOnHit < stackCap('rage'),
     calc:m=>({v: byRar(m, [0.5, 0.8, 1.2, 1.8, 2.6])}),
     desc:c=>`Your swings build RAGE: +${c.v.toFixed(1)} a hit (now `+
       `${(player.rageOnHit||0).toFixed(1)}). Every point of rage is `+
@@ -7155,14 +7169,14 @@ const UPGRADES = [
       `have gone ${HERO_STACKS.rage.grace}s without landing or taking one`,
     apply:c=>{ player.rageOnHit += c.v; } },
   { id:'ragehurt', name:'Spite', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
-    req:()=>!isCaster(),
+    req:()=>!isCaster() && player.rageOnHurt < stackCap('rage'),
     calc:m=>({v: byRar(m, [0.6, 1.0, 1.5, 2.2, 3.2])}),
     desc:c=>`Being hit builds RAGE: +${c.v.toFixed(1)} a hit taken (now `+
       `${(player.rageOnHurt||0).toFixed(1)}) — what is done to you is worth `+
       `${Math.round(HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage a point`,
     apply:c=>{ player.rageOnHurt += c.v; } },
   { id:'ragemax', name:'Deep Well', icon:'force', cls:'OFFENSE', minRar:'rare',
-    req:()=>(player.rageOnHit > 0 || player.rageOnHurt > 0),
+    req:()=>(player.rageOnHit > 0 || player.rageOnHurt > 0) && stackCap('rage') < RAGE_CAP_MAX,
     calc:m=>({v: byRar(m, [4, 6, 8, 12, 16])}),
     desc:c=>`+${c.v} maximum RAGE (now ${stackCap('rage')}) — a deeper well to fill, `+
       `and ${Math.round(c.v*HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage at the top of it`,
@@ -7172,6 +7186,7 @@ const UPGRADES = [
      until something hands them the reason to, so these are the cards that turn
      a charge into a build and the tree is what deepens it. ---- */
   { id:'chgkill', name:'Blood Rush', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>chargeGenRoom('frenzy', player.chargeKill),
     calc:m=>({v: byRar(m, [1,1,1,1,2])}),
     desc:c=>`Killing a monster grants ${c.v} FRENZY charge${c.v>1?'s':''} (now `+
       `${(player.chargeKill||0)+c.v} a kill, ${stackCap('frenzy')} at once). Each is `+
@@ -7180,6 +7195,7 @@ const UPGRADES = [
       `every ${HERO_STACKS.frenzy.decay}s`,
     apply:c=>{ player.chargeKill += c.v; } },
   { id:'chgcrit', name:'Sharpened Focus', icon:'target', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>chargeGenRoom('power', player.chargeCrit),
     calc:m=>({v: byRar(m, [1,1,1,1,2])}),
     desc:c=>`A CRITICAL grants ${c.v} POWER charge${c.v>1?'s':''} (now `+
       `${(player.chargeCrit||0)+c.v} a crit, ${stackCap('power')} at once). Each is `+
@@ -7187,6 +7203,7 @@ const UPGRADES = [
       `critical makes the next one likelier — it pools with every other increase you own`,
     apply:c=>{ player.chargeCrit += c.v; } },
   { id:'chghurt', name:'Set Jaw', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
+    req:()=>chargeGenRoom('endurance', player.chargeHurt),
     calc:m=>({v: byRar(m, [1,1,1,1,2])}),
     desc:c=>`Being hit grants ${c.v} ENDURANCE charge${c.v>1?'s':''} (now `+
       `${(player.chargeHurt||0)+c.v} a hit taken, ${stackCap('endurance')} at once). Each is `+
@@ -7194,7 +7211,8 @@ const UPGRADES = [
       `+${Math.round(HERO_STACKS.endurance.mods.res*100)}% to every elemental resistance`,
     apply:c=>{ player.chargeHurt += c.v; } },
   { id:'chgmax', name:'Reservoir', icon:'force', cls:'OFFENSE', minRar:'rare',
-    req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0),
+    req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0)
+            && CHARGE_IDS.some(k=>stackCap(k) < CHARGE_CAP_MAX),
     calc:m=>({v: byRar(m, [1,1,2,2,3])}),
     desc:c=>`+${c.v} maximum of EVERY charge — FRENZY to ${stackCap('frenzy')+c.v}, `+
       `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
@@ -7324,7 +7342,13 @@ const META_BANK_K        = 4;
    have 38 to place; reach 40 next time and you have two more, because 40 is
    your high-water mark and not your fortieth lap. Studs are still counted, and
    they still buy nothing here. */
-const META_POINT_MAX      = 60;   /* THE HARD CEILING */
+/* THE HARD CEILING, AND IT IS TWICE WHAT IT WAS. Sixty was hit somewhere
+   around wave thirty-nine, which meant the back half of a good run bought
+   nothing at all -- the tree stopped being a record of how far you had got and
+   became a thing you finished. A hundred and twenty is roughly a wave-100 run
+   or a very deep one, and the tree holds far more than that, so there is a
+   reason to keep going for as long as there are waves. */
+const META_POINT_MAX      = 120;
 /* BUMP THIS WHENEVER THE LAYOUT MOVES. A save from an older tree keeps every
    stud, every best wave and every boss — it just hands its allocated points
    BACK, because the nodes it chose are no longer where it left them. Nobody
@@ -7335,14 +7359,14 @@ const META_TREE_VER = 3;
 /* ...and the achievements on top of it, which are the things a wave count
    cannot see: how deep you levelled, which bosses you have ever put down, and
    whether you have actually finished a spell rather than merely owned it. */
-/* TWO POINTS A LEVEL. This used to be seven milestones -- 10, 25, 50, 75, 80,
-   90, 100 -- which paid seven points for a hundred levels and left a dead
-   stretch of twenty-five between the second and the third where levelling was
-   worth nothing at all. Levelling is the thing you do every single run, so it
-   pays every single run: reach level 25 and that is fifty points. The ceiling
-   of META_POINT_MAX still has the last word, which means a deep enough run can
-   now fill the tree on levels alone -- that is the point of it. */
-const META_POINTS_PER_LEVEL = 2;
+/* ONE POINT A LEVEL. This was seven milestones once -- 10, 25, 50, 75, 80, 90,
+   100 -- which paid seven points for a hundred levels and left a dead stretch
+   of twenty-five between the second and the third; then two a level, which was
+   generous enough that a deep run filled the tree on levels alone and the wave
+   count stopped mattering. One a level is the middle: every level pays, the
+   same as every wave does, and neither of the two things you do in a run is
+   worth more than the other. */
+const META_POINTS_PER_LEVEL = 1;
 /* MASTERY. Every CAPPED brick of one spell, at its cap. Flat damage is left
    out on purpose: it has no ceiling, so "all of it" would never be true. */
 const META_MASTERY = {
@@ -8593,7 +8617,14 @@ const RING_AT = [0, 5, 12, 22, 34];
       const q = W(G.hub);
       const n = push({ id:c.id+'_C', kind, spoke:c.sp, cl:c.id, name:mid.name, note:mid.note,
         x:q[0], y:q[1], at: Math.max(c.at, mid.at || 0),
-        cost: mid.cost || (kind === 'legend' ? 5 : kind === 'keystone' ? 3 : 2),
+        /* A KEYSTONE COSTS FIVE. It was three, on a map where sixty points was
+           the ceiling and the far corners were simply too far to collect --
+           the distance WAS the limit and the price did not have to be. At a
+           hundred and twenty a walk that took every keystone on the rim cost
+           sixty-seven, so the thing that used to make you choose had quietly
+           stopped. The price is the limit now, which is a limit that does not
+           depend on how the roads happen to be laid this week. */
+        cost: mid.cost || (kind === 'legend' ? 5 : kind === 'keystone' ? 5 : 2),
         mods:mid.mods, req:[] });
       c.centre = n.id;
       for(const i of G.toHub) if(c.nodes[i]) add(c.nodes[i], n.id);

@@ -1539,21 +1539,30 @@ A worse run pays nothing, however long it was.
 | | |
 |---|--:|
 | **your best wave** *with this weapon* | **1 point each** |
-| **your best level** *with this weapon* | **2 points each** |
+| **your best level** *with this weapon* | **1 point each** |
 | first time smashing each of the 8 bosses | 8 |
 | **BRICKBANE MASTER** — every capped Brickbane brick at its cap | 1 |
-| **the ceiling on everything** | **60** |
+| **the ceiling on everything** | **120** |
 
-**TWO POINTS A LEVEL, EVERY LEVEL.** This used to be seven milestones — 10, 25, 50, 75, 80,
-90, 100 — which paid seven points for a hundred levels and left a dead stretch of twenty-four
-between the second and the third where levelling was worth nothing at all. Levelling is the
-thing you do every single run, so it pays every single run: **reach level 25 and that is
-fifty points.** Your best level is a high-water mark like your best wave — going deeper pays
-the difference, doing it again pays nothing.
+**ONE POINT A LEVEL, EVERY LEVEL** — the same as one a wave, so neither of the two things you
+do in a run outweighs the other. This was seven milestones once (10, 25, 50, 75, 80, 90, 100),
+which paid seven points for a hundred levels and left a dead stretch of twenty-four where
+levelling was worth nothing; then two a level, which was generous enough that a deep run filled
+the tree on levels alone and the wave count stopped mattering. One is the middle. Your best
+level is a high-water mark like your best wave — going deeper pays the difference, doing it
+again pays nothing.
 
-The **ceiling of 60 still has the last word**, which means a deep enough run can now fill the
-tree on levels alone. That is deliberate: the tree's whole power budget is built on 60 points
-and nothing walks past it.
+**The ceiling is 120.** It was 60, and 60 was reached somewhere around wave 39 — so the back
+half of a good run bought nothing at all and the tree stopped being a record of how far you got.
+The whole tree costs over a thousand points, so 120 is still a small share of it and a build is
+still a set of choices.
+
+**What doubling the points did to the budget:** a stay-at-home build went from **×2.53** total
+power to **×3.47** — not double, because the increased-damage caps do their job. And a
+**keystone costs 5 points** now instead of 3: at 60 the far corners were simply unreachable
+together and the *distance* was the limit, but at 120 a walk that collected every keystone on
+the rim cost 67. The price is the limit now — the rim is about **three fifths of everything you
+will ever have**, which is a real trade rather than a wall.
 
 **BRICKBANE MASTER** wants stacks, spread, reach, rate, dose length and Spore Burst all at
 their ceilings. Flat poison damage is *not* asked for: it has no cap, so "all of it" could
@@ -1980,6 +1989,13 @@ the ramp gradually instead of all at once.
 does — and a build that does all three gets all three. Like rage, **nobody gains them by
 default**: the ceiling is three and the generation is zero until a brick or a node hands it
 over. That is what keeps them a build rather than a thing that happens to everyone.
+
+**A generator stops being offered at the bar it fills.** A card that fills a three-deep bar three
+at a time has nothing left to sell, and one that fills it *four* at a time is selling you a point
+that falls on the floor — but `Set Jaw` had no gate at all and kept turning up for a hero who
+could not use another. You may buy up to what the bar holds and not one past it, and **raising
+the bar unlocks the card again**, which is exactly the loop those two cards should make together.
+The same rule now covers Warpath, Spite and the two that raise a ceiling.
 
 ### Six beginnings
 

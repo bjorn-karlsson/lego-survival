@@ -2095,3 +2095,76 @@ exact shape for its magnitude cases three sections earlier and missed it here. T
 the most any of them landed.
 
 23 breaks for `acc`, 54 tests green, wave-50 soak clean.
+
+## Twenty-second pass — a card that could not be used, and a ceiling that was reached
+
+### The card with no gate
+
+> *"There is no cap for upgrades that give me endurance charges etc. I have 3/3 gain Set Jaw
+> but I still get presented with it."*
+
+`chgkill`, `chgcrit` and `chghurt` had no `req` at all. A card that fills a three-deep bar three
+at a time has nothing left to sell, and one that fills it *four* at a time is selling a point
+that falls on the floor. Worse than useless: a card that cannot move a number is a card eating
+one of your three choices, which is the most expensive kind of card in the game.
+
+The rule is `chargeGenRoom(id, have)` — you may buy up to what the bar holds and not one past it
+— and because it reads `stackCap`, **raising the bar unlocks the card again**, which is the loop
+those two cards were always supposed to make together. An audit of every card with no `req` found
+these three and nothing else; `attstr`, `greed` and `eva` are genuinely unbounded and fine.
+
+Rage had the same hole with a different shape: `Warpath` and `Spite` were gated on *being melee*
+and nothing else, so they could sell generation well past the thirty-deep well. And the two cards
+that RAISE a ceiling had no ceiling of their own, which is a pool with no bottom — `CHARGE_CAP_MAX`
+and `RAGE_CAP_MAX` now stop them.
+
+### Twice the points
+
+> *"I just got to wave 39 but still only got 60 points... increase that to 120."*
+
+`META_POINT_MAX` 60 → 120, and levels back to **one point each** (they were one, then two, and
+one is the middle: a level is worth what a wave is worth and neither of the two things you do in
+a run outweighs the other).
+
+Two things followed that were not in the request, and both were found by tests rather than by
+thinking about it:
+
+**The power budget.** At 60 a stay-at-home red build was ×2.53 against a declared ×2.60. At 120
+it is ×3.47 — 37% more for double the points, because the increased-damage caps do their job. The
+declaration moves with the ceiling it was always about and keeps the same slack. A budget that
+silently doubled would catch nothing, which is the whole reason it is written down.
+
+**The rim stopped being a wall.** `meta` asserted that no single walk collects every keystone on
+the rim; at 60 points the four corners were simply too far apart and the *distance* was the
+limit. At 120 the union of four real walks cost 67. Raising a keystone from 3 points to 5 took it
+to 75 — still collectible.
+
+So the rule changed rather than the number. At 120 the limit is no longer "you cannot", it is
+"that is three fifths of everything you will ever have and you will have nothing else" — which is
+a real trade, and the thing the old rule was protecting. Pretending otherwise would have meant a
+keystone price nobody would ever pay. The power budget is what actually bounds a rim-walker, and
+it measures the focused build, which is stronger.
+
+### The third flake, caught with its text
+
+`wavemod` had failed once in a suite run and not reproduced; this time the output was captured:
+
+```
+shocking a body changed the rendered frame by only -187 yellow pixels
+SHOCK IS IN THE FRAME: {"before":524,"after":337}
+```
+
+A normal `before` is 3 to 90. 524 is the **gold wave banner**, which is drawn across the middle
+of the screen for a second and a half and floods the very region this probe samples. Under a full
+suite run the earlier cases take longer, the banner is still up when `before` is grabbed, and the
+test then reports that shocking a body made the frame *less* yellow.
+
+One frame was never a measurement anyway — the arcs animate off `vtime`, so a single grab can
+land in a trough. It takes the quietest of eight frames for `before` and the brightest of eight
+for `after`, spanning long enough for any banner to clear: 1–3 against 429–598, and the break
+that removes the draw call still fails at 3 against 11.
+
+That is three flakes now with one root — a fixed `sleep()` standing in for a condition — and the
+third one found by capturing the failure instead of guessing at it.
+
+6 new breaks, 54 tests green, wave-50 soak clean.
