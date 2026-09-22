@@ -1851,6 +1851,110 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
 
+### How big was the hit?
+
+**Three of the five ailments already scaled with the hit and two did not.** A bleed ticks for a
+share of the wound that opened it, a burn for a share of the fire that lit it, a poison for a
+share of the chaos that landed — hit harder, they hurt more, and that took care of itself.
+**CHILL and SHOCK are counters.** A one-damage orbit tick chilled a body exactly as hard as a
+mace slam did, which meant the two ailments that most want you to hit hard were the two that
+could not tell whether you had.
+
+PoE's rule is that the *magnitude* of a chill or a shock is the hit measured against the body's
+life. That is the rule here, in the currency this game already speaks: **the size of the hit
+decides how many stacks it lays.**
+
+| the hit, as a share of the body's pool | what it leaves |
+|---|---|
+| under **1.2%** | nothing at all |
+| between | 1 or 2 stacks, scaling |
+| **10%** or more | all **3** stacks in one blow |
+
+**A boss's pool is not its life.** A wave-50 boss holds a quarter of a million health; measured
+against that, nothing a hero can swing would ever be one per cent of it and bosses would be
+flatly immune to two of the five ailments — the opposite of what a storm build wants from the
+fight it was built for. A boss's ailment pool is **5%** of its life, so the numbers a late hero
+actually deals still read as big hits.
+
+**Three spells still print their own certainty.** Block Freeze exists to chill; a threshold that
+could stop it doing so would be a rule eating a spell. Fireball, Block Freeze and Slam of the
+Elements always land at least one stack — how many *more* than one still depends on how hard
+they hit.
+
+**Increased magnitude** is the stat you buy to make a smaller blow count. It does not change the
+ceiling, it changes how fast you reach it — the mace's road, and the slow-heavy build's.
+
+### Exposure — *resistance taken off*
+
+**Not an ailment, and the difference is the whole point.** An ailment is damage or a debuff the
+body carries. **EXPOSURE is resistance taken OFF**, which means it sits *outside* your own
+increased-damage pool and outside the MORE ceiling with it. A build that has already bought
+every increase there is can still get more out of a fire hit by making the body worse at
+surviving fire.
+
+> **Solvent** — *+X% chance for a hit to EXPOSE the element it arrived as: −22% of that
+> resistance for 6 seconds.*
+
+It is rolled **per element that landed**, so a hit half converted to fire exposes fire at half
+the chance — the same share rule every ailment follows. It does **not** stack with itself (a
+stacking resistance strip is a hole with no bottom), it *does* stack with the brands a body
+earns, and it can drag a resistance below zero, which is a weakness and multiplies up.
+
+Nothing has it until you buy it: `exposeChance` starts at zero, exactly like the one ailment
+chance.
+
+### The three charges
+
+PoE's frenzy, power and endurance, and they are the reason the stack table was made abstract
+two passes ago: **three whole mechanics arrive as three rows** and nothing else in the file
+learns that they exist.
+
+| | earned by | worth, each |
+|---|---|---|
+| 🟢 **FRENZY** | killing something | +4% attack **and** cast speed, +4% MORE damage |
+| 🟣 **POWER** | a critical strike | +30% *increased* critical chance, into the one pool |
+| 🟠 **ENDURANCE** | being hit | 5% **less** damage taken, +4% to every elemental resistance |
+
+Three each to start, falling off **one every 4 seconds** — so dropping out of a fight costs you
+the ramp gradually instead of all at once.
+
+**Each is earned by doing a different thing,** so which one a build runs on says what that build
+does — and a build that does all three gets all three. Like rage, **nobody gains them by
+default**: the ceiling is three and the generation is zero until a brick or a node hands it
+over. That is what keeps them a build rather than a thing that happens to everyone.
+
+### Five more sentences in the tree
+
+Every one of these is a **trade**, and both halves are real. That is the only thing that makes a
+keystone worth the walk: a node that is simply good is a big minor node, and the tree already
+has plenty of those.
+
+> **The Long Dying** — *what you kill keeps killing; nothing you touch dies fast.*
+> Burns, poisons and wounds spread from a corpse to everything within 210px, at 60% strength.
+> **−25% increased damage.**
+
+That one is the answer to *"ailment proliferation is too strong to just add"*: it turns three
+single-target damage-over-time builds into wave clear in one sentence, so it costs a walk to the
+edge of the map and a flat quarter off everything you hit directly.
+
+> **Blood and Salt** — *your criticals stop hitting harder and start leaving everything.*
+> Every critical inflicts every ailment its damage can. **−55% critical multiplier.**
+
+> **The Overload** — *you cannot crit at all, and everything you do is far bigger.*
+> **+32% MORE damage, +25% increased elemental** — and no critical strikes, from any source,
+> including the axe's guaranteed backswing.
+
+> **The Deep Cold** — *every chill and shock lands full force, and nothing you leave burns.*
+> Ignores the magnitude scale entirely. **−60% increased damage over time.**
+
+> **Unrelenting** — *every charge, by every means — and a body made of glass.*
+> All three generations at once, +2 to every ceiling. **−28% maximum hearts.**
+
+And **ten new notables**, spread so that each country gets what it was missing: the three
+charges one per country (red takes hits, green kills, blue picks its moment), two exposure
+clusters, two about how hard an ailment lands, a shared charge-capacity node, and two filling
+plain gaps — red had no node about ending a fight and green had none about surviving one.
+
 ### Lightning is yellow
 
 **A damage type has one colour, and everything that deals it uses that colour.** The Storm

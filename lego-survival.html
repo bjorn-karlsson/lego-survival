@@ -974,7 +974,8 @@ function paceOf(base, inc, floor){ return Math.max(floor, base / (1 + (inc||0)))
    `inc.atk`, and it is the one thing CAST SPEED does not touch. */
 function castInc(pool){
   return (pool || 0) + ((player && player.inc && player.inc.cast) || 0)
-                     + ((weapon && weapon.incAtk) || 0);
+                     + ((weapon && weapon.incAtk) || 0)
+                     + stackMod('cast');       /* every FRENZY charge */
 }
 /* Rebuild every derived number from its pools. Cheap, and called after anything
    that can move one — a brick, a starting perk, a rebuild. */
@@ -1025,6 +1026,7 @@ function syncStats(){
   /* bleed: a flat chance pool and a share of the hit, both hard-capped */
   p.bleedChance = clamp(p.bleedChanceFlat||0, 0, 1);
   p.ailChance   = clamp(p.ailChanceFlat||0, 0, AIL_CHANCE_MAX);
+  p.exposeChance = clamp(p.exposeChanceFlat||0, 0, EXPOSE_CHANCE_MAX);
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
   /* --- everything that used to be capped where the card wrote it ------------
      Same shape every time: (base + flat) x (1 + sum increased) x each more,
@@ -1853,7 +1855,56 @@ function enemyRes(e, el){
      which is a weakness and multiplies up — the same rule a fire golem's soft
      spot already used. A body with no resistances at all still gets brittle. */
   if(el === 'frost') r -= FROZEN_RES_STEP * frozenMarks(e);
+  /* EXPOSURE, which is the same idea bought rather than earned. */
+  r -= EXPOSE_STEP * exposedOn(e, el);
   return r;
+}
+/* ============================== EXPOSURE ==============================
+   NOT AN AILMENT, and the difference is the whole point of it. An ailment is
+   damage or a debuff the body carries; EXPOSURE is resistance taken OFF, which
+   means it sits OUTSIDE your own increased-damage pool and outside the MORE
+   ceiling with it. A build that has already bought every increase there is can
+   still get more out of a fire hit by making the body worse at surviving fire.
+
+   It does not stack with itself — one mark per element, refreshed — because a
+   stacking resistance strip is a hole with no bottom. It DOES stack with the
+   brands a body earns (BURNT, brittle), which are the same currency arrived at
+   a different way, and it can drag a resistance below zero, which is a
+   weakness and multiplies up.
+
+   Nothing has it until you buy it. `exposeChance` starts at zero, exactly like
+   the one ailment chance, and is rolled per ELEMENT that actually landed --
+   so a hit half converted to fire exposes fire at half the chance. */
+const EXPOSE_STEP  = 0.22;   /* resistance taken off while the mark holds */
+const EXPOSE_T     = 6;      /* seconds; a fresh mark refreshes it */
+const EXPOSE_CHANCE_MAX = 1.0;
+const EXPOSE_ELEMS = ['fire', 'frost', 'shock', 'chaos'];
+const EXPOSE_COL   = { fire:'#ff6a2a', frost:'#7fb9e0', shock:'#e0a81a', chaos:'#b46aff' };
+const EXPOSE_NAME  = { fire:'SCORCHED', frost:'BRITTLE', shock:'SAPPED', chaos:'WITHERED' };
+function exposedOn(e, el){
+  if(!e || !e.expose) return 0;
+  const t = e.expose[el];
+  return (t > 0) ? 1 : 0;
+}
+function exposeEnemy(e, el){
+  if(!e || e.dead || e.state !== 'active' || EXPOSE_ELEMS.indexOf(el) < 0) return;
+  if(!e.expose) e.expose = {};
+  const fresh = !(e.expose[el] > 0);
+  e.expose[el] = EXPOSE_T;
+  if(fresh){
+    addDmg(e.x, e.y - 44*(e.scale||1), EXPOSE_NAME[el], EXPOSE_COL[el], 14);
+    addSparks(e.x, e.y - 18*(e.scale||1), 4, EXPOSE_COL[el]);
+  }
+}
+function exposeTick(e, dt){
+  if(!e || !e.expose) return;
+  for(const el of EXPOSE_ELEMS)
+    if(e.expose[el] > 0) e.expose[el] = Math.max(0, e.expose[el] - dt);
+}
+function exposeCount(e){
+  let n = 0;
+  for(const el of EXPOSE_ELEMS) n += exposedOn(e, el);
+  return n;
 }
 /* ===================== CONVERSION, APPLIED TO A REAL HIT =====================
    Every number in this game is LINEAR in its base: a hit is base x (1+inc) x
@@ -1947,7 +1998,35 @@ const HERO_STACKS = {
     max:30, grace:2.0, rate:10, frac:true, mob:true,
     mods:{ moreDmg:0.01 },      /* +1% MORE attack damage a point */
   },
+  /* ---- THE THREE CHARGES. PoE's frenzy, power and endurance, and they are
+     the reason the stack table was made abstract in the first place: three
+     whole mechanics arrive as three rows and nothing else in the file learns
+     that they exist. Each is earned by doing a DIFFERENT thing -- killing,
+     critting, being hit -- so which one a build runs on says what that build
+     does, and a build that does all three gets all three.
+
+     Like rage, NOBODY GAINS THEM BY DEFAULT. The ceiling is three and the
+     generation is zero until a brick or a node hands it over, which is what
+     keeps them a build rather than a thing that happens to everyone.
+     `decay` and not `grace`: charges fall off one at a time, so dropping out
+     of a fight costs you the ramp gradually instead of all at once. ---- */
+  frenzy: {
+    name:'FRENZY', col:'#6ee06e', max:3, decay:4.0,
+    /* speed AND damage, because a frenzy charge in PoE is the one that makes
+       you faster at everything. moreAll, not moreDmg: rage's is melee only. */
+    mods:{ atk:0.04, cast:0.04, moreAll:0.04 },
+  },
+  power: {
+    name:'POWER', col:'#b46aff', max:3, decay:4.0,
+    mods:{ crit:0.30 },         /* INCREASED critical chance, into the one pool */
+  },
+  endurance: {
+    name:'ENDURANCE', col:'#ff8a3c', max:3, decay:4.0,
+    mods:{ less:0.05, res:0.04 },
+  },
 };
+/* the order the HUD draws them in, which is also the order they read in */
+const CHARGE_IDS = ['frenzy', 'power', 'endurance'];
 function stackDef(id){ return HERO_STACKS[id] || null; }
 /* IS THIS ENTITY ALLOWED TO CARRY IT? A weapon gate is the hero's; a monster
    may carry whatever its row says is `mob`, and carries nothing unless
@@ -2078,9 +2157,69 @@ const AIL_CRIT = { phys:0, frost:1, fire:1, shock:1, chaos:0 };
 const AIL_NATIVE = new Set(['fire', 'ember', 'frost', 'freeze',
                             'slamfire', 'slamfrost', 'slamshock']);
 const AIL_NAME = { phys:'BLEED', frost:'CHILL', fire:'IGNITE', shock:'SHOCK', chaos:'POISON' };
+/* ===================== HOW BIG THE HIT WAS =====================
+   THREE OF THE FIVE AILMENTS ALREADY SCALED WITH THE HIT and two did not.
+   Bleed ticks for a share of the wound that opened it, burn for a share of the
+   fire that lit it, poison for a share of the chaos that landed -- hit harder,
+   they hurt more, and that took care of itself. CHILL and SHOCK are COUNTERS.
+   A one-damage orbit tick chilled a body exactly as hard as a slam did, which
+   meant the two ailments that most want you to hit hard were the two that did
+   not care whether you had.
+
+   PoE's rule is that the MAGNITUDE of a chill or a shock is the hit measured
+   against the body's life. That is the rule here, in the currency this game
+   already speaks: the size of the hit decides HOW MANY STACKS it lays, and a
+   hit too small to matter lays none at all.
+
+     under AIL_MAG_MIN of the pool  -> nothing happens
+     at AIL_MAG_FULL or above       -> AIL_STACK_HIT stacks in one blow
+     between                        -> somewhere in between, rounded
+
+   A BOSS'S POOL IS NOT ITS LIFE. A wave-50 boss holds a quarter of a million
+   health; measured against that, nothing a hero can swing would ever be one per
+   cent of it and bosses would be flatly immune to two of the five ailments --
+   which is the opposite of what a storm build wants from the fight it was built
+   for. A boss's ailment pool is a fraction of its life, so the numbers a late
+   hero actually deals still read as big hits. */
+const AIL_MAG_MIN   = 0.012;  /* of the pool: under this, the hit is a scratch */
+const AIL_MAG_FULL  = 0.10;   /* of the pool: at this, the hit is everything */
+const AIL_STACK_HIT = 3;      /* stacks ONE full-magnitude hit may lay */
+const AIL_POOL_BOSS = 0.05;   /* a boss's ailment pool, as a share of its life */
+function ailPool(e){
+  const hp = Math.max(1, (e && e.maxHp) || 1);
+  return (e && (e.type === 'boss' || e.boss)) ? hp * AIL_POOL_BOSS : hp;
+}
+/* 0 when the hit is beneath notice, 1 when it is a full-magnitude blow */
+function ailMag(e, part){
+  if(!(part > 0)) return 0;
+  /* THE DEEP COLD says every chill and shock lands at full magnitude. It is a
+     keystone, so it reads here rather than at four call sites. */
+  if(player && player.ailFull) return 1;
+  const share = part / ailPool(e);
+  const m = (share - AIL_MAG_MIN) / (AIL_MAG_FULL - AIL_MAG_MIN);
+  /* INCREASED MAGNITUDE is the thing you buy to make a small hit count, which
+     is the whole shape of the PoE stat this borrows: it does not change the
+     ceiling, it changes how fast you get there. */
+  return clamp(m * (1 + ((player && player.ailMagInc) || 0)), 0, 1);
+}
+/* HOW MANY STACKS THIS HIT IS WORTH. `floorOne` is for the spells that ARE
+   their ailment: Block Freeze exists to chill and a threshold that could stop
+   it doing so would be a rule eating a spell. They always land one; how many
+   MORE than one still depends on how hard they hit. */
+function ailStacks(e, part, floorOne){
+  const m = ailMag(e, part);
+  if(m <= 0) return floorOne ? 1 : 0;
+  return Math.max(1, Math.round(m * AIL_STACK_HIT));
+}
 function ailChanceOf(type, source, crit){
   const p = player;
   if(!p) return 0;
+  /* BLOOD AND SALT: a critical stops hitting harder and starts leaving
+     EVERYTHING. Before the native check, because it outranks it -- and before
+     the attack gate below on purpose does NOT apply: a wound is still a thing
+     an edge does, and a keystone that let a fireball cut would be a different
+     promise from the one written on it. */
+  if(crit && p.critAilAll && !(type === 'phys' && !isAttack(source))) return 1;
   if(AIL_NATIVE.has(source) && convFrom(source) === type) return 1;
   /* BLEED IS AN ATTACK AILMENT. Four of the five roll off a damage type alone,
      but a wound is a thing an edge does to a body: only a swing, its whirl, the
@@ -2116,20 +2255,110 @@ function ailTableText(){
    ailment was ever about. */
 function applyAilments(e, d, source, mix, crit, opts){
   if(!e || e.dead || e.state !== 'active') return;
+  const p = player;
+  if(!p) return;
   for(const t of CONV_ORDER){
     const sh = mix[t];
     if(!(sh > 0)) continue;
-    const ch = ailChanceOf(t, source, crit) * sh;
+    /* BLOOD AND SALT MEANS EVERY AILMENT, not every ailment at the share it
+       arrived in. The share rule is the spine of this whole system and the
+       keystone is the one sentence allowed to step over it -- "your criticals
+       leave everything" has to be true or it is not worth the walk. The ailment
+       still lands on the PART of the damage that was that type; only the odds
+       stop caring how big that part was. */
+    const sure = crit && p.critAilAll && !(t === 'phys' && !isAttack(source));
+    const ch = sure ? 1 : ailChanceOf(t, source, crit) * sh;
     if(!(ch > 0) || Math.random() >= ch) continue;
     const part = d * sh;
     if(t === 'phys')       bleedEnemy(e, part);
     else if(t === 'fire')  burnEnemy(e, part, opts && opts.ailDepth);
-    else if(t === 'frost') chillEnemy(e, (opts && opts.ailN) || 1);
-    else if(t === 'shock') shockEnemy(e, (opts && opts.ailN) || 1);
-    else if(t === 'chaos') poisonEnemy(e, part * CHAOS_POISON_S, CHAOS_POISON_T);
+    else {
+      /* CHILL AND SHOCK ARE COUNTERS, so the hit's size decides how many. The
+         three that already carry a share of the damage do not come through
+         here -- they scale because of what they ARE. */
+      const native = AIL_NATIVE.has(source) && convFrom(source) === t;
+      const n = Math.max((opts && opts.ailN) || 0, ailStacks(e, part, native));
+      if(t === 'frost'){ if(n > 0) chillEnemy(e, n); }
+      else if(t === 'shock'){ if(n > 0) shockEnemy(e, n); }
+      else if(t === 'chaos') poisonEnemy(e, part * CHAOS_POISON_S, CHAOS_POISON_T);
+    }
   }
 }
 
+/* ROLLED PER ELEMENT THAT LANDED, so a hit half converted to fire exposes fire
+   at half the chance -- the same share rule every ailment above follows, for
+   the same reason: what a hit can do to a body depends on what of it arrived. */
+function applyExposure(e, mix){
+  const p = player;
+  if(!p || !(p.exposeChance > 0) || !e || e.dead || e.state !== 'active') return;
+  for(const el of EXPOSE_ELEMS){
+    const sh = mix[el];
+    if(!(sh > 0)) continue;
+    if(Math.random() < p.exposeChance * sh) exposeEnemy(e, el);
+  }
+}
+/* ===================== WHAT SPREADS WHEN A BODY DIES =====================
+   PROLIFERATION, and it is a KEYSTONE and not a brick on purpose. "Everything
+   you have set alight, poisoned or opened spreads to everything nearby when it
+   dies" turns three single-target damage-over-time builds into wave clear in
+   one sentence, which is exactly the kind of thing that should cost a walk to
+   the edge of the map and a fistful of points rather than turning up in a
+   reward screen at wave four.
+
+   WHAT SPREADS IS THE AILMENT, not damage. Nothing dies to the spread itself,
+   so a proliferated burn cannot set off another proliferation inside its own
+   call and there is no depth guard to get wrong. The copies are WEAKER than the
+   original by PROLIF_KEEP, so a chain across a packed wave fades out instead of
+   compounding. */
+const PROLIF_KEEP = 0.6;
+function proliferate(e){
+  const p = player, r = p.prolifR || 0;
+  if(!(r > 0) || !e) return;
+  const burns  = (e.eburn && e.eburn.list.length) ? e.eburn.list.slice() : null;
+  const psn    = (e.poison && e.poison.n > 0) ? e.poison : null;
+  const wounds = bleedList(e);
+  if(!burns && !psn && !(wounds && wounds.length)) return;
+  /* THE STACK IS COPIED, not re-derived. burnEnemy and bleedEnemy take a HIT and
+     run it through dotRate to get a rate; what the corpse is carrying is already
+     a rate, and handing it back in as a hit would put the whole
+     increased-damage-over-time pool through a second time. So the copies go
+     straight onto the list, through the same ceilings the originals obey. */
+  const copyBurn = (e2, f)=>{
+    if(!e2.eburn) e2.eburn = { list:[], tick:rnd(0.05, EBURN_TICK) };
+    const L = e2.eburn.list, dps = f.dps * PROLIF_KEEP;
+    if(L.length < burnCap()) L.push({ dps, t:f.t });
+    else {
+      let wi = 0;
+      for(let i=1;i<L.length;i++) if(L[i].dps < L[wi].dps) wi = i;
+      if(dps >= L[wi].dps) L[wi] = { dps, t:f.t };
+    }
+  };
+  const copyWound = (e2, w)=>{
+    if(!e2.bleed) e2.bleed = { list:[], tick:rnd(0.05, BLEED_TICK) };
+    const L = e2.bleed.list, dps = w.dps * PROLIF_KEEP;
+    if(L.length < BLEED_STACK_MAX) L.push({ dps, t:w.t });
+    else {
+      let wi = 0;
+      for(let i=1;i<L.length;i++) if(L[i].dps < L[wi].dps) wi = i;
+      if(dps > L[wi].dps) L[wi] = { dps, t:w.t };
+    }
+  };
+  let touched = 0;
+  for(const e2 of enemies){
+    if(e2 === e || e2.dead || e2.state !== 'active') continue;
+    if(dist(e, e2) > r + hitR(e2)) continue;
+    if(burns)  for(const f of burns) copyBurn(e2, f);
+    if(wounds) for(const w of wounds) copyWound(e2, w);
+    /* poison already speaks in rates, and poisonEnemy is the one place that
+       knows a body's dose ceiling -- so that one goes through the front door */
+    if(psn) for(let i=0;i<psn.n;i++) poisonEnemy(e2, psn.dps * PROLIF_KEEP, psn.t);
+    touched++;
+  }
+  if(touched > 0){
+    addRing(e.x, e.y, 8, 300, r, '#c96a3c', 7, 0.5);
+    addSparks(e.x, e.y - 16, 8, '#ffb07c');
+  }
+}
 /* ===================== WHAT CAN THIS HERO ACTUALLY DEAL? =====================
    A conversion out of a type you have no source of is a card that does nothing,
    and the deck was full of them: a sword hero with no fire anywhere was shown
@@ -2984,10 +3213,19 @@ function newPlayer(){
     reave:0, reaveCd:0,
     /* every self-expiring counter the hero carries, by name, and what the
        hero has bought on top of each one's own ceiling */
-    stacks:{}, stackMax:{ momentum:0, rage:0 },
+    stacks:{}, stackMax:{ momentum:0, rage:0, frenzy:0, power:0, endurance:0 },
     /* HOW MUCH RAGE A HIT IS WORTH, taking one and landing one. Both start at
        nothing: rage is a build you buy into, not a thing that happens to you. */
     rageOnHurt:0, rageOnHit:0,
+    /* THE THREE CHARGES, and the three different things that earn them. All
+       zero, for the same reason rage is: a charge you were never given is a
+       charge nobody has to balance around. */
+    chargeKill:0, chargeCrit:0, chargeHurt:0,
+    /* EXPOSURE: the chance a hit strips the resistance of whatever it arrived
+       as, and the radius a corpse spreads its ailments in. */
+    exposeChanceFlat:0, exposeChance:0, prolifR:0, ailMagInc:0,
+    /* the tree's sentences. Each is a rule, not a pool, so each is a flag. */
+    critAilAll:false, noCrit:false, ailFull:false,
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
     attr:{ str:0, int:0, dex:0 },
     incCritMult:0,
@@ -4071,7 +4309,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   }
   /* the incoming number is already (base + flat) × increased × more */
   let d = Math.max(0, dmg);
-  const crit = opts.forceCrit ? true : (!opts.noCrit && Math.random() < critChance());
+  const crit = (player && player.noCrit) ? false
+             : opts.forceCrit ? true : (!opts.noCrit && Math.random() < critChance());
   if(crit) d *= critMult();
   if(e.magic) d *= 0.88;                      /* magic-touched: 12% less damage taken */
   let suppressed = false;
@@ -4156,8 +4395,18 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      BEFORE the health comes off, so a body the hit finishes still dies burning
      — that was written into three call sites separately and is one line here.
      A tick never re-rolls one: a wound was made the moment it was opened. */
-  if(!opts.quiet && !opts.drain && !opts.noAil)
+  if(!opts.quiet && !opts.drain && !opts.noAil){
     applyAilments(e, d, source, mix, crit, opts);
+    /* EXPOSURE IS NOT AN AILMENT, so it is its own call and its own chance --
+       but it is rolled here because here is where a hit knows what it was made
+       of, and that is the only thing exposure asks. */
+    applyExposure(e, mix);
+  }
+  /* A POWER CHARGE IS EARNED BY CRITTING, which is the loop it is supposed to
+     close: crit, gain the charge, crit more easily, crit again. Not on a
+     bounce or a tick -- one blow, one charge. */
+  if(crit && !opts.quiet && !opts.drain && player && player.chargeCrit > 0)
+    stackAdd('power', player.chargeCrit);
   /* fractions survive all the way to the health bar. Rounding every hit to a
      whole point was quietly handing out free damage on small hits and eating the
      back half of the big ones. */
@@ -4551,6 +4800,15 @@ function poisonTick(e, dt){
 function killEnemy(e, source){
   e.dead = true; player.kills++;
   logKill(e);
+  /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
+     of the things a death can set off -- a Spore Burst that kills three more
+     should pay for all three, and it will, because each of those goes through
+     here too. */
+  if(player.chargeKill > 0) stackAdd('frenzy', player.chargeKill);
+  /* WHAT DIES CARRIES ON DYING. The rot, the fire and the wounds a body was
+     holding jump to everything close enough -- if you have walked all the way
+     out to the keystone that says so. */
+  if(player.prolifR > 0) proliferate(e);
   /* ABSOLUTE ZERO. A body that dies frozen shatters, and throws your own pulse
      out of the corpse — before anything else it might do, because a golem that
      comes apart into minis should scatter them into the frost, not around it. */
@@ -4785,7 +5043,11 @@ function incTotal(kind, el){
    A timed buff multiplies on TOP of that on purpose: the cap exists to stop a
    build compounding forever, not to make the payoff of a rage brick vanish at
    exactly the moment you spend it. */
-function moreTotal(){ return player ? Math.min(MORE_DMG_CAP, player.moreAll) * rageMul() : 1; }
+/* CHARGES MULTIPLY ON TOP OF THE CEILING, like the rage brick and for the same
+   reason: the cap exists to stop a permanent build compounding for ever, not to
+   make a thing you have to keep earning worth nothing the moment you earn it. */
+function chargeMore(){ return 1 + stackMod('moreAll'); }
+function moreTotal(){ return player ? Math.min(MORE_DMG_CAP, player.moreAll) * rageMul() * chargeMore() : 1; }
 /* what the SHEET should print for the more multiplier: the number the hit
    actually uses, not the pool behind it, plus a word when they have parted ways */
 function moreShown(){ return player ? Math.min(MORE_DMG_CAP, player.moreAll) : 1; }
@@ -4926,7 +5188,15 @@ function boltRadius(){
 /* kept under their old names so nothing that reads "the sword's damage" breaks */
 const swordBase = physBase, swordDamage = physDamage;
 function critChance(){
-  return clamp(player.critBase * (1 + player.incCrit + dexOf()*ATTR_DEX_CRIT), 0, CRIT_CHANCE_CAP);
+  /* THE OVERLOAD takes criticals away entirely and pays for it elsewhere. Here,
+     at the one place anything asks, so every source of a critical loses it at
+     once -- including the backswing's guaranteed one, which would otherwise be
+     a loophole shaped exactly like the axe. */
+  if(player.noCrit) return 0;
+  /* a POWER charge is increased critical chance and pools with every other
+     increase, which is exactly what it is in the game this borrows it from */
+  return clamp(player.critBase *
+    (1 + player.incCrit + dexOf()*ATTR_DEX_CRIT + stackMod('crit')), 0, CRIT_CHANCE_CAP);
 }
 function critMultPct(){ return Math.min(CRIT_MULT_CAP, player.critMultPct); }
 function critMult(){ return critMultPct()/100; }
@@ -4980,6 +5250,7 @@ function elemTake(elem){
      It only bites on resistance you actually HAVE: a curse strips what you
      carry, it cannot hand resistance to a hero already under water. */
   const flat = (player.res[elem] || 0) + weaponRes() + wardRes()
+             + stackMod('res')                 /* every ENDURANCE charge */
              - BRAND_STEP * (player.brand[elem] || 0) - resTax();
   const r = flat > 0 ? flat * (1 - player.curse.resist) : flat;
   return 1 - clamp(r, RES_FLOOR, RES_CAP);
@@ -5251,14 +5522,20 @@ function playerDamage(n, src, elem, spell){
   }
   /* LAST, after armour and after suppression: what you are holding. It is a
      LESS multiplier, so it takes its share of whatever got through rather than
-     competing with armour for the same pool. */
+     competing with armour for the same pool. And every ENDURANCE charge is one
+     more LESS beside it, for the same reason. */
   d *= weaponLessTaken();
+  d *= Math.max(0.1, 1 - stackMod('less'));
   n = Math.max(0.05, Math.round(d*100)/100);
   logTaken(n, src, elem, supp, scrit);
   /* RAGE IS BUILT BY BEING HIT, if you have bought any reason for it to be.
      After mitigation and after the log, so a hit that was evaded or suppressed
      away to nothing still counts as a hit — being swung at is the trigger. */
   if(p.rageOnHurt > 0) stackAdd('rage', p.rageOnHurt);
+  /* AN ENDURANCE CHARGE IS EARNED BY BEING HIT, which is why it pays in less
+     damage taken and resistance: the build that keeps getting caught is the
+     build that wants it. Same place as rage and for the same reason. */
+  if(p.chargeHurt > 0) stackAdd('endurance', p.chargeHurt);
   if(elem) applyAilment(elem, src);
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
@@ -6758,6 +7035,52 @@ const UPGRADES = [
     desc:c=>`+${c.v} maximum RAGE (now ${stackCap('rage')}) — a deeper well to fill, `+
       `and ${Math.round(c.v*HERO_STACKS.rage.mods.moreDmg*100)}% MORE attack damage at the top of it`,
     apply:c=>{ player.stackMax.rage += c.v; } },
+  /* ---- THE THREE CHARGES, AND THE THREE THINGS THAT EARN THEM. Same shape as
+     the rage bricks above and for the same reason: nobody generates a charge
+     until something hands them the reason to, so these are the cards that turn
+     a charge into a build and the tree is what deepens it. ---- */
+  { id:'chgkill', name:'Blood Rush', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
+    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    desc:c=>`Killing a monster grants ${c.v} FRENZY charge${c.v>1?'s':''} (now `+
+      `${(player.chargeKill||0)+c.v} a kill, ${stackCap('frenzy')} at once). Each is `+
+      `+${Math.round(HERO_STACKS.frenzy.mods.atk*100)}% attack AND cast speed and `+
+      `+${Math.round(HERO_STACKS.frenzy.mods.moreAll*100)}% MORE damage, falling off one `+
+      `every ${HERO_STACKS.frenzy.decay}s`,
+    apply:c=>{ player.chargeKill += c.v; } },
+  { id:'chgcrit', name:'Sharpened Focus', icon:'target', cls:'OFFENSE', minRar:'uncommon',
+    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    desc:c=>`A CRITICAL grants ${c.v} POWER charge${c.v>1?'s':''} (now `+
+      `${(player.chargeCrit||0)+c.v} a crit, ${stackCap('power')} at once). Each is `+
+      `+${Math.round(HERO_STACKS.power.mods.crit*100)}% INCREASED critical chance, so a `+
+      `critical makes the next one likelier — it pools with every other increase you own`,
+    apply:c=>{ player.chargeCrit += c.v; } },
+  { id:'chghurt', name:'Set Jaw', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
+    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    desc:c=>`Being hit grants ${c.v} ENDURANCE charge${c.v>1?'s':''} (now `+
+      `${(player.chargeHurt||0)+c.v} a hit taken, ${stackCap('endurance')} at once). Each is `+
+      `${Math.round(HERO_STACKS.endurance.mods.less*100)}% LESS damage taken and `+
+      `+${Math.round(HERO_STACKS.endurance.mods.res*100)}% to every elemental resistance`,
+    apply:c=>{ player.chargeHurt += c.v; } },
+  { id:'chgmax', name:'Reservoir', icon:'force', cls:'OFFENSE', minRar:'rare',
+    req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0),
+    calc:m=>({v: byRar(m, [1,1,2,2,3])}),
+    desc:c=>`+${c.v} maximum of EVERY charge — FRENZY to ${stackCap('frenzy')+c.v}, `+
+      `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
+      `A deeper well for whichever of them you are actually filling`,
+    apply:c=>{ for(const k of CHARGE_IDS) player.stackMax[k] += c.v; } },
+  /* ---- EXPOSURE. The one damage increase that is not yours: it comes off the
+     BODY, so it sits outside your own increased pool and outside the MORE
+     ceiling with it — which is what makes it worth a card to a build that has
+     already bought everything there is to buy. ---- */
+  { id:'expose', name:'Solvent', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>player.exposeChance < EXPOSE_CHANCE_MAX && (canDeal('fire') || canDeal('frost')
+            || canDeal('shock') || canDeal('chaos')),
+    calc:m=>({v: byRar(m, [0.10, 0.16, 0.24, 0.34, 0.48])}),
+    desc:c=>`+${Math.round(c.v*100)}% chance for a hit to EXPOSE the element it arrived as: `+
+      `−${Math.round(EXPOSE_STEP*100)}% of that resistance for ${EXPOSE_T}s (now `+
+      `${Math.round((player.exposeChance||0)*100)}%). Resistance taken OFF the monster — it `+
+      `is not in your damage pool, so it is not stopped by your ceiling`,
+    apply:c=>{ player.exposeChanceFlat += c.v; syncStats(); } },
   /* THE AXE'S OWN. Every other weapon had a legendary that changed what it IS
      — the sword whirls, the mace slams the elements, the staff scatters embers
      — and the axe borrowed the sword's. */
@@ -6891,6 +7214,22 @@ const META_STATS = {
   rageHit:    { n:'RAGE when you land a hit',            w:(p,v)=>{ p.rageOnHit  += v; } },
   rageHurt:   { n:'RAGE when you are hit',               w:(p,v)=>{ p.rageOnHurt += v; } },
   rageMax:    { n:'maximum RAGE',                        w:(p,v)=>{ p.stackMax.rage += v; } },
+  /* ---- THE THREE CHARGES. Generation is bought one thing at a time -- kill,
+     crit, or take a hit -- so which charge a build runs on says what it does.
+     The ceilings are their own stats, and a node that raises all three is the
+     reason to walk to it. ---- */
+  chargeKill: { n:'FRENZY charge when you kill',         w:(p,v)=>{ p.chargeKill += v; } },
+  chargeCrit: { n:'POWER charge on a critical',          w:(p,v)=>{ p.chargeCrit += v; } },
+  chargeHurt: { n:'ENDURANCE charge when you are hit',   w:(p,v)=>{ p.chargeHurt += v; } },
+  chargeMax:  { n:'maximum of EVERY charge',
+                w:(p,v)=>{ for(const k of CHARGE_IDS) p.stackMax[k] += v; } },
+  chargeAll:  { n:'of every charge, by every means',
+                w:(p,v)=>{ p.chargeKill += v; p.chargeCrit += v; p.chargeHurt += v; } },
+  /* ---- EXPOSURE, and how hard an ailment lands ---- */
+  exposeChance:{ n:'chance to EXPOSE what a hit arrived as', pct:1,
+                w:(p,v)=>{ p.exposeChanceFlat += v; } },
+  ailMag:     { n:'increased CHILL and SHOCK magnitude', pct:1,
+                w:(p,v)=>{ p.ailMagInc += v; } },
   /* elements */
   incElem:    { n:'increased elemental damage',   pct:1, w:(p,v)=>{ p.inc.elem += v; } },
   incFire:    { n:'increased fire damage',        pct:1, w:(p,v)=>{ p.inc.fire += v; } },
@@ -6983,6 +7322,18 @@ const META_STATS = {
   bankMul:    { n:'× the studs you bank',           w:(p,v)=>{ p.bankMul *= v; } },
   noRegen:    { n:'NO regeneration at all',              w:(p)=>{ p.noRegen = true; } },
   noReroll:   { n:'NO rerolls, ever',                    w:(p)=>{ p.noReroll = true; } },
+  /* ---- AND THE NEW SWITCHES. Every one of these changes a RULE rather than a
+     number, which is the only thing worth walking to the edge of the map for.
+     They live in the tree and nowhere else: a reward screen is not the place to
+     hand somebody a sentence they cannot give back. ---- */
+  prolif:     { n:'px — what dies spreads its BURN, POISON and WOUNDS', px:1,
+                w:(p,v)=>{ p.prolifR = Math.max(p.prolifR||0, v); } },
+  critAilAll: { n:'every CRITICAL leaves every ailment its damage can',
+                w:(p)=>{ p.critAilAll = true; } },
+  noCrit:     { n:'you can NEVER deal a critical strike',
+                w:(p)=>{ p.noCrit = true; } },
+  ailFull:    { n:'CHILL and SHOCK always land at full magnitude',
+                w:(p)=>{ p.ailFull = true; } },
 };
 function metaModText(m){
   const st = META_STATS[m[0]];
@@ -7088,6 +7439,13 @@ const META_ICON_EXACT = {
   tollDelay:'clock', reroll:'split', noReroll:'nofav', chestCards:'gift',
   bankMul:'coin', noRegen:'nofav', noArmour:'nofav', lessSpell:'ward',
   heartsPerInt:'heartplus', grant:'totem',
+  /* the charges wear what EARNS them: a fist for the one you take, a blade for
+     the one you kill for, a target for the one you crit for */
+  chargeHurt:'shield', chargeKill:'sword', chargeCrit:'target',
+  chargeMax:'force', chargeAll:'force',
+  /* exposure is resistance coming OFF, so it is the ward turned upside down */
+  exposeChance:'prismdn', ailMag:'force',
+  prolif:'bane', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -7231,10 +7589,17 @@ let META_TREE_UNPLACED = [];
    `home` is the country it belongs to, `d` the rings it may sit on. */
 const META_GROUPS = [
   /* ============ RED: physical, hearts, armour, regeneration ============ */
+  /* RED PAYS FOR THE DENSITY. These two are the cheapest damage in the game --
+     they sit against the red door, they are INSTANCED several times around the
+     ring, and flat physical on a weapon whose base is 1 is a multiplier wearing
+     a disguise. Fifteen new clusters shortened every route on the map, which
+     bought a stay-at-home red build 7% more power for the same sixty points and
+     took it over the declared ceiling. The ceiling is the promise; these are
+     the dial. */
   { id:'whet',  name:'WHETSTONE',   sp:'war', home:'str', d:[0,3], shape:'ring',
-    minors:[['Whetstone','incMelee',0.035],['Honing','incMelee',0.03],['Grindstone','incMelee',0.025]] },
+    minors:[['Whetstone','incMelee',0.031],['Honing','incMelee',0.026],['Grindstone','incMelee',0.021]] },
   { id:'heft',  name:'HEFT',        sp:'war', home:'str', d:[0,2], shape:'chain',
-    minors:[['Heft','flatPhys',0.08],['Weight','flatPhys',0.06]] },
+    minors:[['Heft','flatPhys',0.058],['Weight','flatPhys',0.044]] },
   { id:'plate', name:'PLATING',     sp:'arm', home:'str', d:[0,3], shape:'ring',
     minors:[['Plated','armour',3],['Riveted','incArmour',0.06],['Banded','armour',3]] },
   { id:'hale',  name:'HALE',        sp:'vit', home:'str', d:[0,3], shape:'ring',
@@ -7417,6 +7782,76 @@ const META_NOTABLES = [
   { id:'n_ember', name:'THE EMBER PATH',sp:'elem',home:'int', d:[0,2], shape:'chain',
     minors:[['Tinder','incElem',0.03],['Charged','flatElem',0.08],['Ward','allRes',0.03]],
     notable:{ name:'Firewalker', mods:[['incFire',0.10],['fireRes',0.06]] } },
+
+  /* ==================== THE CHARGES, ONE COUNTRY EACH ====================
+     Three charges, three ways to earn them, and the three ways are the three
+     countries: red is hit and keeps standing, green kills, blue picks its
+     moment. Which charge a build runs on is decided by where it lives, which
+     is the most a tree can say about a build without saying it out loud. */
+  { id:'n_endure',name:'THE UNBROKEN',  sp:'arm', home:'str', d:[2,3], shape:'ring',
+    minors:[['Weathered','armour',5],['Set Jaw','incHp',0.04],['Dug In','allRes',0.03]],
+    notable:{ name:'Unbroken', note:'what is thrown at you is what arms you',
+              mods:[['chargeHurt',1],['armour',6]] } },
+  { id:'n_frenzy',name:'THE BLOOD RUSH',sp:'swift',home:'dex',d:[2,3], shape:'cresc',
+    minors:[['Quickblood','incAtk',0.04],['Hunting','speed',0.04],['Eager','incCast',0.04]],
+    notable:{ name:'Blood Rush', note:'every body you put down makes the next one faster',
+              mods:[['chargeKill',1],['incAtk',0.05]] } },
+  { id:'n_power', name:'THE FOCUS',     sp:'prec',home:'dex', d:[2,3], shape:'wheel',
+    minors:[['Steady','incCrit',0.06],['Patient','critMult',0.12],['Composed','incAll',0.03]],
+    notable:{ name:'Focus', note:'a critical makes the next one likelier',
+              mods:[['chargeCrit',1],['incCrit',0.08]] } },
+  /* ...and the one node that widens all three at once, out where it belongs */
+  { id:'n_res',   name:'THE RESERVOIR', sp:'core',home:'int', d:[3,4], shape:'ring',
+    minors:[['Capacity','incAll',0.04],['Depth','incHp',0.04],['Reserve','allRes',0.03]],
+    notable:{ name:'The Reservoir', note:'a deeper well for every charge you carry',
+              mods:[['chargeMax',2]] } },
+
+  /* ==================== EXPOSURE ====================
+     Resistance taken OFF, which is the one kind of damage increase that does
+     not live in your own pool -- so it is the thing a build already at its
+     ceiling walks out here for. */
+  { id:'n_expose',name:'THE UNMAKING',  sp:'elem',home:'int', d:[2,4], shape:'fan',
+    minors:[['Etching','exposeChance',0.10],['Solvent','incElem',0.05],['Reagent','incChaos',0.06]],
+    notable:{ name:'Sapper', note:'what you hit stops resisting what hit it',
+              mods:[['exposeChance',0.25],['incElem',0.06]] } },
+  { id:'n_strip', name:'THE STRIPPING', sp:'aff', home:'dex', d:[2,3], shape:'arc',
+    minors:[['Corroding','exposeChance',0.08],['Souring','incChaos',0.06],['Wearing','incDot',0.05]],
+    notable:{ name:'Corrosive', note:'the rot eats the armour before it eats the body',
+              mods:[['exposeChance',0.20],['incChaos',0.08]] } },
+
+  /* ==================== HOW HARD AN AILMENT LANDS ====================
+     A chill or a shock is now measured against the body it lands on, so the
+     stat that matters is how much of the pool your hit counts for. This is the
+     mace's road and the slow-heavy build's road. */
+  /* NOTHING THAT MULTIPLIES A SWING IN HERE. Red holds two of the four weapons,
+     which makes it the country the power budget is always tightest in — a
+     stay-at-home red build was already at x2.55 against a declared x2.60 before
+     this pass, and the first cut of these two nodes put it at x2.73. What red
+     gets instead is WEIGHT: the same swing counting for more against the body
+     it lands on, which is a thing you can only spend on ailments. */
+  { id:'n_mag',   name:'THE HAMMERFALL',sp:'war', home:'str', d:[2,4], shape:'arc',
+    minors:[['Weighted','ailMag',0.20],['Settled','incHp',0.03],['Grounding','shockRes',0.05]],
+    notable:{ name:'Hammerfall', note:'a smaller blow counts for more',
+              mods:[['ailMag',0.55]] } },
+  { id:'n_deep',  name:'THE DEEP WINTER',sp:'elem',home:'int',d:[2,4], shape:'ring',
+    minors:[['Biting','ailMag',0.18],['Rimed','incFrost',0.07],['Numbing','ailChance',0.05]],
+    notable:{ name:'Deep Winter', note:'the cold and the storm both land heavier',
+              mods:[['ailMag',0.40],['incFrost',0.06],['incShock',0.06]] } },
+
+  /* ==================== AND TWO THAT WERE SIMPLY MISSING ====================
+     Red had no node about ending a fight and green had none about surviving
+     one, which is how a country reads as a one-note country. */
+  /* GREEN, NOT RED, and not for flavour: green sat at x1.68 total power against
+     red's x2.55, so a damage notable added to red is a node that breaks a
+     ceiling and the same node added to green is a node that fixes a gap. */
+  { id:'n_exec',  name:'THE HEADSMAN',  sp:'prec',home:'dex', d:[2,3], shape:'fan',
+    minors:[['Heavy Hands','flatPhys',0.08],['Follow Through','incAtk',0.04],['Weight Behind It','ailMag',0.20]],
+    notable:{ name:'Headsman', note:'the whole weight of you behind one swing',
+              mods:[['critMult',0.25],['ailMag',0.25]] } },
+  { id:'n_quick', name:'THE SECOND SKIN',sp:'swift',home:'dex',d:[1,3], shape:'ring',
+    minors:[['Loose','speed',0.04],['Reading','suppress',0.04],['Thickened','incHp',0.04]],
+    notable:{ name:'Second Skin', note:'nothing cast at you lands properly',
+              mods:[['suppress',0.07],['incHp',0.06]] } },
 ];
 /* ---- THE KEYSTONES. One line of rules each, both halves real, and every one
    of them far enough out that you can hold two at most. */
@@ -7493,6 +7928,48 @@ const META_KEYSTONES = [
     minors:[['Unburdened','speed',0.05],['Read the Room','suppress',0.05]],
     keystone:{ name:'The Open Guard', note:'you wear nothing, and nothing cast at you lands properly',
                mods:[['noArmour',null],['lessSpell',0.50]] } },
+
+  /* ==================== FIVE MORE SENTENCES ====================
+     Every one of these is a TRADE, and both halves are real. That is the only
+     thing that makes a keystone worth the walk: a node that is simply good is
+     a big minor node, and the tree already has plenty of those. */
+
+  /* what dies keeps killing. The one the ailment builds have never had: three
+     single-target damage-over-time builds become wave clear in one sentence,
+     which is exactly why it costs a walk to the rim and a flat 25% off
+     everything you hit directly. */
+  { id:'k_prolif',name:'THE LONG DYING',sp:'aff', home:'dex', d:[4,4], shape:'arc',
+    minors:[['Lingering','incDot',0.08],['Seeding','poisonDot',0.3],['Festering','bleedShare',0.04]],
+    keystone:{ name:'The Long Dying', note:'what you kill keeps killing; nothing you touch dies fast',
+               mods:[['prolif',210],['incAll',-0.25]] } },
+
+  /* the crit tree's other ending: stop hitting harder, start leaving
+     everything. Pairs with the ailment table rather than fighting it. */
+  { id:'k_agony', name:'BLOOD AND SALT',sp:'prec',home:'dex', d:[4,4], shape:'cresc',
+    minors:[['Salted','ailChance',0.06],['Opened','bleedChance',0.06],['Rubbed In','incDot',0.06]],
+    keystone:{ name:'Blood and Salt', note:'your criticals stop hitting harder and start leaving everything',
+               mods:[['critAilAll',null],['critMult',-0.55]] } },
+
+  /* ...and the ending where you have no criticals at all. Everything else you
+     own gets bigger, which is a real build and not a consolation. */
+  { id:'k_over',  name:'THE OVERLOAD', sp:'elem',home:'int', d:[4,4], shape:'wheel',
+    minors:[['Surging','incElem',0.07],['Unfocused','incAll',0.04],['Raw','flatElem',0.10]],
+    keystone:{ name:'The Overload', note:'you cannot crit at all, and everything you do is far bigger',
+               mods:[['noCrit',null],['moreAll',0.32],['incElem',0.25]] } },
+
+  /* every chill and shock at full magnitude, whatever the hit was worth --
+     bought with everything that lingers. The mirror of The Long Dying. */
+  { id:'k_cold',  name:'THE DEEP COLD', sp:'elem',home:'int', d:[3,4], shape:'cresc',
+    minors:[['Glacial','ailMag',0.20],['Static','incShock',0.07],['Hoar','incFrost',0.07]],
+    keystone:{ name:'The Deep Cold', note:'every chill and shock lands full force, and nothing you leave burns',
+               mods:[['ailFull',null],['incDot',-0.60]] } },
+
+  /* all three charges at once, on a body that cannot take a hit. The charge
+     build's own ending, and the reason to raise three ceilings. */
+  { id:'k_relent',name:'THE UNRELENTING',sp:'war',home:'str', d:[4,4], shape:'fan',
+    minors:[['Driving','chargeMax',1],['Unyielding','armour',6],['Relentless','incAtk',0.05]],
+    keystone:{ name:'Unrelenting', note:'every charge, by every means — and a body made of glass',
+               mods:[['chargeAll',1],['chargeMax',2],['moreHp',-0.28]] } },
 ];
 /* ---- THE LEGENDARIES. Five points each, on the outermost ring, and what they
    hand over is not a number but a BRICK: you begin the run already holding the
@@ -10342,6 +10819,44 @@ const STAT_PROBES = [
         AIL_NAME[k]+' this often — half the hit, half the chance'+
         (k==='phys' ? '. A wound is an ATTACK ailment: a physical SPELL never opens one'
                     : '') })),
+  /* HOW BIG THE HIT HAS TO BE. Two of the five are counters, and a counter that
+     ignored the size of the blow was the thing that made a one-damage tick worth
+     as much as a slam. These read the real function, so the sheet cannot drift
+     from the rule. */
+  { g:'AILMENT', k:'CHILL/SHOCK floor', get:()=> AIL_MAG_MIN*100/(1+((player&&player.ailMagInc)||0)),
+    fmt:v=>v.toFixed(1)+'%', zero:true,
+    why:'a hit smaller than this share of the body\u2019s pool leaves no chill or shock at all. '+
+        'A boss\u2019s pool is '+Math.round(AIL_POOL_BOSS*100)+'% of its life, so late hits still count as big ones' },
+  { g:'AILMENT', k:'CHILL/SHOCK full at', get:()=> AIL_MAG_FULL*100/(1+((player&&player.ailMagInc)||0)),
+    fmt:v=>v.toFixed(1)+'%', zero:true,
+    why:'a hit this big lays all '+AIL_STACK_HIT+' stacks at once. Between the floor and here it scales' },
+  { g:'AILMENT', k:'Increased magnitude', get:()=> ((player&&player.ailMagInc)||0)*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'brings the whole scale closer: the same hit counts for more, so smaller blows still chill and shock' },
+  { g:'EXPOSURE', k:'Chance', get:()=> ((player&&player.exposeChance)||0)*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'per hit, per ELEMENT it arrived as \u2014 half a hit of fire exposes fire at half of this' },
+  { g:'EXPOSURE', k:'Resistance stripped', get:()=> EXPOSE_STEP*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'taken OFF the body for '+EXPOSE_T+'s. It is not in your damage pool, so your increased-damage '+
+        'ceiling does not stop it \u2014 and it can drag a resistance below zero, which is a weakness' },
+  /* ---- THE CHARGES. One row for what you hold and one for what it is worth,
+     because a charge you cannot see the value of is a chevron. ---- */
+  ...CHARGE_IDS.map(id=>({ g:'CHARGES', k:HERO_STACKS[id].name+' held',
+    get:()=> player ? stackOf(id) : 0, fmt:v=>Math.round(v)+' / '+(player?stackCap(id):0), zero:true,
+    why:(id==='frenzy' ? 'one for every monster you kill, if you have bought a reason. '+
+            Math.round(HERO_STACKS.frenzy.mods.atk*100)+'% attack and cast speed and '+
+            Math.round(HERO_STACKS.frenzy.mods.moreAll*100)+'% MORE damage each'
+       : id==='power' ? 'one for every critical, if you have bought a reason. '+
+            Math.round(HERO_STACKS.power.mods.crit*100)+'% INCREASED critical chance each, into the one pool'
+       : 'one for every hit you take, if you have bought a reason. '+
+            Math.round(HERO_STACKS.endurance.mods.less*100)+'% LESS damage taken and +'+
+            Math.round(HERO_STACKS.endurance.mods.res*100)+'% to every elemental resistance each')+
+       ', falling off one every '+HERO_STACKS[id].decay+'s' })),
+  { g:'CHARGES', k:'Gained by', get:()=> player ?
+      ((player.chargeKill>0?1:0)+(player.chargeCrit>0?1:0)+(player.chargeHurt>0?1:0)) : 0,
+    fmt:v=>Math.round(v)+' of 3', zero:true,
+    why:'killing, critting and being hit are three different charges. Nothing generates one until '+
+        'a brick or a node hands you the reason' },
   ...CONV_ORDER.map(k=>({ g:'AILMENT', k:AIL_NAME[k]+' on a crit',
     get:()=> player ? ailChanceOf(k, undefined, true)*100 : 0,
     fmt:v=>v.toFixed(0)+'%', zero:true,
@@ -12793,6 +13308,7 @@ function updateEnemy(e, dt){
   if(e.chillT > 0){ e.chillT -= dt; if(e.chillT <= 0) e.chillN = 0; }
   if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
   if(e.shocked){ e.shocked.t -= dt; if(e.shocked.t <= 0) e.shocked = null; }
+  if(e.expose) exposeTick(e, dt);
   if(e.frozen){ e.frozen.t -= dt; if(e.frozen.t <= 0) e.frozen = null; }
   if(e.emberCd > 0) e.emberCd -= dt;
   if(e.slowT>0 && Math.random()<0.15)

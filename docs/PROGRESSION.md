@@ -1881,3 +1881,119 @@ missing guard wearing a passing suite, and nothing in the runner would ever have
 repaired, both caught.
 
 52 tests green, wave-50 soak clean.
+
+## Twentieth pass — four things borrowed from Path of Exile
+
+Ailment thresholds, exposure, the three charges, and proliferation as a keystone — plus ten
+notables and five new sentences in the tree.
+
+### The two ailments that could not tell
+
+Three of the five already scaled with the hit: bleed ticks for a share of the wound, burn for a
+share of the fire, poison for a share of the chaos. **Chill and shock are counters**, so a
+one-damage orbit tick chilled a body exactly as hard as a mace slam. The two ailments that most
+want you to hit hard were the two that could not tell whether you had.
+
+The magnitude scale runs from `AIL_MAG_MIN` (1.2% of the pool — under it, nothing) to
+`AIL_MAG_FULL` (10% — all three stacks in one blow). Two things about it were not obvious:
+
+**A boss's pool is not its life.** A wave-50 boss holds 240,000 health. Measured against that,
+nothing a hero can swing is ever 1% of it, and bosses would be flatly immune to two of the five
+ailments — the opposite of what a storm build wants from the fight it exists for. A boss's pool
+is 5% of its life. `bosslife` is the break.
+
+**A spell that IS its ailment needs a floor.** Block Freeze exists to chill, and a threshold
+that can stop it doing so is a rule eating a spell. The three `AIL_NATIVE` sources always land
+one stack; how many *more* still depends on the hit. `nonative` is the break.
+
+### Exposure, and why it is not an ailment
+
+An ailment is damage or a debuff the body carries. Exposure is **resistance taken off**, which
+puts it outside the hero's own increased-damage pool and outside the MORE ceiling with it — the
+one damage increase available to a build that has already bought everything. It does not stack
+with itself (a stacking resistance strip is a hole with no bottom) and it can drag a resistance
+below zero, which is a weakness and multiplies up.
+
+It is rolled per element that landed, at the chance times that element's share, because that is
+the rule every ailment already follows and a second rule would be a second thing to get wrong.
+
+### Three mechanics as three rows
+
+The stack table was made abstract in the fifteenth pass "because I might use it elsewhere". This
+is the elsewhere: frenzy, power and endurance are three rows in `HERO_STACKS` and five one-line
+reads at the points of use — `moreTotal`, `critChance`, `castInc`, `elemTake`, `playerDamage`.
+Nothing else in the file learned that charges exist.
+
+The one design choice worth writing down: **each is earned by a different verb**. Killing,
+critting, being hit. That means which charge a build runs on says what that build *does*, and it
+is why the tree puts one in each country — red takes hits, green kills, blue picks its moment.
+
+### Proliferation, priced
+
+> *"I like the idea of ailment proliferation, but I find it too strong to just add — make it
+> into a costly node in the tree somewhere."*
+
+Correct, and it is a keystone on the outer rim with **−25% increased damage** attached. Two
+things had to be right in the implementation:
+
+**The stack is copied, not re-derived.** `burnEnemy` and `bleedEnemy` take a *hit* and run it
+through `dotRate` to get a rate. What a corpse is carrying is already a rate — handing it back
+in as a hit would put the whole increased-damage-over-time pool through a second time. The
+copies go straight onto the list, through the same ceilings the originals obey.
+
+**The copy is weaker** (`PROLIF_KEEP = 0.6`), so a chain across a packed wave fades out instead
+of compounding. And nothing dies to the spread itself, so a proliferated burn cannot set off
+another proliferation inside its own call and there is no depth guard to get wrong.
+
+### The keystone that had to step over the spine
+
+"Every critical leaves every ailment" is a sentence, and the share rule — *the chance rides on
+how much of the hit arrived as that type* — is the spine of the whole ailment system. The first
+cut of **Blood and Salt** set the chance to 1 and left the share in place, so a hit that was half
+fire ignited half the time and the keystone did not keep its promise. It steps over the share
+too, now. The ailment still lands on the *part* of the damage that was that type; only the odds
+stop caring how big that part was.
+
+### The budget, and a 7% surprise
+
+`meta.js` reported a stay-at-home red build at **×2.731** total power against a declared ceiling
+of ×2.60. The obvious suspects were the new red clusters — so the first four experiments
+stripped them, one at a time and then all three together, and **the number did not move at
+all**. Stripping every new cluster on the map, in all three countries, took it to ×2.551.
+
+The mechanism was not any node's values. Fifteen new clusters made the whole map denser, the
+relax pulled everything closer, **every route on the map got shorter**, and red's sixty points
+simply reached further. Adding a cluster in the blue sector made a red build stronger.
+
+The fix is the one the file already understands: **red pays for the density.** `heft` and
+`whet` sit against the red door, they are instanced several times around the ring, and flat
+physical on a weapon whose base is 1.0 is a multiplier wearing a disguise. Trimming those two
+brought it to ×2.526 with real headroom, which the next pass will need.
+
+Worth keeping: the first instinct — *the new nodes must be too strong* — was wrong, and four
+experiments were needed to prove it wrong rather than one to confirm it.
+
+### Three test bugs
+
+**`noMit` does not mean "skip armour".** It skips the conversion pipeline entirely, so `mix`
+stays `{phys:1}` and a hero converted wholly to cold lands a physical hit. Every threshold case
+in the new file passed it, so every one of them measured a physical hit and reported that chill
+was broken. The mechanic was fine.
+
+**A magnitude is deterministic; the roll is not.** The ailment chance is capped at 75%, so one
+hit per size is a case that fails one time in four and blames the mechanic. The number of stacks
+a given hit is worth never varies — so take the most any of twelve landed.
+
+**An assertion that reads its expectation from the table it is testing proves nothing.** Every
+charge case asked whether the measured value equalled `HERO_STACKS.frenzy.mods.moreAll * 3`. Zero
+the whole row and that is still true while the charge does nothing — `chargenothing` passed. The
+table itself is asserted now, with a floor, and so is what a full stack actually moves. That is
+the third time this file has recorded the same shape of bug.
+
+Twenty-four breaks for `poe4`, 53 tests green, wave-50 soak clean.
+
+### Still open
+
+`ember` failed once inside a full suite run and has not reproduced in fifteen tries since. Its
+assertions are wall-clock ones — *did the chain settle within ten seconds* — which is the same
+shape as the `stacks` flake fixed last pass. Recorded rather than guessed at.
