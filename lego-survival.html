@@ -242,6 +242,28 @@
   .stat span{font-size:13px;color:#ffd9d9;font-weight:600;letter-spacing:1px}
   .btnrow{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
   .smallhint{margin-top:22px;font-size:13px;color:#ffd0d0}
+  /* ---- OPTIONS. One row per switch: what it is on the left, the switch on the
+     right, and a line under the name saying what it actually does, because a
+     setting nobody understands is a setting nobody touches. ---- */
+  .optlist{display:flex;flex-direction:column;gap:2px;margin:18px 0 6px;
+    min-width:520px;max-width:560px;text-align:left}
+  .optrow{display:flex;align-items:center;gap:16px;padding:11px 14px;border-radius:12px;
+    background:rgba(0,0,0,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .optrow + .optrow{margin-top:6px}
+  .optrow .otext{flex:1;min-width:0}
+  .optrow b{display:block;font-family:'Titan One';font-size:15px;letter-spacing:1.2px;color:#fff}
+  .optrow i{display:block;font-style:normal;font-size:12.5px;color:#ffd0d0;
+    font-weight:600;line-height:1.35;margin-top:2px}
+  .optrow.danger{background:rgba(0,0,0,.3);box-shadow:inset 0 0 0 2px rgba(255,185,0,.35)}
+  .optrow.danger b{color:#ffd76e}
+  .oswitch{flex:none;font-family:'Titan One';font-size:12.5px;letter-spacing:1.6px;
+    min-width:104px;padding:9px 0;border:0;border-radius:11px;cursor:pointer;
+    color:#1b2a34;background:#9ba19d;box-shadow:0 4px 0 #6d6e68;text-align:center}
+  .oswitch.on{background:#8ac24a;box-shadow:0 4px 0 #5d8a2c}
+  .oswitch.warn{background:#ffb900;box-shadow:0 4px 0 #c98f00}
+  .oswitch.armed{background:#e2323a;box-shadow:0 4px 0 #8f161d;color:#fff}
+  .oswitch:active{transform:translateY(2px);box-shadow:none}
+  .optnote{font-size:12.5px;color:#ffd0d0;font-weight:600;margin-top:10px;min-height:17px}
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
@@ -520,6 +542,7 @@
     <div class="audiorow">
       <button id="musicBtn" class="btn tiny gray">MUSIC: ON</button>
       <button id="sfxBtn" class="btn tiny gray">SOUND: ON</button>
+      <button id="optBtn" class="btn tiny gray">OPTIONS</button>
     </div>
     <div class="ctl">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>move</b></span>
@@ -608,9 +631,24 @@
     <div class="btnrow">
       <button id="resumeBtn" class="btn">RESUME</button>
       <button id="restartBtn" class="btn gray">RESTART</button>
+      <button id="pauseOptBtn" class="btn gray">OPTIONS</button>
       <button id="pauseTitleBtn" class="btn gray">MAIN MENU</button>
     </div>
     <div class="smallhint">P or Esc resumes · if keys don't respond, click the game once</div>
+  </div>
+</div>
+
+<div id="optScreen" class="overlay hidden">
+  <div class="plate panelbox">
+    <div class="studrow"><span></span><span></span><span></span><span></span></div>
+    <h2>OPTIONS</h2>
+    <div id="optList" class="optlist"></div>
+    <div id="optNote" class="optnote"></div>
+    <div class="gap20"></div>
+    <div class="btnrow">
+      <button id="optBackBtn" class="btn">BACK</button>
+    </div>
+    <div class="smallhint">Esc closes · every switch is remembered between runs</div>
   </div>
 </div>
 
@@ -2313,6 +2351,48 @@ function fitTitle(){
 }
 window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
 
+/* ============================== SETTINGS ==============================
+   Music and sound already had their own localStorage keys and their own button
+   in the corner of the title plate. Everything else that a player might want
+   off was either a keypress they had to remember every run or not a switch at
+   all. These live in ONE record under one key, they are read once at boot, and
+   every write goes through optSet so no screen can set one without saving it.
+
+   A setting is a PREFERENCE, not progress: wiping your tree does not touch it,
+   and a browser that refuses localStorage (private windows do) gets the
+   defaults and a game that still works. */
+const OPT_KEY = 'bb_opts';
+const OPT_DEFS = [
+  { id:'dmgNumbers', def:true,  name:'DAMAGE NUMBERS',
+    note:'the figures that float off a monster when you hit it. Off is a much '+
+         'quieter screen in a wave of sixty \u2014 the combat log still counts every point' },
+  { id:'autoLog', def:false, name:'START WITH THE COMBAT LOG',
+    note:'open the log as soon as a run begins, instead of pressing L every time. '+
+         'SHIFT+L still walks the tabs' },
+];
+const OPT = {};
+for(const o of OPT_DEFS) OPT[o.id] = o.def;
+/* declared HERE, not next to the screen that uses them: refreshAudioBtns runs
+   at boot and asks whether the options screen is open, and a `let` further down
+   the file would still be in its temporal dead zone -- which `typeof` does not
+   rescue you from, it throws the same ReferenceError. */
+let optOn = false, optFrom = 'title', optArmed = 0;
+function optLoad(){
+  let raw = null;
+  try { raw = localStorage.getItem(OPT_KEY); } catch(e){}
+  let o = null;
+  try { o = raw ? JSON.parse(raw) : null; } catch(e){}
+  for(const d of OPT_DEFS)
+    OPT[d.id] = (o && typeof o === 'object' && typeof o[d.id] === 'boolean') ? o[d.id] : d.def;
+}
+function optSave(){
+  const o = {};
+  for(const d of OPT_DEFS) o[d.id] = !!OPT[d.id];
+  try { localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch(e){}
+}
+function optSet(id, v){ OPT[id] = !!v; optSave(); return OPT[id]; }
+function optToggle(id){ return optSet(id, !OPT[id]); }
+
 /* =============================== AUDIO =============================== */
 /* THREE SWITCHES, NOT ONE. M has always killed the lot, which is fine when
    somebody walks into the room and useless when it is only the music you are
@@ -2353,6 +2433,9 @@ function toggleMusic(){ A.musicOn = !A.musicOn; audioApply(); return A.musicOn; 
 function toggleSfx(){   A.sfxOn   = !A.sfxOn;   audioApply(); return A.sfxOn; }
 function toggleMute(){  A.muted   = !A.muted;   audioApply(); return !A.muted; }
 function refreshAudioBtns(){
+  /* the options screen shows the same two switches, so it redraws with them --
+     otherwise M mutes everything and the row still reads ON */
+  if(optOn) optRender();
   const set = (id, on)=>{
     const b = document.getElementById(id);
     if(!b) return;
@@ -2595,7 +2678,11 @@ window.addEventListener('keydown', e=>{
      machine is left on 'play' throughout, so everything keeps updating behind
      it. ESC still pauses, but closes the book first if it is open. */
   if(e.code==='KeyP' && (state==='play'||state==='book')) toggleBook();
-  if(e.code==='Escape' && bookOn){ toggleBook(); }
+  /* OPTIONS EATS ESC FIRST. It is drawn over a paused run, so letting the
+     pause toggle see the key as well would close the options AND un-pause the
+     game in the same press. */
+  if(e.code==='Escape' && optOn){ closeOptions(); }
+  else if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
@@ -3266,6 +3353,15 @@ function fmtHp(v){
 }
 function addDmg(x,y,txt,color='#fff',size=17){
   dmgTexts.push({x:x+rnd(-8,8), y:y-30, txt, color, size, life:0.8, vy:-52});
+}
+/* THE DAMAGE FIGURES, and only those. Everything else that floats is an EVENT
+   worth reading -- FROZEN SOLID, a curse landing, a level -- and a player who
+   turned the numbers off did not ask to stop being told those. So the switch
+   lives here, on the one call the outgoing damage numbers make, rather than on
+   addDmg where it would quietly swallow half the game's feedback. */
+function addHitNum(x,y,txt,color,size){
+  if(!OPT.dmgNumbers) return;
+  addDmg(x,y,txt,color,size);
 }
 
 /* ground-merge sweep: clusters of same-kind studs fuse into the next tier.
@@ -4056,7 +4152,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
        number over the fight it is quietly winning, and it drips in the colour
        of whatever is doing the killing */
     if(Math.random() < 0.4)
-      addDmg(e.x, e.y-30*e.scale, fmtHp(d), dmgColour(source, mix), 13);
+      addHitNum(e.x, e.y-30*e.scale, fmtHp(d), dmgColour(source, mix), 13);
   } else {
     /* THE NUMBER IS THE COLOUR OF WHAT LANDED, and a hit made of two things
        says TWO numbers. Twenty per cent of your physical gained as extra cold
@@ -4079,7 +4175,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     const lead = dmgColour(source, mix);
     addSparks(e.x, e.y-18*e.scale, 5, crit?lead:'#fff2b0');
     if(parts.length < 2){
-      addDmg(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
+      addHitNum(e.x, e.y-34*e.scale, (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'')+fmtHp(d),
         lead, crit?23:16);
     } else {
       /* biggest first, and each one stacked a little above the last so they
@@ -4091,7 +4187,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
          figures on the screen still add up to the damage the monster took */
       parts[0].part += d - shown;
       parts.forEach((pt, i)=>{
-        addDmg(e.x + (i ? (i%2 ? 16 : -16) : 0), e.y-34*e.scale - i*17,
+        addHitNum(e.x + (i ? (i%2 ? 16 : -16) : 0), e.y-34*e.scale - i*17,
           (i === 0 ? (suppressed?'SUPPRESSED ':'')+(crit?'CRIT ':'') : '') + fmtHp(pt.part),
           CONV_COL[pt.k], crit ? (i ? 19 : 23) : (i ? 14 : 16));
       });
@@ -6712,7 +6808,14 @@ const META_TREE_VER = 3;
 /* ...and the achievements on top of it, which are the things a wave count
    cannot see: how deep you levelled, which bosses you have ever put down, and
    whether you have actually finished a spell rather than merely owned it. */
-const META_LEVEL_POINTS  = [10, 25, 50, 75, 80, 90, 100];
+/* TWO POINTS A LEVEL. This used to be seven milestones -- 10, 25, 50, 75, 80,
+   90, 100 -- which paid seven points for a hundred levels and left a dead
+   stretch of twenty-five between the second and the third where levelling was
+   worth nothing at all. Levelling is the thing you do every single run, so it
+   pays every single run: reach level 25 and that is fifty points. The ceiling
+   of META_POINT_MAX still has the last word, which means a deep enough run can
+   now fill the tree on levels alone -- that is the point of it. */
+const META_POINTS_PER_LEVEL = 2;
 /* MASTERY. Every CAPPED brick of one spell, at its cap. Flat damage is left
    out on purpose: it has no ceiling, so "all of it" would never be true. */
 const META_MASTERY = {
@@ -8236,11 +8339,7 @@ function metaStartId(wk){
 /* ---- points, all DERIVED ---- */
 /* the high-water mark, not the lap count */
 function metaWavePoints(m){ return Math.max(0, m.best.wave||0); }
-function metaLevelPoints(m){
-  let n = 0;
-  for(const L of META_LEVEL_POINTS) if((m.best.level||0) >= L) n++;
-  return n;
-}
+function metaLevelPoints(m){ return META_POINTS_PER_LEVEL * Math.max(0, m.best.level||0); }
 function metaMilestonePoints(m){
   return metaLevelPoints(m) + (m.bosses||[]).length + (m.mastery||[]).length;
 }
@@ -8405,18 +8504,21 @@ function metaBank(){
   /* THE WAVE YOU CLEARED, not the one you died on. Dying to the wave-30 boss is
      a wave-29 run — the banner said otherwise and it was simply wrong. */
   const done = wavesCleared();
+  /* EVERY FIRST CARRIES WHAT IT IS WORTH. It used to be a bare string and the
+     run-end screen printed "+1 skill point" under all of them, which was a lie
+     the moment a wave first was worth two -- and is a bigger one now a level is
+     worth two of its own. */
   const firsts = [];
   /* THE HIGH-WATER MARK. Beating your own best by two waves is worth two
      points; beating it by nothing is worth nothing, however long the run was. */
   const wasWave = m.best.wave||0;
   if(done > wasWave){
-    firsts.push('wave '+done+' — '+(done-wasWave)+' new point'+(done-wasWave===1?'':'s'));
+    firsts.push({ text:'wave '+done, pts:done - wasWave });
     m.best.wave = done;
   }
   const lvl = Math.max(0, p.level||0), wasLvl = m.best.level||0;
   if(lvl > wasLvl){
-    for(const L of META_LEVEL_POINTS)
-      if(lvl >= L && wasLvl < L) firsts.push('level '+L);
+    firsts.push({ text:'level '+lvl, pts:(lvl - wasLvl) * META_POINTS_PER_LEVEL });
     m.best.level = lvl;
   }
   metaSave();
@@ -8752,7 +8854,7 @@ function renderTree(){
                              : 'your best is wave '+(m.best.wave||0)+' — clear wave '+
                                nextWave+' for the next one'}</i></div>
     <div class="tbar"><b>${metaMilestonePoints(m)}</b> points from achievements
-      <i>${metaLevelPoints(m)}/${META_LEVEL_POINTS.length} levels (${META_LEVEL_POINTS.join(', ')})
+      <i>${metaLevelPoints(m)} from level ${m.best.level||0} (${META_POINTS_PER_LEVEL} a level)
       · ${(m.bosses||[]).length} bosses · ${(m.mastery||[]).length}/${Object.keys(META_MASTERY).length} mastered
       · all with THIS weapon</i></div>
     <div class="tbar"><b>${m.studsEarned}</b> studs banked
@@ -19777,6 +19879,10 @@ function startGame(){
   cam.x = player.x; cam.y = player.y; cam.shake = 0;
   reclampCam();
   state = 'play'; cv.style.cursor='none';
+  /* AFTER resetRun, which calls clogReset -- and clogReset does not touch
+     clogOn, so a log left open by the last run is already open. Opening it
+     twice would toggle it shut. */
+  if(OPT.autoLog && !clogOn) clogToggle();
   try{ window.focus(); }catch(err){}
   try{ cv.focus(); }catch(err){}
   startWave(1);
@@ -19822,9 +19928,10 @@ function renderRunEnd(res, prevBest){
   L.push(`<div class="rerow"><span>studs banked</span><b>+${res.banked}</b>`+
          `<i>${res.total} total · ${weapon.name} on ${difficulty.name}</i></div>`);
   L.push(`<div class="rerow"><span>reached level</span><b>${res.level}</b>`+
-         `<i>best ${m.best.level||0} · a point at ${META_LEVEL_POINTS.join(', ')}</i></div>`);
+         `<i>best ${m.best.level||0} · ${META_POINTS_PER_LEVEL} skill points a level</i></div>`);
   for(const f of res.firsts)
-    L.push(`<div class="rerow first"><span>FIRST</span><b>${esc(f)}</b><i>+1 skill point</i></div>`);
+    L.push(`<div class="rerow first"><span>FIRST</span><b>${esc(f.text)}</b>`+
+           `<i>+${f.pts} skill point${f.pts === 1 ? '' : 's'}</i></div>`);
   if(res.gained > 0)
     L.push(`<div class="rerow first"><span>skill points</span><b>+${res.gained}</b>`+
            `<i>${res.left} unspent</i></div>`);
@@ -19857,8 +19964,98 @@ function togglePause(){
   else if(state==='pause'){ state='play'; cv.style.cursor='none';
     document.getElementById('pauseScreen').classList.add('hidden'); }
 }
+/* ============================== OPTIONS SCREEN ==============================
+   ONE SCREEN, TWO DOORS. It opens off the title plate and off the pause menu,
+   and it remembers which one it came through, so BACK and ESC put you where
+   you were instead of dumping a paused run onto the title. It never changes
+   `state`: a paused run stays paused underneath it and a title stays a title,
+   which is why it can be opened from either without a second state machine. */
+function optRows(){
+  /* audio is not in OPT_DEFS -- it has its own store and its own live effect on
+     a running context -- so it is described here and toggled through its own
+     functions. The rows read the same way to a player, which is the point. */
+  return [
+    { key:'music', name:'MUSIC', on:()=>A.musicOn && !A.muted,
+      note:'the field and boss tracks. M still takes everything down at once',
+      hit:()=>{ audioInit(); toggleMusic(); } },
+    { key:'sfx', name:'SOUND', on:()=>A.sfxOn && !A.muted,
+      note:'every hit, pickup, cast and smash',
+      hit:()=>{ audioInit(); toggleSfx(); } },
+    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note,
+      on:()=>!!OPT[d.id], hit:()=>optToggle(d.id) })),
+  ];
+}
+function optRender(){
+  const list = document.getElementById('optList');
+  if(!list) return;
+  const rows = optRows().map(r=>
+    `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>`+
+    `<button class="oswitch ${r.on() ? 'on' : ''}" data-opt="${r.key}">`+
+    `${r.on() ? 'ON' : 'OFF'}</button></div>`);
+  /* THE ONE THING THAT CANNOT BE UNDONE gets its own look and two clicks. It
+     wipes the tree for EVERY weapon on EVERY difficulty, because "my character"
+     is all of them and half a wipe is worse than none. */
+  rows.push(
+    `<div class="optrow danger"><div class="otext"><b>RESET CHARACTER PROGRESSION</b>`+
+    `<i>every skill tree, every weapon, every difficulty — best wave, best level, `+
+    `bosses put down, spells mastered and studs banked, all back to nothing. `+
+    `This cannot be undone.</i></div>`+
+    `<button class="oswitch ${optArmed ? 'armed' : 'warn'}" data-opt="wipe">`+
+    `${optArmed ? 'ARE YOU SURE?' : 'RESET'}</button></div>`);
+  list.innerHTML = rows.join('');
+  for(const b of list.querySelectorAll('.oswitch'))
+    b.addEventListener('click', ()=>optClick(b.getAttribute('data-opt')));
+}
+function optSay(msg){
+  const el = document.getElementById('optNote');
+  if(el) el.textContent = msg || '';
+}
+function optClick(key){
+  SFX.click();
+  if(key === 'wipe'){
+    if(!optArmed){ optArmed = 1; optSay('Click again to wipe every tree. Nothing is kept.');
+                   optRender(); return; }
+    optArmed = 0; metaWipe();
+    optSay('Gone. Every weapon starts from zero.');
+    optRender(); return;
+  }
+  optArmed = 0;
+  const r = optRows().find(x=>x.key === key);
+  if(!r) return;
+  r.hit();
+  optSay(r.name + ' is now ' + (r.on() ? 'ON' : 'OFF'));
+  optRender();
+}
+/* A WIPE IS A WIPE. metaBlankSave() builds the empty record for every
+   difficulty and every weapon, so nothing has to be walked by hand and a
+   weapon added tomorrow cannot be missed. The personal-best line on the title
+   plate is part of the same record to a player, so it goes too -- what it is
+   NOT allowed to touch is the options themselves. */
+function metaWipe(){
+  META = metaBlankSave();
+  metaSave();
+  try { localStorage.removeItem('bb_best'); } catch(e){}
+  treeRefund = false;
+  refreshTreeBtn();
+  showBest();
+  if(treeOn) renderTree();
+}
+function openOptions(from){
+  optFrom = from || 'title';
+  optOn = true; optArmed = 0;
+  optSay('');
+  optRender();
+  document.getElementById('optScreen').classList.remove('hidden');
+}
+function closeOptions(){
+  optOn = false; optArmed = 0;
+  document.getElementById('optScreen').classList.add('hidden');
+}
+function toggleOptions(from){ if(optOn) closeOptions(); else openOptions(from); }
+
 function backToTitle(){
   closeBook();
+  closeOptions();
   document.getElementById('cheatScreen').classList.add('hidden');
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
@@ -19884,7 +20081,14 @@ document.getElementById('musicBtn').addEventListener('click', ()=>{
   audioInit(); toggleMusic(); SFX.click(); });
 document.getElementById('sfxBtn').addEventListener('click', ()=>{
   audioInit(); toggleSfx(); SFX.click(); });
+document.getElementById('optBtn').addEventListener('click', ()=>{
+  audioInit(); SFX.click(); openOptions('title'); });
+document.getElementById('pauseOptBtn').addEventListener('click', ()=>{
+  SFX.click(); openOptions('pause'); });
+document.getElementById('optBackBtn').addEventListener('click', ()=>{
+  SFX.click(); closeOptions(); });
 audioLoad();
+optLoad();
 document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });

@@ -1519,10 +1519,21 @@ A worse run pays nothing, however long it was.
 | | |
 |---|--:|
 | **your best wave** *with this weapon* | **1 point each** |
-| reaching level 10, 25, 50, 75, 80, 90, 100 | 7 |
+| **your best level** *with this weapon* | **2 points each** |
 | first time smashing each of the 8 bosses | 8 |
 | **BRICKBANE MASTER** — every capped Brickbane brick at its cap | 1 |
 | **the ceiling on everything** | **60** |
+
+**TWO POINTS A LEVEL, EVERY LEVEL.** This used to be seven milestones — 10, 25, 50, 75, 80,
+90, 100 — which paid seven points for a hundred levels and left a dead stretch of twenty-four
+between the second and the third where levelling was worth nothing at all. Levelling is the
+thing you do every single run, so it pays every single run: **reach level 25 and that is
+fifty points.** Your best level is a high-water mark like your best wave — going deeper pays
+the difference, doing it again pays nothing.
+
+The **ceiling of 60 still has the last word**, which means a deep enough run can now fill the
+tree on levels alone. That is deliberate: the tree's whole power budget is built on 60 points
+and nothing walks past it.
 
 **BRICKBANE MASTER** wants stacks, spread, reach, rate, dose length and Spore Burst all at
 their ceilings. Flat poison damage is *not* asked for: it has no cap, so "all of it" could
@@ -1819,6 +1830,33 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
+
+### The options screen
+
+**Two doors, one screen.** `OPTIONS` sits on the title plate next to the music and sound
+buttons, and on the pause menu behind `ESC`. It never changes the game's state: a paused run
+stays paused underneath it and the title stays a title, which is why the same screen can be
+opened from either. `ESC` closes it — and *only* it, so closing the options over a paused run
+does not also un-pause the run. Every switch is written to disk the moment you click it.
+
+| switch | what it does |
+|---|---|
+| **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
+| **SOUND** | every hit, pickup, cast and smash |
+| **DAMAGE NUMBERS** | the figures that float off a monster when you hit it |
+| **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
+| **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
+
+**DAMAGE NUMBERS turns off the numbers and nothing else.** Everything else that floats off a
+body is an *event* worth reading — `FROZEN SOLID`, a curse landing, `LEVEL UP!` — and a player
+who wanted a quieter screen in a wave of sixty did not ask to stop being told those. So the
+switch sits on the one call the outgoing damage figures make, not on the floater system. The
+combat log still counts every point either way.
+
+**RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
+best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
+every difficulty** — "my character" is all of them, and half a wipe is worse than none. What it
+does *not* touch is your settings: a preference is not progress.
 
 ### Every ailment, one rule
 

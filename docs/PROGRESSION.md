@@ -1693,3 +1693,87 @@ convenient* rather than add an assertion.
 
 Twelve breaks for `ail3`, and `conv2`'s poison case — which asserted the free dose — was
 rewritten to assert both halves: nothing bought, nothing poisoned; 40% bought, 40% poisoned.
+
+## Eighteenth pass — a screen for the switches, and two points a level
+
+### The options screen
+
+Music and sound already had buttons in the corner of the title plate. Everything else a player
+might want off was a keypress they had to remember every run, or not a switch at all. So: one
+screen, reached from the title plate and from the pause menu, with the two audio toggles and
+two new ones beside them, plus the wipe.
+
+It deliberately does **not** touch `state`. A paused run stays `'pause'` underneath it and the
+title stays a title, which is the only reason the same screen can be opened from both without a
+second state machine. The cost of that is one ordering rule: the options screen has to eat `ESC`
+*first*, because the pause toggle is listening for the same key and would otherwise close the
+options **and** un-pause the run in one press. That is `escboth` in the break set.
+
+### Two switches, and where a switch belongs
+
+**DAMAGE NUMBERS** is the interesting one. The obvious place for it is `addDmg`, which is the
+function that makes a floater — and that is the wrong place, because `addDmg` also throws
+`FROZEN SOLID`, `CURSE LIFTED`, `LEVEL UP!`, `THE SWARM!` and every other thing the game shouts
+at you. A player who turned off damage numbers asked for a quieter screen in a wave of sixty;
+they did not ask to stop being told a boss just froze solid.
+
+So the gate is a new `addHitNum`, used by exactly the three calls in `hitEnemy` that throw an
+outgoing damage figure. `dmgall` — move the gate up to `addDmg` — is a break, and the test that
+catches it asserts both halves: twenty hits throw zero numbers, and an event floater still
+lands.
+
+**START WITH THE COMBAT LOG** is three words in `startGame` and one of them matters:
+
+```js
+if(OPT.autoLog && !clogOn) clogToggle();
+```
+
+`clogReset()` clears the buffers but does not close the log, so a log left open by the last run
+is already open when the next one starts. Without the `!clogOn` guard the second run of a
+session would *toggle it shut* — which is the `autologtoggles` break, and is exactly the kind of
+thing that looks fine in one manual test.
+
+### A wipe is a wipe
+
+`metaWipe()` calls `metaBlankSave()`, which builds the empty record for every difficulty and
+every weapon. Nothing is walked by hand, so a weapon added tomorrow cannot be missed. Two
+breaks live here: `wipeone` (only the weapon you happen to be holding) and `wipevolatile`
+(clears the object in memory but never writes it, so the tree comes back on the next reload).
+
+And a third, `wipesettings`, which is the one that taught something. Progress and preferences
+are different things and live under different keys; the break deletes both. It **passed at
+first**, because the test checked the settings after the wipe while both of them happened to be
+sitting on their defaults — deleting the key restored exactly the values under assertion. Same
+shape as the `rowsdrift` bug one pass ago, and the same fix: move the fixture off the values
+where right and wrong coincide. Both settings are now flipped away from their defaults before
+the wipe.
+
+### Two points a level
+
+The level grant was seven milestones — 10, 25, 50, 75, 80, 90, 100 — which paid seven points for
+a hundred levels, and left a dead stretch of twenty-four between the second and the third where
+levelling paid nothing at all. It is a rate now: `META_POINTS_PER_LEVEL * best.level`, two a
+level, so level 25 is fifty points.
+
+`META_POINT_MAX` stays at 60. Two a level is generous on purpose and a deep run can now fill the
+tree on levels alone, but the tree's power budget is built on that ceiling and `noceiling` is a
+break.
+
+Three things in `meta.js` had to move, and all three are worth writing down:
+
+- **The "earned is derived" case** seeded wave 35 + level 30. At two points a level that is 95,
+  clamped to 60 before and after the change — a total that *cannot move* proves nothing about
+  whether it is stored. Reseeded well under the ceiling.
+- **The "clearing 29 is worth 29 points" case** left the hero on level 1, which is now worth two
+  points of its own, so the answer was 31. The hero is explicitly on level 0 now, with a comment
+  saying why, because this case is about what a *wave* is worth.
+- **The old derivation proof** mutated `META_LEVEL_POINTS` at runtime to show the total moved
+  with the rule. There is no list to mutate any more, so the proof runs the other way: move the
+  record, round-trip it through `localStorage`, and the total has to follow. A stored counter
+  would freeze.
+
+`firsts` also stopped being a list of bare strings. The run-end screen printed `+1 skill point`
+under every one of them, which was already a lie whenever a wave first was worth two, and is a
+bigger one now a level first is worth ten. Each entry carries its own `pts`.
+
+Sixteen breaks for `opts`, 51 tests green, wave-50 soak clean.
