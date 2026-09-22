@@ -32,6 +32,8 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 **Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
+**Between runs** — [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
+
 ---
 
 ## Play it
@@ -101,10 +103,43 @@ for the elemental one.
 Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
 comparison against the sword.
 
+### 🪓 Each weapon swings its own way
+
+The sword sweeps twice and spins; the **axe chops and then backswings**; the mace does not swing
+at all, it slams; the staff casts. A combo is a row in a table, and **Blademaster — the whirl —
+is offered only to a weapon whose combo has a spin in it to hold down**, which is read off that
+table rather than off a list of weapon names. The axe has its own rhythm and its own legendary
+to go with it.
+
+Each swinging weapon also has its own opening hand: **Sword & Steel** for the sword (flat
+damage, swing rate, reach), **Reaver's Edge** for the axe (critical chance, critical damage, a
+deeper Momentum), **Earthshaker** for the mace.
+
 ### 🩸 Elements & ailments
 
 Fire, frost and lightning all stack, on you and on them, and **the fifth stack breaks
 something** — you freeze, they turn BURNT, everything you own hits a shocked body harder.
+
+**Five stacks is a threshold for all three.** Fire brands **BURNT** (+25% MORE fire, ×4),
+lightning brands **SHOCKED** (+7% MORE of *everything*, ×3) and frost brands **BRITTLE**
+(−12% frost resistance, ×4). Shock never had a brand at all: five stacks was the end of the
+line and every further bolt did nothing. Unlike a fire — whose stacks are *fuel* — a shock
+brand does **not** spend the stacks, because shock's stacks **are** the multiplier and
+spending them would drop a fully shocked body back to nothing the moment your fifth bolt
+landed. Stacks and marks are separate MORE multipliers on the body, so a fully shocked,
+fully branded monster takes **×1.65** from everything.
+
+**Every ailment lasts longer.** Four seconds was short enough that a stack laid by one source
+had usually expired before a second source arrived — which is the whole reason to own two.
+Chill and shock **4s → 7s**, burning **6s → 9s**, BURNT **10s → 16s**, bleed **8s → 11s**,
+poison **5s → 8s**.
+
+**Poison drains; it does not drip.** Half a second between bites meant a poisoned body's
+health bar came down in visible steps with a number over each one, which reads as a series of
+little hits rather than as rot. It comes off **thirty times a second** now, silently — no
+number, no flash, no shove, just a bar that slides and green coming off the body. The rate is
+unchanged; only the grain is. And it drains by *elapsed time*, not by a fixed slice, so a slow
+frame takes exactly as much as three fast ones.
 
 Curses, poison and bleed run alongside on their own pools. See
 [**Elements & ailments**](#elements--ailments).
@@ -184,6 +219,103 @@ The mace is the one that never leaves contact, so it carries the most of both.
 **The staff gets +8% to every resistance** instead. It stands in the fire it starts, and it
 is the one weapon that cannot answer a burning floor by walking out of it.
 
+### 🪓 The backswing — *what an axe swing is*
+
+The axe used to run the sword's three-step combo with different numbers. It swings **twice**
+now:
+
+| | | |
+|---|--:|---|
+| **the chop** | 0.20s | forward, ordinary reach |
+| **the backswing** | 0.33s | **270°** out of the chop and all the way round behind you, at spin reach, and **always a critical on the first body it touches** |
+
+*tap-TAP* instead of *tap-tap-TAP* — and the guaranteed critical is what **Reaving** is waiting
+for, so the rhythm of the weapon and its legendary are the same thing. Only the *first* body:
+a 270° sweep that crit everything in it would be a legendary, not a combo step.
+
+A weapon's combo is a row in a table, so a fifth weapon swings differently by being written
+down rather than by adding a branch.
+
+### ⚡ Momentum — *and stacks in general*
+
+**Every swing that connects builds a stack.** Six at most, each worth **+8% attack speed and
++4% reach**, and one falls off every **2 seconds** you go without adding another. Once per
+swing however many bodies are in the arc — one step into a crowd being the whole ramp would
+make it a formality. At six stacks the axe swings **48% faster** and reaches a third further.
+
+It bleeds, it does not drop. Losing six stacks the instant you miss is a cliff, and a cliff is
+a thing you *avoid* rather than a thing you play with; bleeding one at a time means dropping
+out of a fight costs the ramp gradually and a single miss costs almost nothing.
+
+**The system underneath knows nothing about momentum.** `HERO_STACKS` is a table of named,
+self-expiring counters — a cap, a decay, a list of what one stack is *worth*, and optionally
+which weapons may carry it. Whoever cares reads `stackMod('atk')` and never learns which stacks
+exist. **Rage** is the second row in that table, and it needed one new field.
+
+### 🔴 Rage
+
+> **You gain more attack damage. You lose 10 rage every second if you have not been hit or
+> gained rage in the past 2 seconds.**
+
+That sentence is `grace: 2` and `rate: 10` in the table and nothing else anywhere. It is the
+*other* decay shape: momentum falls off one at a time, rage sits still for a grace and then
+pours away.
+
+**Nothing gains rage by default.** The ceiling is **30** and the generation is **nothing** — a
+hero buys it and a monster is given it, which is what makes it a build rather than something
+that happens to everybody. Every point is **+1% MORE attack damage**, so a full well is ×1.30
+on what you swing, and on nothing you cast: rage is the melee build's own ramp.
+
+| | |
+|---|---|
+| **Warpath** / **Spite** | bricks: your swings, or the hits you take, build rage |
+| **Deep Well** | +4 to +16 maximum rage, offered once you generate any |
+| **WARPATH**, **SPITE**, **THE DEEP WELL** | three groups in the red country, at +0.2 a hit |
+| **The Red Mist** | the notable at the far end: +5 maximum and generation both ways |
+
+**And a monster can carry it.** The `WRATHFUL` wave modifier turns it on: hurt something and it
+gets angrier, up to +30% damage, and it cools off if you leave it alone. Same table, same
+decay, same tick — the only thing the monster side needed was for the stack helpers to take an
+entity instead of assuming the hero.
+
+Rage is fractional, because you gain a fifth of a point at a time. It is drawn as a bar with a
+number rather than as chevrons: thirty chevrons is a fence.
+
+Every live stack is a chevron over your own head, in its own colour, and the one about to fall
+off fades as its clock runs down — a ramp you cannot see is a ramp you cannot play around.
+
+### 🪓 Reaving — *what the axe does that nothing else can*
+
+Every other weapon had a legendary that changed what it **is** — the sword whirls, the mace
+slams the elements, the staff scatters embers. The axe borrowed the sword's.
+
+The axe's identity is in two numbers: **twice a sword's crit chance and a far bigger
+multiplier**, paid for with a bleed multiplier of **0.45** that locks it out of the one tree its
+crits would otherwise feed. So the payoff for critting *is* the mechanic.
+
+> **Reaving** — *legendary, axe only.* Every **critical** hurls a spinning axe. It reaps
+> through up to **3** more bodies within 320px, each for **70%** of the critical that threw it
+> and each able to crit on its own. **You keep swinging**, and up to **4** can be in the air at
+> once — **6** at rank two.
+
+**You keep the axe.** The first cut of this left the hero standing there empty-handed until the
+blade came home, which read as a punishment for critting on a build whose whole idea is
+critting: stack attack speed, crit more, swing less. What flies is a *copy*. A second critical
+throws a second one, and several axes in the air at once is the good version of this legendary,
+not a bug to design around.
+
+What holds it in check is two numbers instead of your hands: a **0.16s** cooldown between
+throws, so forty criticals landing in one frame still throw one axe, and a hard ceiling on how
+many may be out. A **bounce** can still never start a blade of its own — several axes have to
+come from several *criticals*.
+
+> **Rank two** — the blade leaves a **BLEEDING** body for free. Reaping one costs it none of its
+> three bounces, so a wound is a longer harvest — and the axe's own terrible 45% bleed becomes
+> the thing you build around.
+
+Measured: rank one reaps 4 bodies off a ring of nine; rank two over the same ring, bleeding,
+reaps all 9.
+
 ### ⛰️ The ground slam — *what a mace does instead*
 
 A mace hero does not swing. They drive the head into the floor and a **fault** opens in
@@ -196,23 +328,35 @@ one hit per slam, the same as one swing would, so a wide fault opens every crate
 It does **not** deflect — a slam is the floor coming up, and nothing about that turns an
 arrow aside.
 
-**What it is worth.** Each tooth is **30.7% of a full swing**, and **one body may be bitten
+**What it is worth.** Each tooth is **36% of a full swing**, and **one body may be bitten
 by at most three teeth of the same slam** — so a body held dead centre in the fault takes
-**0.92 of one sword swing** per slam, and everything else in the fan takes the same. It
-opened at twice that, which made an AoE basic attack out-damage the single-target one it
-replaced; at this share the mace trades single-target for coverage instead of getting both.
+**1.08 of one mace swing** per slam, and everything else in the fan takes the same.
+
+This number has moved twice. It opened at **0.62** a tooth, which made an AoE basic attack
+beat the single-target one it replaced. The cut to **0.307** fixed that and overshot: the mace
+came out at **4.37**/s against the sword's 5.79 and the axe's 6.28 — a quarter behind on one
+body while *also* being the slowest weapon in the game. It was not trading single-target for
+coverage, it was paying twice for it. At **0.36** the mace sits at **5.12**/s: still under the
+sword on one body, which is what the fan is for, but no longer the weakest thing you can pick
+up.
 
 Read off a fresh hero with no favourite, which is what the character sheet's
 **Sustained DPS** row shows you:
 
 | | single target | |
 |---|--:|---|
-| **SWORD** | **5.38** /s | one body, kept in reach |
-| **AXE** | **5.69** /s | one body, kept in reach |
-| **MACE** | **3.96** /s | one body held in the fault — *and everything else in it* |
+| **SWORD** | **5.79** /s | one body, kept in reach |
+| **AXE** | **6.28** /s | one body, kept in reach |
+| **MACE** | **5.12** /s | one body held in the fault — *and everything else in it* |
 
-About three-quarters of a sword's single target, spread across everything in a 99° fan.
-That is the trade.
+About **88%** of a sword's single target, spread across everything in a 99° fan. That is the
+trade — and the test asserts the ratio, not the literal, so the day the numbers move it is
+still the rule that is being checked.
+
+**You can see through your own teeth.** A fully-fanned slam is twenty-six rows of stone
+standing between you and the pack you are standing in, and at full opacity the thing you needed
+to read — what is walking at you — was behind the effect you cast to deal with it. Your teeth
+are drawn at **52%**. The *monsters'* are not: a hazard you have to see is a hazard.
 
 | | opens at | ceiling |
 |---|--:|--:|
@@ -275,11 +419,19 @@ kit — reach, the spin combo, bleed — and gets **+25% increased spell damage,
 elemental damage and +20% increased cast speed** for carrying it. Physical bricks are not
 offered to a staff hero at all; the elemental ones are not offered to anyone else.
 
-**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 6s, and
-they all burn at once. **The fifth stack breaks**: the fires go out and the body is **BURNT**,
-taking **25% MORE fire** from then on. Marks stack to four, each its own multiplier — a
-four-mark body takes **×2.44** fire. Burning is damage over time, so it reads the same
-`Rotbrick` pool poison and bleed do.
+**Fire burns.** Every bolt lays a stack that ticks for 30% of the hit a second over 9s, and
+they all burn at once. **Five stacks is a threshold, not a counter.** From there, every fire
+that lands has a **30% chance** to brand the body **BURNT** — **+5% per stack above five**,
+so a deeper fire brands sooner — and branding costs **five stacks, not the whole fire**.
+A BURNT body takes **25% MORE fire**; marks stack to four, each its own multiplier, so a
+four-mark body takes **×2.44**. Burning is damage over time, so it reads the same `Rotbrick`
+pool poison and bleed do.
+
+> This used to fire on the stack that **overflowed the cap**, which made `Ember Scatter` —
+> whose whole job is to deepen the well to 10 stacks and then 20 — quietly a *downgrade* for
+> the thing it fed: at rank 2 you needed **21 fires** to see a single mark, and the brand
+> then threw **19 of your 20 stacks away**. Five is the threshold at every depth now, and a
+> brand costs five.
 
 Five bricks come with it: `Ember Core` (flat elemental), `Elemental Focus` (increased
 elemental), `Pyromancy` (increased fire), `Wildfire` (a wider burst), and the legendary
@@ -316,9 +468,55 @@ A chain travels **3 bodies deep** and one body can only throw embers every 0.25s
 packed crowd lights up and then settles rather than running away.
 
 **`Block Freeze` is the staff's second element.** It deals **frost damage** and lays a
-**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid** and
-clears them. It is only offered to a caster, the way the melee spells are only offered to
-a melee weapon.
+**chill stack** — each one drags a body 13% slower, and **the fifth freezes it solid**.
+
+It used to be a wall of frost that arrived rarely, reached most of the screen and dropped
+its whole hit in one lump. It is now a **short, frequent pulse**: the opening interval went
+**10s → 5.5s** (floor 3.5s → 2.2s), the reach **190 → 128** (cap 420 → 290) and the base hit
+**1.6 → 0.85**. Something you feel every few seconds rather than a bomb you wait for.
+
+**And the ring is the spell.** The frost animation expanded at a fixed 420 px/s for a fixed
+half-second, which reaches the edge at exactly one radius and misses at every other — a
+small pulse drew a ring **three times** the size of the spell, and a maxed one fell **60 px
+short** of what it was freezing. Speed is derived *from* the radius now, so the frost always
+arrives at the edge, and always at the same moment.
+
+**Frozen leaves a body BRITTLE.** The fifth chill stack still freezes a monster solid — and
+now leaves a mark that takes **12% frost resistance off it**, four marks deep. The mark lands
+on a **boss** too: a boss cannot be held still, but it can be made easy to freeze, which is
+the first thing frost has ever done to one that lasts.
+
+**Every stack of the spell deepens the CHILL, and chill has a ceiling.** Extra stacks used
+to buy radius and duration with **no cap on either**: forty-six of them read **1654 px** and
+**63 seconds** on the test bench, which is not a spell, it is an oversight. They lay an extra
+chill stack now instead, capped at **4** — five freezes a body solid, so one pulse can never
+do it alone however you got there. The card stops being offered once it can buy nothing more,
+and it prints its own ceiling, so it can never promise a stack it will not hand over.
+
+**It has its own rarity ladder, and it starts at RARE.** Every other spell counts in
+projectiles and can afford eight of them; this one counts in chill stacks, so an *uncommon*
+handing over two was three quarters of a permanent freeze on one card. A **rare gives +1**,
+an **epic +2**, and it is never offered below rare.
+
+| | |
+|---|---|
+| **`Killing Frost`** | flat frost damage, added to the base *before* every increase |
+| **`Absolute Zero`** | every caught foe frozen SOLID for 4.5s **and left BRITTLE** — and anything that **dies frozen SHATTERS**, throwing your own pulse out of the corpse |
+
+`Deepening Winter` is gone: it did the job the spell's own stacks now do, which made picking
+the spell up twice and picking it up once the same card in two coats.
+
+**A frozen corpse throws your pulse.** Absolute Zero's payoff is no longer just a stun — a
+body that dies frozen shatters for **75% of your own radius**, with the same frost and the
+same chill, and what it died **BRITTLE** with is the multiplier: **+50% a mark, four deep**,
+so a four-mark corpse hits for **2×** a one-mark corpse. A shatter that kills sets off
+another, twice deep and no further. The frost build's own debuff is what makes its kills
+worth watching.
+
+The freeze also **holds longer** — the chill 2.5s → **4.5s**, and Absolute Zero 3.0s →
+**4.5s** — because a pulse this small and this frequent has to make what it lands stick.
+
+It is only offered to a caster, the way the melee spells are only offered to a melee weapon.
 
 **Nothing is offered to a weapon that cannot use it — and the card says so.** Every brick
 whose requirement is narrower than "any weapon" prints the weapons it serves in a small row
@@ -601,6 +799,17 @@ that take you straight to a cap stay scarce even here.
 **Generous Smith** *increases* the heart chance rather than adding to it — it caps at
 **+200% increased**, which is ×3 the base, or 3.00% a monster.
 
+### What you threw back
+
+**A brick you paid studs to reroll away goes scarce for 3 to 5 waves** — rolled per brick, so
+they do not all come back at once. Paying to get rid of three cards and being shown one of
+them on the very next screen is the reroll not working.
+
+**Scarce, not banned.** It is still in the pool and weighted to a fifth of its usual chance,
+which measures out at roughly 1% of screens against 4.5%. Banning it outright would turn the
+reroll into a way to *delete* cards from a run, and a brick you rejected at wave 4 for having
+no fire yet may be exactly what you want at wave 9.
+
 ### The mystery chest
 
 Rarer than an epic reward roll and commoner than a legendary one — about **3 a run**,
@@ -762,9 +971,9 @@ read straight off the stack count, and they expire together.
 | | How you inflict it | What it does |
 |---|---|---|
 | ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
-| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
-| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed**. **Five stacks freeze it solid** |
-| ⚡ **Shocked** | Any storm bolt that rolls `Conductor` | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
+| 🩸 **Bleed** | Any **attack** that lands physical and rolls it — **0%** until you buy it, and a critical does not help | 40%/s of the hit that opened it for **11s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
+| ❄️ **Chilled** | Any hit that lands as cold and rolls it — **always** on a cold critical, and always off Block Freeze | The body crawls at **45% speed**. **Five stacks freeze it solid** |
+| ⚡ **Shocked** | Any hit that lands as lightning and rolls it — **always** on a lightning critical | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
 | 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
 
 Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
@@ -826,6 +1035,7 @@ offered at all.
 | Buffs on a monster | 9 unique | Monster resistance | 90% | Elite court | 9 |
 | | | | | Magic band | 15 |
 | Slam width | **180° / 360°** | Slam range | 430 px | Slam speed | 1400 px/s |
+| **Skill points** | **60** | Tree cost | 444 | Points per wave | 1 |
 | Teeth biting one body | 3 | Slam of the Elements | ×2 | | |
 | Flat armour | 520 | Storm bricks | 5 | | |
 | Increased armour | +200% | Storm forks | 2 (40 nodes) | | |
@@ -893,12 +1103,12 @@ full at 6 max hearts, 49 at 60, 102 at 300. Between waves it runs at **×2**.
 small hits, thin against one big one. Fully capped at 1,560 armour value, a 5-damage hit
 lands for 0.8 and a 120-damage hit still lands for 33.
 
-**BLEED** is the melee half of damage over time, and it is Path of Exile's rule set. An
-ordinary swing never opens a wound on its own — that chance starts at **0%** and is a brick
-you buy — but every **critical** swing opens one **half the time** for free, which ties the
-mechanic to the crit tree instead of making it a third parallel build.
+**BLEED** is the attack half of damage over time, and it is Path of Exile's rule set. No
+swing opens a wound on its own, critical or not: bleed is the one ailment a critical does
+**not** hand you, so the chance starts at **0%** and is always a brick you buy. What a crit
+buys instead is the three elemental ailments, which is where the crit tree points.
 
-A wound ticks for **40% of the hit that opened it, every second, for 8 seconds** — 320% of
+A wound ticks for **40% of the hit that opened it, every second, for 11 seconds** — 440% of
 that hit in total — rising to **70%/s** with Deep Cuts. It reads the same increased
 damage-over-time pool Rotbrick feeds, and it ignores armour, because the opening hit
 already paid it.
@@ -1142,6 +1352,957 @@ touches *attacks*. You cannot out-swing a stone golem; you burn it. Resistance c
 
 ---
 
+## The skill tree
+
+You used to die at wave 15 and nothing happened: the run was the whole reward and the run
+was gone. Now every run banks, and **pushing your best** is worth more than grinding a wave
+you have already beaten.
+
+![The skill tree](docs/tree.png)
+
+**TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
+weapons — and **they share nothing**. Points earned on a staff are a staff's; switch to the
+axe and you find the axe's own tree exactly as you left it, and switching back finds the
+staff's.
+
+**Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
+dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
+is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
+swings, the staff's is focus and warding. Each door sits in its own country — the sword and
+the mace in the red, the axe in the green, the staff in the blue.
+
+### Four beginnings, and all four are on the map
+
+Each door **fans into four paths of three flavoured nodes** — a sword's edge, its footwork,
+its guard, its opening — before the plain attribute road takes over. One flavoured node and
+then a corridor made the beginning of a build a formality: you pressed a button and then
+walked. Three is a small decision of its own, which of the four directions you commit to
+before the map opens.
+
+**And every door's paths are open to everybody.** You still *begin* at your own one, and
+nothing paths through somebody else's door — so a sword hero reaching the staff's beginning
+has to come at it from the far end, up the lane it hangs off. Your own costs you **3**
+points; it costs everybody else **5 to 13**, averaging more than double. Leaning into the
+beginning next door is a real option, the way it is in the tree this is borrowed from; four
+beginnings that only one weapon could ever touch were four quarters of the middle of the map
+wasted.
+
+The doors you did not choose are drawn dimmed, so you can see where the axe begins and what
+hangs off it without being able to start there.
+
+### A lattice, not a wheel
+
+### The highway
+
+Five rings of **hubs**, each joined to its neighbours around its own ring *and* to the nearest
+hubs on the rings either side of it. **Every hub is a travel node and so is every lane node
+between them** — the whole of it is one connected piece that pays nothing but attributes. You
+can cross the map in any direction without buying a single point of somebody else's build.
+
+That is the rule everything else hangs off, and it is measured: the 592 lane nodes are **one**
+connected component, and in each country almost every attribute node it owns is in a single
+walkable piece (230 of 231 in the red, 164 of 165 in the blue, 194 of 196 in the green). Every
+one of the 180 door-to-prize pairs is reachable on the highway alone, and the worst of them
+costs **nothing** extra for staying on it.
+
+**The jumps are long.** A junction is a decision and the road between two of them should not
+be a queue: no more than **four** attribute nodes ever sit between one junction and the next,
+and the median jump is 336px. A lane that would need a fifth does not get one — it gets longer
+jumps, because jumping a long way sometimes is the point of a road. The map itself grew by half
+to pay for that: a longer jump is also *fewer* nodes, and the highway's length in points is the
+only thing keeping the outer keystones apart — shortened, one walk round the rim collected
+every keystone on it for 55 points against a ceiling of 60.
+
+**Clusters never sit on it.** They go in the empty middle of a quad — between two rings and
+two radial lanes — and join the road by two or three **connectors**, each from a different
+stretch of it. Two is the number that matters: one connector is a pocket you must leave the
+way you came, and the point is to leave the road, take what you came for, and rejoin it
+further along. A cluster on the outer rim gets one, because there is no further along.
+
+**Every prize on the map can be reached using the highway and nothing but its own cluster**,
+and doing it that way costs at most **3** extra points against cutting through whatever
+happens to be in the way — mean 0.29. Nothing is ever standing in a doorway.
+
+**A door opens four ways and none of them stops.** Each is a lane to a different hub of the
+inner ring, and the first node of each carries the weapon's own flavour instead of a plain
+attribute.
+
+**Nine hundred and ninety nodes**, and nothing in it is hand-placed. Hubs come off a ring
+table, clusters come off a template library, and both are picked by a hash of where they are:
+the map is identical every time you open it, and adding a weapon, a spell or a damage type
+extends it without anybody moving a coordinate.
+
+| | |
+|---|--:|
+| nodes | **990** |
+| of which highway | **677** |
+| clusters | **98** |
+| notables / keystones / legendaries | **20 / 17 / 8** |
+| the whole tree, in points | **1072** |
+| what the ceiling buys you of it | **6%** |
+
+### Three countries
+
+The map is cut into three wedges, and what lives in a wedge belongs to it. No lane carries a
+label saying which attribute it pays — it pays the attribute of the **ground it stands on**,
+so a ring changes colour exactly where the border is and the map colours itself.
+
+| | | |
+|---|---|---|
+| **RED — STRENGTH** | the sword and the mace | physical damage, hearts, regeneration, armour |
+| **GREEN — DEXTERITY** | the axe | criticals, speed, bleed and poison, everything that lingers |
+| **BLUE — INTELLIGENCE** | the staff | spells, the elements, the cold and the storm |
+
+Conversion is in all three, because every build has something worth converting. Your own third is
+markedly cheaper to its keystones than anybody else's.
+
+### What a cluster is
+
+**One or two kinds of stat and nothing else** — a cluster you can read at a glance and want or
+not want. QUENCHED is fire resistance and cold resistance. THE EMBER WELL is fire resistance
+and increased fire. HEFT is two flat physical nodes. Most of the library **repeats**: the same
+three fire nodes turn up in three places around the blue country, the way the same small wheel
+turns up all over the tree this is borrowed from, so the library stays short and the map stays
+big. Two copies never stand within 1200px of each other.
+
+**Ten shapes**, and the shape changes what buying in costs you:
+
+| | |
+|---|---|
+| **ring** | a closed loop of five or six; the prize touches every other one |
+| **wheel** | the same loop, but the prize touches all of them |
+| **arc** | an open bow of four to six, bulging outward, prize inside it — a long way round and a short way |
+| **crescent** | a deeper bow with both ends curled in |
+| **diamond** | four corners round the prize |
+| **line** | a straight run of three or four with the prize past the end |
+| **chain** | the same run, zig-zagged |
+| **hook** | an L: out, then a turn along the ring |
+| **star** | no loop at all; every leaf hangs off the prize alone |
+| **vee** | a bracket of four with the prize in the notch |
+
+**The figure decides how many nodes there are**, not the list of stats — the stats are dealt
+round it and repeat if the figure is the longer of the two, which is what a six-node arc of
+*Smoulder, Rimebite, Arcing, Smoulder, Rimebite, Arcing* is for. Before that every template
+held three minors and three points on a circle is a triangle, so the whole map was triangles.
+**Nothing holds fewer than four**: two stats with a name over them is not a group worth leaving
+the road for. Sizes run four to seven.
+
+**And no cluster wears the same figure as one within reach of it** — not one pair on the whole
+map does. A group whose neighbour already has its shape takes the next one along, so THE MACE'S
+OATH reads differently in each of the three places it lands.
+
+**How wide a figure has to be, and how far it reaches, are asked of the figure** rather than of
+a table: it is laid out once at a notional hundred and measured, so six on a ring and six along
+a line get the radii they each need and a new shape brings its own answer. If the site cannot
+hold it, the cluster carries fewer nodes, or wears a different figure, or the site itself walks
+away from the nearest lane until there is room.
+
+### What is on it
+
+- **Every conversion the pipeline allows.** Ten legal pairs, both forms of each, generated
+  from `CONV_ORDER` — so the day a damage type is added, every conversion involving it has a
+  node on the map without another line of data. Each pair is *guaranteed* a site: left to the
+  random fill, four of the ten never landed anywhere.
+- **A weapon's own nodes.** `+0.1 flat damage — Sword only`, `+4% increased spell damage —
+  Staff only`. Generated from `WEAPON_KEYS`, and the panel greys them out for anybody else.
+- **The strange ones**, which change what a build *is* rather than what its numbers are:
+  RUNEBLOOD (a heart for every 5 intelligence, and 15% less hearts otherwise), VOIDCALL (all
+  your lightning arrives as chaos), THE SOUR SUN (your fireballs are not made of fire any
+  more), FROSTBOUND (nothing you swing is made of metal any more), THE OPEN GUARD (you wear no
+  armour at all and nothing cast at you lands properly).
+- **Eight legendaries, five points each**, on the outermost ring: *Born With Brickbane*, *Born
+  With Block Freeze*, one for every spell — and what they hand over is not a number but a
+  **brick**. You begin the run already holding it. Generated from `SPELL_KEYS`.
+
+**The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
+WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
+Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Volley rate`. A tree that only ever says *+5% damage* has no opinions; a node that names one
+of your bricks makes you re-read the map every time the deck hands you something new.
+
+**Resistance is everywhere, and paired.** QUENCHED is fire *and* cold, TEMPERED is cold
+*and* lightning, GROUNDED is lightning *and* suppression — the elemental wells give you the
+resistance and the damage of the same element together, and WARDING gives a little of all
+three.
+
+**One currency you can see: skill points.** They come from two places, and both are
+*derived* — nothing is stored as a counter:
+
+**EVERY WAVE IS A POINT, AND STUDS ARE NOT.** Studs were the gate, and the gate was the
+problem: a run that got further than any before it paid exactly what one that shuffled round
+wave 12 hoovering bricks did, so the tree was a grind rather than a record.
+
+**Your best wave IS your point total.** Reach 38 and you have 38 to place. Reach 40 next
+time and you have **two** more — because 40 is your high-water mark, not your fortieth lap.
+A worse run pays nothing, however long it was.
+
+| | |
+|---|--:|
+| **your best wave** *with this weapon* | **1 point each** |
+| **your best level** *with this weapon* | **1 point each** |
+| first time smashing each of the 8 bosses | 8 |
+| **BRICKBANE MASTER** — every capped Brickbane brick at its cap | 1 |
+| **the ceiling on everything** | **120** |
+
+**ONE POINT A LEVEL, EVERY LEVEL** — the same as one a wave, so neither of the two things you
+do in a run outweighs the other. This was seven milestones once (10, 25, 50, 75, 80, 90, 100),
+which paid seven points for a hundred levels and left a dead stretch of twenty-four where
+levelling was worth nothing; then two a level, which was generous enough that a deep run filled
+the tree on levels alone and the wave count stopped mattering. One is the middle. Your best
+level is a high-water mark like your best wave — going deeper pays the difference, doing it
+again pays nothing.
+
+**The ceiling is 120.** It was 60, and 60 was reached somewhere around wave 39 — so the back
+half of a good run bought nothing at all and the tree stopped being a record of how far you got.
+The whole tree costs over a thousand points, so 120 is still a small share of it and a build is
+still a set of choices.
+
+**What doubling the points did to the budget:** a stay-at-home build went from **×2.53** total
+power to **×3.47** — not double, because the increased-damage caps do their job. And a
+**keystone costs 5 points** now instead of 3: at 60 the far corners were simply unreachable
+together and the *distance* was the limit, but at 120 a walk that collected every keystone on
+the rim cost 67. The price is the limit now — the rim is about **three fifths of everything you
+will ever have**, which is a real trade rather than a wall.
+
+**BRICKBANE MASTER** wants stacks, spread, reach, rate, dose length and Spore Burst all at
+their ceilings. Flat poison damage is *not* asked for: it has no cap, so "all of it" could
+never be true. The point lands the moment the last cap is met — mid-run, with a banner —
+rather than waiting for you to die.
+
+Studs are still banked and still counted. They buy bricks inside a run and **nothing at all**
+in here.
+
+**The wave you CLEARED, not the one you died on.** Dying to the wave-30 boss is a wave-29
+run and the screen says so.
+
+**You bank the square root of what you picked up** — `floor(4 × √studs)`. A full clear
+collects about 15× what a death at wave 15 does; banked raw, the early runs this exists to
+reward would feel *worse*. The square root compresses that to about 4×. It banks what you
+**collected**, not what you are holding, so rerolling never costs you twice.
+
+**The tree costs 1072 points and you can never hold more than 60.** That is the whole design:
+at most **6%** of it, ever, so the tree is a set of builds rather than a ladder you finish.
+412 nodes — 116 small ones in clusters, 12 notables, 12 keystones, and 268 steps of corridor
+between them.
+
+**Every step of corridor is an ATTRIBUTE**, and attributes are the boring numbers you collect
+on the way to somewhere interesting:
+
+| | | |
+|---|---|--:|
+| 🔴 **STRENGTH** | +0.5% increased physical damage, +0.5% increased maximum hearts | *each* |
+| 🔵 **INTELLIGENCE** | +0.5% increased spell damage, +0.5% increased regeneration | *each* |
+| 🟢 **DEXTERITY** | +0.3% increased critical chance, critical damage and attack speed | *each* |
+
+**Every weapon starts somewhere different on the three** — a mace opens on 20 strength, a
+staff on 22 intelligence, an axe on 16 dexterity, and the sword is the only one with a little
+of all three. Four bricks hand them over directly and **any weapon and any favourite can be
+offered all four**: `Ironbone`, `Runescript`, `Quicksilver`, and `The Whole Brick` for all
+three at once.
+
+**What an attribute grants is DERIVED, never written.** A brick that handed you ten strength
+*and* poked +5% into the increased-physical pool would double-count the moment a second source
+of strength turned up, and the pool would keep the bonus after the strength went away. The
+attribute is the pool; the percentage is read off it at the point of use, every rebuild.
+
+> `+0.03 maximum hearts` was a node nobody could feel and nobody could read. Those are
+> `+4% increased maximum hearts` now — a percentage of a pool that grows with the build is
+> both.
+
+**You cannot drop points wherever you like.** A node has to *touch* something you already
+hold, and everything you hold has to trace back to your weapon's door. Every corridor is
+walkable from **both** ends and the map is full of loops: knock out any single cluster and
+the middle is still reachable from all four doors. There is always more than one route —
+each one costs something different.
+
+**Refund is a mode, not a button that eats your tree.** Turn it on and click nodes back one
+at a time, free; a node holding up a branch is refused until you unwind the branch. `CLEAR
+ALL` is there when you want it.
+
+**Zoom and drag.** The map does not fit on a screen at a size you can read it, so scroll to
+zoom toward the cursor, drag to pan, and `FIT` puts the whole thing back. A drag is never
+mistaken for a purchase.
+
+> The first version of this captured the pointer on the `<svg>` to follow a drag, which
+> retargets the pointer — and the `click` that follows is delivered to the `<svg>` and never
+> reaches the node you pressed. **Every node in the tree became unclickable.** `metaplay.js`
+> passed anyway, because it drove the map with a synthetic `MouseEvent` that skipped the
+> pointer handlers entirely: a test that clicks in a way no hand can is a test that proves
+> nothing. It now presses, wobbles two pixels the way a hand does, and releases — and it asks
+> the browser, via `elementFromPoint`, whether anything is sitting on top of any node. That
+> second check found six more nodes hidden under cluster labels.
+
+**A PATCH NEVER COSTS YOU PROGRESS.** The save carries the version of the tree it was spent
+on. Move the tree and every stud, every best wave and every boss stays exactly where it was —
+the allocated points simply come **back**, and the tree screen says so in as many words:
+*THE TREE CHANGED — your N spent points are back. Spend them again.* A respec, never a reset.
+
+Eight colours of ground — WARFARE, PRECISION, SWIFTNESS, AFFLICTION, VITALITY, ARMOUR,
+ELEMENTS, ARCANA — and a gold CORE at the middle. Clusters wear the colour of the ground
+they stand on, so the regions read from across the map even before you have taken anything.
+Twelve notables sit at the centre of a cluster, and twelve **keystones carry a real
+downside**:
+
+| | |
+|---|---|
+| **Glass Bricks** | +35% increased damage — and **30% less maximum hearts** |
+| **Perfect Strike** | +150% increased critical chance — and **half the critical multiplier** |
+| **Slow Death** | +60% increased damage over time — and **25% less increased damage** |
+| **Slow Burn** | every elemental toll lands 10 waves later — and **30% less XP** |
+| **Ironclad Oath** | +50% armour and +10% all resistance — and **20% less move speed** |
+| **Bloodthirst** | +20% lifesteal chance and +6% share — and **no regeneration at all** |
+| **Hoarder** | **double** the studs you bank — and 20% less increased damage |
+| **Scavenger** | chests offer **two** cards — and you can never reroll |
+| **Livewire** | the Storm Brick fires twice as fast and forks — and **nothing you do lingers** |
+| **Vengeance** | +50% damage over time and a deeper wound — and **60% less critical chance** |
+| **Stoneheart** | +35% MORE maximum hearts and +6% all resistance — and **30% less damage** |
+| **Conduit** | +50% elemental damage and +8% all resistance — and **35% less cast speed** |
+
+A tree of pure upgrades is a ratchet; a tree of trade-offs is a set of builds. That is why
+people still open Path of Exile's tree after ten years.
+
+### What a node looks like
+
+**Every node wears a picture**, and the picture is read off the stat rather than typed in
+beside it, so a stat written tomorrow arrives with an icon already on it. They are the same
+drawings the bricks and the upgrade cards use: a flame in the tree and a flame on the card
+that gave it to you are the same flame. Fire is a flame, cold is a snowflake, lightning a
+bolt, chaos a vortex, poison and bleed a bane, spells a rune, crit a target, armour a shield,
+health a heart, speed a boot. A conversion wears the type it *arrives* as, because that is
+the half of it you will spend the rest of the tree scaling.
+
+**The road wears a plus in the colour of the country it runs through** — red, green or blue —
+and nothing else, because that is the whole of what a travel node does. From across the map
+the three countries read as three countries and the highways read as highways.
+
+Rank is the frame: a **notable** is a bigger disc, a **keystone** wears a broken ring round
+it, a **legendary** a whole second one.
+
+### And nothing sits on anything
+
+Four things a player can see, all measured rather than eyeballed, all of them at zero:
+
+- **No two node circles overlap.** The closest pair on the map is 17px clear.
+- **No edge is drawn through a node it does not belong to.** This is most of what *"the nodes
+  are overlapping"* turned out to be — the circles were clear of each other and a line ran
+  straight over them. Twenty-three did. The layout pass shoves a node off any edge it is
+  standing on, and a slip road off the highway picks the node it can reach without crossing
+  another one of that cluster's.
+- **A cluster's blot holds its own nodes and nothing else.** It used to be a fixed circle
+  drawn round where the cluster was *asked* to go; after the layout pass settled it was in
+  the wrong place and the wrong size, and it shaded whatever highway ran past — a stretch of
+  road inside a shop's shadow reads as part of the shop. It is now measured off where the
+  nodes ended up and pulled in clear of everything else, including every other blot.
+- **No edge passes within 20px of a node it does not touch either.** "Through the middle" is
+  the version a computer notices; what a player sees is a line shaving the edge of a circle.
+  The worst on the map clears by 24px.
+- **No two lines cross.** Forty-five pairs did. Most were a lane laid over a cluster that had
+  grown wide enough to reach it; the rest were slip roads chosen before the layout pass settled,
+  so they were aimed at where their two ends were about to stop being. Slip roads are picked
+  last now, against final positions, and a way in can be refused for crossing something.
+- **Every cluster name is readable.** Twenty-four directions are tried at two distances each,
+  and the first that lands on no node and no other name wins. All 98 find one.
+
+Laying all of that out is a node against every other node, forty passes deep. Done the obvious
+way that is 56 million sums between opening the game and seeing the title, and it cost three
+and a half seconds; the neighbours worth shoving against are gathered once off a grid instead,
+and it costs 0.7.
+
+Every one of those is a test, and every one of them was proved to fail against a map broken in
+the matching way — the figures forced back to three nodes, the blot back to a fixed circle, the
+name placed blind, the slip roads picked before the layout pass, the cluster pinned to the dead
+centre of its quad however close the road is.
+
+**Hover anything to read it.** Every node lists exactly what it gives, good and bad, and a
+node whose stat does nothing for the weapon you are on says so rather than selling it to
+you. A running total of everything you have allocated sits beside the map — the panel and
+the hero are read off the same `mods`, so they cannot disagree.
+
+**It does not touch the test bench.** The tree is applied only when a real run starts, so
+every preview and throwaway hero reads the raw numbers. A switch on the tree screen turns it
+off for real runs too.
+
+### Why it survives being rebalanced
+
+Four invariants, and they are the whole reason the save stays alive through future changes:
+
+1. **The save stores node IDs, never the stats they grant.** The effect is rebuilt from the
+   live table every load, so rebalancing a node is free — no migration, no stale saves.
+2. **Points spent are derived**, by summing the live table. Change a cost and every save
+   re-derives. A node that no longer exists costs nothing, so **a deleted node self-refunds**
+   with no migration code at all.
+3. **Points earned are derived from the achievements**, never from a counter. Change *"a
+   point every 10 waves"* to *"every 5"* and everyone's existing progress re-grants
+   retroactively. A counter can never be fixed; a derived value is always right.
+4. **Nodes write into the same pools the bricks write into.** Because every ceiling in this
+   game lives on the derived value rather than on the pool, the tree is bound by every cap —
+   *including caps that do not exist yet*.
+
+A corrupt save resets rather than throwing, and a save claiming nodes it never earned — or
+one it cannot reach from its door — is refunded instead of honoured. That is also why the
+map could be rebuilt from scratch without a line of migration code: every old node ID is
+simply unknown now, so **every existing save got all of its points back to re-spend**.
+
+An older save from before the tree was split by weapon used to be poured into *all four*
+weapons, which made the tree look shared when it never was. It now lands on the one weapon
+that was selected when it was written, and nowhere else.
+
+**And the budget is a test, not a promise.** `meta.js` walks real routes out of the sword's
+own door, spends **exactly** the 60-point ceiling on them — a budget checked on a half-spent
+tree is a budget nobody is ever held to — and fails the build if it beats **×2.60 total
+power**, damage *times* hearts. Damage alone is the wrong measure: a glass build buys damage
+by selling hearts, and a damage-only budget waves it through while punishing an honest one.
+The product cannot be gamed, because a node with no downside raises both halves.
+
+Measured at the full 60-point ceiling: a straight build is **×2.09 damage, ×2.39 power**.
+Glass Bricks is **×2.79 damage but only ×2.39 power** against **×2.27 / ×2.92** for *the same
+walk with the keystone left out* — more damage, less total, which is exactly the trade it
+advertises. (Comparing it against a *different* route list measured the two lists as much as
+it measured the keystone; dropping the one node out of the one walk measures the keystone.)
+
+The ceiling has gone 26 → 34 → 46 → **60** across four passes. On the second the power did not
+move at all, because the tree grew faster than the ceiling did and the extra points went
+into corridor. On the third it moved from ×1.60 to ×1.96 — a fully banked tree is now worth
+roughly twice a bare hero, and that is what thirty stud points and eight boss firsts buy.
+
+---
+
+## Damage conversion
+
+**Live, on every hit in the game.**
+
+**Five types, one direction.** Conversion only ever runs *down* this list, which is the whole
+reason it terminates — there is no arrangement of modifiers that can send damage back round
+the loop:
+
+> **PHYSICAL → LIGHTNING → COLD → FIRE → CHAOS**
+
+**Two forms, and the difference is what happens to the source:**
+
+| | |
+|---|---|
+| `#% of X Converted to Y` | takes the damage **out** of the source type |
+| `Gain #% of X as Extra Y` | leaves the source intact and adds a copy as the new type |
+
+**When it happens:** after flat added damage joins the base, and **before** any increased or
+more multiplier touches it.
+
+**A converted part is scaled by every type it has ever been.** A sword swing converted to
+cold and then to fire keeps increased physical damage for how it was built, *and* gains
+increased cold for the road it took, *and* increased fire for what it arrived as — all three,
+once each. (The global elemental pool is paid once however many elements the chain touched;
+paid per element it would be a free multiplier for anyone converting twice.)
+
+That is why damage travels the pipeline as **parcels** rather than as one number per type.
+Each parcel remembers its own history and splits when it converts. Totals cannot carry that:
+cold arriving from two different chains would have to share one provenance, and whichever one
+you picked would overpay the half that did not take that road.
+
+**What the monster does about it: nothing to do with you.**
+
+- A part that arrives as **cold** pays **cold resistance**, whatever it set out as.
+- **Only the part that is still physical ever meets armour.** Converting a swing to fire is
+  how you walk past a golem's plate, and that is the point of the entire mechanic.
+- A **spell** meets suppression however it has been converted — being cold does not stop it
+  being a spell.
+- **What lingers is not converted again.** A bleed, a burn and a poison were all built the
+  moment they were inflicted; running them back through the pipeline on every tick would
+  convert the same damage over and over.
+
+**How it is wired, and why nothing upstream had to change.** Every number in this game is
+linear in its base — a hit is `base × (1 + increased) × more` — so the *effect* of conversion
+does not depend on the base at all. Run the pipeline on a base of **one** and you have both
+the ratio between the converted hit and the plain one and the share each type ended up with.
+The swing still builds one number the way it always did; `hitEnemy` corrects its size and
+mitigates each share as what it became. A hero who converts nothing takes a one-line fast
+path that is arithmetically identical to the code that was there before.
+
+**Fifteen bricks write it**, and seven skill-tree nodes do too. Every legal pair in the
+chain has something behind it, in both forms:
+
+| Converted — takes the damage out of the source | |
+|---|---|
+| **Emberforge** / **Rimeblade** / **Galvanise** | physical → fire, cold, lightning |
+| **Stormfrost** / **Fulminate** | lightning → cold, cold → fire |
+| **Rotgale** / **The Unmaking** | cold → chaos, fire → chaos |
+
+| Gained as extra — leaves the source alone | |
+|---|---|
+| **Brand Iron** / **Hoarfrost** / **Static Charge** | physical → fire, cold, lightning |
+| **Catalyst** | cold → fire |
+| **Creeping Blight** / **Sour Ending** | physical → chaos, fire → chaos |
+
+| And the two that scale it | |
+|---|---|
+| **Entropy** | increased chaos damage — offered once you convert anything |
+| **Sourproof** | chaos resistance, which nothing else in the game gives you |
+
+Stack Stormfrost under Fulminate and a storm bolt arrives as fire carrying increased
+lightning, increased cold *and* increased fire.
+
+**Over-conversion is shared, not compounded.** Asking for 80% to cold *and* 80% to fire gets
+you half of each, never a hero dealing 160% of their own damage.
+
+### You are only offered conversions you can use
+
+**A conversion out of a type you have no source of is a card that does nothing**, and the deck
+was full of them. A sword hero with no fire anywhere was shown FIRE TO CHAOS; a staff hero
+carrying Bomb Volley — which deals *physical* — was refused every physical conversion in the
+game, because the gate was the crude one, *"is this a caster"*.
+
+What a hero can deal is now read off their kit: **the weapon in their hands, every spell in
+their book**, and then **anything they already turn one of those into**. The weapon, because a
+staff casts fire and a sword swings physical. The spellbook, because the Storm Brick is
+lightning, Block Freeze is cold and Brickbane is chaos whatever you are holding. And the
+conversions already bought, because *that is how a chain gets built*: take Brand Iron and you
+now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a moment earlier.
+
+A mace running Slam of the Elements is credited with all three, because it cycles through
+them.
+
+### Accuracy and evasion
+
+**A flat dodge chance is a number you cannot answer.** A shade evaded 32% of your hits and
+nothing in the game changed that — it was either irrelevant or infuriating. PoE's shape is two
+ratings pulling against each other, so investing in either is real and neither ever wins:
+
+```
+chance to hit = accuracy / (accuracy + (evasion / 4)^0.8)
+```
+
+floored at **15%**, because a fight you cannot win by any margin is not a fight.
+
+**It is an attack thing.** A swing has to find a body that is moving; a fireball arrives where
+it was aimed. Accuracy is checked on attacks and never on spells, which is what makes it a melee
+stat and gives the staff a reason not to want it. A damage-over-time tick never re-rolls either
+— the wound was landed when it was opened.
+
+| | accuracy | vs an ordinary body | vs a hard dodger |
+|---|--:|--:|--:|
+| **SWORD** | 370 | 94.2% | 87.0% |
+| **AXE** | 310 | 93.1% | 84.9% |
+| **STAFF** | 236 | 91.2% | 81.1% |
+| **MACE** | 214 | 90.3% | 79.5% |
+
+The sword is the precise one. The mace is a lump of iron on a stick: it hits hardest and least
+often, and misses one swing in five against something quick unless it buys accuracy.
+
+**A monster's two ratings are derived, not authored.** The roster is forty rows and hand-writing
+a number into each is forty chances to forget one — and a stat nobody can predict is a stat
+nobody plays around. A body dodges because it is **fast** and **small**: a skeleton slips a
+swing, a stone golem does not, and `evade` on a row is the shade's own gift on top of that.
+
+**And nothing here scales with the wave.** PoE's accuracy is a treadmill — monster evasion climbs
+with level, so you buy accuracy every ten levels to stand still. A wave-50 monster here is
+already dangerous for three reasons; it does not need to also be harder to hit. A monster's
+evasion is a property of *what it is*, so accuracy is a choice made once rather than a tax.
+
+**Evasion is the defence you choose.** Armour is the one you begin with; evasion starts at
+**zero**, so a hero who never buys any is never missed by anything — exactly as it was before
+this existed. It does nothing against a **spell**: armour and suppression are what stand in
+front of those.
+
+**Dexterity is the attribute for both**, on top of everything it already did: **+2 accuracy** and
+**+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
+busiest of the three now, which is what it is in the game this borrows from.
+
+### Buffs on the left, ailments on the right
+
+One list of everything bad was already in the corner doing its job. What was missing was the
+other half: a hero carrying three charges, a rage well and a fortune had no way to see any of it
+except the chevrons over their own head, which say *how many* and never what they are worth.
+
+Two columns now — **BUFFS** on the left, where your eye already goes for your own health bar, and
+**AILMENTS** on the right, where the thing happening *to* you belongs. Every row says what the
+stack is actually paying (`FRENZY ×3 · +12% MORE dmg`), and a row too long for its pill drops its
+extras one at a time rather than running off the end. Both columns are built from data — the
+stack table, the curse table, the element list — so a fourth charge arrives in here by existing.
+
+### How big was the hit?
+
+**Three of the five ailments already scaled with the hit and two did not.** A bleed ticks for a
+share of the wound that opened it, a burn for a share of the fire that lit it, a poison for a
+share of the chaos that landed — hit harder, they hurt more, and that took care of itself.
+**CHILL and SHOCK are counters.** A one-damage orbit tick chilled a body exactly as hard as a
+mace slam did, which meant the two ailments that most want you to hit hard were the two that
+could not tell whether you had.
+
+PoE's rule is that the *magnitude* of a chill or a shock is the hit measured against the body's
+life. That is the rule here, in the currency this game already speaks: **the size of the hit
+decides how many stacks it lays.**
+
+| the hit, as a share of the body's pool | what it leaves |
+|---|---|
+| under **1.2%** | nothing at all |
+| between | 1 or 2 stacks, scaling |
+| **10%** or more | all **3** stacks in one blow |
+
+**A boss's pool is not its life.** A wave-50 boss holds a quarter of a million health; measured
+against that, nothing a hero can swing would ever be one per cent of it and bosses would be
+flatly immune to two of the five ailments — the opposite of what a storm build wants from the
+fight it was built for. A boss's ailment pool is **5%** of its life, so the numbers a late hero
+actually deals still read as big hits.
+
+**Three spells still print their own certainty.** Block Freeze exists to chill; a threshold that
+could stop it doing so would be a rule eating a spell. Fireball, Block Freeze and Slam of the
+Elements always land at least one stack — how many *more* than one still depends on how hard
+they hit.
+
+**Increased magnitude** is the stat you buy to make a smaller blow count. It does not change the
+ceiling, it changes how fast you reach it — the mace's road, and the slow-heavy build's.
+
+### Exposure — *resistance taken off*
+
+**Not an ailment, and the difference is the whole point.** An ailment is damage or a debuff the
+body carries. **EXPOSURE is resistance taken OFF**, which means it sits *outside* your own
+increased-damage pool and outside the MORE ceiling with it. A build that has already bought
+every increase there is can still get more out of a fire hit by making the body worse at
+surviving fire.
+
+> **Solvent** — *+X% chance for a hit to EXPOSE the element it arrived as: −22% of that
+> resistance for 6 seconds.*
+
+It is rolled **per element that landed**, so a hit half converted to fire exposes fire at half
+the chance — the same share rule every ailment follows. It does **not** stack with itself (a
+stacking resistance strip is a hole with no bottom), it *does* stack with the brands a body
+earns, and it can drag a resistance below zero, which is a weakness and multiplies up.
+
+Nothing has it until you buy it: `exposeChance` starts at zero, exactly like the one ailment
+chance.
+
+### The three charges
+
+PoE's frenzy, power and endurance, and they are the reason the stack table was made abstract
+two passes ago: **three whole mechanics arrive as three rows** and nothing else in the file
+learns that they exist.
+
+| | earned by | worth, each |
+|---|---|---|
+| 🟢 **FRENZY** | killing something | +4% attack **and** cast speed, +4% MORE damage |
+| 🟣 **POWER** | a critical strike | +30% *increased* critical chance, into the one pool |
+| 🟠 **ENDURANCE** | being hit | 5% **less** damage taken, +4% to every elemental resistance |
+
+Three each to start, falling off **one every 4 seconds** — so dropping out of a fight costs you
+the ramp gradually instead of all at once.
+
+**Each is earned by doing a different thing,** so which one a build runs on says what that build
+does — and a build that does all three gets all three. Like rage, **nobody gains them by
+default**: the ceiling is three and the generation is zero until a brick or a node hands it
+over. That is what keeps them a build rather than a thing that happens to everyone.
+
+**A generator stops being offered at the bar it fills.** A card that fills a three-deep bar three
+at a time has nothing left to sell, and one that fills it *four* at a time is selling you a point
+that falls on the floor — but `Set Jaw` had no gate at all and kept turning up for a hero who
+could not use another. You may buy up to what the bar holds and not one past it, and **raising
+the bar unlocks the card again**, which is exactly the loop those two cards should make together.
+The same rule now covers Warpath, Spite and the two that raise a ceiling.
+
+### Six beginnings
+
+**Four weapons is not a symmetrical number.** Red held two doors, green one and blue one, so the
+map had a crowded side and a bare one — and every door sat inside a 670px circle round the
+middle, which is why the start of the tree read as one tangle rather than six places you could
+begin.
+
+Two more doors, one in green and one in blue, and the circle they stand on is pushed out to
+**900px**: six doors, two to a country, none of them within **590px** of another. Two of them
+are **not finished** — there is no bow and no wand in the game yet — so they are drawn hollow
+and dashed, they say so when you hover them, and they carry one short spur each instead of a
+full fan. A door that is *coming* is worth more on the map than a gap where one should be: it
+tells you the shape of the thing, which is the whole point of a tree you can see all of at once.
+
+**Three ways out of a door, not four.** Every exit from a door inside the ring points outward,
+so a fourth was one way out with three spares — twelve nodes inside one 50-degree slice, in the
+one part of the map that could least afford them.
+
+**Longer roads with fewer stops.** A road is worth walking when the jump between one decision
+and the next is long; six attribute nodes shoulder to shoulder is a queue, and a queue is a toll.
+`LANE_STEP` went from **392** to **560** and the cap from five stops to four. The map went from
+1,200 nodes to 983 and the median gap between stops is **456px**, so skipping a block of them to
+reach something is a real choice.
+
+**And no node prints a number nobody can read.** `+0.04 flat physical damage` is a real 4% on a
+weapon whose base is one, and it reads like a rounding error — the *unit* was the problem, not
+the value. No tree node prints a raw figure under **0.2** now; where the honest value is smaller
+it is sold as a percentage instead, which is the same strength in a unit you can act on. (A card
+may still hand over a small flat number: by then you have a built hero to add it to, and the card
+says what it does to your actual damage.)
+
+### The card comes to you
+
+Reading a node meant looking away to a panel 900px to the right and then back to find where you
+were — twice per node, on a map with a thousand of them. **The card follows the cursor** now, and
+flips to the other side rather than running off the edge of the window. The panel keeps what it
+is actually good at: what you have spent, and what the tree is giving you.
+
+**And the three country washes are a toggle, off by default.** Three coloured wedges and three
+dashed borders across the whole map is a lot of ink for a thing you need to know once. `COUNTRIES`
+turns them on, and it is remembered.
+
+### Five more sentences in the tree
+
+Every one of these is a **trade**, and both halves are real. That is the only thing that makes a
+keystone worth the walk: a node that is simply good is a big minor node, and the tree already
+has plenty of those.
+
+> **The Long Dying** — *what you kill keeps killing; nothing you touch dies fast.*
+> Burns, poisons and wounds spread from a corpse to everything within 210px, at 60% strength.
+> **−25% increased damage.**
+
+That one is the answer to *"ailment proliferation is too strong to just add"*: it turns three
+single-target damage-over-time builds into wave clear in one sentence, so it costs a walk to the
+edge of the map and a flat quarter off everything you hit directly.
+
+> **Blood and Salt** — *your criticals stop hitting harder and start leaving everything.*
+> Every critical inflicts every ailment its damage can. **−55% critical multiplier.**
+
+> **The Overload** — *you cannot crit at all, and everything you do is far bigger.*
+> **+32% MORE damage, +25% increased elemental** — and no critical strikes, from any source,
+> including the axe's guaranteed backswing.
+
+> **The Deep Cold** — *every chill and shock lands full force, and nothing you leave burns.*
+> Ignores the magnitude scale entirely. **−60% increased damage over time.**
+
+> **Unrelenting** — *every charge, by every means — and a body made of glass.*
+> All three generations at once, +2 to every ceiling. **−28% maximum hearts.**
+
+And **ten new notables**, spread so that each country gets what it was missing: the three
+charges one per country (red takes hits, green kills, blue picks its moment), two exposure
+clusters, two about how hard an ailment lands, a shared charge-capacity node, and two filling
+plain gaps — red had no node about ending a fight and green had none about surviving one.
+
+### Lightning is yellow
+
+**A damage type has one colour, and everything that deals it uses that colour.** The Storm
+Brick did not. It was a **blue** 2×2 with navy studs, throwing **pale blue-white** bolts —
+which is the colour this game uses for **COLD** — while the damage number floating off the
+body it hit came up in `CONV_COL.shock` yellow. The one spell that only ever deals lightning
+was the wrong element on screen.
+
+The brick body, its studs, its charge glow, its spark and the bolt itself all read off
+`CONV_COL.shock` now. And the test that checks it does not stop at the colour table: it samples
+the **pixels the canvas actually carries** around a hovering brick and along a drawn bolt,
+because a palette nothing draws with is a palette that is wrong and passing.
+
+### The options screen
+
+**Two doors, one screen.** `OPTIONS` sits on the title plate next to the music and sound
+buttons, and on the pause menu behind `ESC`. It never changes the game's state: a paused run
+stays paused underneath it and the title stays a title, which is why the same screen can be
+opened from either. `ESC` closes it — and *only* it, so closing the options over a paused run
+does not also un-pause the run. Every switch is written to disk the moment you click it.
+
+| switch | what it does |
+|---|---|
+| **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
+| **SOUND** | every hit, pickup, cast and smash |
+| **DAMAGE NUMBERS** | the figures that float off a monster when you hit it |
+| **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
+| **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
+
+**DAMAGE NUMBERS turns off the numbers and nothing else.** Everything else that floats off a
+body is an *event* worth reading — `FROZEN SOLID`, a curse landing, `LEVEL UP!` — and a player
+who wanted a quieter screen in a wave of sixty did not ask to stop being told those. So the
+switch sits on the one call the outgoing damage figures make, not on the floater system. The
+combat log still counts every point either way.
+
+**RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
+best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
+every difficulty** — "my character" is all of them, and half a wipe is worse than none. What it
+does *not* touch is your settings: a preference is not progress.
+
+### Every ailment, one rule
+
+**An ailment is a property of the damage TYPE, not of the spell that threw it.** That was true
+of exactly one of the five. The rest were each written into their own call site, and what you
+got was arbitrary:
+
+| | before | now |
+|---|---|---|
+| **SHOCK** | only off the Storm Brick, from a chance called *"chance for a storm bolt to SHOCK"* | any hit that lands as lightning |
+| **IGNITE** | only off the staff's bolt and the ember | any hit that lands as fire |
+| **CHILL** | only off Block Freeze | any hit that lands as cold |
+| **BLEED** | only off a *melee* source, so a physical spell never opened one | any **attack** that lands as physical |
+| **POISON** | rolled off how much of the hit arrived as chaos, wherever it came from | unchanged — this one was always right |
+
+A hero who had converted a whole build into lightning could not shock anything with any of it.
+Now every one of them is poison's rule: the chance rides on the share of the hit that arrived
+as that type, and the ailment lands on the part of the damage that actually *was* that type.
+
+#### What you start with is nothing
+
+| damage type | ailment | base chance | on a critical |
+|---|---|---|---|
+| 🩸 Physical | BLEED | 0% | 0% — *and attacks only* |
+| 🔥 Fire | IGNITE | 0% | **100%** |
+| ❄️ Cold | CHILL | 0% | **100%** |
+| ⚡ Lightning | SHOCK | 0% | **100%** |
+| ☠️ Chaos | POISON | 0% | 0% |
+
+Every base chance is zero. Chaos used to carry a free **35%** dose, which made it the one
+damage type that never had to pay for its ailment — it pays now. What turns any of them on is
+**Afflict**: one stat, added to all five, capped at **75%**. Because it is one stat it works on
+whatever your damage has *become*, which is the whole point.
+
+**What a critical buys is the three ELEMENTS, and only those.** A fire crit always ignites, a
+cold crit always chills, a lightning crit always shocks. It does **not** open a wound and it
+does **not** leave a dose: BLEED and POISON are bought, or they do not happen. A crit used to
+carry its own 50% bleed, which quietly made the crit tree the bleed tree as well.
+
+**BLEED is the only one that cares where the hit came from.** It is an *attack* ailment: a
+swing, its whirl, the vortex, bladestorm's blades and the slam can cut. An orbiting brick that
+has bought physical damage still hits for physical — it just does not cut.
+
+**Three spells print their own 100%,** the way a PoE gem does, and this is written on the
+character sheet rather than hidden in the code: **Fireball** always ignites, **Block Freeze**
+always chills (Absolute Zero upgrades that chill into a stun, so without it the legendary would
+do nothing), and **Slam of the Elements** leaves all three. Nothing else does — not the storm
+brick, and not a converted swing.
+
+A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangles at **×1.9**.
+
+#### The bug this fixes
+
+> *"I play with axe now and 50% of my physical damage is converted to fire — why don't I ignite
+> the boss when I'm hitting him?"*
+
+Because the chance was **zero**. An axe swing reports as a weapon source, not as a fireball, so
+it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever Afflict you had bought (0) — nothing,
+at any conversion. Now that same axe ignites on every crit, on the fire half of the hit, and at
+your bought chance the rest of the time. Half the hit, half the chance.
+
+### An ailment belongs to what landed
+
+**Convert every point of your fire into chaos and your fireball sets nothing alight.** This
+is the half of conversion that is easy to forget to write, and for a while it was missing:
+the bolt called for an ignite because it was a *fireball*, not because any fire had actually
+arrived — and a burn ticks as **fire**, down a path that deliberately skips the pipeline so
+a wound is not re-converted on every tick. A build that had converted all of its fire away
+was still dealing fire.
+
+Every ailment now rides on the share of the hit that actually arrived as its type, which is
+the rule the chaos poison always followed:
+
+| | |
+|---|---|
+| **Ignite** | the fire that landed — half converted is half the burn, all converted is none |
+| **Chill / freeze** | the cold that landed |
+| **Shock** | the lightning that landed |
+| **Bleed** | the **physical** that landed — a swing converted entirely to fire opens no wound |
+| **Poison** | the chaos that landed (this one was always right) |
+
+A magnitude simply scales. A count of *stacks* cannot be fractional, so the remainder is
+rolled — half a chill is one chill half the time, which is unbiased and does not quietly
+round a 40% conversion away to nothing.
+
+### Chaos
+
+**Neither physical nor elemental**, and the rules follow from exactly that:
+
+- **Armour never stops it.** Armour is a physical mitigation and chaos is not physical.
+- **It has a resistance of its own**, and almost nothing in the roster carries any — but it
+  *is* a resistance, not a hole in the rules.
+- **Nothing that says "to every elemental resistance" covers it.** Not a brick, not a tree
+  node, and not a curse that sunders your elemental resistances either. Chaos resistance is
+  bought on its own or not at all.
+- **It pays its own increase pool.** Increased elemental damage does nothing for it.
+- **Poison is chaos damage over time**, the way bleed is physical over time and burn is fire.
+  It reads increased chaos damage as well as increased damage over time, it pays the
+  monster's chaos resistance, and the dose *you* are carrying is reduced by yours.
+- **A hit carrying chaos can leave a dose behind**, on odds that ride on how much of the hit
+  actually was chaos — the way physical can open a bleed.
+
+Which makes chaos the answer to a monster that resists everything else, and chaos resistance
+the answer to a blightspitter.
+
+**The character sheet grows a CONVERSION card** the moment you convert anything — one row
+per type showing what share of an ordinary hit arrives as it and what it meets on the way in,
+plus the multiplier conversion puts on the size of the hit. It reads the *same* split the hit
+itself reads, so if the card and the monster ever disagree you can see which one is lying.
+The exhaustive EVERY STAT list below it carries the same five rows, always.
+
+`conv.js` proves the pipeline on its own — an uphill pair is refused, a hero with no table is
+the safest path through rather than the one that throws, and the worst case (every legal
+conversion *and* every gain-as-extra at once) terminates in under a millisecond.
+`conv2.js` puts a hero in front of a monster and measures what actually comes off its health
+bar: armour walked past, the right resistance paid, half-converted is half-mitigated, a real
+swing arriving at exactly `base × every pool that should apply to it`, gain-as-extra leaving
+the source alone, chaos resisted by nothing, chaos leaving doses, a drain **not** re-converted,
+and the sheet agreeing with the hit. Sixteen break-builds between them, each caught by the
+assertion meant for it.
+
+---
+
+## The main menu
+
+**Every stat, and which layer put it there.** The left panel used to show nine opening
+numbers and a percentage against "no favourite", which answered one question out of three: a
+hero is a **bare hand + a weapon + a favourite + a skill tree**, and the tree was invisible on
+this screen entirely.
+
+Four heroes are now stood up from scratch and **every probe on the character sheet** is read
+off each of them. The difference between one layer and the next *is* that layer's
+contribution, printed beside the finished number as a chip:
+
+> **Bolt damage 3.18** `W+2.64` `T+0.54`
+
+Nothing is estimated, nothing is duplicated, and a stat nobody has thought of yet appears on
+this panel the moment somebody adds a probe for it. The panel scrolls, its group headings
+stick while it does, and every row explains itself on hover.
+
+> **No Favourite is a favourite.** It hands out +5% increased damage, a heart, ten armour and
+> more — so a "weapon only" layer that quietly applied it made every real favourite look like
+> it *cost* you five per cent. Which it does, and which is exactly what the `F` chip should
+> say out loud rather than hide inside the `W` one.
+
+**ABILITIES, not ability floors.** The panel lists what you actually open with — your weapon's
+attack and every spell your favourite grants — with its damage beside it, and hovering one
+opens its full damage panel. The floors moved down into CEILINGS where they belong.
+
+**The sword is not the yardstick any more.** Hovering it used to show nothing at all, because
+every weapon was written against it. Everything is written against **BARE HANDS** now — a
+level-1 hero holding nothing, every multiplier 1 and every defensive perk zero — so the sword
+reads −32% swing time, +40% reach, +50% crit multiplier and +40% less damage taken like any
+other choice.
+
+And the tooltips **fit**. An absolutely positioned tip anchored above its row has no idea
+where the top of the window is, so the mace's and the staff's ran off the screen. They use the
+same fixed, viewport-clamped element the stat rows use, drop below the row when there is no
+room above, and scroll when the window is shorter than they are.
+
+**The skill tree button says which number it is showing, and whose.** It printed points
+*left*, so a hero who had spent all twelve read `SKILL TREE — 0 POINTS` — identical to one who
+had never earned any. And it was refreshed when the **difficulty** changed but not when the
+**weapon** did, so it went on showing the last weapon's count. Twelve trees, one label, and no
+way to tell them apart. It now reads `SKILL TREE — 4 TO PLACE · 15 spent · STAFF · HARD`.
+
+**`Ember Core` was never a fire card.** `flatElem` is read by the bolt, by Block Freeze and by
+the Storm Brick alike, so it has always been the single best upgrade a frost build can take —
+and it was called Ember Core, wore a flame, and said *"to your fire bolt"*. Being handed an
+ember after picking Block Freeze as your favourite was a card lying about itself, not a bad
+roll. It is **`Elemental Core`** now and says what it feeds.
+
+---
+
+## Sound
+
+**Music and sound are separate switches, both on the menu, both remembered.** `M` still
+takes everything down at once — which is what you want when somebody walks into the room,
+and useless when it is only the music you are tired of. The buttons say `MUSIC: OFF` the
+moment `M` mutes, so the menu never disagrees with what you can hear.
+
+A silent channel **builds no voices**: turning the music off stops the scheduler rather than
+turning its volume down, and the scheduler's clock is caught up when it comes back — otherwise
+ten silent minutes return as ten minutes of notes at once.
+
+**`STUD OVERDRIVE` is gone.** 150 bpm, a square-wave lead and a hat on every sixteenth, and
+it played for every wave from fifteen to the end of the run; ten minutes of it was exhausting.
+**`THE DEEP FOUNDRY`** takes its place and makes the opposite bet: 116 bpm, slower than the
+track before it, a descending D-minor walk under a lead that leaves gaps, and the weight in
+the low end rather than in the tempo. Something you can hear for an hour.
+
+---
+
 ## The world gets colder
 
 A hero who ignored resistance entirely used to be perfectly fine at wave 50, because
@@ -1268,6 +2429,33 @@ what it costs the wave budget, and what it pays out. The at-this-wave numbers ru
 the same wave curve, monster level and difficulty the spawner uses, so they are what you
 would actually meet rather than the table's raw base.
 
+### Every number is the colour of what it is
+
+**One palette, read everywhere a number is drawn.** White is plain physical, and every type
+owns a colour of its own — so a converted hit wears the colour of what it *arrived* as, and
+you can watch a conversion work without opening a menu and doing arithmetic.
+
+| | | | |
+|---|---|---|---|
+| ⬜ **Physical** | `#ffffff` | 🟥 **Fire** | `#ff4a3c` |
+| 🟦 **Cold** | `#6fb7ff` | 🟪 **Chaos** | `#b46aff` |
+| 🟨 **Lightning** | `#ffe23d` | 🟩 **Lifesteal** | `#8ede4a` |
+
+A wound keeps a dimmer relative of the type that opened it — **dark red** for a bleed,
+**orange** for a burn, **dark green** for the rot — because a tick is a different *kind* of
+event from a blow and reads better for being quieter.
+
+**A critical is the same colour and simply bigger.** Gold for every critical told you it was
+a critical and nothing else; what a hit is *made of* is the thing worth reading at a glance.
+
+**A hit made of two things says two numbers.** Twenty per cent of your physical gained as
+extra cold is a real part of every swing, and rolled into one figure in the colour of the
+bigger half it was invisible everywhere but a chart in a panel — so a 137 swing with that
+brick now reads `137` in white with `27.4` in blue stacked above it. Biggest first, each one
+a little smaller than the one below. A part too small to read stays folded into the largest
+rather than littering the screen, and whatever was folded in is *added back* to it, so the
+figures on the screen always total the damage the monster actually took.
+
 ### The DPS tab — <kbd>L</kbd>, then the fourth tab
 
 The run totals answer *"what did the most damage all run"*, which flatters whatever you
@@ -1288,6 +2476,23 @@ the array and silently writes a *property* rather than a slot — a roll that lo
 cleared thirty buckets and cleared two. Sources past the ninth fold into one `+N more` row rather than being dropped,
 so the rows still add up to the total printed above.
 
+### The TYPES tab — *what am I actually dealing?*
+
+The same chart asked a different question. **DPS** says which of your spells is doing the
+work; **TYPES** says what you are actually dealing — and the moment a conversion is in play
+those stop being the same question. A staff running 45% fire-to-chaos shows one `fire`
+source on the DPS tab and three rows on this one, because the fireball's chaos half also
+leaves a dose behind.
+
+Same buckets, same rolling minute, same sparklines. The two charts always total the same
+damage; they are two readings of one number.
+
+### Clearing it
+
+**CLEAR**, in the panel's title row, wipes every tab, both sets of totals and all sixty
+seconds of both charts. Half of reading a record is being able to start a fresh one: pull a
+build together, wipe it, fight one wave and see what *that* wave did.
+
 ---
 
 ## Controls
@@ -1301,7 +2506,7 @@ so the rows still add up to the total printed above.
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
-| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** |
+| <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
 | <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
