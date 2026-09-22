@@ -1517,16 +1517,15 @@ const MELEE_SOURCES = new Set(['sword','storm','vortex','slam']);
    whole slam, in fireSlam's tally. */
 const LEECH_SOURCES = new Set(['sword']);
 /* BLEED — physical damage over time off a melee hit, Path of Exile's rules.
-   An ordinary swing never opens one on its own: the chance starts at nothing and
-   is a brick you buy. A CRITICAL swing opens one half the time for free, which
-   is what ties the mechanic to the crit tree instead of making it a third
-   parallel build. The wound ticks for a share of the hit that made it, it reads
+   No swing opens one on its own, critical or not: BLEED is the one ailment a
+   critical does NOT hand you, so the chance is always a brick you buy. What a
+   crit does buy is the three elemental ailments, which is where the crit tree
+   points now. The wound ticks for a share of the hit that made it, it reads
    the one increased-damage-over-time pool like every other lingering damage, and
    it tears worse on a body that keeps running -- stand still and it half closes. */
 const BLEED_T          = 11;     /* how long one wound runs */
 const BLEED_SHARE_BASE = 0.40;   /* of the opening hit, per second */
 const BLEED_SHARE_MAX  = 0.70;
-const BLEED_CRIT_BASE  = 0.50;   /* a crit's own chance to open one */
 /* how far the one ailment chance can be bought. Not 100%: a build that ignites,
    chills, shocks, bleeds and poisons EVERY hit is not a build, it is a status
    bar, and the four ailments that stack want a reason to pick between them. */
@@ -1754,8 +1753,8 @@ const CONV_RESIST = { shock:'shock', frost:'frost', fire:'fire', chaos:'chaos' }
    CONVERTED because it never has to give anything up. */
 const CONV_CARD = [0.10, 0.15, 0.20, 0.30, 0.40];   /* CONVERTED, by rarity */
 const GAIN_CARD = [0.06, 0.10, 0.15, 0.22, 0.30];   /* GAIN AS EXTRA, by rarity */
-/* CHAOS LEAVES A DOSE, the way physical opens a wound. */
-const CHAOS_POISON   = 0.35;   /* chance, at a hit that is ALL chaos */
+/* CHAOS LEAVES A DOSE, the way physical opens a wound -- and like a wound, only
+   if you bought the chance. A critical does not hand you this one either. */
 const CHAOS_POISON_S = 0.30;   /* of the chaos that landed, per second */
 const CHAOS_POISON_T = 4;
 /* WHICH ELEMENT A SOURCE IS. The hero has had elemental resistance since the
@@ -1801,6 +1800,11 @@ function enemyRes(e, el){
    number the way it always did; this corrects its size and tells hitEnemy what
    the number is MADE OF, which is the only thing mitigation needs to know. */
 function convFrom(source){ return SOURCE_ELEM[source] || 'phys'; }
+/* AN ATTACK, not a spell. A bare source is the weapon's own swing. */
+function isAttack(source){
+  return source === undefined || MELEE_SOURCES.has(source)
+      || source === 'slamfire' || source === 'slamfrost' || source === 'slamshock';
+}
 function convKind(source){
   return SPELL_SOURCES.has(source) || source === 'fire' || source === 'frost'
       || source === 'burn' || source === 'freeze' ? 'spell' : 'melee';
@@ -1984,16 +1988,28 @@ function rageMore(ent){ return 1 + stackMod('moreDmg', ent); }
    arrived as, the chance rides on that type's share, and the ailment lands on
    the part of the damage that actually was that type.
 
-   WHAT YOU START WITH. Nothing is quietly buffed: the base chance is zero for
-   four of the five, chaos keeps the dose it always had, and a critical still
-   opens a wound half the time. What turns the rest on is a stat you buy, and
-   because it is ONE stat it works on whatever your damage has become. */
-const AIL_BASE = { phys:0, frost:0, fire:0, shock:0, chaos:CHAOS_POISON };
-const AIL_CRIT = { phys:BLEED_CRIT_BASE, frost:0, fire:0, shock:0, chaos:0 };
-/* ...except the sources that ARE their element. A fireball that did not set
-   things alight would not be a fireball, Block Freeze without the chill is a
-   damage spell with a silly name, and a mace that paid a legendary for SLAM OF
-   THE ELEMENTS bought the ailments, not a chance at them. */
+   WHAT YOU START WITH IS NOTHING. Every base chance is zero -- physical, fire,
+   cold, lightning and chaos alike. An ordinary hit that is half fire leaves no
+   ignite at all until you have bought a chance, and the stat you buy is ONE
+   stat, so it works on whatever your damage has become.
+
+   WHAT A CRITICAL BUYS is the three ELEMENTS, and only those: a fire crit always
+   ignites, a cold crit always chills, a lightning crit always shocks. It does
+   NOT open a wound and it does NOT leave a dose -- BLEED and POISON are bought
+   or they do not happen, which is what keeps the crit tree from quietly being
+   the bleed tree and the chaos tree as well. */
+const AIL_BASE = { phys:0, frost:0, fire:0, shock:0, chaos:0 };
+const AIL_CRIT = { phys:0, frost:1, fire:1, shock:1, chaos:0 };
+/* THREE SPELLS PRINT THEIR OWN 100%, the way a PoE gem does. This is not a
+   hidden exception to the table above -- it is a property of those spells, it is
+   written on their cards and on the character sheet, and it is the only thing in
+   the game that overrides the table. A fireball that did not set things alight
+   would not be a fireball, Block Freeze without the chill is a damage spell with
+   a silly name (Absolute Zero upgrades that chill into a stun, so without it the
+   legendary would do nothing), and a mace that paid a legendary for SLAM OF THE
+   ELEMENTS bought the ailments, not a chance at them.
+   Note what is NOT in here: the storm brick, which is exactly the bug that
+   started all of this, and any weapon swing, however converted. */
 const AIL_NATIVE = new Set(['fire', 'ember', 'frost', 'freeze',
                             'slamfire', 'slamfrost', 'slamshock']);
 const AIL_NAME = { phys:'BLEED', frost:'CHILL', fire:'IGNITE', shock:'SHOCK', chaos:'POISON' };
@@ -2001,12 +2017,34 @@ function ailChanceOf(type, source, crit){
   const p = player;
   if(!p) return 0;
   if(AIL_NATIVE.has(source) && convFrom(source) === type) return 1;
+  /* BLEED IS AN ATTACK AILMENT. Four of the five roll off a damage type alone,
+     but a wound is a thing an edge does to a body: only a swing, its whirl, the
+     vortex, bladestorm's blades and the slam can open one. An orbiting brick
+     that has bought physical damage still hits for physical -- it just does not
+     cut. (A bare source is the weapon's own swing.) */
+  if(type === 'phys' && !isAttack(source)) return 0;
   let ch = (AIL_BASE[type] || 0) + (crit ? (AIL_CRIT[type] || 0) : 0) + (p.ailChance || 0);
   /* a wound is still the weapon's: an axe cuts clean and barely bleeds, a mace
      mangles. Everything else in here is the build's, not the weapon's. */
   if(type === 'phys') ch += (p.bleedChance || 0);
   if(type === 'phys' && (source === undefined || source === 'sword')) ch *= weapon.bleed;
   return clamp(ch, 0, 1);
+}
+/* The same five rows the character sheet shows, built from the one table above so
+   a number on the sheet is the number the hit rolls against. */
+function ailTableText(){
+  const rows = [['phys','Physical','BLEED'], ['fire','Fire','IGNITE'],
+                ['frost','Cold','CHILL'],    ['shock','Lightning','SHOCK'],
+                ['chaos','Chaos','POISON']];
+  return rows.map(([t, el, name])=>{
+    const hit  = Math.round(ailChanceOf(t, undefined, false)*100);
+    const crit = Math.round(ailChanceOf(t, undefined, true)*100);
+    const tail = t === 'phys' ? '   (attacks only)' : '';
+    /* no column padding: the tip is not a monospaced font, so padEnd lines the
+       numbers up in the source and nowhere a player can see */
+    return '  ' + el + ' / ' + name + ' — ' + hit + '% on a hit, '
+         + crit + '% on a crit' + tail;
+  }).join('\n') + '\n';
 }
 /* ONE CALL, from one place in hitEnemy, so a source added tomorrow inherits
    every ailment by arriving as a damage type — which is the only thing an
@@ -2818,9 +2856,10 @@ function newPlayer(){
     freeze:{ n:0, r:128, dur:4.5, rate:FREEZE_RATE_BASE, cd:1.2, stun:0, flat:0 },
     bane:{ n:0, dmg:2, rate:BANE_RATE_BASE, cd:1.5, r:BANE_R_BASE, arc:BANE_ARC_BASE,
            dot:BANE_DOT_BASE, dotT:BANE_DOT_T, stacks:1, burst:0 },
-    /* BLEED. chanceFlat is added to every melee hit and stacks on top of the
-       crit's own 50%; shareFlat deepens the wound itself. Both are rebuilt by
-       syncStats like everything else -- no card writes the derived number. */
+    /* BLEED. chanceFlat is added to every ATTACK and is the only thing that
+       opens a wound -- a critical buys the three elemental ailments, never this
+       one. shareFlat deepens the wound itself. Both are rebuilt by syncStats
+       like everything else -- no card writes the derived number. */
     bleedChanceFlat:0, bleedShareFlat:0, bleedChance:0, bleedShare:BLEED_SHARE_BASE,
     /* ONE CHANCE, EVERY AILMENT. It is added to all five, so what it does for
        you depends on what your damage has become rather than on which spell you
@@ -4109,19 +4148,12 @@ function baneStrike(e, dmg, dir, kb, dps, dur, stacks){
   for(let i=0;i<n;i++) poisonEnemy(e, dps, dur);
   hitEnemy(e, dmg, dir, kb, 'bane', {spin:true});
 }
-/* The odds this swing opens a wound. A crit carries its own fifty per cent; an
-   ordinary hit carries only what you bought. Both read the same pool, so one
-   brick makes your crits nastier AND your ordinary swings bleed at all. */
+/* The odds this swing opens a wound. It is NOT its own rule any more: bleed is
+   the physical ailment, so this asks the one ailment table what a physical hit
+   leaves and every display in the game reads the number the hit will actually
+   roll against. A critical is worth nothing here -- that is the point. */
 function bleedChance(crit, src){
-  const p = player;
-  /* the weapon is a MORE multiplier on the whole chance: an axe cuts clean and
-     barely bleeds, a mace mangles. Its own base and your bricks are one pool. */
-  const pooled = (crit ? BLEED_CRIT_BASE : 0) + ((p && p.bleedChance) || 0);
-  /* the weapon's own bleed multiplier applies to the WEAPON. Bladestorm and
-     Blade Vortex are physical spells in their own right — they bleed on their
-     own merits, so a staff hero's blades still cut. */
-  const mul = (src === undefined || src === 'sword') ? weapon.bleed : 1;
-  return clamp(pooled * mul, 0, 1);
+  return ailChanceOf('phys', src, crit);
 }
 /* Open one. PoE's rule: a body carries ONE wound, and a worse one replaces it
    rather than stacking beside it — so bleed rewards hitting hard, not often. */
@@ -6288,7 +6320,9 @@ const UPGRADES = [
     desc:c=>`+${Math.round(c.v*100)}% chance for ANY hit to leave the ailment of whatever `+
       `it arrived as — physical BLEEDS, cold CHILLS, fire IGNITES, lightning SHOCKS and `+
       `chaos POISONS (now ${Math.round((player.ailChance||0)*100)}%, cap `+
-      `${Math.round(AIL_CHANCE_MAX*100)}%)`,
+      `${Math.round(AIL_CHANCE_MAX*100)}%). A CRITICAL already ignites, chills and shocks `+
+      `on its own — this is what buys you bleed, poison, and the other three off an `+
+      `ordinary hit`,
     apply:c=>{ player.ailChanceFlat += c.v; syncStats(); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
     req:()=>!isCaster() && canTakeSpell('storm') && player.storm.n < stormMaxN(),
@@ -6402,9 +6436,9 @@ const UPGRADES = [
   { id:'bleedchance', name:'Serrated Edge', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
     req:()=>!isCaster() && player.bleedChance < 1,
     calc:m=>({v: byRar(m, [0.05, 0.08, 0.12, 0.18, 0.25])}),
-    desc:c=>`+${Math.round(c.v*100)}% chance for a melee hit to open a BLEED — `+
-      `on top of the ${Math.round(BLEED_CRIT_BASE*100)}% every critical already carries `+
-      `(now ${Math.round(bleedChance(false)*100)}% on a swing, ${Math.round(bleedChance(true)*100)}% on a crit)`,
+    desc:c=>`+${Math.round(c.v*100)}% chance for an ATTACK to open a BLEED — a wound is `+
+      `the one ailment a critical does not hand you, so this and Afflict are the only `+
+      `things that open one (now ${Math.round(bleedChance(false)*100)}% on a swing)`,
     apply:c=>{ player.bleedChanceFlat += c.v; syncStats(); } },
   { id:'bleedpow', name:'Deep Cuts', icon:'sword', cls:'OFFENSE', minRar:'rare',
     req:()=>!isCaster() && player.bleedShare < BLEED_SHARE_MAX,
@@ -10163,10 +10197,24 @@ const STAT_PROBES = [
   { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
   { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
   { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
-  { g:'BLEED', k:'On a crit',       get:()=> bleedChance(true)*100,    fmt:v=>v.toFixed(0)+'%',
-    why:'a critical strike opens a wound this often. Only PHYSICAL hits bleed — your weapon, bladestorm and vortex' },
-  { g:'BLEED', k:'On any swing',    get:()=> bleedChance(false)*100,   fmt:v=>v.toFixed(0)+'%', zero:true,
-    why:'`Serrated Edge` buys bleed on hits that did NOT crit' },
+  /* ONE ROW PER AILMENT, and the row is the chance the hit actually rolls. These
+     read ailChanceOf, so nothing here can drift away from what applyAilments does
+     — which is how shock spent a build being the storm brick's private stat. */
+  ...CONV_ORDER.map(k=>({ g:'AILMENT', k:AIL_NAME[k]+' on a hit',
+    get:()=> player ? ailChanceOf(k, undefined, false)*100 : 0,
+    fmt:v=>v.toFixed(0)+'%', zero:true,
+    why:'a hit that arrived ENTIRELY as '+CONV_NAME[k].toLowerCase()+' leaves a '+
+        AIL_NAME[k]+' this often — half the hit, half the chance'+
+        (k==='phys' ? '. A wound is an ATTACK ailment: a physical SPELL never opens one'
+                    : '') })),
+  ...CONV_ORDER.map(k=>({ g:'AILMENT', k:AIL_NAME[k]+' on a crit',
+    get:()=> player ? ailChanceOf(k, undefined, true)*100 : 0,
+    fmt:v=>v.toFixed(0)+'%', zero:true,
+    why:(AIL_CRIT[k] >= 1
+          ? 'a critical ALWAYS leaves this one — every point of '+CONV_NAME[k].toLowerCase()+
+            ' in the hit '+(k==='fire'?'ignites':k==='frost'?'chills':'shocks')
+          : 'a critical buys you nothing here: '+AIL_NAME[k]+' is bought with `Afflict`'+
+            (k==='phys' ? ' or `Serrated Edge`, never with crit' : ', never with crit')) })),
   { g:'BLEED', k:'Share of the hit',get:()=> player.bleedShare*100,    fmt:v=>v.toFixed(0)+'%/s',
     why:'one wound bleeds this share of the hit that opened it, per second — before the damage-over-time pool' },
   /* THE NUMBERS THE GAME ACTUALLY DEALS. Every row above is a SHARE, so none of
@@ -10883,14 +10931,20 @@ function renderCharSheet(){
       `deeper. A weaker cut on a fully opened body is thrown away.\n\n`+
       `Which means hitting OFTEN beats hitting hard once: parked on a boss, every\n`+
       `swing trades your worst wound up for a better one.`),
-    sRow('Bleed chance', Math.round(bleedChance(true)*100)+'% / '+Math.round(bleedChance(false)*100)+'%',
-      'on a critical / on any swing',
-      `A melee hit that rolls it opens a BLEED: physical damage over time for `+
-      `${BLEED_T}s.\n\n`+
-      `Every critical carries ${Math.round(BLEED_CRIT_BASE*100)}% on its own. `+
-      `Serrated Edge adds to both.\n`+
-      `Only the sword, its whirl, the vortex and bladestorm blades can open one — `+
-      `spells never do.`),
+    sRow('Ailment chance', Math.round(ailChanceOf('fire', undefined, false)*100)+'% / '
+        + Math.round(ailChanceOf('fire', undefined, true)*100)+'%',
+      'a hit that is ALL one type / the same hit on a crit',
+      `An ailment belongs to the DAMAGE TYPE that landed, not to the spell that threw\n`+
+      `it. A hit is checked against each type it arrived as, and the chance rides on\n`+
+      `that type's share: a swing that is half fire rolls half of this for an ignite.\n\n`+
+      ailTableText()+`\n`+
+      `A CRITICAL always ignites, chills and shocks. It never opens a wound and never\n`+
+      `leaves a dose — BLEED and POISON are bought, or they do not happen.\n\n`+
+      `BLEED is the only one that cares where the hit came from: an ATTACK can cut,\n`+
+      `a spell cannot, however physical it is.\n\n`+
+      `THREE SPELLS PRINT THEIR OWN 100% and ignore the table: FIREBALL always\n`+
+      `ignites, BLOCK FREEZE always chills, and SLAM OF THE ELEMENTS leaves all\n`+
+      `three. Nothing else does — not the storm brick, and not a converted swing.`),
     sRow('Bleed damage', Math.round(p.bleedShare*100)+'%/s',
       Math.round(p.bleedShare*BLEED_T*100)+'% of the hit over '+BLEED_T+'s',
       `A wound ticks for ${Math.round(p.bleedShare*100)}% of the damage that opened it, `+

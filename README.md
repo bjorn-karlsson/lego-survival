@@ -951,9 +951,9 @@ read straight off the stack count, and they expire together.
 | | How you inflict it | What it does |
 |---|---|---|
 | ☠️ **Poison** | Brickbane's gas, 1–3 doses a touch | Every dose bites at once. **9 / 18 / 36** deep on a monster, **12 / 24 / 48** on a boss, by Spore Burst rank. Green beads orbit the body; past 12 the count takes over |
-| 🩸 **Bleed** | Any melee hit that rolls it — **50%** on every critical, **0%** otherwise until you buy it | 40%/s of the hit that opened it for **8s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
-| ❄️ **Chilled** | Any frost you deal | The body crawls at **45% speed**. **Five stacks freeze it solid** |
-| ⚡ **Shocked** | Any storm bolt that rolls `Conductor` | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
+| 🩸 **Bleed** | Any **attack** that lands physical and rolls it — **0%** until you buy it, and a critical does not help | 40%/s of the hit that opened it for **11s**, up to 70%/s. **Stacks 8 deep**, all biting together; a 9th cut displaces the shallowest wound or is discarded. Ignores armour, and **40% less while the body stands still** |
+| ❄️ **Chilled** | Any hit that lands as cold and rolls it — **always** on a cold critical, and always off Block Freeze | The body crawls at **45% speed**. **Five stacks freeze it solid** |
+| ⚡ **Shocked** | Any hit that lands as lightning and rolls it — **always** on a lightning critical | **+7% damage taken per stack, 5 deep** — from *everything* you own, not just lightning. A multiplier on the body, so it sits outside your own damage ceiling. Arcs crawl its silhouette while it holds |
 | 🧊 **Frozen solid** | Block Freeze with *Absolute Zero* | **3s** of no AI, no attacks, no contact damage |
 
 Both lingering damages read the one **increased damage over time** pool that `Rotbrick`
@@ -1083,12 +1083,12 @@ full at 6 max hearts, 49 at 60, 102 at 300. Between waves it runs at **×2**.
 small hits, thin against one big one. Fully capped at 1,560 armour value, a 5-damage hit
 lands for 0.8 and a 120-damage hit still lands for 33.
 
-**BLEED** is the melee half of damage over time, and it is Path of Exile's rule set. An
-ordinary swing never opens a wound on its own — that chance starts at **0%** and is a brick
-you buy — but every **critical** swing opens one **half the time** for free, which ties the
-mechanic to the crit tree instead of making it a third parallel build.
+**BLEED** is the attack half of damage over time, and it is Path of Exile's rule set. No
+swing opens a wound on its own, critical or not: bleed is the one ailment a critical does
+**not** hand you, so the chance starts at **0%** and is always a brick you buy. What a crit
+buys instead is the three elemental ailments, which is where the crit tree points.
 
-A wound ticks for **40% of the hit that opened it, every second, for 8 seconds** — 320% of
+A wound ticks for **40% of the hit that opened it, every second, for 11 seconds** — 440% of
 that hit in total — rising to **70%/s** with Deep Cuts. It reads the same increased
 damage-over-time pool Rotbrick feeds, and it ignores armour, because the opening hit
 already paid it.
@@ -1831,24 +1831,54 @@ got was arbitrary:
 | **SHOCK** | only off the Storm Brick, from a chance called *"chance for a storm bolt to SHOCK"* | any hit that lands as lightning |
 | **IGNITE** | only off the staff's bolt and the ember | any hit that lands as fire |
 | **CHILL** | only off Block Freeze | any hit that lands as cold |
-| **BLEED** | only off a *melee* source, so a physical spell never opened one | any hit that lands as physical |
+| **BLEED** | only off a *melee* source, so a physical spell never opened one | any **attack** that lands as physical |
 | **POISON** | rolled off how much of the hit arrived as chaos, wherever it came from | unchanged — this one was always right |
 
 A hero who had converted a whole build into lightning could not shock anything with any of it.
 Now every one of them is poison's rule: the chance rides on the share of the hit that arrived
 as that type, and the ailment lands on the part of the damage that actually *was* that type.
 
-**Nothing is quietly buffed.** The base chance is zero for four of the five, chaos keeps the
-dose it always had, and a critical still opens a wound half the time. What turns the rest on is
-**Afflict** — one stat, added to all five, capped at **75%**. Because it is one stat it works on
+#### What you start with is nothing
+
+| damage type | ailment | base chance | on a critical |
+|---|---|---|---|
+| 🩸 Physical | BLEED | 0% | 0% — *and attacks only* |
+| 🔥 Fire | IGNITE | 0% | **100%** |
+| ❄️ Cold | CHILL | 0% | **100%** |
+| ⚡ Lightning | SHOCK | 0% | **100%** |
+| ☠️ Chaos | POISON | 0% | 0% |
+
+Every base chance is zero. Chaos used to carry a free **35%** dose, which made it the one
+damage type that never had to pay for its ailment — it pays now. What turns any of them on is
+**Afflict**: one stat, added to all five, capped at **75%**. Because it is one stat it works on
 whatever your damage has *become*, which is the whole point.
 
-**Except the sources that ARE their element.** A fireball that did not set things alight would
-not be a fireball, Block Freeze without the chill is a damage spell with a silly name, and a
-mace that paid a legendary for Slam of the Elements bought the ailments, not a chance at them.
-Those stay certainties — scaled, as ever, by how much of them survived your conversions.
+**What a critical buys is the three ELEMENTS, and only those.** A fire crit always ignites, a
+cold crit always chills, a lightning crit always shocks. It does **not** open a wound and it
+does **not** leave a dose: BLEED and POISON are bought, or they do not happen. A crit used to
+carry its own 50% bleed, which quietly made the crit tree the bleed tree as well.
+
+**BLEED is the only one that cares where the hit came from.** It is an *attack* ailment: a
+swing, its whirl, the vortex, bladestorm's blades and the slam can cut. An orbiting brick that
+has bought physical damage still hits for physical — it just does not cut.
+
+**Three spells print their own 100%,** the way a PoE gem does, and this is written on the
+character sheet rather than hidden in the code: **Fireball** always ignites, **Block Freeze**
+always chills (Absolute Zero upgrades that chill into a stun, so without it the legendary would
+do nothing), and **Slam of the Elements** leaves all three. Nothing else does — not the storm
+brick, and not a converted swing.
 
 A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangles at **×1.9**.
+
+#### The bug this fixes
+
+> *"I play with axe now and 50% of my physical damage is converted to fire — why don't I ignite
+> the boss when I'm hitting him?"*
+
+Because the chance was **zero**. An axe swing reports as a weapon source, not as a fireball, so
+it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever Afflict you had bought (0) — nothing,
+at any conversion. Now that same axe ignites on every crit, on the fire half of the hit, and at
+your bought chance the rest of the time. Half the hit, half the chance.
 
 ### An ailment belongs to what landed
 

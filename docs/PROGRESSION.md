@@ -1615,3 +1615,81 @@ false and the counter drained *a point a frame*: faster than the thing it was me
 down. The break was rewritten to fall back to `d.grace`, and the real code got the same
 fallback, because a row with neither field would have done exactly that in production while
 looking like it worked.
+
+## Seventeenth pass — the ailment table, and a chance that was quietly zero
+
+> *"I play with axe now and 50% of my physical damage is converted to fire, why don't I ignite
+> the boss when I'm hitting him? Or is the chance set to 0."*
+
+It was zero. Exactly zero, and not by accident — by the shape of the table the fourteenth pass
+had left behind.
+
+An axe swing reports as a weapon source. `ailChanceOf('fire', 'sword', false)` read
+`AIL_BASE.fire` (0) plus `AIL_CRIT.fire` (0) plus whatever **Afflict** had been bought (0), and
+returned nothing. Half the hit was arriving as fire and every point of it was ignoring the
+ailment step, at any amount of conversion, forever. The one thing that *did* carry a certainty
+was `AIL_NATIVE` — the fireball, Block Freeze and Slam of the Elements — and an axe is none of
+those.
+
+So the fourteenth pass had unified the *rule* and left the *numbers* arbitrary. Four of the five
+started at zero, chaos carried a free 35% dose nobody had to pay for, and a critical bought a
+50% bleed and nothing else. Nothing said why.
+
+### What the table says now
+
+| damage type | ailment | base | on a critical |
+|---|---|---|---|
+| Physical | BLEED | 0% | 0% — *and attacks only* |
+| Fire | IGNITE | 0% | **100%** |
+| Cold | CHILL | 0% | **100%** |
+| Lightning | SHOCK | 0% | **100%** |
+| Chaos | POISON | 0% | 0% |
+
+Three changes, each of them one line:
+
+- **Chaos pays like everything else.** The free 35% dose made chaos the only damage type whose
+  ailment came in the box, which is exactly the kind of exception this whole thread has been
+  removing.
+- **A critical buys the three ELEMENTS, and only those.** That is the PoE rule and it is the one
+  that fixes the report: the axe now ignites on every crit, on the fire half of the hit.
+- **A critical no longer opens a wound.** The old 50% made the crit tree quietly the bleed tree
+  as well; bleed is bought with `Serrated Edge` or `Afflict`, or it does not happen.
+
+And one gate: **BLEED is an attack ailment.** The fourteenth pass widened it to *any* physical
+hit, on the reasoning that an ailment belongs to the type. That was one step too far — a wound
+is a thing an edge does to a body. A swing, its whirl, the vortex, bladestorm's blades and the
+slam can cut; an orbiting brick that has bought physical damage hits for physical and does not.
+
+`AIL_NATIVE` stays, because a fireball that sets nothing alight is not a fireball and Block
+Freeze without the chill would leave Absolute Zero upgrading nothing. But it is no longer a
+hidden override: the comment names it, the character sheet names it, and the set is exactly
+three spells — pointedly not the storm brick, which is what started all of this.
+
+### One place, one number
+
+The old `bleedChance(crit, src)` kept its own arithmetic — its own crit term, its own weapon
+multiplier — and every display in the game read *it* rather than the thing the hit rolls
+against. That is the same defect as the storm brick's private shock chance, one layer up. It now
+delegates to `ailChanceOf('phys', src, crit)` and does nothing else, and the `sheetdrift` break
+(give it back its own sums) fails the suite.
+
+The character sheet grew an **AILMENT** block: one row per ailment, on a hit and on a crit, ten
+rows all reading `ailChanceOf`. The `Ailment chance` row's tooltip prints the five-line table
+above from the same call. A player who wonders why they are not igniting can now read the answer
+off the sheet instead of filing it as a bug.
+
+### The test that passed for the wrong reason
+
+The first version of the sheet-row assertion set up a bare **sword** with 30% Afflict and
+checked each row against `ailChanceOf`. Every row read 30%. So did the `rowsdrift` break, which
+replaced the row's getter with a flat `player.ailChance` — because on a bare sword with no bleed
+brick, `p.ailChance` *is* the answer for all five.
+
+The probe was moved to an **axe** with a `Serrated Edge` on top of the Afflict, so the physical
+row can only match if the weapon's own bleed multiplier and the bleed brick are both in it. Then
+the break failed. A test whose setup makes the right answer and the wrong answer coincide is not
+a test, and this is the third time in this file that the fix has been *make the fixture less
+convenient* rather than add an assertion.
+
+Twelve breaks for `ail3`, and `conv2`'s poison case — which asserted the free dose — was
+rewritten to assert both halves: nothing bought, nothing poisoned; 40% bought, 40% poisoned.
