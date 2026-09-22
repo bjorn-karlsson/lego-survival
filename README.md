@@ -293,13 +293,21 @@ The axe's identity is in two numbers: **twice a sword's crit chance and a far bi
 multiplier**, paid for with a bleed multiplier of **0.45** that locks it out of the one tree its
 crits would otherwise feed. So the payoff for critting *is* the mechanic.
 
-> **Reaving** — *legendary, axe only.* Every **critical** throws the axe. It reaps through up
-> to **3** more bodies within 320px, each for **70%** of the critical that threw it and each
-> able to crit on its own, and comes back. **You cannot swing while it is away.**
+> **Reaving** — *legendary, axe only.* Every **critical** hurls a spinning axe. It reaps
+> through up to **3** more bodies within 320px, each for **70%** of the critical that threw it
+> and each able to crit on its own. **You keep swinging**, and up to **4** can be in the air at
+> once — **6** at rank two.
 
-That last line is the whole cost, and it gets worse the more attack speed you stack — which is
-the tension the axe was missing. One critical throws one axe: a 0.55s cooldown is what stops a
-whirl being a wall of them, and a bounce can never start a second blade.
+**You keep the axe.** The first cut of this left the hero standing there empty-handed until the
+blade came home, which read as a punishment for critting on a build whose whole idea is
+critting: stack attack speed, crit more, swing less. What flies is a *copy*. A second critical
+throws a second one, and several axes in the air at once is the good version of this legendary,
+not a bug to design around.
+
+What holds it in check is two numbers instead of your hands: a **0.16s** cooldown between
+throws, so forty criticals landing in one frame still throw one axe, and a hard ceiling on how
+many may be out. A **bounce** can still never start a blade of its own — several axes have to
+come from several *criticals*.
 
 > **Rank two** — the blade leaves a **BLEEDING** body for free. Reaping one costs it none of its
 > three bounces, so a wound is a longer harvest — and the axe's own terrible 45% bleed becomes
@@ -320,23 +328,35 @@ one hit per slam, the same as one swing would, so a wide fault opens every crate
 It does **not** deflect — a slam is the floor coming up, and nothing about that turns an
 arrow aside.
 
-**What it is worth.** Each tooth is **30.7% of a full swing**, and **one body may be bitten
+**What it is worth.** Each tooth is **36% of a full swing**, and **one body may be bitten
 by at most three teeth of the same slam** — so a body held dead centre in the fault takes
-**0.92 of one sword swing** per slam, and everything else in the fan takes the same. It
-opened at twice that, which made an AoE basic attack out-damage the single-target one it
-replaced; at this share the mace trades single-target for coverage instead of getting both.
+**1.08 of one mace swing** per slam, and everything else in the fan takes the same.
+
+This number has moved twice. It opened at **0.62** a tooth, which made an AoE basic attack
+beat the single-target one it replaced. The cut to **0.307** fixed that and overshot: the mace
+came out at **4.37**/s against the sword's 5.79 and the axe's 6.28 — a quarter behind on one
+body while *also* being the slowest weapon in the game. It was not trading single-target for
+coverage, it was paying twice for it. At **0.36** the mace sits at **5.12**/s: still under the
+sword on one body, which is what the fan is for, but no longer the weakest thing you can pick
+up.
 
 Read off a fresh hero with no favourite, which is what the character sheet's
 **Sustained DPS** row shows you:
 
 | | single target | |
 |---|--:|---|
-| **SWORD** | **5.38** /s | one body, kept in reach |
-| **AXE** | **5.69** /s | one body, kept in reach |
-| **MACE** | **3.96** /s | one body held in the fault — *and everything else in it* |
+| **SWORD** | **5.79** /s | one body, kept in reach |
+| **AXE** | **6.28** /s | one body, kept in reach |
+| **MACE** | **5.12** /s | one body held in the fault — *and everything else in it* |
 
-About three-quarters of a sword's single target, spread across everything in a 99° fan.
-That is the trade.
+About **88%** of a sword's single target, spread across everything in a 99° fan. That is the
+trade — and the test asserts the ratio, not the literal, so the day the numbers move it is
+still the rule that is being checked.
+
+**You can see through your own teeth.** A fully-fanned slam is twenty-six rows of stone
+standing between you and the pack you are standing in, and at full opacity the thing you needed
+to read — what is walking at you — was behind the effect you cast to deal with it. Your teeth
+are drawn at **52%**. The *monsters'* are not: a hazard you have to see is a hazard.
 
 | | opens at | ceiling |
 |---|--:|--:|
@@ -1830,6 +1850,19 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
+
+### Lightning is yellow
+
+**A damage type has one colour, and everything that deals it uses that colour.** The Storm
+Brick did not. It was a **blue** 2×2 with navy studs, throwing **pale blue-white** bolts —
+which is the colour this game uses for **COLD** — while the damage number floating off the
+body it hit came up in `CONV_COL.shock` yellow. The one spell that only ever deals lightning
+was the wrong element on screen.
+
+The brick body, its studs, its charge glow, its spark and the bolt itself all read off
+`CONV_COL.shock` now. And the test that checks it does not stop at the colour table: it samples
+the **pixels the canvas actually carries** around a hovering brick and along a drawn bolt,
+because a palette nothing draws with is a palette that is wrong and passing.
 
 ### The options screen
 

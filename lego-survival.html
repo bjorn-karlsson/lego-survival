@@ -830,14 +830,24 @@ const WHIRL_MAX = 2;                      /* ranks of Blademaster */
    locks it out of the one tree its crits would otherwise feed. So the payoff
    for critting IS the mechanic: every critical throws the axe, it reaps through
    the bodies around it, and it comes back.
-   The cost is that it is not in your hands while it is away. That gets worse
-   the more attack speed you stack, which is the tension the axe was missing. */
+   YOU KEEP THE AXE. The first cut of this had the hero standing there empty
+   handed until the blade came home, which read as a punishment for critting on
+   a build whose whole idea is critting: stack attack speed, crit more, swing
+   less. What is thrown is a COPY, the hero keeps swinging, and a second crit
+   throws a second one -- several axes in the air at once is the good version of
+   this legendary, not a bug to design around.
+   What holds it in check is no longer your hands, it is two numbers: a short
+   cooldown between throws and a hard ceiling on how many may be in the air. */
 const REAVE_MAX     = 2;     /* ranks */
 const REAVE_BOUNCES = 3;     /* bodies after the one that threw it */
 const REAVE_MUL     = 0.70;  /* of the critical that threw it, per body */
 const REAVE_SPEED   = 760;
 const REAVE_SEEK    = 320;   /* how far it will reach for the next one */
-const REAVE_CD      = 0.55;  /* or a whirl throws thirty axes a second */
+/* short, not absent: forty crits in one frame -- a bladestorm burst landing all
+   at once -- must still throw ONE axe and not forty. */
+const REAVE_CD      = 0.16;
+const REAVE_AIR     = 4;     /* blades in the air at once, rank one */
+const REAVE_AIR_R2  = 6;     /* ...and rank two, which keeps them out longer */
 const REAVE_LIFE    = 2.4;   /* a fuse, so a blade can never be lost */
 const WHIRL_SPIN = 13;                    /* rad/s the hero turns while whirling */
 const WHIRL_TICK = 0.18;                  /* per-foe cooldown inside the whirl */
@@ -1310,17 +1320,28 @@ const SLAM_WIND       = 0.16;   /* the head coming down, before the floor breaks
 const SLAM_RAY_GAP    = 0.27;   /* radians between one line of stone and the next */
 const SLAM_RAYS_MAX   = 26;
 const SLAM_STEP       = 52;     /* pixels between one row of teeth and the next */
-/* HALF OF WHAT IT WAS. At 0.62 a tooth, a body held in the middle of the
-   fault took 1.86 swings a slam AND every other body in the fan took the same —
-   an AoE basic attack out-damaging the single-target one it replaced. The tooth
-   is roughly half of that now: three of them land 0.92 of a swing on one body,
-   so the mace trades single-target for coverage instead of getting both. */
-const SLAM_SHARE      = 0.307;  /* one tooth, against one full swing */
+/* WHERE THE TOOTH LANDED, and why it moved twice. At 0.62 a body held in the
+   middle of the fault took 1.86 swings a slam AND so did every other body in
+   the fan — an AoE basic attack beating the single-target one it replaced. The
+   cut to 0.307 fixed that and overshot: the mace came out at 4.37 sustained
+   against the sword's 5.79 and the axe's 6.28, a quarter behind on one body
+   while ALSO being the slowest weapon in the game. It was not trading
+   single-target for coverage, it was paying twice for it.
+   0.36 puts three teeth at 1.08 of a mace swing and the mace at about 5.1 —
+   still under the sword on one body, which is what the fan is for, but no
+   longer the weakest thing you can pick up. */
+const SLAM_SHARE      = 0.36;   /* one tooth, against one full swing */
 const SLAM_MAX_HITS   = 3;      /* how many teeth of ONE slam may bite one body */
 const SLAM_ELEM_SHARE = 0.5;    /* how much of the tooth the legendary converts */
 const SLAM_ELEMS      = ['fire', 'shock', 'frost'];
 const SLAM_ELEM_MAX   = 2;
 const SLAM_COL  = { fire:'#ff9a3c', shock:'#ffe95a', frost:'#bfe3ff' };
+/* YOU CAN SEE THROUGH YOUR OWN TEETH. A fully-fanned slam is twenty-six rows of
+   stone standing between you and the pack you are standing in, and at full
+   opacity the thing you needed to read -- what is walking at you -- was behind
+   the effect you cast to deal with it. They are drawn at this alpha instead.
+   The MONSTERS' spikes are not: a hazard you have to see is a hazard. */
+const SLAM_SPIKE_A = 0.52;
 const SLAM_AIL  = { fire:'BURN', shock:'SHOCK', frost:'CHILL' };
 const LEECH_MAX        = 0.25;   /* share of the hit, at most */
 const LEECH_CHANCE_MAX = 0.60;   /* how often, at most */
@@ -1666,6 +1687,12 @@ const CONV_NAME  = { phys:'PHYSICAL', shock:'LIGHTNING', frost:'COLD', fire:'FIR
    to watch a conversion work without opening a menu and doing arithmetic. */
 const CONV_COL   = { phys:'#ffffff', shock:'#ffe23d', frost:'#6fb7ff',
                      fire:'#ff4a3c', chaos:'#b46aff' };
+/* THE BRICK IS THE COLOUR OF ITS DAMAGE. It was a blue 2x2 with navy studs,
+   which is this game's COLD, on the one spell that only ever deals lightning.
+   Every part of it now reads off CONV_COL.shock, the same yellow the damage
+   number floats in and the same yellow the bolt is drawn in. */
+const STORM_BRICK = { body:'#f2c000', stud:'#9a7400',
+                      spark:'#fff3a8', glow:CONV_COL.shock };
 const CONV_RANK  = CONV_ORDER.reduce((o,k,i)=>{ o[k] = i; return o; }, {});
 /* THE TWO WAYS TO WRITE ONE, and the only two anything uses. Keeping them here
    rather than letting every brick poke at the object means the legality rule is
@@ -2954,7 +2981,7 @@ function newPlayer(){
     ailChanceFlat:0, ailChance:0,
     /* REAVING: the rank, the fuse while the axe is away, and the cooldown that
        stops a whirl throwing one every frame */
-    reave:0, reaveT:0, reaveCd:0,
+    reave:0, reaveCd:0,
     /* every self-expiring counter the hero carries, by name, and what the
        hero has bought on top of each one's own ceiling */
     stacks:{}, stackMax:{ momentum:0, rage:0 },
@@ -3550,7 +3577,12 @@ const FX = {
   friend: {
     ring:'#fff2c4', ringHot:'#ffd98a', spark:'#fffaf0',
     bricks:['#fff2c4','#ffd98a','#ffe89a'],
-    zap:'#dff2ff', zapCore:'#ffffff',
+    /* THE COLOUR OF WHAT IT IS. A bolt off the storm brick was drawn in a pale
+       blue-white, which is the colour this game uses for COLD -- so the one
+       spell that is nothing but lightning was the wrong element on screen, and
+       the number floating off the body (CONV_COL.shock) did not match the thing
+       that put it there. Both are the same yellow now. */
+    zap:CONV_COL.shock, zapCore:'#fffbe0',
     brick:'#ffe89a', brickStud:'#ffd166',
     frost:'#f2fbff', frostDeep:'#cfeaff'
   },
@@ -6733,13 +6765,14 @@ const UPGRADES = [
     req:()=>weapon.id === 'axe' && player.reave < REAVE_MAX,
     calc:c=>({n:1}),
     desc:c=> player.reave === 0
-      ? `Every CRITICAL throws the axe. It reaps through up to ${REAVE_BOUNCES} more bodies `+
-        `within ${REAVE_SEEK}px — each for ${Math.round(REAVE_MUL*100)}% of the critical that `+
-        `threw it, each able to crit on its own — and comes back. You cannot swing while `+
-        `it is away.`
+      ? `Every CRITICAL hurls a spinning axe. It reaps through up to ${REAVE_BOUNCES} more `+
+        `bodies within ${REAVE_SEEK}px — each for ${Math.round(REAVE_MUL*100)}% of the `+
+        `critical that threw it, each able to crit on its own. You KEEP swinging, and up to `+
+        `${REAVE_AIR} can be in the air at once.`
       : `The blade leaves a BLEEDING body for free: reaping one costs it none of its `+
         `${REAVE_BOUNCES} bounces, so a wound is a longer harvest — and the axe's own `+
-        `${Math.round(WEAPONS.axe.bleed*100)}% bleed becomes something worth building.`,
+        `${Math.round(WEAPONS.axe.bleed*100)}% bleed becomes something worth building. `+
+        `${REAVE_AIR_R2} axes may fly at once.`,
     apply:c=>{ player.reave = Math.min(REAVE_MAX, player.reave + 1); } },
   { id:'vortextotem', name:'Lingering Vortex', icon:'totem', cls:'SPELL', minRar:'legendary',
     req:()=>!isCaster() && player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
@@ -11543,7 +11576,6 @@ function updatePlayer(dt){
   p.magnetT = Math.max(0, p.magnetT - dt);
   /* the axe is back in your hands a breath after the blade dies; the live
      projectile keeps topping this up while it is out */
-  p.reaveT = Math.max(0, (p.reaveT || 0) - dt);
   p.reaveCd = Math.max(0, (p.reaveCd || 0) - dt);
   stackTick(dt);
   if(p.fortuneT>0){
@@ -12355,7 +12387,6 @@ const SWING_COMBO = { _:['lo','hi','spin'], axe:['lo','back'] };
 function comboSteps(){ return SWING_COMBO[weapon && weapon.id] || SWING_COMBO._; }
 function startSwing(aim){
   const p = player;
-  if(reaveOut()) return;      /* it is not in your hands */
   const steps = comboSteps();
   p.combo = p.comboTimer>0 ? (p.combo+1)%steps.length : 0;
   p.comboTimer = 0.85;
@@ -14642,11 +14673,13 @@ function reaveTarget(x, y, seen){
 function throwReave(from, dmg){
   const p = player;
   if(!p || (p.reaveCd || 0) > 0 || !(dmg > 0)) return null;
+  /* the ceiling, not your hands. Past it a crit simply does not throw -- it is
+     still a critical and still hits like one. */
+  if(reaveAir() >= reaveAirMax()) return null;
   const seen = new Set([from]);
   const tgt = reaveTarget(from.x, from.y, seen);
   if(!tgt) return null;
   p.reaveCd = REAVE_CD;
-  p.reaveT = Math.max(p.reaveT || 0, 0.12);
   SFX.whoosh && SFX.whoosh();
   const pr = { kind:'reave', x:from.x, y:from.y - 14, px:from.x, py:from.y - 14,
                dmg, legs:REAVE_BOUNCES, tgt, hit:seen, spin:rnd(TAU),
@@ -15004,11 +15037,10 @@ function updateProjectiles(dt){
     }
     else if(pr.kind==='reave'){
       /* it flies to the body it picked, reaps it, and looks for the next. When
-         it runs out of bodies or bounces it comes home, and only THEN is the
-         axe back in your hands. */
+         it runs out of bodies or bounces it comes home and fades -- the axe in
+         your hands was never the one that left. */
       pr.spin += dt*26;
       pr.life -= dt;
-      if(player) player.reaveT = Math.max(player.reaveT || 0, 0.08);
       const t = pr.tgt;
       const live = !pr.back && t && !t.dead && t.state === 'active';
       const goX = live ? t.x : player.x, goY = live ? t.y - 16 : player.y - 14;
@@ -16489,8 +16521,18 @@ function drawWeaponArt(c, s, bright, kind){
 /* IS THE AXE IN YOUR HANDS? While it is out reaping, it is not — you cannot
    swing and you are drawn empty-handed, which is the whole cost of the thing. */
 function isReaver(){ return !!(player && player.reave > 0 && weapon && weapon.id === 'axe'); }
-function reaveOut(){ return !!(player && player.reaveT > 0); }
-function heldArt(){   return reaveOut() ? null : ((weapon && weapon.hold) || 'sword'); }
+/* HOW MANY ARE OUT. This used to be a timer on the hero that emptied his hands;
+   it is a count of live blades now, and the only thing it gates is whether a
+   crit may throw another. The axe never leaves your hands, so heldArt is just
+   the weapon again and startSwing has nothing to ask. */
+function reaveAir(){
+  let n = 0;
+  for(const pr of projectiles) if(pr.kind === 'reave' && !pr.dead) n++;
+  return n;
+}
+function reaveAirMax(){ return (player && player.reave >= 2) ? REAVE_AIR_R2 : REAVE_AIR; }
+function reaveOut(){ return reaveAir() > 0; }
+function heldArt(){   return (weapon && weapon.hold) || 'sword'; }
 function thrownArt(){ return (weapon && weapon.throw) || 'blade'; }
 function drawMace(c, s){
   c.strokeStyle = 'rgba(20,30,40,0.5)'; c.lineWidth=2;
@@ -17600,6 +17642,7 @@ function render(){
     const w = sp.w;
     const el = sp.el, glow = el ? SLAM_COL[el] : null;
     ctx.save(); ctx.translate(sp.x, sp.y);
+    ctx.globalAlpha = SLAM_SPIKE_A;   /* restored with the rest of the state */
     ctx.fillStyle = 'rgba(15,20,25,0.26)';
     ctx.beginPath(); ctx.ellipse(0, 1, w*1.35, w*0.52, 0, 0, TAU); ctx.fill();
     if(glow){
@@ -17782,15 +17825,16 @@ function render(){
       const bp = chainBrickPos(player, z, zn);
       const ph = z*1.3;
       const charged = (player.chain.cds[z] ?? 0) <= 0.12;   /* each brick glows on its own clock */
-      ctx.fillStyle = charged ? 'rgba(150,220,255,0.26)' : 'rgba(120,200,255,0.16)';
+      const gl = prs(STORM_BRICK.glow).join(',');
+      ctx.fillStyle = `rgba(${gl},${charged ? 0.26 : 0.16})`;
       ctx.beginPath(); ctx.arc(bp.x, bp.y-4, 16+Math.sin(vtime*5+ph)*3, 0, TAU); ctx.fill();
       ctx.save(); ctx.translate(bp.x, bp.y); ctx.rotate(Math.sin(vtime*2+ph)*0.2);
-      ctx.fillStyle = '#2e7dd1'; ctx.strokeStyle='rgba(15,30,50,0.6)'; ctx.lineWidth=1.8;
+      ctx.fillStyle = STORM_BRICK.body; ctx.strokeStyle='rgba(50,36,0,0.6)'; ctx.lineWidth=1.8;
       roundRect(ctx,-13,-13,26,26,3); ctx.fill(); ctx.stroke();
       /* plain 2x2: two studs across, two rows deep */
       for(let row=0; row<2; row++)
-        for(let k=0;k<2;k++) drawStudG(ctx,-6.4+k*12.8, -6.4+row*12.8, 4, '#1d4a6b');
-      ctx.fillStyle = '#bfe3ff';
+        for(let k=0;k<2;k++) drawStudG(ctx,-6.4+k*12.8, -6.4+row*12.8, 4, STORM_BRICK.stud);
+      ctx.fillStyle = STORM_BRICK.spark;
       ctx.beginPath(); ctx.arc(15,-15,2+Math.sin(vtime*12+ph)*0.8,0,TAU); ctx.fill();
       ctx.restore();
     }

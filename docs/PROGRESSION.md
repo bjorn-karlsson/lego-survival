@@ -1777,3 +1777,107 @@ under every one of them, which was already a lie whenever a wave first was worth
 bigger one now a level first is worth ten. Each entry carries its own `pts`.
 
 Sixteen breaks for `opts`, 51 tests green, wave-50 soak clean.
+
+## Nineteenth pass — you keep the axe, the mace stops apologising, lightning is yellow
+
+### The legendary that punished its own build
+
+> *"Instead of leaving the player empty handed when the axe is going around, make the player
+> keep his axe and he may trigger another axe toss, so we can have multiple axes flying around,
+> no problem, just good old fun."*
+
+The first cut of Reaving cost you the axe until the blade came home, and the design note said
+so proudly: *"that gets worse the more attack speed you stack, which is the tension the axe was
+missing."* It was the wrong tension. The axe's identity is **twice a sword's crit chance and a
+far bigger multiplier**; a legendary that takes the weapon out of your hands every time that
+identity fires is a legendary that punishes you for building into it. Stack attack speed, crit
+more, swing less.
+
+What flies is a copy now. `reaveT` — a rolling timer on the hero, refreshed every frame a blade
+was alive — is gone entirely, and with it the `heldArt()` null and the `startSwing` early
+return. `reaveOut()` survives as a **count of live blades**, which is the only thing it is
+still asked.
+
+The brake moved from your hands to two numbers: `REAVE_CD` cut from 0.55s to **0.16s**, and a
+hard ceiling of **4** blades in the air (**6** at rank two). The cooldown still does the one job
+it was written for — forty criticals landing in a single frame throw one axe, not forty — and
+the guard that stops a *bounce* starting a blade of its own is untouched, because several axes
+are supposed to come from several criticals.
+
+Five breaks: `emptyhands` (put the old rule back), `oneaxe` (the ceiling is 1, which is the old
+rule wearing a hat), `noceiling`, `nocd`, `bouncethrows`.
+
+### A fixture that passed without doing anything
+
+The test for "a second critical throws a second axe" used the file's own `critHit` helper,
+which returns the moment any live blade exists — and one already did. It would have reported a
+pass without throwing a thing. It counts blades before and after now, and hits until the count
+moves.
+
+### The mace was paying twice
+
+`SLAM_SHARE` has moved twice. It opened at **0.62** a tooth, which made an AoE basic attack beat
+the single-target one it replaced. The cut to **0.307** fixed that and overshot: measured, the
+mace came out at **4.37**/s against the sword's **5.79** and the axe's **6.28** — a quarter
+behind on one body while *also* being the slowest weapon in the game. It was not trading
+single-target for coverage. It was paying for coverage twice.
+
+**0.36** puts it at **5.12**/s, about 88% of a sword. And the test rule changed with it. The old
+assertion was `SLAM_SHARE * SLAM_MAX_HITS < 1.0` — "a slam must be worth less than a swing" —
+which is the wrong comparison, because the swing it is measured against is one the mace does
+not have. The rule is now stated where a player feels it: **sustained single-target DPS against
+the weapons it competes with**, strictly under a sword and strictly over 0.82 of one. Two
+breaks, `slamcut` and `slamfat`, sit on either side of it.
+
+`mlvl.js` had `Math.abs(R.share - 0.307) < 1e-9` — a second copy of the constant, which fails
+whenever balance moves and tells you nothing about whether the balance is right. It asserts the
+ratio now.
+
+### Two rendering rules, asserted in pixels
+
+**Lightning is yellow.** The Storm Brick was a blue 2×2 with navy studs throwing pale blue-white
+bolts — this game's *cold* — while the damage number floating off the body came up in
+`CONV_COL.shock`. Everything about it reads off that one constant now.
+
+**You can see through your own teeth.** A fully-fanned slam is twenty-six rows of stone between
+you and the pack you are standing in; the thing you needed to read was behind the effect you
+cast to deal with it. Hero spikes draw at `SLAM_SPIKE_A = 0.52`. Monster spikes do not — a
+hazard you have to see is a hazard.
+
+Both are asserted off **the pixels on the canvas**, not off the constants, because a palette
+nothing draws with is a palette that is wrong and passing. `brickdrift` is exactly that break:
+the table says yellow, the draw call still says `#2e7dd1`.
+
+The transparency assertion took a rewrite to be worth anything. "The pixel is not the rock
+colour" depends on which part of a tooth the sample lands on — body, highlight, outline, seam.
+So instead: **draw the same tooth over two different floors.** If it is translucent the two
+patches still differ, in proportion to how different the floors were; drawn opaque they collapse
+to the same stone. The assertion is `spikeGap / floorGap > 0.25`, and the fixture asserts the
+two floors differ in the first place.
+
+And the first version of that fixture hand-built a `pspike` without an `h` field. `spikeHeight`
+returned `NaN`, `h < 1` was **false** (every comparison with NaN is), the path was drawn with
+NaN coordinates, and nothing landed on the canvas at all — a tooth that was never there would
+have sailed through the transparency check. The fixture now carries every field the renderer
+reads.
+
+### Two flakes and a dead break
+
+`ail3`'s axe-crit case measured a **product of two rolls** — an 80% crit and a 50% share — over
+400 samples with a ±0.09 window, which is under four sigma. It passed alone and failed in a full
+suite run. It counts the criticals it actually got in the same loop and divides them out now, so
+what is asserted is the thing it claims: a fire critical ignites the fire **half** of the hit.
+The test also freezes the world first — `waveMods`, the spawn queue, the live enemies — because
+a run continuing underneath a measurement is a second source of randomness nobody declared.
+
+`stacks`'s momentum case swung into five bodies that the **previous** case had just thrown with
+a `kb: 2.0` backswing. Whether they were still inside a plain swing's 54px depended on how much
+real time passed during a `sleep(500)`, which is to say on how busy the machine was. It puts
+them back and pins them.
+
+And `mkbrk13.py` had two breaks — `perbody` and `freemomentum` — that had been **unbuildable**
+since the rage pass reformatted the block they patched. A break that no longer applies is a
+missing guard wearing a passing suite, and nothing in the runner would ever have said so. Both
+repaired, both caught.
+
+52 tests green, wave-50 soak clean.
