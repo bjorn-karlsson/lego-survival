@@ -2278,3 +2278,75 @@ That is four flakes now with one root — a fixed sample standing in for a condi
 the four were found by reading the captured failure rather than by re-running until it passed.
 
 29 new breaks, 55 tests green, wave-50 soak clean.
+
+## Twenty-fourth pass — the shield you wear
+
+> *"Visualize on the player/monster a little tiny shield that absorbs the player, if he has ES.
+> If the ES is depleted he doesn't have a ES. And make it so its % value is the transparent
+> value. If you have 100% shield, it's less transparent and if you have 0% it's gone."*
+
+Two bars had been added for the shield — one over the XP bar, one over the boss's health — and
+both are in the wrong place for the moment that matters. When something is winding up at you,
+your eyes are on the thing winding up. The boss's shield track is 300 pixels from the boss.
+
+So the pool is drawn on the body that owns it, and **the fraction is the opacity**: full is a
+bright dome, a third left is a hint, empty is nothing at all. No number, no bar, no reading.
+
+Faint on purpose — it sits on top of a body you are trying to watch, and a shield you cannot see
+through hides the wind-up it exists to survive. Same call the mace's teeth got two passes ago.
+The rim carries it; the fill is barely there.
+
+### Where a body is
+
+The first version took `(x, y, r, scale)` and drew an ellipse at a hand-picked offset. It looked
+right on a minifig and nowhere else, because a minifig is one of about six shapes in here.
+
+`bodyLo`, `bodyHi` and `bodyRad` already exist: they are the vertical segment every swing and
+every projectile in the game is tested against, and they already know that a golem is enormous
+and a boss is tall. Drawing the bubble around *those* means it is drawn exactly where the thing
+it protects can be struck, and a golem, a minifig and a bat all fit without any of the three
+being measured by hand.
+
+One thing they cannot know. A bat is **hit** as though it were standing on the floor — that is
+deliberate, and it is what the hit model says — but it is **drawn** in the air, with its height
+computed inside its own draw function and never written down. So the bat boss's bubble was
+hanging over the patch of floor it was hovering above. `drawZ` records the draw height for
+anything that needs to find the drawn body; nothing that hits it reads that field.
+
+### Five early returns
+
+The bubble was first called from inside `drawEnemy`, after `drawFigure`. `drawEnemy` is seven
+shapes behind five early returns — golems, minis, crypt bats, the bat boss, then the minifigs —
+so it only ever reached the minifig path, and every other shape in the game carried a shield it
+never drew.
+
+It is called from the draw list instead, where there is exactly one body per enemy and the bubble
+lands on top of whichever shape it turned out to be. `minifigonly` is the break that puts it
+back.
+
+### A mean is the wrong statistic for "is it there"
+
+The test measures cyan off the canvas. The mean of `blue − red` over a box around the body is the
+right statistic for *how solid* the bubble is — it gives a clean straight ramp, −58.4 / −61.8 /
+−65.0 / −68.1 across the four fractions — and the wrong one for *whether there is one at all*.
+
+`ghostbubble`, which deletes the `f > 0` guard and leaves a dim ring round an empty pool, moved
+that mean by **1.08** against a threshold of 1.2, and passed. A 1.8px ring at a third opacity is
+a rounding error in the mean of a 112×89 box.
+
+Counting the pixels the ring actually paints — anything cooler than −55, which no floor in this
+game ever is — makes the same break show up as 1198 against 985. A hundred times more sensitive,
+and no tuned threshold: the two statistics are used for the two different claims.
+
+### And one more hovering-body flake
+
+The boss case failed about one run in three at first. The bat bobs ten pixels either way while it
+flaps, so a sample box measured once and reused across four frames has the bubble sliding out of
+it — which reads exactly like the shield fading. The box is measured against the body's current
+draw height every time now, and the margin went from 3.6–7.7 to 8.0–10.6 against a threshold of
+5.
+
+That is the fifth flake in this codebase with the same root: something measured once standing in
+for something that moves.
+
+9 new breaks, 56 tests green, wave-50 soak clean.

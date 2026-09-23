@@ -18842,7 +18842,13 @@ function render(){
     list.push({y:p.y, f:()=>drawProp(ctx,p)});
   for(const e of enemies){
     if(!onScreen(e, 120)) continue;
-    list.push({y:e.y, f:()=>drawEnemy(ctx,e)});
+    /* THE SHIELD GOES ON OUTSIDE drawEnemy, not inside it. That function is
+       seven shapes behind five early returns -- golems, bats, minis, the bat
+       boss and the minifigs -- and putting the bubble on the minifig path gave
+       every one of the others a shield it did not draw. Out here there is one
+       body per enemy and the bubble lands on top of whichever shape it was. */
+    list.push({y:e.y, f:()=>{ drawEnemy(ctx, e);
+      if(e.esMax > 0) drawShieldBubble(ctx, e, e.es/e.esMax, e.esFlash); }});
   }
   if(player && (!player.dead || player.deadT<0.05)) list.push({y:player.y, f:()=>drawHero(ctx)});
   list.sort((a,b)=>a.y-b.y);
@@ -19342,6 +19348,52 @@ function edgeMarker(wx, wy, col, glyph, showDist){
   }
   ctx.restore();
 }
+/* THE SHIELD YOU CAN SEE. A bar in the corner is not where your eyes are when
+   something is winding up at you, and a boss's shield track is 300px from the
+   boss. So the pool is drawn ON the body that owns it, and HOW MUCH IS LEFT is
+   HOW SOLID IT IS: full and it is a bright dome, half spent and it is a hint,
+   empty and there is nothing there at all. You read the number without reading
+   anything, which is the only way to read something mid-fight.
+
+   Faint on purpose. This sits on top of a body you are trying to watch, and a
+   shield you cannot see through hides the wind-up it is there to survive --
+   the same reason the mace's teeth went translucent. The RIM is what you read;
+   the fill is barely there. */
+const ES_RIM = '#dff2ff';
+const ES_BUBBLE_PAD = 11;
+function drawShieldBubble(c, o, frac, flash){
+  const f = clamp(frac || 0, 0, 1);
+  if(!(f > 0.001)) return;        /* spent is GONE, not faint */
+  const hit = clamp(flash || 0, 0, 1);
+  /* WRAPPED ROUND THE BODY THE GAME ALREADY MODELS. bodyLo/bodyHi/bodyRad are
+     what every swing and every projectile in the game is tested against, so
+     using them here means the bubble is drawn exactly where the thing it is
+     protecting can be struck -- and it fits a golem, a minifig and a bat
+     without any of the three being measured by hand.
+     `drawZ` is the one thing those cannot know: a bat is HIT as though it were
+     standing on the floor, on purpose, but it is DRAWN in the air. */
+  const lift = o.drawZ || 0;
+  const lo = bodyLo(o) - lift, hi = bodyHi(o) - lift;
+  const pad = ES_BUBBLE_PAD * Math.max(1, Math.sqrt(o.scale || 1));
+  /* it breathes, so a full shield is alive rather than a decal */
+  const wob = 1 + 0.03*Math.sin(vtime*2.4 + (o.x + o.y)*0.02);
+  const x = o.x, cy = (lo + hi)/2;
+  const rx = (bodyRad(o) + pad) * wob, ry = ((lo - hi)/2 + pad) * wob;
+  c.save();
+  c.fillStyle = ES_COL;
+  c.globalAlpha = (0.13 + 0.22*hit) * f;
+  c.beginPath(); c.ellipse(x, cy, rx, ry, 0, 0, TAU); c.fill();
+  c.strokeStyle = ES_RIM;
+  c.globalAlpha = (0.62 + 0.38*hit) * f;
+  c.lineWidth = 1.8 + 1.2*hit;
+  c.beginPath(); c.ellipse(x, cy, rx, ry, 0, 0, TAU); c.stroke();
+  /* one highlight up and to the left, so it reads as glass and not as a ring */
+  c.globalAlpha = 0.5 * f;
+  c.lineWidth = 2;
+  c.beginPath(); c.ellipse(x, cy, rx*0.78, ry*0.78, 0, Math.PI*1.08, Math.PI*1.42); c.stroke();
+  c.globalAlpha = 1;
+  c.restore();
+}
 function drawHero(c){
   const p = player;
   if(!p || p.dead) return;
@@ -19365,6 +19417,7 @@ function drawHero(c){
     whirlA: wh, elite:false, phase:0 });
   c.globalAlpha = 1;
   drawPlayerWeapon(c);
+  if(p.esMax > 0) drawShieldBubble(c, p, p.es/p.esMax, p.esFlash);
   drawHeroStacks(c, p);
 }
 /* WHAT YOU ARE CARRYING, over your own head. A ramp you cannot see is a ramp
@@ -19511,6 +19564,10 @@ function drawBatBoss(c, e){
   const sp    = diving ? 0.60 : (casting ? 1.14 : 1);
   const sweep = diving ? 0.62 : (casting ? -0.18 : 0);
   const z = (diving ? 30 : 22) + Math.sin(hov*2.4 + ph)*6 + flap*4;
+  /* how far off the floor this thing is DRAWN. Nothing that hits it reads this
+     -- a bat is struck as though it stood on the ground, which is deliberate --
+     but anything drawn around its body has to find the body. */
+  e.drawZ = z;
   const dir = (e.face && e.face.x < 0) ? -1 : 1;
   const hi = casting ? 1 : 0;
 

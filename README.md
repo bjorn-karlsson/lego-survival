@@ -1920,6 +1920,24 @@ long enough.
 · ANY damage restarts that clock, including the chaos that walked past
 ```
 
+**And you wear it.** A bar in the corner is not where your eyes are when something is winding up
+at you, and a boss's shield track is 300 pixels away from the boss. So the pool is drawn **on the
+body that owns it**, and how much is left is **how solid it is** — full and it is a bright dome,
+half spent and it is a hint, empty and there is nothing there at all. You read the number without
+reading anything, which is the only way to read something mid-fight.
+
+![The same hero at four fractions](docs/shield-fade.png)
+
+It is deliberately faint. This sits on top of a body you are trying to watch, and a shield you
+cannot see through hides the wind-up it exists to survive — the same reason the mace's teeth are
+translucent. The **rim** is what you read; the fill is barely there.
+
+The bubble is wrapped around the body the game already models — the same vertical segment every
+swing and every projectile is tested against — so it fits a minifig, a golem and a hovering bat
+without any of the three being measured by hand.
+
+![A hero and a bat boss, both shielded](docs/shield-bodies.png)
+
 ![The hero's shield, above the XP bar](docs/shield-hud.png)
 
 ![A shielded boss, mid-recharge](docs/shield-boss.png)
