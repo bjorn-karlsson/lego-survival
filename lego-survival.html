@@ -68,6 +68,12 @@
   .cpanel .cpbrick em{font-style:normal;font-size:10px;color:#a9b8ad;line-height:1.35}
   .cpanel .cpnote{font-size:10px;color:#8ea092;margin-top:9px;line-height:1.45}
   .cpanel .cpvs{font-size:9.5px;color:#8ea092;line-height:1.4;margin:-2px 0 5px}
+  /* the one way into the long list, and back out of it */
+  .cpanel .cpmore{display:block;width:100%;margin:12px 0 2px;padding:7px 10px;
+    font-family:'Titan One';font-size:10px;letter-spacing:1.4px;color:#ffe6a3;
+    background:rgba(255,214,110,.09);border:1.5px solid rgba(255,214,110,.38);
+    border-radius:8px;cursor:pointer}
+  .cpanel .cpmore:hover{background:rgba(255,214,110,.18);border-color:rgba(255,214,110,.7)}
   /* the left panel carries every probe on the character sheet now, so it is
      wider, taller and it scrolls — and the group headings stick while it does */
   #comboStats{width:400px;flex:0 1 400px}
@@ -300,7 +306,9 @@
     padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
   .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
   .cheatbtn.got{border-color:#4b9b41;color:#a5e06e}
-  #favRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:540px;margin:0 auto}
+  /* seven a row: three more hands took the sword's list to thirteen, and at six
+     a row the last one sat alone on a third line */
+  #favRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:600px;margin:0 auto}
   .fav{display:flex;flex-direction:column;align-items:center;gap:2px;width:74px;padding:6px 3px 5px;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);border-radius:13px;
     cursor:pointer;transition:transform .1s, background .1s, border-color .1s}
@@ -431,6 +439,23 @@
     border-radius:10px;padding:9px 11px;font-size:12px;color:#dfe8e0;letter-spacing:.4px}
   .tpts b{font-family:'Titan One';font-size:26px;color:#ffd76e;vertical-align:-3px;margin-right:4px}
   .tpts i{display:block;font-style:normal;color:#9fb0a4;font-size:10.5px;margin-top:3px}
+  /* the column SCROLLS; its cards do not SHRINK. With the presets block in it
+     the column outgrew the window and flex squashed the info card until its
+     text ran out of the bottom of it into the next one. */
+  .treeside > *{flex-shrink:0}
+  .tpresets{background:rgba(9,13,17,.46);border:2px solid rgba(143,212,255,.26);
+    border-radius:11px;padding:10px 13px}
+  .tpresets h4{font-family:'Titan One';font-size:10.5px;letter-spacing:2px;color:#8fd4ff;margin:0 0 7px}
+  .tprow{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;margin-bottom:7px}
+  .tprow i{grid-column:1 / -1;font-style:normal;font-size:10px;color:#9fb0a4;margin-top:-3px}
+  .tprow .tbtn{margin:0;padding:6px 10px;font-size:10px}
+  .tprow .tbtn[disabled]{opacity:.38;cursor:default;box-shadow:none}
+  .tpname{min-width:0;font-family:'Fredoka';font-size:12.5px;font-weight:600;color:#fff;
+    background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:7px;
+    padding:5px 8px;outline:none}
+  .tpname:focus{border-color:#8fd4ff;background:rgba(143,212,255,.10)}
+  .tpresets .tmeta{font-size:10.5px;color:#9fb0a4;letter-spacing:.4px}
+  .tpmsg{margin-top:6px;font-size:11px;color:#8fd4ff}
   .tbar{background:rgba(9,13,17,.46);border:2px solid rgba(255,255,255,.12);
     border-radius:11px;padding:10px 13px;font-size:12px;color:#dfe8e0;line-height:1.6}
   .tbar b{color:#ffd76e}
@@ -485,6 +510,13 @@
   .sheethead h2{font-family:'Titan One';font-size:32px;color:#fff;letter-spacing:1px;
     text-shadow:0 4px 0 rgba(0,0,0,.35)}
   .sheetsub{font-size:14px;color:#ffdada;font-weight:600;margin-top:3px}
+  /* SIMPLE / NERD: one pill, two halves, the lit one is where you are */
+  .sheetmode{display:inline-flex;margin-top:9px;border-radius:999px;overflow:hidden;
+    border:2px solid rgba(255,230,163,.45);background:rgba(9,13,17,.35)}
+  .sheetmode button{font-family:'Titan One';font-size:11px;letter-spacing:1.6px;
+    padding:5px 16px;border:0;background:transparent;color:#ffe6a3;cursor:pointer}
+  .sheetmode button.on{background:#ffd76e;color:#2a1c0c}
+  .sheetmode button:not(.on):hover{background:rgba(255,214,110,.16)}
   .sheetbody{overflow-y:auto;padding:14px 18px 4px;display:flex;flex-direction:column;gap:14px;min-height:0}
   .sheetbody::-webkit-scrollbar{width:9px}
   .sheetbody::-webkit-scrollbar-thumb{background:rgba(0,0,0,.35);border-radius:5px}
@@ -562,6 +594,7 @@
       <span><kbd>C</kbd> <b>character</b></span>
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>spellbook</b></span>
+      <span><kbd>T</kbd> <b>skill tree</b></span>
       <span><kbd>ESC</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>mute everything</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
@@ -627,9 +660,12 @@
     <div class="sheethead">
       <h2>CHARACTER</h2>
       <div class="sheetsub" id="charSub"></div>
+      <div class="sheetmode" id="sheetMode">
+        <button data-mode="simple">SIMPLE</button><button data-mode="nerd">NERD</button>
+      </div>
     </div>
     <div class="sheetbody" id="charBody"></div>
-    <div class="sheetfoot">C or ESC to close</div>
+    <div class="sheetfoot">C or ESC to close · N to switch SIMPLE / NERD</div>
   </div>
 </div>
 
@@ -641,10 +677,11 @@
     <div class="btnrow">
       <button id="resumeBtn" class="btn">RESUME</button>
       <button id="restartBtn" class="btn gray">RESTART</button>
+      <button id="pauseTreeBtn" class="btn gray">SKILL TREE</button>
       <button id="pauseOptBtn" class="btn gray">OPTIONS</button>
       <button id="pauseTitleBtn" class="btn gray">MAIN MENU</button>
     </div>
-    <div class="smallhint">P or Esc resumes · if keys don't respond, click the game once</div>
+    <div class="smallhint">Esc resumes · T opens the skill tree mid-run · if keys don't respond, click the game once</div>
   </div>
 </div>
 
@@ -2306,6 +2343,24 @@ const AIL_CRIT = { phys:0, frost:1, fire:1, shock:1, chaos:0 };
    started all of this, and any weapon swing, however converted. */
 const AIL_NATIVE = new Set(['fire', 'ember', 'frost', 'freeze',
                             'slamfire', 'slamfrost', 'slamshock']);
+/* ...AND NOT EVERY ONE OF THEM PRINTS 100%. A fireball that ignited every time
+   made "chance to ignite" a card a staff never wanted and made every other
+   fire build's ignite look like a failure beside it. It carries a GEM'S chance
+   instead -- 25%, the number PoE's own Fireball is written with -- and that
+   ADDS to whatever the build has bought, so the ailment bricks are worth
+   something to a staff for the first time. A critical still always ignites,
+   by the table above. Anything not named here keeps its 100%: Block Freeze
+   (Absolute Zero is written on top of the chill), the slam's legendary (which
+   is what it bought), and the EMBERS -- they only fly off a body that is
+   already burning, and "sets the next one alight" is the whole of what Ember
+   Scatter's card promises. An ember LANDS as a 'fire' hit, the same source as
+   the bolt, so it cannot be told apart by name: it says so on the hit instead
+   (`ailSure`), and applyAilments honours that for the spell's own element. */
+const AIL_NATIVE_CHANCE = { fire:0.25 };
+function ailNativeChance(source){
+  const v = AIL_NATIVE_CHANCE[source];
+  return v === undefined ? 1 : v;
+}
 const AIL_NAME = { phys:'BLEED', frost:'CHILL', fire:'IGNITE', shock:'SHOCK', chaos:'POISON' };
 /* ===================== HOW BIG THE HIT WAS =====================
    THREE OF THE FIVE AILMENTS ALREADY SCALED WITH THE HIT and two did not.
@@ -2370,7 +2425,13 @@ function ailChanceOf(type, source, crit){
      an edge does, and a keystone that let a fireball cut would be a different
      promise from the one written on it. */
   if(crit && p.critAilAll && !(type === 'phys' && !isAttack(source))) return 1;
-  if(AIL_NATIVE.has(source) && convFrom(source) === type) return 1;
+  if(AIL_NATIVE.has(source) && convFrom(source) === type){
+    const nat = ailNativeChance(source);
+    if(nat >= 1) return 1;
+    /* a spell's own chance is a FLOOR the build adds to, not a replacement for it */
+    return clamp(nat + (AIL_BASE[type] || 0) + (crit ? (AIL_CRIT[type] || 0) : 0)
+                 + (p.ailChance || 0), 0, 1);
+  }
   /* BLEED IS AN ATTACK AILMENT. Four of the five roll off a damage type alone,
      but a wound is a thing an edge does to a body: only a swing, its whirl, the
      vortex, bladestorm's blades and the slam can open one. An orbiting brick
@@ -2417,7 +2478,10 @@ function applyAilments(e, d, source, mix, crit, opts){
        still lands on the PART of the damage that was that type; only the odds
        stop caring how big that part was. */
     const sure = crit && p.critAilAll && !(t === 'phys' && !isAttack(source));
-    const ch = sure ? 1 : ailChanceOf(t, source, crit) * sh;
+    /* a hit that carries its spell's own certainty (an ember) keeps the old
+       native rule exactly: certain, times the share of it still that element */
+    const own = opts && opts.ailSure && AIL_NATIVE.has(source) && convFrom(source) === t;
+    const ch = sure ? 1 : (own ? 1 : ailChanceOf(t, source, crit)) * sh;
     if(!(ch > 0) || Math.random() >= ch) continue;
     const part = d * sh;
     if(t === 'phys')       bleedEnemy(e, part);
@@ -3075,6 +3139,13 @@ const keys = {};
 const mouse = { x:0, y:0, down:false, wx:0, wy:0 };
 let everInput = false;
 window.addEventListener('keydown', e=>{
+  /* A TEXT FIELD OWNS ITS KEYS. Without this, naming a preset "Tank" would type
+     a T -- which closes the tree it is being typed into. Esc leaves the field. */
+  const tg = e.target && e.target.tagName;
+  if(tg === 'INPUT' || tg === 'TEXTAREA'){
+    if(e.code === 'Escape') e.target.blur();
+    return;
+  }
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
@@ -3091,9 +3162,11 @@ window.addEventListener('keydown', e=>{
   else if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
+  if(e.code==='KeyN' && state==='char') setSheetNerd(!sheetNerd);
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
   if(e.code==='Escape' && treeOn) toggleTree();
+  else if(e.code==='KeyT' && (state==='play' || state==='tree')) toggleTree();
   if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
@@ -5250,6 +5323,7 @@ function gainXp(n, fromMob){
     logEvent('LEVEL '+p.level, '#ffb900');
     SFX.levelup();
     queuePick('level');
+    metaLiveBank();
   }
 }
 /* Damage = (Base + Flat) × (1 + increased) × ∏(1 + more).
@@ -6358,6 +6432,7 @@ function updateWave(dt){
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
       wave.done = Math.max(wave.done||0, wave.n);
+      metaLiveBank();
       const folded = wave.merged||0;
       const bonus = (4 + wave.n*2) * (1 + folded);
       showBanner(folded ? 'DOUBLE WAVE CLEARED!' : 'WAVE CLEARED!',
@@ -9264,7 +9339,14 @@ function metaApplyNode(n, p){
 }
 
 /* ---- the save. Difficulty, then WEAPON: twelve independent records. ---- */
-function blankMeta(){ return { best:{ wave:0, level:0 }, bosses:[], mastery:[], studsEarned:0, nodes:[], tv:META_TREE_VER }; }
+/* THREE NAMED PRESETS PER TREE. A preset is a saved allocation -- a name and
+   the nodes, in the order they were bought -- on the SAME record as the tree it
+   came from: a sword's build starts at the sword's door and means nothing on a
+   staff's tree, so each of the twelve trees keeps its own three. */
+const META_PRESETS = 3, META_PRESET_NAME_MAX = 24;
+function metaPresetBlank(i){ return { name:'Preset '+(i+1), nodes:[] }; }
+function blankMeta(){ return { best:{ wave:0, level:0 }, bosses:[], mastery:[], studsEarned:0, nodes:[],
+  presets:[0,1,2].map(metaPresetBlank), tv:META_TREE_VER }; }
 let META = null;
 /* how many points the last load handed back because the tree moved under them */
 let META_REFUNDED = 0;
@@ -9287,6 +9369,18 @@ function metaParseOne(r){
        points come back on their own */
     if(Array.isArray(r.nodes))
       for(const k of r.nodes) if(META_BY_ID[k] && b.nodes.indexOf(k) < 0) b.nodes.push(k);
+    /* a preset is validated like the tree itself: a name that is a string of
+       sane length, and only node ids the map still has */
+    if(Array.isArray(r.presets))
+      for(let i=0;i<META_PRESETS;i++){
+        const q = r.presets[i];
+        if(!q || typeof q !== 'object') continue;
+        const pr = b.presets[i];
+        if(typeof q.name === 'string' && q.name.trim())
+          pr.name = q.name.trim().slice(0, META_PRESET_NAME_MAX);
+        if(Array.isArray(q.nodes))
+          for(const k of q.nodes) if(META_BY_ID[k] && pr.nodes.indexOf(k) < 0) pr.nodes.push(k);
+      }
   }
   return b;
 }
@@ -9320,6 +9414,8 @@ function metaParse(raw){
     if(m.tv === META_TREE_VER) continue;
     if(m.nodes.length) META_REFUNDED += metaPointsSpent(m);
     m.nodes = []; m.tv = META_TREE_VER;
+    /* a preset saved on the old map is a shape that is not there any more */
+    for(const pr of (m.presets || [])) pr.nodes = [];
   }
   return out;
 }
@@ -9433,6 +9529,50 @@ function metaRefund(id){
   metaSave(); return true;
 }
 function metaRespec(){ const m = metaCur(); m.nodes = []; metaSave(); }
+/* SAVE is a snapshot of what is placed now, under the slot's name. */
+function metaPresetSave(i){
+  const m = metaCur(), pr = m.presets && m.presets[i];
+  if(!pr) return false;
+  pr.nodes = m.nodes.slice();
+  metaSave(); return true;
+}
+function metaPresetRename(i, name){
+  const m = metaCur(), pr = m.presets && m.presets[i];
+  if(!pr) return false;
+  const t = String(name || '').replace(/\s+/g, ' ').trim().slice(0, META_PRESET_NAME_MAX);
+  pr.name = t || metaPresetBlank(i).name;
+  metaSave(); return true;
+}
+/* LOAD IS A RESPEC INTO THE SAVED SHAPE, and it is BOUGHT, not copied: the
+   nodes are placed through the same rules a click obeys -- connected to what is
+   held, unlocked, affordable -- so a preset can never put the tree into a state
+   the tree could not have reached by hand. Several passes, because a build that
+   was refunded in the middle can hold a node before the one it now hangs from.
+   Whatever cannot be placed (a ceiling you have not reached, a node locked
+   behind a wave) is reported rather than forced. Never mid-run: that would be
+   a refund, and refunds wait for the run to end. */
+function metaPresetLoad(i){
+  if(state === 'tree') return null;
+  const m = metaCur(), pr = m.presets && m.presets[i];
+  if(!pr || !pr.nodes.length) return null;
+  m.nodes = [];
+  let grew = true, guard = 0;
+  while(grew && guard++ < 50){
+    grew = false;
+    for(const id of pr.nodes){
+      if(m.nodes.indexOf(id) >= 0) continue;
+      const n = META_BY_ID[id];
+      if(n && metaCanBuy(n, m)){ m.nodes.push(id); grew = true; }
+    }
+  }
+  metaSave();
+  return { placed:m.nodes.length, of:pr.nodes.length };
+}
+function metaPresetCost(pr){
+  let t = 0;
+  for(const id of pr.nodes){ const n = META_BY_ID[id]; if(n) t += metaCost(n); }
+  return t;
+}
 function metaToggle(){ if(!META) metaLoad(); META.on = !META.on; metaSave(); return META.on; }
 /* A COST RISE CAN LEAVE A SAVE OVERSPENT, and a layout change can leave it
    disconnected. Refund the newest nodes until both hold. */
@@ -9504,11 +9644,66 @@ function metaStatLines(m){
                                     col:(META_STATS[k] && META_STATS[k].col) || '',
                                     good:metaModGood([k, tot[k]]) }));
 }
+/* ---- THE TREE, DURING A RUN ----
+   A level used to be worth a skill point only once you DIED: the record was
+   written by metaBank at the end, so a hero who reached level 38 on a fresh
+   character spent the whole run with the points they were earning sitting in
+   the future. The records are written the moment they are set now -- a new
+   best level on the level-up, a new best wave on the clear -- and the tree
+   opens on T mid-run, with the game frozen behind it, to spend them.
+   `metaRun` is what the records were when THIS run began, so the death screen
+   can still say what the run was worth: without it, a record already banked
+   live would read as "nothing new". */
+let metaRun = null;
+function metaLiveBank(){
+  if(!metaRun || !META || !META.on || !player || state !== 'play') return 0;
+  const m = metaCur();
+  const before = metaPointsEarned(m);
+  const lvl = Math.max(0, player.level||0), done = wavesCleared();
+  let moved = false;
+  if(lvl  > (m.best.level||0)){ m.best.level = lvl;  moved = true; }
+  if(done > (m.best.wave||0)){  m.best.wave  = done; moved = true; }
+  if(!moved) return 0;
+  metaSave();
+  const got = metaPointsEarned(m) - before;
+  if(got > 0){
+    logEvent('+'+got+' SKILL POINT'+(got>1?'S':'')+' \u2014 press T to place', '#8fd4ff');
+    addDmg(player.x, player.y-74, '+'+got+' SKILL POINT \u00b7 T', '#8fd4ff', 15);
+  }
+  return got;
+}
+/* A NODE BOUGHT MID-RUN LANDS ON THE HERO NOW. The tree only ever writes
+   POOLS (invariant 4), so applying one node on top of a live hero is exactly
+   what applying it at the start would have done, and syncStats rebuilds every
+   number that reads them. A node that hands over a BRICK hands it over now. */
+function metaGrantBricks(list){
+  for(const g of list){
+    const u = UPGRADES.find(x=>SPELL_GRANT[x.id] === g);
+    if(!u) continue;
+    try { if(u.req && !u.req()) continue; } catch(e){ continue; }
+    try { applyPick(u, 'common'); } catch(e){}
+  }
+}
+function metaBuyLive(id){
+  if(!metaBuy(id)) return false;
+  if(state === 'tree' && player && META && META.on){
+    const n = META_BY_ID[id];
+    const had = (player.metaGrants || []).length;
+    metaApplyNode(n, player);
+    metaClampFlags(player);
+    metaGrantBricks((player.metaGrants || []).slice(had));
+    syncStats();
+    logEvent('TREE \u2014 '+n.name, '#8fd4ff');
+  }
+  return true;
+}
 /* ---- what a finished run is worth ---- */
 function metaBank(){
   if(!META) metaLoad();
   const m = metaCur(), p = player;
-  const before = metaPointsEarned(m);
+  /* measured from where THIS RUN began, not from the records -- which the run
+     may already have moved, live, on the level-up and the wave clear */
+  const before = metaRun ? metaRun.earned : metaPointsEarned(m);
   const collected = Math.max(0, Math.round(p.studsTotal||0));
   const banked = Math.floor(META_BANK_K * Math.sqrt(collected) * (p.bankMul||1));
   m.studsEarned += banked;
@@ -9522,17 +9717,21 @@ function metaBank(){
   const firsts = [];
   /* THE HIGH-WATER MARK. Beating your own best by two waves is worth two
      points; beating it by nothing is worth nothing, however long the run was. */
-  const wasWave = m.best.wave||0;
+  const wasWave = metaRun ? metaRun.wave : (m.best.wave||0);
   if(done > wasWave){
     firsts.push({ text:'wave '+done, pts:done - wasWave });
-    m.best.wave = done;
+    m.best.wave = Math.max(m.best.wave||0, done);
   }
-  const lvl = Math.max(0, p.level||0), wasLvl = m.best.level||0;
+  const lvl = Math.max(0, p.level||0), wasLvl = metaRun ? metaRun.level : (m.best.level||0);
   if(lvl > wasLvl){
     firsts.push({ text:'level '+lvl, pts:(lvl - wasLvl) * META_POINTS_PER_LEVEL });
-    m.best.level = lvl;
+    m.best.level = Math.max(m.best.level||0, lvl);
   }
   metaSave();
+  /* A BANKED RUN IS OVER. Its snapshot goes with it, so nothing can bank it
+     live again and a second call (there should never be one) reads the save
+     like it always did instead of paying the same run twice. */
+  metaRun = null;
   return { banked, collected, firsts, cleared:done, level:lvl,
            gained: metaPointsEarned(m) - before,
            total: m.studsEarned, left: metaPointsLeft(m) };
@@ -9573,6 +9772,8 @@ const TREE_VIEW = (function(){
            cx:(x0+x1)/2, cy:(y0+y1)/2 };
 })();
 let treeOn = false, treePick = null, treeRefund = false, treeHover = null;
+/* one line of feedback after SAVE or LOAD, shown on the next render only */
+let treePresetMsg = '';
 /* the three country washes. Remembered like every other preference. */
 let treeSectors = false;
 try { treeSectors = localStorage.getItem('bb_treesec') === '1'; } catch(e){}
@@ -9893,6 +10094,24 @@ function renderTree(){
       <i>${metaLevelPoints(m)} from level ${m.best.level||0} (${META_POINTS_PER_LEVEL} a level)
       · ${(m.bosses||[]).length} bosses · ${(m.mastery||[]).length}/${Object.keys(META_MASTERY).length} mastered
       · all with THIS weapon</i></div>
+    <div class="tpresets">
+      <h4>PRESETS</h4>
+      ${(m.presets || []).map((pr, i)=>{
+        const cost = metaPresetCost(pr), same = pr.nodes.length === m.nodes.length
+          && pr.nodes.every(id=>m.nodes.indexOf(id) >= 0);
+        return `<div class="tprow">
+          <input class="tpname" data-i="${i}" maxlength="${META_PRESET_NAME_MAX}"
+            value="${esc(pr.name)}" spellcheck="false" aria-label="preset ${i+1} name">
+          <button class="tbtn gray tpsave" data-i="${i}">SAVE</button>
+          <button class="tbtn tpload" data-i="${i}"${(!pr.nodes.length || state === 'tree') ? ' disabled' : ''}>LOAD</button>
+          <i>${pr.nodes.length ? cost+' point'+(cost===1?'':'s')+(same ? ' \u00b7 what you have now' : '')
+                               : 'empty'}</i>
+        </div>`;}).join('')}
+      <div class="tmeta">${state === 'tree'
+        ? 'mid-run you can SAVE; LOADING is a respec and waits for the run to end'
+        : 'SAVE keeps what is placed now. LOAD takes it all back and places the preset'}</div>
+      ${treePresetMsg ? `<div class="tpmsg">${esc(treePresetMsg)}</div>` : ''}
+    </div>
     <div class="tbar"><b>${m.studsEarned}</b> studs banked
       <i>a lifetime count. Studs buy bricks inside a run and nothing at all in here</i></div>
     <div class="tstats">
@@ -9935,19 +10154,53 @@ function renderTree(){
       ev.stopPropagation();
       if(treeDragged) return;          /* that was a pan, not a purchase */
       treePick = id;
-      if(treeRefund){ if(metaRefund(id)) SFX.click(); else SFX.clank && SFX.clank(); }
-      else if(metaBuy(id)) SFX.pick();
+      if(treeRefund && state !== 'tree'){ if(metaRefund(id)) SFX.click(); else SFX.clank && SFX.clank(); }
+      else if(metaBuyLive(id)) SFX.pick();
       else SFX.click();
       renderTree(); refreshTreeBtn();
     });
   }
+  /* MID-RUN THE TREE ONLY GROWS. A point placed lands on the hero at once;
+     taking one back would mean unpicking a node from a live hero, and the
+     switches some nodes throw do not unpick cleanly -- so refunds, CLEAR ALL
+     and the on/off switch wait for the run to end, and say so. */
+  const live = state === 'tree';
+  for(const bid of ['respecBtn','clearBtn','treeOffBtn']){
+    const b = document.getElementById(bid);
+    if(b) b.style.display = live ? 'none' : '';
+  }
+  /* the three preset rows */
+  for(const inp of body.querySelectorAll('.tpname')){
+    inp.addEventListener('change', ()=>{ metaPresetRename(+inp.dataset.i, inp.value); });
+    inp.addEventListener('keydown', ev=>{ if(ev.key === 'Enter') inp.blur(); });
+  }
+  for(const b2 of body.querySelectorAll('.tpsave'))
+    b2.addEventListener('click', ()=>{
+      const i = +b2.dataset.i, inp = body.querySelector('.tpname[data-i="'+i+'"]');
+      if(inp) metaPresetRename(i, inp.value);
+      metaPresetSave(i); SFX.pick();
+      treePresetMsg = 'saved to ' + metaCur().presets[i].name;
+      renderTree(); });
+  for(const b2 of body.querySelectorAll('.tpload'))
+    b2.addEventListener('click', ()=>{
+      const i = +b2.dataset.i, r = metaPresetLoad(i);
+      if(!r){ SFX.click(); return; }
+      SFX.pick(); treePick = null; treeRefund = false;
+      treePresetMsg = 'loaded ' + metaCur().presets[i].name + (r.placed < r.of
+        ? ' \u2014 placed ' + r.placed + ' of ' + r.of + '; the rest need points or waves you do not have yet'
+        : '');
+      renderTree(); refreshTreeBtn(); });
+  treePresetMsg = '';
   const rb = document.getElementById('respecBtn');
   if(rb){ rb.textContent = treeRefund ? 'REFUNDING — CLICK A NODE' : 'REFUND MODE';
           rb.classList.toggle('on', treeRefund); }
   const off = document.getElementById('treeOffBtn');
   if(off) off.textContent = META.on ? 'APPLIED TO RUNS' : 'NOT APPLIED';
   const note = document.getElementById('treeNote');
-  if(note) note.textContent = treeRefund
+  if(note && live) note.textContent = META.on
+    ? 'MID-RUN \u2014 a point you place lands on your hero now. Refunds wait for the run to end.'
+    : 'the tree is switched off for this run \u2014 points placed now wait for the next one';
+  else if(note) note.textContent = treeRefund
     ? 'click any node you hold to take the point back — free, and one at a time'
     : (META.on ? 'applied when a run starts — never to the test bench’s preview heroes'
                : 'switched off: runs are played on the raw numbers');
@@ -9970,14 +10223,37 @@ function treeTipHide(){
   const t = document.getElementById('treeTip');
   if(t) t.classList.remove('on');
 }
+/* THREE DOORS NOW: the title, T in a run, and the pause menu. From a run it
+   takes `state` to 'tree', which freezes the world exactly like the character
+   sheet does (only 'play' updates anything), and closing puts you back where
+   you came from -- a paused run stays paused. */
+let treeFrom = 'title';
 function toggleTree(){
   treeTipHide();
   const el = document.getElementById('treeScreen');
   if(!el) return;
   treeOn = !treeOn;
-  if(treeOn){ treePick = null; treeRefund = false; renderTree(); treeFit();
-              el.classList.remove('hidden'); }
-  else el.classList.add('hidden');
+  if(treeOn){
+    treeFrom = (state === 'play' || state === 'pause') ? state : 'title';
+    if(treeFrom !== 'title'){
+      document.getElementById('pauseScreen').classList.add('hidden');
+      state = 'tree'; cv.style.cursor = 'default';
+    }
+    treePick = null; treeRefund = false; renderTree(); treeFit();
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+    if(state === 'tree'){
+      if(treeFrom === 'pause'){
+        state = 'pause';
+        document.getElementById('pauseScreen').classList.remove('hidden');
+      } else {
+        state = 'play'; cv.style.cursor = 'none';
+        try{ window.focus(); }catch(err){}
+      }
+    }
+    treeFrom = 'title';
+  }
 }
 /* A favourite doesn't grant anything — it just weights its own bricks (and the
    mastery that scales them) heavier in every wave and level reward. */
@@ -10044,7 +10320,22 @@ const FAV_PERKS = {
                   '+0.02 hearts/s regeneration'],
     apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
       for(const el of ELEMENTS) p.resFlat[el] += 0.08;
-      p.regenFlat += 0.02; } }
+      p.regenFlat += 0.02; } },
+  /* ---- ONE HAND PER ATTRIBUTE. Everything the last three passes added --
+     accuracy, evasion, energy shield, the attributes that feed them -- was a
+     brick you could be offered and never a way to START. Each attribute already
+     owns a defence (strength the hearts, dexterity the dodge, intelligence the
+     shield), so each gets the opening hand that leans on it: some of the
+     attribute, the defence it pays for, and its bricks up more often. ---- */
+  might: { lines:['+16 STRENGTH (+8% physical damage, +8% max hearts)', '+1 max heart',
+                  '+20 armour'],
+    apply(p){ p.attr.str += 16; p.hpFlat += 1; p.hp += 1; p.armourFlat += 20; } },
+  finesse: { lines:['+16 DEXTERITY (+32 accuracy, +3% evasion, +5% crit and swing rate)',
+                    '+160 evasion — you begin hard to catch', '+60 accuracy'],
+    apply(p){ p.attr.dex += 16; p.evaFlat += 160; p.accFlat += 60; } },
+  ward: { lines:['+16 INTELLIGENCE (+8% spell damage, +3% energy shield)',
+                 'Start with a 3-point energy shield', '+20% increased energy shield'],
+    apply(p){ p.attr.int += 16; p.esFlat += 3; p.inc.es += 0.20; } }
 };
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];
@@ -10083,7 +10374,16 @@ const FAVOURITES = [
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
   { id:'bane',    name:'Brickbane',    icon:'bane',    ids:['bane','banearc','baner','banerate','banedot','banedotinc','orbm'] },
   { id:'tough',   name:'Tough Bricks', icon:'shield',
-    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
+    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] },
+  /* the three attribute hands. None is gated: every weapon has hearts, every
+     weapon can dodge, every weapon can carry a shield -- and a card a weapon
+     cannot use (accuracy on a staff) is already kept out by its own `req` */
+  { id:'might',   name:'Brute Strength', icon:'fist',
+    ids:['attstr','attall','hp','heart','armor','armorinc','dmg'] },
+  { id:'finesse', name:'Fleetfoot',      icon:'boot',
+    ids:['attdex','attall','eva','evainc','acc','accinc','crit','aspd'] },
+  { id:'ward',    name:'Arcane Ward',    icon:'ward',
+    ids:['attint','attall','es','esinc','chaosres','resall','suppress'] }
 ];
 let favourite = FAVOURITES[0];
 let godMode = false;
@@ -10261,7 +10561,8 @@ function weaponTip(w){
     L.push('It REPLACES the swing: no reach, no bleed,');
     L.push('no spin combo. Physical bricks are not offered');
     L.push('to you; the elemental ones are.');
-    L.push('Every bolt sets a fire. Five stacks is the');
+    L.push('A bolt has a 25% chance to set a fire, and a');
+    L.push('critical always does. Five stacks is the');
     L.push('threshold: from there every fire can BRAND the');
     L.push('body BURNT, and a deeper fire brands sooner.');
   } else {
@@ -10357,7 +10658,12 @@ function statTipHide(){ if(statTipEl) statTipEl.style.display = 'none'; }
 /* THE SAME BOX, GIVEN HTML AND PLACED WHERE IT FITS. Preferred above the row,
    dropped below when there is no room above, clamped to the viewport either
    way, and allowed to scroll rather than run off the top of the window. */
-function floatTipShow(row, html, cls){
+/* `side` puts the tip BESIDE the row instead of above it. The weapon card is
+   taller than the gap above or below a button in the middle of the title card,
+   so the above/below rule clamped it straight down on top of the button -- the
+   card covered its own label and the pointer that summoned it. Beside it, it
+   is the same card at the same size, and the pointer stays visible. */
+function floatTipShow(row, html, cls, side){
   const el = statTip();
   el.className = cls || '';
   el.style.maxHeight = 'none';
@@ -10370,6 +10676,19 @@ function floatTipShow(row, html, cls){
   if(el.offsetHeight > room){ el.style.maxHeight = room+'px'; el.style.overflowY = 'auto'; }
   else el.style.overflowY = 'visible';
   const w = el.offsetWidth, h = el.offsetHeight;
+  if(side){
+    const GAP = 22;
+    /* right of the row when it fits, left of it when it does not */
+    let x = r.right + GAP;
+    if(x + w > window.innerWidth - 8) x = r.left - w - GAP;
+    x = Math.max(8, x);
+    /* level with the row, then kept on screen */
+    let y = r.top + r.height/2 - h/2;
+    y = Math.min(Math.max(PADV, y), Math.max(PADV, window.innerHeight - h - PADV));
+    el.style.left = Math.round(x)+'px';
+    el.style.top  = Math.round(y)+'px';
+    return;
+  }
   let x = Math.round(r.left + r.width/2 - w/2);
   x = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8));
   let y = r.top - h - 12;
@@ -10474,7 +10793,8 @@ function comboLayers(){
     head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : physDamage()),
     tip:`${weapon.name}, every ${hero.atkRate.toFixed(2)}s\n`+
         `${fmtHp(swordDps())} a second sustained, crits folded in\n`+
-        (isCaster() ? `${Math.round(boltRadius())} burst radius, and every bolt sets a fire`
+        (isCaster() ? `${Math.round(boltRadius())} burst radius, `+
+            `${Math.round(ailChanceOf('fire','fire',false)*100)}% to set a fire (a crit always does)`
          : isSlammer() ? `A fault of ${SLAM_MAX_HITS} teeth, ${Math.round(SLAM_SHARE*100)}% of a swing each`
          : `${Math.round(hero.reach)} reach, every third swing is the spin combo`) });
   try { for(const sp of spellSummaries()) out.abilities.push(sp); } catch(e){}
@@ -10485,12 +10805,18 @@ function comboLayers(){
 }
 /* every probe, in the order the character sheet lists them, with the layer that
    moved it named beside it */
-function comboStatRows(L){
+function comboStatRows(L, all){
   const parts = [];
   let group = null;
+  /* THE SHORT LIST: only the basic probes, under the simple headings, and only
+     the ones this hero actually HAS -- a sword is not shown its bolt damage as
+     a dash, it is simply not shown it. */
+  const short = {};
   for(const q of STAT_PROBES){
+    if(!all && !q.basic) continue;
     const k = q.g+'|'+q.k;
     const v = { bare:L.bare[k], weap:L.weap[k], fav:L.fav[k], tree:L.tree[k] };
+    if(!all && !(v.tree > 0 || v.tree < 0)) continue;
     const chips = [];
     for(let i=1;i<CP_LAYERS.length;i++){
       const cur = CP_LAYERS[i], prev = CP_LAYERS[i-1];
@@ -10501,15 +10827,21 @@ function comboStatRows(L){
     }
     const dead = !v.bare && !v.weap && !v.fav && !v.tree;
     if(dead && !q.zero) continue;                 /* a probe that is off for everyone */
+    const why = statWhy(q.g, q.k) || '';
+    const html = `<div class="cprow cpstat${dead?' cpdim':''}${why?' cptip':''}"`+
+      `${why?` data-why="${esc(why)}"`:''}>`+
+      /* the W/F/T chips need the legend the long list prints above them; the
+         short list has no legend, so it has no chips -- a number, not a sum */
+      `<span>${esc(q.k)}</span><b>${cpFmt(v.tree, q)}${all ? chips.join('') : ''}</b></div>`;
+    if(!all){ (short[q.basic] = short[q.basic] || []).push(html); continue; }
     if(q.g !== group){
       group = q.g;
       parts.push(`<div class="cphead cpgrp">${esc(group)}</div>`);
     }
-    const why = statWhy(q.g, q.k) || '';
-    parts.push(`<div class="cprow cpstat${dead?' cpdim':''}${why?' cptip':''}"`+
-      `${why?` data-why="${esc(why)}"`:''}>`+
-      `<span>${esc(q.k)}</span><b>${cpFmt(v.tree, q)}${chips.join('')}</b></div>`);
+    parts.push(html);
   }
+  if(!all) for(const h of STAT_BASIC_ORDER) if(short[h])
+    parts.push(`<div class="cphead cpgrp">${h}</div>` + short[h].join(''));
   return parts.join('');
 }
 function cpFmt(v, q){ try { return q.fmt ? q.fmt(v) : (Math.round(v*100)/100).toString(); }
@@ -10519,6 +10851,18 @@ function cpNum(v, q){
   const t = cpFmt(v, q);
   const m = /^[^0-9-]*(-?[\d.,]+)\s*(.*)$/.exec(t);
   return m ? (m[1] + (m[2] && m[2].length <= 2 ? m[2] : '')) : t;
+}
+/* SHORT BY DEFAULT. The menu is the first thing a new player reads, and it was
+   handing them every number in the game -- burning rows for a sword, ceilings
+   nobody reaches for an hour. It opens on the short list now, and the button
+   at the bottom of it is the whole panel, exactly as it was. Remembered, so a
+   player who wants the lot only asks once. */
+let menuStatsAll = false;
+try { menuStatsAll = localStorage.getItem('bb_menustats') === '1'; } catch(e){}
+function setMenuStatsAll(on){
+  menuStatsAll = !!on;
+  try { localStorage.setItem('bb_menustats', menuStatsAll ? '1' : '0'); } catch(e){}
+  buildComboPanel();
 }
 function buildComboPanel(){
   const stats = document.getElementById('comboStats');
@@ -10568,14 +10912,21 @@ function buildComboPanel(){
     `<div class="cphead">ABILITIES</div>
      <div class="cpvs">what you open with. Hover one for its damage</div>` +
     abil +
+    (menuStatsAll ?
     `<div class="cphead">EVERY STAT</div>
      <div class="cpvs">the finished number, and which layer moved it:
        <i class="cpchip cpleg up">W</i> weapon
        <i class="cpchip cpleg up">F</i> favourite
        <i class="cpchip cpleg up">T</i> skill tree.
        Everything is measured from BARE HANDS \u2014 a level-1 hero holding nothing.
-       Hover a row for what it means.</div>` +
-    comboStatRows(L) +
+       Hover a row for what it means.</div>`
+    : `<div class="cphead">YOUR STATS</div>
+       <div class="cpvs">what you start the run with. Hover a row for what it means.</div>`) +
+    comboStatRows(L, menuStatsAll) +
+    `<button class="cpmore" id="cpMore">${menuStatsAll
+        ? 'SHOW FEWER STATS'
+        : 'SHOW EVERY STAT & THE CEILINGS'}</button>` +
+    (!menuStatsAll ? '' :
     `<div class="cphead">CEILINGS</div>
      <div class="cpvs">nothing in a run climbs past these, however long it runs</div>` +
     orow('Increased damage', Math.round(INC_DMG_CAP*100)+'%',
@@ -10588,7 +10939,9 @@ function buildComboPanel(){
       orow(esc(SPELL_NAME[k]||k)+' floor', SPELL_FLOOR[k].toFixed(2)+'s',
         `however much CAST SPEED you buy, ${SPELL_NAME[k]||k} never comes round faster than this`)).join('') +
     orow('Guardian ring', ORBIT_MAX_SPD.toFixed(1)+' rad/s',
-      'past this the guardian bricks strobe instead of spinning');
+      'past this the guardian bricks strobe instead of spinning'));
+  { const more = document.getElementById('cpMore');
+    if(more) more.addEventListener('click', ()=>{ SFX.click(); setMenuStatsAll(!menuStatsAll); }); }
 
   el.innerHTML =
     (bricks ? `<div class="cphead">BRICKS THAT COME UP MORE OFTEN</div>${bricks}
@@ -10614,7 +10967,7 @@ function buildWeaponRow(){
   for(const el of row.children){
     el.addEventListener('click', ()=>{ SFX.click(); setWeapon(el.dataset.weapon); });
     el.addEventListener('mouseenter', ()=>
-      floatTipShow(el, weaponTip(WEAPONS[el.dataset.weapon]), 'wtipbox'));
+      floatTipShow(el, weaponTip(WEAPONS[el.dataset.weapon]), 'wtipbox', true));
     el.addEventListener('mouseleave', statTipHide);
   }
   let saved = 'sword';
@@ -11262,20 +11615,28 @@ function statWhy(sOrG, k){
   return (pr && pr.why) || '';
 }
 /* `hi:false` marks a stat where SMALLER is better — cooldowns, mostly. */
+/* THE SHORT LIST. A new player opening the menu or pressing C was handed 168
+   numbers, most of them the inside of a mechanic they have not met yet. A
+   probe with `basic` is one a player needs to read to play -- how hard, how
+   often, how tough, how fast -- and its value is the heading it sits under in
+   the SIMPLE views. It is a field on the probe rather than a second list, so
+   the simple view and the full one can never disagree about a number: they
+   are the same row, and one of them just shows fewer. */
+const STAT_BASIC_ORDER = ['OFFENCE', 'DEFENCE', 'RESISTANCE', 'ATTRIBUTES', 'MOVEMENT'];
 const STAT_PROBES = [
   /* THE FIREBALL IS NOT "ELEMENTAL". Elemental is the GLOBAL tree — the pools
      every elemental source in the game reads. The staff's own attack is one
      ability like any other, and filing it under the global tree made a card
      that widened the burst look like a card that changed the whole build. */
-  { g:'FIREBALL', k:'Bolt damage',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true,
+  { g:'FIREBALL', k:'Bolt damage', basic:'OFFENCE',        get:()=> isCaster() ? boltDamage() : 0, fmt:v=>fmtHp(v), zero:true,
     why:'what one fireball lands for on impact, before the fire it leaves behind' },
   { g:'FIREBALL', k:'Bolt base + flat',   get:()=> isCaster() ? boltBase() : 0,   fmt:v=>v.toFixed(2), zero:true,
     why:'the weapon base plus every FLAT elemental brick — the number every increase then multiplies' },
   { g:'FIREBALL', k:'Burst radius',       get:()=> isCaster() ? boltRadius() : 0, fmt:v=>Math.round(v)+' px', zero:true,
     why:'everything inside this takes the hit and catches fire, so it is area AND ignition' },
-  { g:'FIREBALL', k:'Casts a second',     get:()=> isCaster() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
+  { g:'FIREBALL', k:'Casts a second', basic:'OFFENCE',     get:()=> isCaster() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
     why:'your own hands — ATTACK SPEED, not the CAST SPEED that shortens your abilities' },
-  { g:'FIREBALL', k:'Bolt DPS',           get:()=> isCaster() ? boltDamage()/player.atkRate : 0, fmt:v=>v.toFixed(1), zero:true,
+  { g:'FIREBALL', k:'Bolt DPS', basic:'OFFENCE',           get:()=> isCaster() ? boltDamage()/player.atkRate : 0, fmt:v=>v.toFixed(1), zero:true,
     why:'impact damage only, one target, before burning and before crits' },
   { g:'FIREBALL', k:'Embers per trigger', get:()=> EMBER_SHOTS[(player&&player.ember)||0]||0, fmt:v=>Math.round(v)+'', zero:true,
     why:'hitting an ALREADY BURNING body throws this many embers, each seeking a body that is not yet alight' },
@@ -11326,7 +11687,7 @@ const STAT_PROBES = [
     why:'frost only — Block Freeze and every chill it lays. Adds into the elemental pool, never multiplies it' },
   { g:'ELEMENTAL', k:'Increased lightning',get:()=> ((player&&player.inc.shock)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'lightning only — every storm bolt and every leap it makes. Adds into the elemental pool, never multiplies it' },
-  { g:'ELEMENTAL', k:'Chaos resistance',   get:()=> Math.min(RES_CAP, (player&&player.res&&player.res.chaos)||0)*100,
+  { g:'ELEMENTAL', k:'Chaos resistance', basic:'RESISTANCE',   get:()=> Math.min(RES_CAP, (player&&player.res&&player.res.chaos)||0)*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'chaos is not an element — nothing that says "every elemental resistance" covers this one, '+
         'and no curse that sunders them reaches it. Poison is chaos damage over time, so this is what '+
@@ -11347,16 +11708,16 @@ const STAT_PROBES = [
     fmt:v=>v.toFixed(2)+'×', zero:true,
     why:'what conversion does to the SIZE of a hit, before any monster sees it. Above one means the '+
         'increases on what it became beat the increases on what it was; GAIN AS EXTRA always pushes it up' },
-  { g:'PHYSICAL', k:'Weapon hit',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Weapon hit', basic:'OFFENCE',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
-  { g:'PHYSICAL', k:'Sustained DPS',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
+  { g:'PHYSICAL', k:'Sustained DPS', basic:'OFFENCE',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
     why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth' },
   { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && !isSlammer() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
   { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : (isSlammer() ? slamBase() : physBase()), fmt:v=>v.toFixed(2), zero:true },
-  { g:'PHYSICAL', k:'Swing rate',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
+  { g:'PHYSICAL', k:'Swing rate', basic:'OFFENCE',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
   { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
-  { g:'PHYSICAL', k:'Crit chance',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
+  { g:'PHYSICAL', k:'Crit chance', basic:'OFFENCE',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
   /* ONE ROW PER AILMENT, and the row is the chance the hit actually rolls. These
      read ailChanceOf, so nothing here can drift away from what applyAilments does
      — which is how shock spent a build being the storm brick's private stat. */
@@ -11383,7 +11744,7 @@ const STAT_PROBES = [
     why:'brings the whole scale closer: the same hit counts for more, so smaller blows still chill and shock' },
   /* ---- THE CONTEST, on the sheet, as a CHANCE and not a rating. Nobody can
      read 840 against 420; everybody can read 87%. ---- */
-  { g:'ACCURACY', k:'Accuracy', get:()=> accuracyValue(), fmt:v=>Math.round(v)+'',
+  { g:'ACCURACY', k:'Accuracy', basic:'OFFENCE', get:()=> accuracyValue(), fmt:v=>Math.round(v)+'',
     why:'attacks only \u2014 a spell arrives where it was aimed. The weapon is a MORE '+
         'multiplier over the whole pool, and dexterity pays '+ATTR_DEX_ACC+' a point into it' },
   { g:'ACCURACY', k:'vs an ordinary body', get:()=> hitChance(accuracyValue(), EVA_BASE)*100,
@@ -11393,7 +11754,7 @@ const STAT_PROBES = [
   { g:'ACCURACY', k:'vs a hard dodger', get:()=> hitChance(accuracyValue(), EVA_BASE*3)*100,
     fmt:v=>v.toFixed(1)+'%',
     why:'a shade, or anything under SLIPPERY. This is the number accuracy is bought for' },
-  { g:'ENERGY SHIELD', k:'Maximum', get:()=> player ? player.esMax : 0,
+  { g:'ENERGY SHIELD', k:'Maximum', basic:'DEFENCE', get:()=> player ? player.esMax : 0,
     fmt:v=>fmtHp(v), zero:true,
     why:'a second bar in front of your hearts. It takes the hit first, and CHAOS goes '+
         'straight through it \u2014 a dose is the one thing it cannot stop' },
@@ -11410,7 +11771,7 @@ const STAT_PROBES = [
   { g:'ENERGY SHIELD', k:'From intelligence', get:()=> intOf()*ATTR_INT_ES*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'+'+(ATTR_INT_ES*100)+'% increased maximum energy shield per point of INT' },
-  { g:'EVASION', k:'Evasion', get:()=> evasionValue(), fmt:v=>Math.round(v)+'', zero:true,
+  { g:'EVASION', k:'Evasion', basic:'DEFENCE', get:()=> evasionValue(), fmt:v=>Math.round(v)+'', zero:true,
     why:'you start with NONE \u2014 armour is the defence you begin with, evasion is the one '+
         'you choose. It does nothing against a spell' },
   { g:'EVASION', k:'An ordinary swing lands', get:()=> hitChance(ACC_MOB_BASE, evasionValue())*100,
@@ -11466,7 +11827,7 @@ const STAT_PROBES = [
     why:'all '+BLEED_STACK_MAX+' wounds bleeding at once. This is why staying on a boss beats hitting it harder once' },
   { g:'BLEED', k:'Wounds at once',  get:()=> BLEED_STACK_MAX, fmt:v=>Math.round(v)+'',
     why:'past this a new cut displaces the SHALLOWEST wound, and only if it is deeper than that one' },
-  { g:'SWORD', k:'Crit damage',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
+  { g:'SWORD', k:'Crit damage', basic:'OFFENCE',     get:()=> critMultPct(),            fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased melee',get:()=> player.incMelee*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased spell',get:()=> player.incSpell*100,      fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Increased all',  get:()=> player.incAll*100,        fmt:v=>Math.round(v)+'%' },
@@ -11475,7 +11836,7 @@ const STAT_PROBES = [
   { g:'DAMAGE', k:'On a spell hit', get:()=> incTotal('spell')*100,    fmt:v=>Math.round(v)+'%' },
   { g:'DAMAGE', k:'Damage over time', get:()=> dotInc(),               fmt:v=>Math.round(v*100)+'%' },
   { g:'DAMAGE', k:'More damage',    get:()=> moreShown(),              fmt:v=>'×'+v.toFixed(2) },
-  { g:'GROUND SLAM', k:'Damage a tooth', get:()=> isSlammer() ? slamSpikeDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
+  { g:'GROUND SLAM', k:'Damage a tooth', basic:'OFFENCE', get:()=> isSlammer() ? slamSpikeDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
     why:'one stone tooth. A body in the fan is bitten by up to '+SLAM_MAX_HITS+' of them, so a slam landed dead centre is worth several' },
   { g:'GROUND SLAM', k:'Base + flat',    get:()=> isSlammer() ? slamBase() : 0, fmt:v=>v.toFixed(2), zero:true,
     why:'the weapon plus every FLAT physical brick and every Fault Hammer — the number the increases then multiply' },
@@ -11489,19 +11850,19 @@ const STAT_PROBES = [
   { g:'GROUND SLAM', k:'Teeth a slam',   get:()=> isSlammer() ? slamRays(player.slamArc)*Math.max(2, Math.round(player.slamRange/SLAM_STEP)) : 0,
     fmt:v=>Math.round(v)+'', zero:true,
     why:'lines of stone times rows. Widening the fault adds lines, deepening it adds rows' },
-  { g:'GROUND SLAM', k:'Slams a second', get:()=> isSlammer() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
+  { g:'GROUND SLAM', k:'Slams a second', basic:'OFFENCE', get:()=> isSlammer() ? 1/player.atkRate : 0, fmt:v=>v.toFixed(2)+'/s', zero:true,
     why:'how often the fault opens. It is the ATTACK SPEED pool, so every brick that speeds a '+
         'swing speeds the slam — and it meets the same floor a swing does' },
   { g:'GROUND SLAM', k:'Element cycle',  get:()=> (player.slam && player.slam.elem) || 0, fmt:v=>v>=2?'ring + cycle':(v?'cycling':'\u2014'), zero:true,
     why:'SLAM OF THE ELEMENTS: each slam converts half of every tooth into fire, then lightning, then frost, and brings that ailment with it' },
-  { g:'ATTRIBUTES', k:'Strength',     get:()=> strOf(), fmt:v=>Math.round(v)+'', zero:true,
+  { g:'ATTRIBUTES', k:'Strength', basic:'ATTRIBUTES',     get:()=> strOf(), fmt:v=>Math.round(v)+'', zero:true,
     why:'the weapon\u2019s own plus every brick and node that handed some over. '+
         'Each point is +'+(ATTR_STR_DMG*100)+'% increased PHYSICAL damage and '+
         '+'+(ATTR_STR_HP*100)+'% increased MAXIMUM HEARTS' },
-  { g:'ATTRIBUTES', k:'Intelligence', get:()=> intOf(), fmt:v=>Math.round(v)+'', zero:true,
+  { g:'ATTRIBUTES', k:'Intelligence', basic:'ATTRIBUTES', get:()=> intOf(), fmt:v=>Math.round(v)+'', zero:true,
     why:'each point is +'+(ATTR_INT_SPELL*100)+'% increased SPELL damage and '+
         '+'+(ATTR_INT_REGEN*100)+'% increased REGENERATION' },
-  { g:'ATTRIBUTES', k:'Dexterity',    get:()=> dexOf(), fmt:v=>Math.round(v)+'', zero:true,
+  { g:'ATTRIBUTES', k:'Dexterity', basic:'ATTRIBUTES',    get:()=> dexOf(), fmt:v=>Math.round(v)+'', zero:true,
     why:'each point is +'+(ATTR_DEX_CRIT*100)+'% increased CRITICAL CHANCE, '+
         '+'+(ATTR_DEX_CMULT*100)+'% increased CRITICAL DAMAGE and '+
         '+'+(ATTR_DEX_ATK*100)+'% increased ATTACK SPEED' },
@@ -11516,14 +11877,14 @@ const STAT_PROBES = [
   { g:'ATTRIBUTES', k:'From dexterity',    get:()=> dexOf()*ATTR_DEX_CRIT*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'increased critical chance from DEXTERITY, and the same again on critical damage and attack speed' },
-  { g:'DEFENCE', k:'Max hearts',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
-  { g:'DEFENCE', k:'Armour',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
+  { g:'DEFENCE', k:'Max hearts', basic:'DEFENCE',    get:()=> player.maxHp,             fmt:v=>Math.round(v)+'' },
+  { g:'DEFENCE', k:'Armour', basic:'DEFENCE',        get:()=> armourValue(),            fmt:v=>Math.round(v)+'' },
   { g:'DEFENCE', k:'Hit taken (6)', get:()=> 6*(1-armourDR(armourValue(),6)), fmt:v=>v.toFixed(2), hi:false },
   { g:'DEFENCE', k:'Suppression',   get:()=> suppressChance()*100,     fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Weapon mitigation', get:()=> ((weapon && weapon.lessTaken)||0)*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'LESS damage taken from everything, just for carrying a melee weapon — a staff buys its safety with range instead' },
-  { g:'DEFENCE', k:'Regeneration',  get:()=> cursedRegen(),            fmt:v=>v.toFixed(3)+'/s' },
+  { g:'DEFENCE', k:'Regeneration', basic:'DEFENCE',  get:()=> cursedRegen(),            fmt:v=>v.toFixed(3)+'/s' },
   { g:'DEFENCE', k:'Lifesteal chance', get:()=> (player.leechChance||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'how often one of your own swings drinks. The staff never does — lifesteal is a melee stat' },
   { g:'DEFENCE', k:'Lifesteal share',  get:()=> (player.leech||0)*100, fmt:v=>v.toFixed(1)+'%', zero:true,
@@ -11534,11 +11895,11 @@ const STAT_PROBES = [
     why:'chance times share — the average share of every swing that comes back, which is the number to compare builds on' },
   { g:'DEFENCE', k:'Elemental toll', get:()=> resTax()*100, fmt:v=>'\u2212'+Math.round(v)+'%', zero:true, hi:false,
     why:'the world\u2019s own tax on resistance, 30 points at wave 20, 40 and 60. It is flat and permanent — the only answer is to carry more resistance' },
-  { g:'DEFENCE', k:'Fire res',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
-  { g:'DEFENCE', k:'Frost res',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
-  { g:'DEFENCE', k:'Lightning res', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Fire res', basic:'RESISTANCE',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Frost res', basic:'RESISTANCE',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
+  { g:'DEFENCE', k:'Lightning res', basic:'RESISTANCE', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Heart drops',   get:()=> DROP.heart*(1+player.heartChance)*100, fmt:v=>v.toFixed(2)+'%' },
-  { g:'UTILITY', k:'Move speed',    get:()=> player.speed,             fmt:v=>Math.round(v)+' px/s' },
+  { g:'UTILITY', k:'Move speed', basic:'MOVEMENT',    get:()=> player.speed,             fmt:v=>Math.round(v)+' px/s' },
   { g:'UTILITY', k:'Roll cooldown', get:()=> player.dash.cdMax,        fmt:v=>v.toFixed(2)+'s', hi:false },
   { g:'UTILITY', k:'Pickup range',  get:()=> player.magnetR,           fmt:v=>Math.round(v)+' px' },
   { g:'UTILITY', k:'Stud gain',     get:()=> player.studMul,           fmt:v=>'×'+v.toFixed(2) },
@@ -11946,6 +12307,41 @@ function sBlock(title, rows, extra=''){
 function sBar(frac, col){
   return `<div class="sbar"><i style="width:${(clamp(frac,0,1)*100).toFixed(1)}%;background:${col}"></i></div>`;
 }
+/* SIMPLE IS WHERE IT OPENS. The sheet was written for somebody tuning a build
+   -- every pool, every formula, every ceiling -- and that is still here, one
+   click away, as NERD. SIMPLE is the handful of numbers a player reads to
+   play: the same basic probes the menu shows, under the same headings, only
+   the ones this hero actually has, then the spells and the bricks. Remembered
+   between runs, and N flips it without reaching for the mouse. */
+let sheetNerd = false;
+try { sheetNerd = localStorage.getItem('bb_sheetnerd') === '1'; } catch(e){}
+function setSheetNerd(on){
+  sheetNerd = !!on;
+  try { localStorage.setItem('bb_sheetnerd', sheetNerd ? '1' : '0'); } catch(e){}
+  if(state === 'char') renderCharSheet();
+}
+function sheetModeWire(){
+  const m = document.getElementById('sheetMode');
+  if(!m) return;
+  for(const b of m.children){
+    b.classList.toggle('on', (b.dataset.mode === 'nerd') === sheetNerd);
+    if(!b._wired){ b._wired = true;
+      b.addEventListener('click', ()=>{ SFX.click(); setSheetNerd(b.dataset.mode === 'nerd'); }); }
+  }
+}
+/* the short list as sheet blocks: basic probes, grouped by their simple
+   heading, a stat this hero does not have is left out rather than dashed */
+function simpleStatBlocks(){
+  const by = {};
+  for(const sp of STAT_PROBES){
+    if(!sp.basic) continue;
+    let v = null;
+    try { v = sp.get(); } catch(e){ v = null; }
+    if(v === null || !isFinite(v) || v === 0) continue;
+    (by[sp.basic] = by[sp.basic] || []).push(sRow(esc(sp.k), sp.fmt(v), '', statWhy(sp)));
+  }
+  return STAT_BASIC_ORDER.filter(h=>by[h]).map(h=>sBlock(h, by[h])).join('');
+}
 /* Everything here is read straight off the live player, and the derived numbers use
    the same formulas the update loop does — see updatePlayer / hitEnemy / gainXp. */
 function renderCharSheet(){
@@ -12045,7 +12441,7 @@ function renderCharSheet(){
         `${atCap(incTotal('spell', weapon.elem), INC_DMG_CAP)})`+
         ` × ${moreShown().toFixed(2)} more = ${boltDamage().toFixed(2)}`),
       sRow('Burst radius', Math.round(boltRadius())+' px',
-        `everything caught takes the hit and catches fire (cap ${BOLT_R_CAP})`),
+        `everything caught takes the hit and may catch fire (cap ${BOLT_R_CAP})`),
       ...(p.ember ? [sRow('Ember Scatter', '\u00d7'+p.ember,
         EMBER_SHOTS[p.ember]+' embers per hit on a burning body',
         `Hitting something already alight knocks ${EMBER_SHOTS[p.ember]} embers off it.\n`+
@@ -12056,7 +12452,9 @@ function renderCharSheet(){
         `A chain travels ${EMBER_DEPTH} bodies deep, and one body can only throw\n`+
         `embers every ${EMBER_CD}s — otherwise a crowd would never stop.`)] : []),
       sRow('Burning', burnCap()+' stacks', 'then BURNT',
-        `Every bolt lights a fire on what it hits. Each stack burns on its own for\n`+
+        `A bolt has ${Math.round(ailChanceOf('fire','fire',false)*100)}% to light a fire on what it `+
+        `hits — ${Math.round(AIL_NATIVE_CHANCE.fire*100)}% of its own, plus\n`+
+        `every chance you have bought, and a critical always does. Each stack burns on its own for\n`+
         `${Math.round(EBURN_SHARE*100)}% of the hit a second over ${EBURN_DUR}s, and they all burn at once.\n\n`+
         `THE LAST ONE BREAKS: the fires go out and the body is BURNT, taking\n`+
         `${Math.round(BURNT_STEP*100)}% MORE fire from then on. Marks stack to ${BURNT_MAX} and each is its own\n`+
@@ -12185,9 +12583,11 @@ function renderCharSheet(){
       `leaves a dose — BLEED and POISON are bought, or they do not happen.\n\n`+
       `BLEED is the only one that cares where the hit came from: an ATTACK can cut,\n`+
       `a spell cannot, however physical it is.\n\n`+
-      `THREE SPELLS PRINT THEIR OWN 100% and ignore the table: FIREBALL always\n`+
-      `ignites, BLOCK FREEZE always chills, and SLAM OF THE ELEMENTS leaves all\n`+
-      `three. Nothing else does — not the storm brick, and not a converted swing.`),
+      `THREE SPELLS CARRY THEIR OWN CHANCE on top of the table, the way a gem does:\n`+
+      `FIREBALL ignites ${Math.round(AIL_NATIVE_CHANCE.fire*100)}% of the time before anything you buy `+
+      `(${Math.round(ailChanceOf('fire','fire',false)*100)}% now),\n`+
+      `BLOCK FREEZE always chills, and SLAM OF THE ELEMENTS leaves all three.\n`+
+      `Nothing else does — not the storm brick, and not a converted swing.`),
     sRow('Bleed damage', Math.round(p.bleedShare*100)+'%/s',
       Math.round(p.bleedShare*BLEED_T*100)+'% of the hit over '+BLEED_T+'s',
       `A wound ticks for ${Math.round(p.bleedShare*100)}% of the damage that opened it, `+
@@ -12396,6 +12796,17 @@ function renderCharSheet(){
   }
   const allStats = probeGroups.map(grp => sBlock(esc(grp.g), grp.rows)).join('');
 
+  sheetModeWire();
+  if(!sheetNerd){
+    document.getElementById('charBody').innerHTML =
+      `<div class="seclabel">STATS &mdash; HOVER ANY ROW</div>
+       <div class="sgrid">${simpleStatBlocks()}</div>
+       <div class="seclabel">SPELLS</div>
+       <div class="spellgrid">${spellHtml}</div>
+       <div class="seclabel">BRICKS TAKEN</div>
+       <div id="charChips" style="display:flex;flex-direction:column;gap:10px;align-items:center">${upHtml}</div>`;
+    return;
+  }
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
      <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${resist}${ail}${curseBlock}${loot}${run}</div>
@@ -16048,7 +16459,7 @@ function updateProjectiles(dt){
         pr.dead = true;
         addSparks(t2.x, t2.y-16, 6, '#ffb02e');
         /* the chain carries its depth, and the fire itself is hitEnemy's now */
-        hitEnemy(t2, pr.dmg, angTo(pr, t2), 40, 'fire', { ailDepth: pr.depth });
+        hitEnemy(t2, pr.dmg, angTo(pr, t2), 40, 'fire', { ailDepth: pr.depth, ailSure: true });
       }
     }
     else if(pr.kind==='pbolt'){
@@ -20688,6 +21099,23 @@ function renderHUD(){
   ctx.strokeStyle='rgba(15,20,25,0.7)'; ctx.lineWidth=2.5; ctx.stroke();
   ctx.fillStyle = '#1b2a34'; ctx.font='700 15px "Titan One"'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(p.level, bx+10, xpY+7);
+  /* POINTS WAITING. A point earned mid-run is only worth something if you know
+     it is there, so while any sit unplaced the level bar says so -- and names
+     the key, because T is a new door into an old screen. */
+  if(metaRun && META && META.on){
+    const waiting = metaPointsLeft();
+    if(waiting > 0){
+      const txt = 'T \u00b7 ' + waiting + ' SKILL POINT' + (waiting > 1 ? 'S' : '');
+      ctx.font = '700 10.5px Fredoka';
+      const tw = ctx.measureText(txt).width + 16;
+      const pulse = 0.75 + 0.25*Math.sin(vtime*3.2);
+      ctx.fillStyle = 'rgba(15,20,25,0.7)';
+      roundRect(ctx, bx+224, xpY - 2, tw, 16, 8); ctx.fill();
+      ctx.strokeStyle = `rgba(143,212,255,${pulse})`; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#8fd4ff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, bx+232, xpY + 6.5);
+    }
+  }
   ctx.textBaseline='middle';
   drawStudHUD(cw-112, 36, p.studs>=200 ? '#a45bd6' : PAL.gold);
   ctx.font='700 26px "Titan One"'; ctx.textAlign='left';
@@ -21171,13 +21599,13 @@ function resetRun(demo){
     /* WHAT THE TREE STARTED YOU WITH. A legendary node does not hand over a
        number, it hands over a BRICK — so it is applied here, once, where a real
        run begins, and never in newPlayer or on the bench's preview heroes. */
-    for(const g of (player.metaGrants || [])){
-      const u = UPGRADES.find(x=>SPELL_GRANT[x.id] === g);
-      if(!u) continue;
-      try { if(u.req && !u.req()) continue; } catch(e){ continue; }
-      try { applyPick(u, 'common'); } catch(e){}
-    }
+    metaGrantBricks(player.metaGrants || []);
   }
+  /* the records as this run found them -- see metaLiveBank */
+  if(!META) metaLoad();
+  { const m0 = metaCur();
+    metaRun = (!demo && META.on) ? { wave:m0.best.wave||0, level:m0.best.level||0,
+                                     earned:metaPointsEarned(m0) } : null; }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   rollRoster();
@@ -21226,7 +21654,7 @@ function showGameOver(){
   /* THE RUN IS BANKED BEFORE THE SCREEN IS DRAWN, so what you read is the truth
      and not a promise. Read `prevBest` first — metaBank moves it. */
   const cur = metaCur();
-  const prevBest = cur.best.wave || 0;
+  const prevBest = metaRun ? metaRun.wave : (cur.best.wave || 0);
   const res = (META && META.on) ? metaBank() : null;
   renderRunEnd(res, prevBest);
   document.getElementById('overScreen').classList.remove('hidden');
@@ -21411,6 +21839,7 @@ document.getElementById('sfxBtn').addEventListener('click', ()=>{
   audioInit(); toggleSfx(); SFX.click(); });
 document.getElementById('optBtn').addEventListener('click', ()=>{
   audioInit(); SFX.click(); openOptions('title'); });
+document.getElementById('pauseTreeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 document.getElementById('pauseOptBtn').addEventListener('click', ()=>{
   SFX.click(); openOptions('pause'); });
 document.getElementById('optBackBtn').addEventListener('click', ()=>{
@@ -21434,11 +21863,14 @@ refreshTreeSecBtn();
    click the nodes you want back, one at a time. Clearing the lot is its own
    button and says so. */
 document.getElementById('respecBtn').addEventListener('click', ()=>{
+  if(state === 'tree') return;
   SFX.click(); treeRefund = !treeRefund; treePick = null; renderTree(); });
 document.getElementById('clearBtn').addEventListener('click', ()=>{
+  if(state === 'tree') return;
   SFX.click(); metaRespec(); treeRefund = false; treePick = null;
   renderTree(); refreshTreeBtn(); });
 document.getElementById('treeOffBtn').addEventListener('click', ()=>{
+  if(state === 'tree') return;
   SFX.click(); metaToggle(); renderTree(); refreshTreeBtn(); });
 document.getElementById('retryBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('overScreen').classList.add('hidden'); startGame(); });

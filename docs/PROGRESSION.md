@@ -2350,3 +2350,115 @@ That is the fifth flake in this codebase with the same root: something measured 
 for something that moves.
 
 9 new breaks, 56 tests green, wave-50 soak clean.
+
+## Twenty-fifth pass — less on the screen, and a tree you can spend while you play
+
+> *"Change some of the favourite bonuses — we don't have any that give ES, accuracy, STR/DEX/INT,
+> evasion. Lower the ailment chance for the default fire ability. Move the weapon tooltip so I
+> can see the mouse. The main menu shows too much: basic stats and a button for more. Same for
+> the C menu — a simple view and a NERD view. Let me spend skill points as I level up, mid-run.
+> And three named presets I can save and load."*
+
+### Three hands, one per attribute
+
+Each attribute already owns a defence — strength the hearts, dexterity the dodge, intelligence the
+shield — so each gets the opening hand that leans on it: **Brute Strength**, **Fleetfoot**,
+**Arcane Ward**. Some of the attribute, the defence it pays for, and that defence's bricks up more
+often. None is gated to a weapon. The hover card's numbers are the per-point constants multiplied
+out by hand, checked against `ATTR_*` rather than guessed.
+
+### The fireball stops being a certainty
+
+It carries 25% of its own now — PoE's Fireball number — and that *adds* to bought chance, so the
+ailment bricks mean something to a staff. The first version lowered the **embers** too, because
+`AIL_NATIVE` listed `'ember'` as a source; three ember tests went red. They were right: an ember
+**lands as a `'fire'` hit** — the same source name as the bolt — so no table keyed by source can
+tell them apart. The ember says so on the hit instead (`ailSure`), and keeps its certainty,
+because "sets the next one alight" is Ember Scatter's whole card.
+
+And `ail3` had been asserting `'ember'`'s native chance all along — against a source name nothing
+in the game ever hits with. That assertion is gone; `ember.js` flies real embers.
+
+### Two short views, one field
+
+The menu opened on 175 stats and the sheet on 243 rows. Both now open short, on the same list: a
+probe with `basic` is one a player reads to play, and its value is the heading it sits under. The
+short list is a *filter over the same rows*, not a second table, so the two views cannot disagree
+about a number. The menu's long view and the sheet's NERD view are unchanged and remembered.
+
+Three existing tests asserted things about the long views — every probe on the sheet, the layer
+chips, the conversion card — and went red when the default flipped. They now switch to the long
+view first, because that is what they test; the short views have their own claims.
+
+### The card beside the button
+
+The weapon card is taller than the gap above or below a button in the middle of the menu, so
+above-or-below clamped it straight onto the button. It stands beside the button now. The test
+compares the card's size against *the same card placed the old way*: a fixed 300px floor failed the
+staff, whose card is simply narrower.
+
+### The tree mid-run
+
+A level was worth a point only when you **died** — `metaBank` wrote the record at the end. Now the
+record moves on the level-up and the wave clear, <kbd>T</kbd> opens the tree with the world frozen,
+and a node bought lands on the live hero. That last part is safe because of an invariant the tree
+has kept since it was built: **a node only writes pools**, the same ones a brick writes, so applying
+it to a live hero is exactly what applying it at the start does.
+
+Mid-run the tree only grows. Refunds would mean unpicking a node from a live hero, and the
+switches some nodes throw do not unpick cleanly.
+
+**Two tests described runs that cannot happen any more.** `opts` wrote `best.level = 3` onto the
+save in the middle of a run that began at 0, then expected the bank to pay 5; `meta` banked three
+"runs" back to back without starting any of them. A run now remembers the records it began from —
+the death screen needs that, or a record banked live reads as "nothing new". The fix for the
+second was in the game, not the test: a banked run is **over**, so `metaBank` drops its snapshot.
+The first needed its fixture to say where its run began.
+
+### Presets
+
+Three per tree, on the same record as the tree they came from. **LOAD buys, it does not copy** —
+every node goes through `metaCanBuy`, in several passes, so a preset can never put the tree in a
+state it could not reach by hand. The `presetcopy` break (push the list straight in) overspends a
+30-point tree by 6, and the test says so.
+
+**A text field owns its keys.** Naming a preset "Tank" would type a T into a window whose keydown
+handler closes the tree on T. The test types `Tank CN build`; the break that removes the guard is
+caught by a symptom nobody predicted — the game's Space handler swallows the spaces, and the
+preset comes back as `Preset 1TankCNbuild`.
+
+**The side column was squashing its cards.** Adding the presets block made the column taller than
+the window, and flex shrank the info card until its text ran out of the bottom. Its children do not
+shrink now; the column already scrolls.
+
+### Three breaks that proved nothing
+
+`menuleak` and `sheetleak` deleted the `basic` filter — and survived, because a probe with no
+simple heading is dropped by the grouping step anyway. Equivalent code is not a break. Both now
+leak for real (file everything under OFFENCE) and are caught. `tnokey` "survived" because the
+runner counted a crashed test as a pass: with T dead the tree never rendered, the next click
+threw, and no FAILURES line was printed. A crash is a catch, and `brkrun.sh` scores it as one
+now — but a crash is also a worse message than a sentence, so the tree-dependent checks in `qol`
+stop once "T does not open the tree" is recorded, and the break fails by name.
+
+### The bubble test, twice
+
+`bubble` went red on the first suite run: the new `+1 SKILL POINT` float is the shield's own blue,
+and it rose over the hero's head just as the bare frame was sampled. Clearing floating text fixed
+that and exposed a second thing: the hero's own body shifts pose between frames, and its blue legs
+moved the pixel count by ±25. The rim is drawn *outside* the body, so the body's rectangle is now
+masked out of the count. Noise went from ±25 to ±7; the ghost-ring break still reads +197.
+
+That is six flakes in this codebase with the same root — a sample taken of something that moves —
+and this is the first found *before* it flaked, by reading which pixels differed.
+
+### And one of mine
+
+The new fireball assertion went red in a full suite run on a correct build: **0.1975** against
+0.25 ± 0.05. Four hundred samples at p = 0.25 have a standard deviation of 0.022, so that window
+was 2.3σ — a few percent of runs fail for nothing. It is the second recurring bug shape in the
+list at the top of this log (a statistical claim on too few samples), written fresh in the same
+pass that listed it. Two thousand samples puts the window at five sigma; four runs read
+0.243–0.258, and both fireball breaks still fail by a mile.
+
+33 new breaks, 57 tests green, wave-50 soak clean.

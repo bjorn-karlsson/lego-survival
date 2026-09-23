@@ -1360,6 +1360,40 @@ you have already beaten.
 
 ![The skill tree](docs/tree.png)
 
+### Spending it mid-run — <kbd>T</kbd>
+
+**A level is worth a point the moment you reach it.** It used to be worth one only when you
+*died*: the record was written at the end of the run, so a hero who reached level 38 on a
+fresh character spent the whole run with the points they were earning sitting in the future.
+A new best level is written on the level-up now, and a new best wave on the clear, with a
+`+1 SKILL POINT · T` over your head and a pill beside the level bar while any sit unplaced.
+
+**<kbd>T</kbd> opens the tree mid-run** (so does SKILL TREE on the pause menu), and the world
+freezes behind it exactly as it does behind the character sheet. A node you take lands on your
+hero **now** — the tree only ever writes the same pools the bricks do, so applying one node to a
+live hero is exactly what applying it at the start would have done. A node that hands over a
+brick hands it over there and then.
+
+**Mid-run the tree only grows.** Refunds, CLEAR ALL, loading a preset and the on/off switch
+wait for the run to end: taking a point back would mean unpicking a node from a live hero, and
+the switches some nodes throw do not unpick cleanly. The death screen still tells you what the
+run was worth — it measures from where the run began, not from a record the run already moved.
+
+### Three named presets
+
+**Every tree keeps three.** A preset is a name and a saved allocation, on the same record as the
+tree it came from — a sword's build starts at the sword's door and means nothing on a staff's
+tree, so each of the twelve trees has its own three. Type a name, **SAVE** keeps what is placed
+now, **LOAD** takes it all back and places the preset.
+
+![Three named presets](docs/tree-presets.png)
+
+**A preset is bought, not copied.** LOAD places each node through the same rules a click
+obeys — touching what you hold, unlocked, affordable — so it can never put the tree somewhere
+the tree could not have reached by hand. A preset saved on more points than you have now
+places what it can and says how much. A layout change empties presets the way it refunds the
+tree, and keeps their names.
+
 **TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
 weapons — and **they share nothing**. Points earned on a staff are a staff's; switch to the
 axe and you find the axe's own tree exactly as you left it, and switching back finds the
@@ -2259,11 +2293,16 @@ carry its own 50% bleed, which quietly made the crit tree the bleed tree as well
 swing, its whirl, the vortex, bladestorm's blades and the slam can cut. An orbiting brick that
 has bought physical damage still hits for physical — it just does not cut.
 
-**Three spells print their own 100%,** the way a PoE gem does, and this is written on the
-character sheet rather than hidden in the code: **Fireball** always ignites, **Block Freeze**
-always chills (Absolute Zero upgrades that chill into a stun, so without it the legendary would
-do nothing), and **Slam of the Elements** leaves all three. Nothing else does — not the storm
-brick, and not a converted swing.
+**Three spells carry their own chance on top of the table,** the way a PoE gem does, and it
+is written on the character sheet rather than hidden in the code. **Fireball** ignites **25%**
+of the time on its own — PoE's Fireball number — and that *adds* to whatever Afflict you
+have bought, so ailment bricks are worth something to a staff for the first time; a fire
+critical still always ignites. It used to be 100%, which made "chance to ignite" a card a
+staff never wanted. **Block Freeze** always chills (Absolute Zero upgrades that chill into a
+stun, so without it the legendary would do nothing), and **Slam of the Elements** leaves all
+three. The **embers** Ember Scatter throws keep their certainty too — they only fly off a body
+that is already burning, and "sets the next one alight" is the whole card. Nothing else
+carries a chance of its own — not the storm brick, and not a converted swing.
 
 A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangles at **×1.9**.
 
@@ -2382,6 +2421,48 @@ had never earned any. And it was refreshed when the **difficulty** changed but n
 **weapon** did, so it went on showing the last weapon's count. Twelve trees, one label, and no
 way to tell them apart. It now reads `SKILL TREE — 4 TO PLACE · 15 spent · STAFF · HARD`.
 
+### The short list
+
+**The menu opens on twelve numbers, not a hundred and seventy-five.** It was handing a new
+player every stat in the game — burning rows for a sword, ceilings nobody reaches for an
+hour. It opens on **YOUR STATS** now: how hard, how often, how tough, how fast, under four
+plain headings, and only the ones this hero actually *has* — a sword is not shown its bolt
+damage as a dash, it is simply not shown it.
+
+![The menu's short list](docs/menu-short.png)
+
+**SHOW EVERY STAT & THE CEILINGS** at the bottom is the whole panel, exactly as it was, layer
+chips and all. It is remembered, so a player who wants the lot asks once.
+
+The short list is not a second list. A probe carries a `basic` field naming the heading it
+sits under, and both short views — this one and the character sheet's — filter on it, so the
+short view and the long one can never disagree about a number: they are the same row, and one
+of them shows fewer.
+
+### Three more opening hands
+
+Accuracy, evasion, energy shield and the attributes that feed them were things you could be
+*offered* and never a way to *start*. Each attribute already owns a defence, so each gets the
+hand that leans on it:
+
+| hand | you start with | bricks up more often |
+|---|---|---|
+| **Brute Strength** | +16 STR (+8% physical, +8% hearts) · +1 heart · +20 armour | strength, hearts, armour |
+| **Fleetfoot** | +16 DEX · +160 evasion · +60 accuracy | dexterity, evasion, accuracy, crit, speed |
+| **Arcane Ward** | +16 INT · a 3-point energy shield · +20% increased shield | intelligence, shield, chaos and elemental res |
+
+None is locked to a weapon: every weapon has hearts, can dodge and can carry a shield, and a
+brick a weapon cannot use (accuracy on a staff) is already kept out by its own gate. The row
+lays out seven a line now so the thirteenth hand is not left alone on a third.
+
+### The weapon card stands beside its button
+
+Hovering a weapon shows a card taller than the gap above or below a button in the middle of
+the menu, so the old above-or-below rule clamped it straight down **on top of** the button —
+the card covered its own label and the pointer that summoned it. It stands to the right of the
+button now (to the left for the rightmost one, where the window runs out), level with it, at
+exactly the same size.
+
 **`Ember Core` was never a fire card.** `flatElem` is read by the bolt, by Block Freeze and by
 the Storm Brick alike, so it has always been the single best upgrade a frost build can take —
 and it was called Ember Core, wore a flame, and said *"to your fire bolt"*. Being handed an
@@ -2483,10 +2564,18 @@ are their own groups.
 
 ### The character sheet — <kbd>C</kbd> — *what am I right now?*
 
+**It opens SIMPLE.** The sheet was written for somebody tuning a build — every pool, every
+formula, every ceiling — and a player who pressed C mid-fight got two hundred and forty rows.
+SIMPLE is the same short list the menu uses, grouped the same way, then your spells and the
+bricks you have taken. **NERD** — the pill at the top, or <kbd>N</kbd> while the sheet is
+open — is everything below, unchanged. It remembers which you left it on.
+
+![The character sheet, SIMPLE](docs/sheet-simple.png)
+
 The hand-written blocks at the top carry the deep explanations. Underneath them,
 **EVERY STAT** is generated straight from the probe list, grouped, with each row's
 explanation on hover — so a probe added for the comparison reaches this screen the same day
-rather than months later. A test asserts all 111 appear.
+rather than months later. A test asserts every probe appears (in NERD, where this lives).
 
 ### The spellbook — <kbd>P</kbd> — *what am I carrying?*
 
