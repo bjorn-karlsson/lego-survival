@@ -861,6 +861,58 @@ function mobAccuracyOf(d){
   const k = (d.type === 'boss' || d.boss) ? 2.2 : 1;
   return Math.round(ACC_MOB_BASE * (0.6 + spd/140) * k);
 }
+/* ========================= ENERGY SHIELD =========================
+   A SECOND BAR IN FRONT OF THE FIRST, and three rules that make it a different
+   defence rather than more health:
+
+     · IT TAKES THE HIT FIRST. Damage eats the shield, and only what is left
+       over reaches hearts. Nothing about armour or resistance changes -- those
+       have already happened by the time a number arrives here.
+     · IT COMES BACK BY ITSELF. Go ES_DELAY seconds without being touched and
+       it refills at ES_RATE of its maximum a second. Any hit at all restarts
+       the clock, INCLUDING one that bypassed the shield entirely.
+     · CHAOS GOES STRAIGHT THROUGH IT. This is the whole reason chaos is worth
+       building and the whole reason an energy-shield build is not simply the
+       best one: it is the only damage type in the game that ignores a defence,
+       and it is what a shielded boss is afraid of.
+
+   The hero and the monsters use the same three functions, because a shield is a
+   shield -- which is what makes "some bosses have one" a row in a table rather
+   than a second system. */
+const ES_DELAY = 2.5;    /* seconds untouched before it starts coming back */
+const ES_RATE  = 0.22;   /* of the maximum, per second, once it does */
+const ES_COL   = '#7fd8ff';
+/* WHAT A HIT DOES TO A SHIELDED BODY. Returns what is LEFT for the health bar.
+   `o` is anything with `es`/`esMax`: the hero, a boss, a monster. */
+function esAbsorb(o, n, type, chaosShare){
+  if(!o) return n;
+  /* the clock restarts on ANY damage, even the kind that walked past */
+  o.esT = ES_DELAY;
+  /* A HIT IS A MIX, so the bypass is a SHARE and not a yes-or-no. A swing half
+     converted to chaos puts half of itself past the shield and leaves the other
+     half to be eaten -- the same share rule every ailment already follows, and
+     the reason a partial conversion is a real answer to a shielded boss rather
+     than an all-or-nothing gamble. */
+  const cs = (type === 'chaos') ? 1 : clamp(chaosShare || 0, 0, 1);
+  const through = n * cs, stopped = n - through;
+  const have = o.es || 0;
+  if(have <= 0) return n;
+  const eaten = Math.min(have, stopped);
+  o.es = Math.round((have - eaten)*100)/100;
+  return Math.max(0, through + (stopped - eaten));
+}
+function esTick(o, dt){
+  if(!o || !(o.esMax > 0)) return;
+  if(o.esT > 0){ o.esT -= dt; return; }
+  if(o.es >= o.esMax) return;
+  o.es = Math.min(o.esMax, (o.es || 0) + o.esMax * ES_RATE * dt);
+}
+/* WHAT SHARE OF A HIT WAS CHAOS, off the mix a converted hit carries. A hit
+   with no mix at all is whatever its source is made of. */
+function chaosShareOf(source, mix){
+  if(mix) return mix.chaos || 0;
+  return convFrom(source) === 'chaos' ? 1 : 0;
+}
 const EVADE_CAP = 0.55;                   /* no monster ever dodges more than this */
 const ZORB_SPD = 118;                     /* the storm orb drifts, it does not fly */
 const ZORB_SPIN = 2.1;                    /* rad/s, clockwise */
@@ -1091,6 +1143,12 @@ function syncStats(){
   p.bleedChance = clamp(p.bleedChanceFlat||0, 0, 1);
   p.ailChance   = clamp(p.ailChanceFlat||0, 0, AIL_CHANCE_MAX);
   p.exposeChance = clamp(p.exposeChanceFlat||0, 0, EXPOSE_CHANCE_MAX);
+  /* THE SHIELD'S CEILING, rebuilt like every other pool -- and what is standing
+     in it is kept, clamped, rather than refilled: a rebuild mid-fight must not
+     be a free heal. A shield that has just GROWN keeps what it had. */
+  { const was = p.esMax || 0;
+    p.esMax = Math.max(0, (p.esFlat||0) * (1 + (p.inc.es||0) + intOf()*ATTR_INT_ES));
+    p.es = (was <= 0) ? p.esMax : Math.min(p.es || 0, p.esMax); }
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
   /* --- everything that used to be capped where the card wrote it ------------
      Same shape every time: (base + flat) x (1 + sum increased) x each more,
@@ -3238,7 +3296,7 @@ function newPlayer(){
        it started as, which is exactly what the game did before any of this. */
     conv: blankConv(),
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, cast:0, roll:0, regen:0, heart:0,
-          acc:0, eva:0,
+          acc:0, eva:0, es:0,
           elem:0, fire:0, frost:0, shock:0, boltR:0,
           /* CHAOS IS NOT ELEMENTAL, so it gets its own increase and takes no
              part in the elemental one. That is the entire difference. */
@@ -3320,6 +3378,9 @@ function newPlayer(){
     /* ACCURACY AND EVASION. Accuracy opens at ACC_BASE and is only ever added
        to; evasion opens at NOTHING, because it is the defence you choose. */
     accFlat:0, evaFlat:0,
+    /* ENERGY SHIELD. Zero to start, like evasion: it is a defence you choose.
+       `esT` is the clock since the last time anything touched you. */
+    esFlat:0, es:0, esMax:0, esT:0, esFlash:0,
     /* the tree's sentences. Each is a rule, not a pool, so each is a flag. */
     critAilAll:false, noCrit:false, ailFull:false,
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
@@ -4154,30 +4215,64 @@ function shotPow(src, kind){
 const RANGED_SET = new Set(['archer','spitter','hexer','pyromancer','frostmage','stormcaller',
   'lobber','marksman','necromancer','necrolord','pyrolord','frostlord','stormlord','overseer',
   'shadestorm','blightspitter']);
+/* WHICH BOSSES CARRY A SHIELD, AND WHICH DEAL CHAOS.
+   `es` is a share of the boss's health carried as ENERGY SHIELD on top of it --
+   a second bar that takes the hit first, comes back if you cannot sustain, and
+   is the game's answer to a build that deletes a boss in one burst and then has
+   nothing. `chaos` is the share of what it deals to YOU that walks past your
+   own shield, which is what stops an energy-shield hero simply being immune to
+   the late fights.
+   Not everything has one. A brute is a brute: LORD LAVABRICK and VON BRICKTHANE
+   hit you with a lump of rock and there is nothing arcane about them. The bone,
+   ash and bat bosses are the ones the fiction already made strange. */
+/* HOW DEEP A BOSS IS, AS ONE CURVE.
+   There used to be two: the ultras climbed 2.3x a tier with the monster level
+   on top, and the bosses between them climbed a flat 420 a tier with no monster
+   level at all. Two formulas for one idea drift, and these drifted until a
+   wave-45 boss had 8,200 health against the 56,000 of the wave-40 ultra it
+   followed -- a boss you walked through on the way to the next one.
+   So there is one curve now, read at the wave you are on, and an ordinary boss
+   is a SHARE of it. `st` is the ultra step: 1 at wave 10, 2 at wave 20, and the
+   halves in between belong to the ordinary bosses, so wave 15 sits exactly
+   between the first ultra and the second. */
+const ULTRA_STEP = 2.3;     /* each ultra tier is this much deeper than the last */
+const ULTRA_FLAT = 1250;    /* ...plus this a tier, so tier one is a fight too */
+const ULTRA_BASE = 1300;
+const BOSS_SHARE = 0.5;     /* an ordinary boss is half the ultra at its own wave */
+const BOSS_BASE_MUL = 3.2;  /* ...off a roster whose bases are a quarter the size */
+function bossPool(baseHp, st){
+  return baseHp*1.2*(1 + (st-1)*ULTRA_STEP) + st*ULTRA_FLAT + ULTRA_BASE;
+}
 const BOSSES = {
   brickthane:{ name:'VON BRICKTHANE', hp:90,  speed:52, r:26, scale:2.15, dmg:2, xp:40, studs:[40,60],
     col:{head:'#3a3f44', torso:'#23272b', legs:'#1b1f23', hands:'#2f3438', hair:'#2f3438'}, style:'boss' },
   bonebaron:{ name:'THE BONE BARON',  hp:85,  speed:62, r:24, scale:2.05, dmg:2, xp:45, studs:[45,68],
+    es:0.35,
     col:{head:'#eef0ee', torso:'#c9cecb', legs:'#9ba19d', hands:'#eef0ee', hair:'#5c5e59'}, style:'skel' },
   lavabrick:{ name:'LORD LAVABRICK',  hp:120, speed:44, r:28, scale:2.35, dmg:3, xp:55, studs:[50,78],
     col:{head:'#ff9a3c', torso:'#4a342a', legs:'#2a2422', hands:'#5a4a3a', hair:'#5a4a3a'}, style:'brute' },
   ashtyrant:{ name:'THE ASH TYRANT',  hp:150, speed:48, r:29, scale:2.4,  dmg:3, xp:65, studs:[60,95],
+    es:0.25, chaos:0.20,
     col:{head:'#6b5f58', torso:'#3a2f2a', legs:'#241d1a', hands:'#8a2f1d', hair:'#241d1a'}, style:'brute' },
   /* The bat boss: it never stands still. It hangs in the air, rains bat-shaped
      missiles and hexes, calls the whole roost down on you, and then throws
      itself across the arena in a string of charges. */
   batsovereign:{ name:'THE DREAD ROOST', hp:170, speed:72, r:30, scale:2.5, dmg:3, xp:80, studs:[70,110],
+    es:0.30, chaos:0.30,
     col:{head:'#4a3a63', torso:'#2e2442', legs:'#1d1730', hands:'#6b5790', hair:'#140f22'},
     style:'bat' }
 };
 /* NEW: SUPER BOSSES at waves 10 / 20 / 30 … */
 const SUPERBOSSES = {
   omegathane:{ name:'OMEGA BRICKTHANE', hp:640, speed:66, r:40, scale:3.1, dmg:5, xp:120, studs:[120,180], sig:'nova',
+    es:0.30, chaos:0.15,
     col:{head:'#2c3136', torso:'#181c20', legs:'#101315', hands:'#3a4045', hair:'#3a4045'}, style:'boss' },
   megabaron:{ name:'MEGA BONE BARON', hp:400, speed:70, r:38, scale:3.0, dmg:4, xp:130, studs:[130,190], sig:'spiral',
     hpMul:1.30, armourMul:2.0, dmgMul:1.35, atkMul:0.72,
+    es:0.45, chaos:0.25,
     col:{head:'#f6f2e4', torso:'#d9cf9a', legs:'#b3a878', hands:'#f6f2e4', hair:'#8a7d4a'}, style:'skel' },
   ultralava:{ name:'ULTRA LAVABRICK', hp:520, speed:52, r:42, scale:3.3, dmg:5, xp:150, studs:[150,220], sig:'meteor',
+    es:0.20, chaos:0.35,
     col:{head:'#ff7a2a', torso:'#5e2a1a', legs:'#331610', hands:'#7a3a20', hair:'#7a3a20'}, style:'brute' }
 };
 /* which ultra appears at which multiple-of-10 wave: 10→1st, 20→2nd, 30→3rd, 40→1st upgraded… */
@@ -4234,10 +4329,10 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
       const skey = forceBossKey || ultraForWave(wave.n);
       B = SUPERBOSSES[skey];
       const st = Math.max(1, Math.floor(wave.n/10));
-      /* tiers must feel wildly different: 1.9x mult per ultra-tier + heavy armor */
-    /* the first ultra used to fold to any build; it now starts from a real base */
-      const mult = 1 + (st-1)*2.3;
-      const bhp = Math.round((B.hp*mult*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp
+      /* tiers must feel wildly different, and the first ultra used to fold to
+         any build -- it starts from a real base now. This is THE curve; the
+         ordinary bosses below read the same one at a half-step. */
+      const bhp = Math.round(bossPool(B.hp, st) * (B.hpMul||1) * difficulty.hp
                              * mobRankMul());
       e = { type:'boss', x, y, bkey:skey, bname:B.name, super:true, sig:B.sig, btier:tier+2,
         col:B.col, style:B.style, r:B.r, scale:B.scale,
@@ -4249,6 +4344,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         mlvl: mobRank(),
         xp:Math.round(B.xp*(1+(st-1)*0.8)), studs:{a:B.studs[0], b:B.studs[1]},
         atkS:Math.max(0.42, (1-(wave.n-1)*0.02)*difficulty.atk*(B.atkMul||1)), touchCd:0.8,
+        chaosShare: B.chaos || 0,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
         flash:0, hitCd:0, atkCd:0, kx:0, ky:0, mode:'chase', modeT:0,
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
@@ -4265,7 +4361,17 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         bkey = keys2[(tier-1) % keys2.length];
         B = BOSSES[bkey];
       }
-      const bhp = Math.round((B.hp*(1 + (tier-1)*2.2) + tier*420) * difficulty.hp);
+      /* HALF AN ULTRA, ON THE ULTRA'S OWN CURVE -- read at a half-step, so a
+         wave-15 boss sits between the first ultra and the second instead of on
+         a private curve that falls behind a little further every tier. The
+         monster level is on it now like it is on every other monster in the
+         game; not having it is what left a wave-35 boss with 4,100 health
+         beside a wave-30 ultra's 17,700, with the hero's damage compounding the
+         whole way. Floored at one step so the very first boss is not written
+         with a negative multiplier. */
+      const st = Math.max(1, wave.n/10);
+      const bhp = Math.round(bossPool(B.hp*BOSS_BASE_MUL, st)
+                             * BOSS_SHARE * difficulty.hp * mobRankMul());
       e = { type:'boss', x, y, bkey, bname:B.name, btier:tier,
         col:B.col, style:B.style,
         r:B.r, scale:B.scale,
@@ -4274,9 +4380,12 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
            boss suppresses half of every spell that lands on it */
         suppress: B.style==='skel' ? 0.45 : 0.15,
         speed:B.speed*(1+tier*0.05),
-        dmg:Math.round(B.dmg*(1 + tier*1.1) + tier*tier*1.6),
+        /* and what it hits for follows the same rule, at a gentler slope: a
+           boss that cannot be killed and also one-shots you is not a fight */
+        dmg:Math.round((B.dmg*(1 + tier*1.1) + tier*tier*1.6) * Math.pow(mobRankMul(), 0.6)),
         xp:B.xp, studs:{a:B.studs[0], b:B.studs[1]},
         atkS:Math.max(0.6, 1-(wave.n-1)*0.02), touchCd:0.9,
+        chaosShare: B.chaos || 0,
         face:{x:0,y:1}, faceA:rnd(TAU), walk:rnd(TAU), moving:false, state:'build', buildT:0,
         flash:0, hitCd:0, atkCd:0, kx:0, ky:0, mode:'chase', modeT:0,
         strafe:1, strafeT:2, elite:false, magic:false, dead:false, phase:rnd(TAU),
@@ -4285,8 +4394,16 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
         path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1,
         nextAtk:2.2, ring:null, cycle:0 };
     }
+    /* THE SHIELD IS A SHARE OF WHAT IT ENDED UP WITH, so it rides every
+       multiplier the health did -- the wave, the difficulty, the monster level
+       -- without any of them having to know it exists. AFTER the traits, so a
+       VITAL boss's deeper bar is a deeper shield too. */
     rollBossTraits(e);
     applyWaveMods(e);
+    if(B.es > 0){
+      e.esMax = Math.round(e.maxHp * B.es);
+      e.es = e.esMax; e.esT = 0; e.esFlash = 0;
+    }
     enemies.push(e);
     SFX.build();
     return;
@@ -4519,6 +4636,17 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      leeching off the number before mitigation would pay you for damage the
      monster never took */
   if(LEECH_SOURCES.has(source) && !opts.quiet) leechFrom(d);
+  /* THE SHIELD TAKES IT FIRST, and chaos walks through. After leech on purpose:
+     you drank what you dealt, and what you dealt was dealt -- the shield is the
+     monster's problem, not a reduction in the size of your hit. */
+  if(e.esMax > 0){
+    const was = e.es || 0;
+    d = esAbsorb(e, d, null, chaosShareOf(source, mix));
+    if((was - (e.es || 0)) > 0.01 && !opts.drain){
+      addSparks(e.x, e.y - 22*(e.scale||1), 3, ES_COL);
+      e.esFlash = 1;
+    }
+  }
   e.hp = opts.drain ? e.hp - d : Math.round((e.hp - d)*100)/100;
   if(!opts.drain){
     e.flash = 1;
@@ -5234,6 +5362,12 @@ const ATTRS = [
    The old three lines are untouched: dexterity still pays crit, crit multiplier
    and attack speed. It is simply the busiest of the three now, which is what it
    is in the game this borrows from. */
+/* INTELLIGENCE IS THE SHIELD ATTRIBUTE, which is the last line of the table
+   this borrows: "+0.2% increased maximum energy shield per INT". It keeps
+   everything it already did -- spell damage and regeneration -- and gains the
+   defence that belongs to it, so a caster who has been stacking INT for damage
+   finds it has quietly been buying survivability as well. */
+const ATTR_INT_ES    = 0.002;   /* INCREASED maximum energy shield, per point */
 const ATTR_DEX_ACC   = 2.0;     /* flat accuracy, per point: 20 per 10 DEX */
 const ATTR_DEX_EVA   = 0.002;   /* INCREASED evasion, per point */
 const ATTR_STR_DMG   = 0.005, ATTR_STR_HP    = 0.005;
@@ -5520,12 +5654,23 @@ function applyAilment(elem, src, stacks){
    effect would never land a single point. */
 /* `n` may be a fraction of a heart. The floating number is only spawned once a
    whole point has burned away, or the screen would be a blizzard of -0.01. */
-function ailmentDamage(n, quiet){
+/* `type` is the DAMAGE TYPE the ailment is made of, and the only one anything
+   here cares about is chaos: a dose is chaos over time, so it walks past an
+   energy shield exactly as a chaos hit does. Everything else -- a burn, a bleed
+   -- meets the shield like any other damage. */
+function ailmentDamage(n, quiet, type){
   const p = player;
   if(godMode || p.dead || state!=='play') return;
   /* the weapon's mitigation reaches what is already eating you too — an
      ailment is damage taken like any other */
   n = n * weaponLessTaken();
+  /* AN AILMENT IS DAMAGE TAKEN, so the shield stands in front of it too -- and
+     POISON is chaos over time, so poison is the one that walks past. That is
+     what makes a dose the answer to a shielded hero, the same way it is the
+     answer to a shielded boss. */
+  if(p.esMax > 0) n = esAbsorb(p, n, type, 0);
+  else p.esT = ES_DELAY;
+  if(n <= 0.001) return;
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
   p.flash = 1; redFlash = Math.max(redFlash, 0.35);
@@ -5597,7 +5742,7 @@ function updateAilments(dt){
     p.psn.acc += deal;
     const show = p.psn.acc >= 1;
     if(show) p.psn.acc -= 1;
-    if(deal > 0) ailmentDamage(deal, !show);
+    if(deal > 0) ailmentDamage(deal, !show, 'chaos');
     if(show) addDmg(p.x, p.y-44, '-1', '#8ac24a', 16);
     if(Math.random() < 0.4)
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40),
@@ -5678,6 +5823,28 @@ function playerDamage(n, src, elem, spell){
      After mitigation and after the log, so a hit that was evaded or suppressed
      away to nothing still counts as a hit — being swung at is the trigger. */
   if(p.rageOnHurt > 0) stackAdd('rage', p.rageOnHurt);
+  /* THE SHIELD TAKES IT. After the log, so what you read is the hit that was
+     thrown at you; what reaches the hearts is what is left of it. A monster's
+     chaos -- a venomous boss, a rotted one -- walks straight past. */
+  if(p.esMax > 0){
+    const was = p.es || 0;
+    /* WHERE THE CHAOS COMES FROM. A boss's body and its rings pass the boss
+       itself, so `chaosShare` is read straight off it; a hexbolt records its
+       thrower in `src`, so it is read through that. An arrow does not record
+       anybody, and an arrow from a rotted boss is still an arrow -- what makes
+       the late fights bite is the thing standing on top of you, which is
+       exactly what this covers. */
+    const cs = (src && (src.chaosShare
+                || (src.src && src.src.chaosShare))) || 0;
+    n = esAbsorb(p, n, null, cs);
+    const ate = was - (p.es || 0);
+    if(ate > 0.01){
+      p.esFlash = 1;
+      addDmg(p.x, p.y - 50, '-'+fmtHp(ate), ES_COL, 14);
+      addSparks(p.x, p.y - 20, 4, ES_COL);
+    }
+    if(n <= 0.001){ p.invuln = IFRAME_T; p.flash = 1; return; }
+  } else p.esT = ES_DELAY;
   /* AN ENDURANCE CHARGE IS EARNED BY BEING HIT, which is why it pays in less
      damage taken and resistance: the build that keeps getting caught is the
      build that wants it. Same place as rage and for the same reason. */
@@ -7240,6 +7407,28 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased ACCURACY — on the whole pool, `+
       `including your dexterity and the weapon's own (now ${Math.round(accuracyValue())})`,
     apply:c=>{ player.inc.acc += c.v; } },
+  /* ---- THE SHIELD. Two cards, the same shape as accuracy and evasion: a flat
+     one that anybody can take and an increase that is only worth anything once
+     you have a pool to increase. ---- */
+  { id:'es', name:'Ward Brick', icon:'ward', cls:'DEFENSE',
+    calc:m=>({v: byRar(m, [2, 3.5, 5.5, 8, 12])}),
+    desc:c=>{
+      const was = player.esMax;
+      player.esFlat += c.v; syncStats();
+      const now = player.esMax; player.esFlat -= c.v; syncStats();
+      return `+${c.v} ENERGY SHIELD (${fmtHp(was)} → ${fmtHp(now)}). A second bar in `+
+        `front of your hearts: it takes the hit first and comes back on its own `+
+        `${ES_RATE*100}% a second after ${ES_DELAY}s untouched. CHAOS goes straight `+
+        `through it — a dose is the one thing a shield cannot stop`;
+    },
+    apply:c=>{ player.esFlat += c.v; syncStats(); } },
+  { id:'esinc', name:'Deep Ward', icon:'ward', cls:'DEFENSE', minRar:'rare',
+    req:()=>player.esFlat > 0,
+    calc:m=>({v: byRar(m, [0.12, 0.20, 0.30, 0.45, 0.65])}),
+    desc:c=>`${Math.round(c.v*100)}% increased ENERGY SHIELD — and your intelligence `+
+      `increases it too, ${Math.round(intOf()*ATTR_INT_ES*100)}% of it so far `+
+      `(now ${fmtHp(player.esMax)})`,
+    apply:c=>{ player.inc.es += c.v; syncStats(); } },
   { id:'eva', name:'Loose Footing', icon:'boot', cls:'DEFENSE',
     calc:m=>({v: byRar(m, [60, 110, 180, 280, 420])}),
     desc:c=>{
@@ -7422,6 +7611,8 @@ const META_STATS = {
   incAcc:     { n:'increased ACCURACY',           pct:1, w:(p,v)=>{ p.inc.acc += v; } },
   eva:        { n:'EVASION',                             w:(p,v)=>{ p.evaFlat += v; } },
   incEva:     { n:'increased EVASION',            pct:1, w:(p,v)=>{ p.inc.eva += v; } },
+  es:         { n:'ENERGY SHIELD',                       w:(p,v)=>{ p.esFlat += v; } },
+  incEs:      { n:'increased ENERGY SHIELD',      pct:1, w:(p,v)=>{ p.inc.es += v; } },
   chargeMax:  { n:'maximum of EVERY charge',
                 w:(p,v)=>{ for(const k of CHARGE_IDS) p.stackMax[k] += v; } },
   chargeAll:  { n:'of every charge, by every means',
@@ -7649,6 +7840,7 @@ const META_ICON_EXACT = {
      the one you kill for, a target for the one you crit for */
   chargeHurt:'shield', chargeKill:'sword', chargeCrit:'target',
   acc:'target', incAcc:'target', eva:'boot', incEva:'boot',
+  es:'ward', incEs:'ward',
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
@@ -8059,6 +8251,18 @@ const META_NOTABLES = [
      Resistance taken OFF, which is the one kind of damage increase that does
      not live in your own pool -- so it is the thing a build already at its
      ceiling walks out here for. */
+  /* ==================== THE SHIELD ====================
+     Blue's, because intelligence is what increases it -- a caster who has been
+     stacking INT for spell damage has been buying this all along and only finds
+     out when there is somewhere to spend it. */
+  { id:'n_ward',  name:'THE WARDING',   sp:'arc', home:'int', d:[1,3], shape:'ring',
+    minors:[['Warding','es',3],['Layered','incEs',0.12],['Reinforced','es',2.5]],
+    notable:{ name:'Wardkeeper', note:'a second bar, and chaos is the only thing past it',
+              mods:[['es',7],['incEs',0.18]] } },
+  { id:'n_ward2', name:'THE RESERVOIR OF WILL', sp:'arc', home:'int', d:[2,4], shape:'arc',
+    minors:[['Willed','incEs',0.14],['Studied','int',4],['Insulated','es',3]],
+    notable:{ name:'Reservoir of Will', note:'what you learned is what stands in front of you',
+              mods:[['incEs',0.30],['int',6]] } },
   { id:'n_expose',name:'THE UNMAKING',  sp:'elem',home:'int', d:[2,4], shape:'fan',
     minors:[['Etching','exposeChance',0.10],['Solvent','incElem',0.05],['Reagent','incChaos',0.06]],
     notable:{ name:'Sapper', note:'what you hit stops resisting what hit it',
@@ -11189,6 +11393,23 @@ const STAT_PROBES = [
   { g:'ACCURACY', k:'vs a hard dodger', get:()=> hitChance(accuracyValue(), EVA_BASE*3)*100,
     fmt:v=>v.toFixed(1)+'%',
     why:'a shade, or anything under SLIPPERY. This is the number accuracy is bought for' },
+  { g:'ENERGY SHIELD', k:'Maximum', get:()=> player ? player.esMax : 0,
+    fmt:v=>fmtHp(v), zero:true,
+    why:'a second bar in front of your hearts. It takes the hit first, and CHAOS goes '+
+        'straight through it \u2014 a dose is the one thing it cannot stop' },
+  { g:'ENERGY SHIELD', k:'Standing', get:()=> player ? (player.es||0) : 0,
+    fmt:v=>fmtHp(v), zero:true,
+    why:'what is left of it right now' },
+  { g:'ENERGY SHIELD', k:'Comes back after', get:()=> ES_DELAY, fmt:v=>v.toFixed(1)+'s',
+    why:'seconds untouched before it starts refilling. ANY damage restarts the clock, '+
+        'including a hit that walked past the shield entirely' },
+  { g:'ENERGY SHIELD', k:'Refills at', get:()=> player ? player.esMax*ES_RATE : 0,
+    fmt:v=>fmtHp(v)+'/s', zero:true,
+    why:Math.round(ES_RATE*100)+'% of the maximum a second \u2014 so a bigger shield comes '+
+        'back faster as well as lasting longer' },
+  { g:'ENERGY SHIELD', k:'From intelligence', get:()=> intOf()*ATTR_INT_ES*100,
+    fmt:v=>Math.round(v)+'%', zero:true,
+    why:'+'+(ATTR_INT_ES*100)+'% increased maximum energy shield per point of INT' },
   { g:'EVASION', k:'Evasion', get:()=> evasionValue(), fmt:v=>Math.round(v)+'', zero:true,
     why:'you start with NONE \u2014 armour is the defence you begin with, evasion is the one '+
         'you choose. It does nothing against a spell' },
@@ -11569,6 +11790,10 @@ function mobStatRows(key){
   if(d.fire) add('BASE', 'Attack every', d.fire.toFixed(1) + 's');
   /* THE CONTEST, BOTH WAYS ROUND, and both of them in the numbers the hero
      actually carries -- a rating on its own means nothing to anybody. */
+  if(d.es) add('BASE', 'Energy shield', Math.round(d.es*100) + '% of its health, on top of it'
+      + ' \u2014 chaos goes straight through');
+  if(d.chaos) add('BASE', 'Chaos in its hits', Math.round(d.chaos*100)
+      + '% \u2014 that share walks past YOUR shield');
   { const ev = mobEvasionOf(d), ac = mobAccuracyOf(d);
     add('BASE', 'Evasion', ev + '  (you hit ' + Math.round(hitChance(accuracyValue(), ev)*100) + '%)');
     add('BASE', 'Accuracy', ac + (evasionValue() > 0
@@ -12499,6 +12724,10 @@ function updatePlayer(dt){
      nothing below that rate ever healed at all. */
   /* getting hit knocks the wind out of it — no ticking for half a second */
   p.regenStall = Math.max(0, (p.regenStall||0) - dt);
+  /* the shield comes back on its own clock, which is not the regen clock: one
+     is a thing you bought and the other is a thing that heals you slowly */
+  esTick(p, dt);
+  p.esFlash = Math.max(0, (p.esFlash||0) - dt*3);
   const regen = p.regenStall > 0 ? 0 : cursedRegen();
   if(regen > 0 && p.hp < p.maxHp){
     p.regenAcc += regen*dt;
@@ -13677,6 +13906,7 @@ function updateEnemy(e, dt){
   if(e.shockT > 0){ e.shockT -= dt; if(e.shockT <= 0) e.shockN = 0; }
   if(e.shocked){ e.shocked.t -= dt; if(e.shocked.t <= 0) e.shocked = null; }
   if(e.expose) exposeTick(e, dt);
+  if(e.esMax > 0){ esTick(e, dt); e.esFlash = Math.max(0, (e.esFlash||0) - dt*3); }
   if(e.frozen){ e.frozen.t -= dt; if(e.frozen.t <= 0) e.frozen = null; }
   if(e.emberCd > 0) e.emberCd -= dt;
   if(e.slowT>0 && Math.random()<0.15)
@@ -20369,6 +20599,28 @@ function renderHUD(){
     }
     xpY = 36 + rows*25 + 8;
   }
+  /* THE SHIELD SITS ON TOP OF THE HEARTS, which is where it stands in the
+     fight. A slim bar rather than pips: it is one pool, it moves in fractions,
+     and it refills while you watch -- three things a row of hearts says badly.
+     Nothing is drawn at all until you own some, so a hero who never bought a
+     shield has exactly the HUD they had before it existed. */
+  if(p.esMax > 0){
+    const f = clamp((p.es||0)/p.esMax, 0, 1);
+    ctx.fillStyle = 'rgba(15,20,25,0.62)';
+    roundRect(ctx, 24, xpY - 1, 216, 9, 4); ctx.fill();
+    if(f > 0){
+      ctx.fillStyle = ES_COL;
+      ctx.globalAlpha = 0.9 + 0.1*(p.esFlash||0);
+      roundRect(ctx, 25.5, xpY + 0.5, Math.max(3, 213*f), 6, 3); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.font='700 9px Fredoka'; ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillStyle = ((p.esT||0) <= 0 && f < 1) ? '#bfeaff' : ES_COL;
+    ctx.fillText(((p.esT||0) <= 0 && f < 1 ? '\u25b2 ' : '') + fmtHp(p.es||0) + ' / ' + fmtHp(p.esMax),
+                 236, xpY + 3.5);
+    ctx.textAlign='left';
+    xpY += 14;
+  }
   const bx = 24;
   ctx.fillStyle = 'rgba(15,20,25,0.6)';
   roundRect(ctx, bx+26, xpY, 190, 12, 6); ctx.fill();
@@ -20473,6 +20725,10 @@ function renderHUD(){
        top of the screen, and the boss traits were being drawn straight over
        them — so the block starts from whatever the wave block actually used. */
     const bw = Math.min(460, cw-80), bx2 = cw/2-bw/2, by2 = hudWaveBottom() + 46;
+    /* THE SHIELD TRACK SITS IN THE ROW THE NAME USED, so everything above the
+       health bar moves up by exactly its height when there is one. Without this
+       THE DREAD ROOST was printed straight through its own shield. */
+    const esLift = boss.esMax > 0 ? 13 : 0;
     ctx.font='700 15px "Titan One"'; ctx.textAlign='center';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     if(boss.traits && boss.traits.length){
@@ -20483,22 +20739,44 @@ function renderHUD(){
       for(let i=0;i<parts.length;i++){
         const w4 = ctx.measureText(parts[i]).width + 12;
         ctx.fillStyle = 'rgba(15,20,25,0.55)';
-        roundRect(ctx, tx, by2-38, w4, 15, 7); ctx.fill();
+        roundRect(ctx, tx, by2-38-esLift, w4, 15, 7); ctx.fill();
         ctx.fillStyle = boss.traits[i].col;
-        ctx.textAlign='center'; ctx.fillText(parts[i], tx + w4/2, by2-27);
+        ctx.textAlign='center'; ctx.fillText(parts[i], tx + w4/2, by2-27-esLift);
         tx += w4 + 6;
       }
       ctx.textAlign='center';
     }
     ctx.font='700 15px "Titan One"';
-    ctx.strokeText(bname, cw/2, by2-8);
+    ctx.strokeText(bname, cw/2, by2-8-esLift);
     ctx.fillStyle = boss.super ? '#c95bd0' : '#ff5a4a';
-    ctx.fillText(bname, cw/2, by2-8);
+    ctx.fillText(bname, cw/2, by2-8-esLift);
     ctx.fillStyle='rgba(15,20,25,0.65)'; roundRect(ctx,bx2,by2,bw,18,6); ctx.fill();
     ctx.fillStyle = boss.super ? '#9b45d6' : '#d3242b';
     roundRect(ctx,bx2+2,by2+2,Math.max(4,(bw-4)*clamp(boss.hp/boss.maxHp,0,1)),14,4); ctx.fill();
     ctx.strokeStyle='rgba(15,20,25,0.5)'; ctx.lineWidth=2;
     for(let i=1;i<10;i++){ ctx.beginPath(); ctx.moveTo(bx2+bw*i/10,by2+2); ctx.lineTo(bx2+bw*i/10,by2+16); ctx.stroke(); }
+    /* THE SHIELD, ON TOP OF THE HEALTH BAR AND NOT BESIDE IT, because that is
+       what it is: a thing standing in front. It refills while you watch, so a
+       fight you cannot out-damage looks exactly like what it is. */
+    if(boss.esMax > 0){
+      const f = clamp((boss.es||0)/boss.esMax, 0, 1);
+      ctx.fillStyle = 'rgba(15,20,25,0.55)';
+      roundRect(ctx, bx2, by2-9, bw, 8, 4); ctx.fill();
+      if(f > 0){
+        ctx.fillStyle = ES_COL;
+        ctx.globalAlpha = 0.85 + 0.15*(boss.esFlash||0);
+        roundRect(ctx, bx2+1.5, by2-8, Math.max(3,(bw-3)*f), 6, 3); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      /* and it says when it is coming back, because that is the decision --
+         inside the track's own right end, where it cannot reach the name */
+      if((boss.esT||0) <= 0 && f < 1){
+        ctx.font='700 8px Fredoka'; ctx.textAlign='right';
+        ctx.fillStyle = ES_COL;
+        ctx.fillText('RECHARGING', bx2 + bw - 4, by2 - 2.5);
+        ctx.textAlign='center';
+      }
+    }
     drawBossDebuffs(ctx, boss, cw/2, by2 + 24);
   }
   if(!everInput && runTime > 3.5){

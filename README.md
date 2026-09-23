@@ -1906,6 +1906,94 @@ front of those.
 **+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
 busiest of the three now, which is what it is in the game this borrows from.
 
+### Energy shield — *the bar in front of the bar*
+
+**A third defence that is not more health.** Armour takes a slice off every physical hit and
+evasion makes some of them miss entirely. Energy shield is the other shape PoE has: a second
+pool drawn in front of the first, which **comes back by itself** if you can stop being hit for
+long enough.
+
+```
+· it takes the hit first, and what it cannot eat spills through to the hearts
+· CHAOS walks straight past it — the one damage type it cannot touch
+· go 2.5s without being touched and it refills at 22% of its maximum a second
+· ANY damage restarts that clock, including the chaos that walked past
+```
+
+![The hero's shield, above the XP bar](docs/shield-hud.png)
+
+![A shielded boss, mid-recharge](docs/shield-boss.png)
+
+That last line is what makes it a different defence rather than a bigger one. Armour pays you
+for every hit you take; a shield pays you for the hits you **don't**. A build that can back out
+of a fight for three seconds has a pool that renews all run. A build that stands in the middle of
+everything has a pool it spends once.
+
+**Chaos is the answer to it, and a share is enough.** A hit is a mix, not a type — so a swing
+half converted to chaos puts *half of itself* past the shield and leaves the other half to be
+eaten. You do not need a chaos build to fight a shielded boss; you need some chaos in the build
+you have. The same rule runs the other way: a **poison** is chaos over time, so a dose walks
+through your own shield while a **burn** meets it.
+
+**Intelligence is the attribute for it** — **+0.2% increased maximum energy shield** per point,
+which is PoE's line in this game's units, and the reason the staff's attribute finally buys a
+defence. You start with **none**: `WARD BRICK` is what gives you a pool at all, `DEEP WARD`
+increases it, and two notables in the blue country (`THE WARDING`, `THE RESERVOIR OF WILL`) are
+the tree's way in. A rebuild is never a free heal — picking a card mid-fight raises the ceiling
+and leaves what is standing in the bar where it was.
+
+**Six bosses carry one, and the brutes do not.** LORD LAVABRICK and VON BRICKTHANE hit you with
+a lump of rock and there is nothing arcane about them; the bone, ash and bat bosses are the ones
+the fiction already made strange. The share rides on whatever health the boss ended up with —
+after its traits, after the wave modifiers — so nothing else has to know the shield exists.
+
+| | shield | chaos it deals |
+|---|--:|--:|
+| **VON BRICKTHANE** | — | — |
+| **LORD LAVABRICK** | — | — |
+| **THE BONE BARON** | 35% | — |
+| **THE ASH TYRANT** | 25% | 20% |
+| **THE DREAD ROOST** | 30% | 30% |
+| **OMEGA BRICKTHANE** | 30% | 15% |
+| **MEGA BONE BARON** | 45% | 25% |
+| **ULTRA LAVABRICK** | 20% | 35% |
+
+The chaos column is the other half of the same idea: a late boss that deals some chaos is a boss
+your *own* shield does not fully answer, which is why the ultras have it and the wave-5 boss
+does not.
+
+### One curve, not two
+
+**A wave-45 boss had 8,200 health standing next to a wave-40 ultra's 56,000.** It died before it
+finished building itself. The reason was not a number that needed raising — it was that bosses
+were written on **two** curves: the ultras climbed 2.3× a tier *with the monster level on top*,
+and the bosses between them climbed a flat 420 a tier with **no monster level at all**. Every
+other monster in the game multiplies its health by the monster level. These did not.
+
+Two formulas for one idea drift, and these had been drifting for the whole run.
+
+There is one curve now. The ultras read it at whole steps — 1 at wave 10, 2 at wave 20 — and the
+ordinary bosses read the **same** curve at the half-steps between, at **half** of it. A wave-15
+boss is written as half of what the curve says wave 15 is worth, and it stays half forever
+without anybody keeping two formulas in step.
+
+| wave | | pool | share of the ultra before it |
+|--:|---|--:|--:|
+| 10 | OMEGA BRICKTHANE | 5,700 | |
+| 15 | LORD LAVABRICK | 3,100 | ×0.54 |
+| 20 | MEGA BONE BARON | 16,900 | |
+| 25 | THE DREAD ROOST | 8,200 | ×0.49 |
+| 30 | ULTRA LAVABRICK | 24,500 | |
+| 35 | THE BONE BARON | 14,600 | ×0.60 |
+| 40 | OMEGA BRICKTHANE | 64,700 | |
+
+(Pool is health *plus* shield, averaged over twelve spawns — which of the roster stands up and
+what rank it rolls are both dice.)
+
+The ultras stay spikes, which is the half the first repair got wrong: a curve steep enough to
+fix wave 45 put a wave-35 boss **above** the wave-30 ultra, and an ultra that is not a wall is
+not an ultra. Half is the whole design, in both directions.
+
 ### Buffs on the left, ailments on the right
 
 One list of everything bad was already in the corner doing its job. What was missing was the
@@ -2408,6 +2496,12 @@ The boss block stacks **under** the wave block now rather than being drawn throu
 wave number, its modifier chips and the bodies-left line all live at the top of the screen,
 and the boss's traits were being painted straight over them. One function reports where the
 wave block ends, and the boss block starts below whatever it actually used.
+
+Above the health bar, a **shield track** on the six bosses that carry one, with `RECHARGING`
+written into its right end the moment the clock runs out — because that is the decision you are
+making: a fight you cannot out-damage looks exactly like what it is. Everything above the health
+bar moves up by the track's height when there is one, which is what stops `THE DREAD ROOST` being
+printed straight through its own shield.
 
 Under the health bar, **every debuff on the boss on one line**, left to right — poison,
 bleed, burning, BURNT, chill, shock, frozen — as a **symbol and a count**, no names. On a

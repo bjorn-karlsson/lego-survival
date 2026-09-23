@@ -2168,3 +2168,113 @@ That is three flakes now with one root — a fixed `sleep()` standing in for a c
 third one found by capturing the failure instead of guessing at it.
 
 6 new breaks, 54 tests green, wave-50 soak clean.
+
+## Twenty-third pass — the bar in front of the bar, and one curve instead of two
+
+> *"I want to implement ES as it's done in PoE. Make sure chaos damage goes through Energy
+> Shield. Make sure some bosses also have Energy Shield, and give the higher tier bosses some
+> chaos damage. Right now the lvl 20-25-30-35-40 bosses are extremely easy to kill... They get
+> oneshotted at times, i dont want that."*
+
+### A defence that pays you for the hits you don't take
+
+Armour pays you for every hit you take. Evasion makes some of them miss. Energy shield is the
+third shape and the only one that **comes back**: a pool in front of the health pool that refills
+at 22% of its maximum a second once you have gone 2.5 seconds untouched.
+
+Four rules, all in one twelve-line function:
+
+```
+· it eats the hit first; what it cannot eat spills through
+· chaos walks past it
+· any damage restarts the recharge clock — including the chaos that walked past
+· it is a SHARE, not a yes-or-no
+```
+
+The fourth is the one that makes it a system rather than a gate. A hit here is already a mix
+carrying its own provenance, so a swing half converted to chaos puts *half of itself* past the
+shield and leaves the other half to be eaten. Nothing needed a special case: `chaosShareOf` reads
+the mix the conversion pipeline already built. It means you never need a chaos build to fight a
+shielded boss — you need *some* chaos, which is a much better thing to want.
+
+The same function runs the hero's shield, a monster's, and a boss's, because the only thing it
+needs is an object with `es` and `esMax`. "Some bosses have one" is therefore a column in a table
+rather than a second system.
+
+Poison is chaos over time, so `ailmentDamage` passes its type through and a dose walks past a
+shield while a burn meets it — the one place where the ailment table and the shield had to agree,
+and they agree by construction rather than by a rule written twice.
+
+### The thing that was actually wrong with the bosses
+
+The complaint was that the bosses at 20/25/30/35/40 fold. Measuring first, before touching a
+number:
+
+```
+w10 OMEGA BRICKTHANE  ULTRA  5,314        w35 THE BONE BARON   4,147
+w20 MEGA BONE BARON   ULTRA 13,813        w45 THE ASH TYRANT   8,213
+w30 ULTRA LAVABRICK   ULTRA 17,740
+```
+
+A wave-45 boss with 8,200 health next to a wave-40 ultra's 56,000. Not a number that wanted
+raising — a **second curve**. The ultras climbed 2.3× a tier with `mobRankMul()` on top; the
+bosses between them climbed a flat 420 a tier with **no monster level at all**, while every
+ordinary skeleton in the game has one. Two formulas for one idea, drifting apart a little more
+every tier for the whole run.
+
+The first repair raised the in-between curve — quadratic in tier, with the monster level added.
+It fixed wave 45 and broke something else: a wave-35 boss came out at ×1.31 of the wave-30 ultra
+it followed. An ultra that is not a wall is not an ultra. Steeper was not the claim.
+
+So there is one curve now. `bossPool(baseHp, st)` is *the* curve; the ultras read it at whole
+steps and the ordinary bosses read the same one at the half-steps between, at `BOSS_SHARE` of it.
+A wave-15 boss is half of what wave 15 is worth, and stays half forever with nobody keeping two
+formulas in step.
+
+```
+w10 ULTRA  5,713          w15  3,063  ×0.54
+w20 ULTRA 16,947          w25  8,230  ×0.49
+w30 ULTRA 24,481          w35 14,623  ×0.60
+w40 ULTRA 64,683
+```
+
+The wave-45 boss went from 8,200 to 44,700. The wave-50 raid is 40% deeper than it was, which is
+the cost of the five ordinary bosses in it no longer evaporating.
+
+### A test that called a correct game broken
+
+The first version of the curve assertion walked the sampled waves in order and demanded each be
+deeper than the last. It failed on a correct build:
+
+```
+wave 15 (LORD LAVABRICK, 3637) is no deeper than wave 10 (6908)
+```
+
+Waves 10/20/30/40 are ultras and 15/25/35 are not, so the pool is *supposed* to dip on the wave
+after an ultra. The comparison crossed the boundary between two kinds of thing. It compares
+within kind now, with the reason written above it.
+
+Then the replacement was wrong in the other direction. "The ordinary bosses must climb at least
+as steeply as the ultras" passes for a build where they climb steeply *past* them — which is
+exactly the overshoot above. The claim that is actually true of a share is a **band**: every
+ordinary boss between 0.40 and 0.90 of the ultra before it, and the share must not drift across
+the run (max/min < 1.6). That catches the original bug at ×0.19, the overshoot at ×1.28, and a
+`BOSS_SHARE` set wrong in either direction — four breaks where the slope version caught one.
+
+### Two more of the same three bugs
+
+**A one-sample measurement.** The curve was read from one spawn a wave. Which boss stands up is a
+roll and so is its rank, and one run put wave 15 at ×0.405 against a floor of 0.40 — a pass by a
+hair and a red suite next run for no reason at all. Twelve spawns a wave, averaged.
+
+**A patch that averaged the signal away.** `stormcol` failed in a suite run at a margin of exactly
+10 against a threshold of 10. A bolt is drawn *jagged*, so it does not sit on the straight line
+between its own endpoints — a 6px patch at the midpoint catches it on some frames and clean
+ground on others. Widening the patch made it **worse**: a thin bright line averaged over a bigger
+box is a line averaged away. What says "a yellow line crossed here" is the **hottest pixel**, not
+the mean one. Margin went from 10±2 to 91±1, and every colour break still fails.
+
+That is four flakes now with one root — a fixed sample standing in for a condition — and two of
+the four were found by reading the captured failure rather than by re-running until it passed.
+
+29 new breaks, 55 tests green, wave-50 soak clean.
