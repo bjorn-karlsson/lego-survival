@@ -2448,6 +2448,24 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### The guardian guards
+
+Tidal Orbit made the ring breathe in and out — a different way of dealing the same damage. The
+two legendaries that replace it change what the ring is **for**:
+
+- **Aegis Ring** — every brick in the ring **stops one hostile projectile** that crosses it:
+  arrows, bolts, skulls, hexes, a thrown boulder. The brick breaks doing it and rebuilds itself
+  **2.4s** later, and while it is rebuilding it neither blocks nor strikes. Brick count and spin
+  speed become defence: more bricks is a thicker wall, a faster spin sweeps more of the circle.
+- **Twin Ring** — needs the Aegis. A second ring of as many bricks, in gold, turning **the other
+  way**, far enough out that the two can never touch, and blocking too. Its bricks strike on their
+  own clock, so a body caught across both rings is hit by both.
+
+![Aegis and Twin Ring, two bricks rebuilding](docs/twin-ring.png)
+
+Measured on a 40-arrow volley from every direction: a bare hero takes all of it, the Aegis stops
+about a quarter, the Twin Ring about three fifths.
+
 ### Every hand carries attributes
 
 Every favourite hands over **twelve attribute points**, split by what the hand is — the same
@@ -2579,7 +2597,7 @@ say nothing at all on a build that was bleeding and burning: every bleed probe w
 **share** of the hit, and none of them read the damage-over-time pool. There are real
 numbers now — `One wound`, `Damage per wound`, `Fully opened`, and a whole `BURNING` group —
 so an increased-damage-over-time card shows its effect on poison, bleed **and** fire at
-once. Four legendaries (`Tidal Orbit`, `Crackling Storm`, `Returning Blades`,
+once. Four legendaries (`Aegis Ring`, `Crackling Storm`, `Returning Blades`,
 `Absolute Zero`) were silent for the same reason and now have probes of their own. A test
 walks every brick on every weapon and fails if any of them moves nothing.
 

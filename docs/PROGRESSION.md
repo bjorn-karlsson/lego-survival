@@ -2521,3 +2521,31 @@ Also fixed while there: the spread read **"+120 px px"** — the stat's name beg
 formatter added another.
 
 20 new breaks, 58 tests green, wave-50 soak clean.
+
+## Twenty-seventh pass — the guardian guards
+
+> *"Do Aegis Ring as the first upgrade, the second upgrade is Twin Ring, where the opposite ring is
+> a little further out so it doesn't collide with the inner ring. Both block incoming hits."*
+
+Tidal Orbit is gone. **Aegis Ring**: every brick stops one hostile projectile crossing it, breaks,
+and rebuilds 2.4s later — neither blocking nor striking meanwhile. **Twin Ring** (needs the Aegis):
+a second ring of as many bricks, turning the other way, out at `r + max(2·size + 24, 0.38·r)`, with
+its own strike clock so a body across both is hit by both. The block sits in the one swept check
+every hostile projectile already passes before it can reach the hero, so a new kind of enemy shot is
+blockable by existing.
+
+**Three fixture bugs, found by a volley that would not add up.** Hearts lost read exactly 7 with and
+without a wall that had stopped 12 shots: the fixture set a million hearts and *then* called
+`syncStats`, which rebuilt the pool to 7 — the hero was simply dying. Behind that, hit
+invulnerability swallowed arrows arriving close together, so hearts were not a count of arrows until
+i-frames were held at zero every frame. And "the Twin strikes" was being satisfied by the staff's own
+fireballs landing on the test body; it reads the outer ring's own strike clock now.
+
+**Two claims were too weak to catch their breaks.** "No brick on each ring can touch" was checked
+in one snapshot — but counter-rotating rings line every pair up radially sooner or later, so a twin
+6px outside the first ring passed. The claim is the radial gap, which holds at every phase.
+
+The deleted constants were still exported by the test bridge: a boot-time `ReferenceError`, the
+same trap the log already describes.
+
+10 new breaks, 59 tests green.

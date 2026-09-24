@@ -1059,11 +1059,50 @@ const BLAST_SPLIT_MAX = 2;                /* Scattershot: 3 shards, then 9 */
    rank, a quarter at the second -- so three halves beat one whole and nine
    quarters beat three halves. It finally earns its legendary slot. */
 const BLAST_SPLIT_KEEP = [1, 0.50, 0.25];
-const ORBIT_PULSE_RATE = 1.5;             /* rad/s of the tidal sweep — slow on purpose */
-/* The tide breathes OUTWARD. Collapsing the ring onto the hero looked like the
-   bricks had fallen off; pushing it out past its own cap is the point. */
-const ORBIT_PULSE_IN  = 0.88;
-const ORBIT_PULSE_OUT = 1.62;
+/* ===================== THE GUARDIAN GUARDS =====================
+   Tidal Orbit made the ring breathe in and out, which was a different way of
+   dealing the same damage. The two legendaries that replace it change what the
+   ring is FOR.
+     AEGIS RING -- every brick in the ring stops one hostile projectile that
+       crosses it: arrows, bolts, skulls, hexes, a thrown boulder. The brick
+       breaks doing it and rebuilds itself AEGIS_REFORM seconds later, and while
+       it is rebuilding it neither blocks nor hits. So brick count and spin speed
+       become DEFENCE -- more bricks is a thicker wall, a faster spin sweeps more
+       of the circle -- and a volley that breaks the whole ring is a volley that
+       has bought the next one a clean path.
+     TWIN RING -- needs the Aegis. A second ring of as many bricks, turning the
+       other way, far enough out that the two never touch, blocking as well.
+       Its bricks strike on their own clock, so a body standing across both
+       rings is hit by both. */
+const AEGIS_REFORM = 2.4;       /* seconds a brick that stopped a shot takes to rebuild */
+const AEGIS_BLOCK_R = 5;        /* how much wider than the brick its catch is */
+const TWIN_GAP_MIN = 24;        /* clear air between the two rings, at least */
+function twinRadius(orb){
+  /* far enough out that a brick on each ring cannot overlap -- two brick
+     sizes plus a gap -- or a third further out on a wide ring */
+  return orb.r + Math.max(orb.size*2 + TWIN_GAP_MIN, orb.r*0.38);
+}
+/* does a whole brick of the Aegis stand in this shot's path? If so the shot is
+   gone and the brick is broken. Returns true when it blocked. */
+function aegisBlock(pr){
+  const orb = player && player.orbit;
+  if(!orb || !orb.aegis || !(orb.n > 0) || !orb.pos.length) return false;
+  const px = pr.px !== undefined ? pr.px : pr.x, py = pr.py !== undefined ? pr.py : pr.y;
+  const catchR = orb.size + AEGIS_BLOCK_R + (pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0));
+  for(const op of orb.pos){
+    if(op.broken > 0) continue;
+    if(segDist(px, py, pr.x, pr.y, op.x, op.y) > catchR) continue;
+    (op.outer ? orb.brk2 : orb.brk)[op.i] = AEGIS_REFORM;
+    op.broken = AEGIS_REFORM;
+    pr.dead = true;
+    orb.blocked = (orb.blocked || 0) + 1;
+    addSparks(pr.x, pr.y, 7, '#ffe08a');
+    addRing(op.x, op.y, 4, 220, 26, '#ffd166', 4, 0.3);
+    SFX.deflect();
+    return true;
+  }
+  return false;
+}
 /* Sturdy Plates stops here — and MORE Life raises the ceiling with it */
 function heartCap(){ return Math.round(HEART_MAX * (player.hpMore || 1)); }
 /* =============================== THE POOL ===============================
@@ -3455,7 +3494,7 @@ function newPlayer(){
     curseN:{ resist:0, haste:0, armor:0, regen:0 },   /* how many hexes deep each one is */
     regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0, heartStacks:0,
     crit:0.1, studMul:1, heartChance:0,
-    orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], pulse:0 },
+    orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], aegis:0, twin:0, brk:[], brk2:[] },
     /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
        exactly one pick and the volley can never become a spray of piercing bricks */
     blaster:{ n:0, dmg:2, rate:BLAST_RATE_BASE, cd:0.8, spd:560, pierce:0, split:0 },
@@ -7368,13 +7407,22 @@ const UPGRADES = [
       ? 'Storm blades stop fading at the end of their flight — each one wheels around and cuts its way back to you'
       : 'You catch every returning blade and hurl it straight back out: four passes per blade',
     apply:c=>{ player.storm.boomer = Math.min(BOOMER_MAX, player.storm.boomer + 1); } },
-  { id:'orbitpulse', name:'Tidal Orbit', icon:'tide', cls:'SPELL', minRar:'legendary',
-    req:()=>player.orbit.n>0 && !player.orbit.pulse,
+  { id:'orbitaegis', name:'Aegis Ring', icon:'ward', cls:'SPELL', minRar:'legendary',
+    req:()=>player.orbit.n>0 && !player.orbit.aegis,
     calc:m=>({n:1}),
-    desc:c=>`Your guardian bricks stop holding their ring — they sweep all the way `+
-      `in to you and back out to ${Math.round(player.orbit.r)} reach, over and over, `+
-      `raking everything between`,
-    apply:c=>{ player.orbit.pulse = 1; } },
+    desc:c=>`Your guardian bricks become a wall. Every brick in the ring STOPS one hostile `+
+      `projectile that crosses it — arrows, bolts, skulls, hexes, a thrown boulder — and `+
+      `breaks doing it, rebuilding itself ${AEGIS_REFORM}s later. More bricks, a thicker wall; `+
+      `a faster spin, more of the circle covered`,
+    apply:c=>{ player.orbit.aegis = 1; } },
+  { id:'orbittwin', name:'Twin Ring', icon:'orbit', cls:'SPELL', minRar:'legendary',
+    req:()=>player.orbit.n>0 && player.orbit.aegis && !player.orbit.twin,
+    calc:m=>({n:1}),
+    desc:c=>`A SECOND ring of ${player.orbit.n} guardian brick${player.orbit.n>1?'s':''} turns the other `+
+      `way, out at ${Math.round(twinRadius(player.orbit))} — clear of the first — and it blocks `+
+      `shots too. Its bricks strike on their own clock, so a body caught across both rings `+
+      `is hit by both`,
+    apply:c=>{ player.orbit.twin = 1; } },
   { id:'freezestun', name:'Absolute Zero', icon:'icecube', cls:'SPELL', minRar:'legendary',
     req:()=>isCaster() && player.freeze.n>0 && !player.freeze.stun,
     calc:m=>({n:1}),
@@ -11068,7 +11116,7 @@ const BENCH_SECTIONS = [
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'LIFESTEAL',       ids:['leech','leechrate'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
-  { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitpulse'] },
+  { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
@@ -11425,8 +11473,8 @@ function spellSummaries(){
       `${p.orbit.n} brick${p.orbit.n>1?'s':''} orbiting at ${Math.round(p.orbit.r)} reach\n`+
       `${per(d)} per hit — ${p.orbit.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)${moreShown()>1?` × ${moreShown().toFixed(2)} more`:''}\n`+
       `A foe can be struck every ${hitCd.toFixed(2)}s`+
-      (p.orbit.pulse ? `\nTidal Orbit: the ring breathes from ${Math.round(p.orbit.r*ORBIT_PULSE_IN)} `+
-        `out to ${Math.round(p.orbit.r*ORBIT_PULSE_OUT)} — past its own cap — and back` : '') });
+      (p.orbit.aegis ? `\nAegis Ring: each brick stops one shot, then rebuilds in ${AEGIS_REFORM}s` : '')+
+      (p.orbit.twin ? `\nTwin Ring: ${p.orbit.n} more, turning the other way at ${Math.round(twinRadius(p.orbit))}` : '') });
   }
   if(p.blaster.n>0){
     const d = calcDamage(p.blaster.dmg,'spell');
@@ -11976,14 +12024,15 @@ const STAT_PROBES = [
   { g:'GUARDIAN BRICK', k:'Spin speed',     get:()=> player.orbit.n ? player.orbit.spd : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'GUARDIAN BRICK', k:'DPS to one foe',  get:()=> orbitDps(), fmt:v=>v.toFixed(1), zero:true,
     why:'one body standing in the ring, struck as often as the ring allows' },
-  /* Tidal Orbit changes the ring from a fixed circle into a sweep; nothing read
-     that, so the only legendary in the tree showed an empty panel */
-  { g:'GUARDIAN BRICK', k:'Sweeps in to',   get:()=> (player.orbit.n && player.orbit.pulse) ? player.orbit.r*ORBIT_PULSE_IN : 0,
+  { g:'GUARDIAN BRICK', k:'Shots it can stop', get:()=> (player.orbit.n && player.orbit.aegis)
+      ? player.orbit.n * (player.orbit.twin ? 2 : 1) : 0, fmt:v=>Math.round(v)+'', zero:true,
+    why:'Aegis Ring: every brick in the ring stops one hostile projectile, then rebuilds' },
+  { g:'GUARDIAN BRICK', k:'Rebuilds in',    get:()=> (player.orbit.n && player.orbit.aegis) ? AEGIS_REFORM : 0,
+    fmt:v=>v.toFixed(1)+'s', zero:true,
+    why:'a brick that stopped a shot neither blocks nor strikes until it is whole again' },
+  { g:'GUARDIAN BRICK', k:'Twin ring at',   get:()=> (player.orbit.n && player.orbit.twin) ? twinRadius(player.orbit) : 0,
     fmt:v=>Math.round(v)+' px', zero:true,
-    why:'Tidal Orbit: the ring stops holding its circle and breathes in to here' },
-  { g:'GUARDIAN BRICK', k:'…and out to',    get:()=> (player.orbit.n && player.orbit.pulse) ? player.orbit.r*ORBIT_PULSE_OUT : 0,
-    fmt:v=>Math.round(v)+' px', zero:true,
-    why:'…and back out to here, PAST the ring reach cap, raking everything between' },
+    why:'Twin Ring: a second ring, turning the other way, far enough out never to touch the first' },
   { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
   { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
   { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
@@ -13381,26 +13430,33 @@ function updatePlayer(dt){
   orb.pos.length = 0;
   if(orb.n>0){
     const hitCd = clamp(0.5 * 2.6/orb.spd, 0.05, 0.5);
-    /* Tidal Orbit: the ring breathes in to the hero and back out to full reach,
-       so the bricks rake everything between instead of holding one circle */
-    const rNow = orb.pulse
-      ? orb.r * (ORBIT_PULSE_IN + (ORBIT_PULSE_OUT-ORBIT_PULSE_IN)*(0.5 - 0.5*Math.cos(vtime*ORBIT_PULSE_RATE)))
-      : orb.r;
-    orb.rNow = rNow;
-    for(let i=0;i<orb.n;i++){
-      const ang = vtime*orb.spd + i*TAU/orb.n;
-      const ox = p.x + Math.cos(ang)*rNow;
-      const oy = p.y-12 + Math.sin(ang)*rNow*0.72;
-      orb.pos.push({x:ox, y:oy, ang});
-      for(const en of enemiesNear(ox, oy, orb.size + 80)){
-        if(en.dead || en.state!=='active' || en.orbCd>0) continue;
-        if(hitsBody(en, ox, oy, orb.size + 4)){
-          en.orbCd = hitCd;
-          hitEnemy(en, calcDamage(orb.dmg,'spell'), angTo(p,en), 150, 'orbit', {spin:true});
-          addRing(en.x, en.y, 6, 160, 40, '#ffd166', 3, 0.3);
+    orb.rNow = orb.r;
+    /* ONE RING, WRITTEN ONCE, CALLED TWICE: the inner ring, and the Twin Ring
+       turning the other way on its own strike clock. A broken brick still has a
+       place on the circle -- it is drawn rebuilding there -- but it neither
+       strikes nor blocks until its clock runs out. */
+    const ring = (radius, dir, brk, cdKey, outer)=>{
+      while(brk.length < orb.n) brk.push(0);
+      brk.length = orb.n;
+      for(let i=0;i<orb.n;i++){
+        const ang = dir*vtime*orb.spd + (i + (outer ? 0.5 : 0))*TAU/orb.n;
+        const ox = p.x + Math.cos(ang)*radius;
+        const oy = p.y-12 + Math.sin(ang)*radius*0.72;
+        if(brk[i] > 0) brk[i] = Math.max(0, brk[i] - dt);
+        orb.pos.push({x:ox, y:oy, ang, r:radius, outer, i, broken:brk[i]});
+        if(brk[i] > 0) continue;
+        for(const en of enemiesNear(ox, oy, orb.size + 80)){
+          if(en.dead || en.state!=='active' || (en[cdKey]||0)>0) continue;
+          if(hitsBody(en, ox, oy, orb.size + 4)){
+            en[cdKey] = hitCd;
+            hitEnemy(en, calcDamage(orb.dmg,'spell'), angTo(p,en), 150, 'orbit', {spin:true});
+            addRing(en.x, en.y, 6, 160, 40, '#ffd166', 3, 0.3);
+          }
         }
       }
-    }
+    };
+    ring(orb.r, 1, orb.brk, 'orbCd', false);
+    if(orb.twin && orb.aegis) ring(twinRadius(orb), -1, orb.brk2, 'orbCd2', true);
   }
   const bl = p.blaster;
   if(bl.n>0 && casting){
@@ -14371,6 +14427,7 @@ function updateEnemy(e, dt){
   e._spx = e.x; e._spy = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
   e.orbCd -= dt;
+  if(e.orbCd2) e.orbCd2 -= dt;
   e.vortCd -= dt; e.whirlCd = Math.max(0, (e.whirlCd||0) - dt);
   e.totCd = Math.max(0, (e.totCd||0) - dt);
   e.slowT = Math.max(0, e.slowT - dt);
@@ -16350,6 +16407,10 @@ function updateProjectiles(dt){
         if(pr.kind==='frostrock' && s.r < 20) continue;
         if(dist(pr,s) < s.r){ pr.dead=true; addDust(pr.x,pr.y,2); break; }
       }
+      /* THE AEGIS, before the hero: a whole brick the shot's path crosses stops
+         it, and breaks. Swept like the hero's own check, for the same reason --
+         a fast boulder would otherwise step clean over a brick between frames. */
+      if(pr.owner==='enemy' && !pr.dead && !player.dead && aegisBlock(pr)) continue;
       /* swept, not sampled: a 660px/s boulder covers 11px a frame and used to be
          able to step straight over the hero between two frames */
       if(pr.owner==='enemy' && !player.dead &&
@@ -19451,15 +19512,31 @@ function render(){
   if(player && player.orbit.n>0 && !player.dead){
     const os = Math.min(2, player.orbit.size/9);   /* capped visual growth */
     for(const op of player.orbit.pos){
-      ctx.fillStyle = 'rgba(15,30,20,0.2)';
-      ctx.beginPath(); ctx.ellipse(op.x, player.y + Math.sin(op.ang)*player.orbit.r*0.72 + 4, 9*os, 3.5*os, 0, 0, TAU); ctx.fill();
+      const rr = op.r || player.orbit.r;
+      /* a brick that stopped a shot is rebuilding: an outline that fills back in */
+      const back = op.broken > 0 ? 1 - op.broken/AEGIS_REFORM : 1;
+      ctx.fillStyle = `rgba(15,30,20,${0.2*back})`;
+      ctx.beginPath(); ctx.ellipse(op.x, player.y + Math.sin(op.ang)*rr*0.72 + 4, 9*os, 3.5*os, 0, 0, TAU); ctx.fill();
       ctx.save();
       ctx.translate(op.x, op.y - 4 + Math.sin(vtime*6+op.ang)*3);
       ctx.rotate(op.ang*1.4);
       ctx.scale(os,os);
-      ctx.fillStyle = '#d3242b'; ctx.strokeStyle='rgba(20,30,40,0.55)'; ctx.lineWidth=1.8;
-      roundRect(ctx,-11,-5.5,22,11,2.5); ctx.fill(); ctx.stroke();
-      drawStudG(ctx,-5,0,3,'#8f161d'); drawStudG(ctx,5,0,3,'#8f161d');
+      if(op.broken > 0){
+        ctx.globalAlpha = 0.25 + 0.35*back;
+        ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.6; ctx.setLineDash([3,3]);
+        roundRect(ctx,-11,-5.5,22,11,2.5); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = op.outer ? '#e8a13a' : '#d3242b';
+        roundRect(ctx,-11,-5.5,22*back,11,2.5); ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        /* the Twin Ring is the gold one, so the two can be told apart at a glance */
+        ctx.fillStyle = op.outer ? '#e8a13a' : '#d3242b';
+        ctx.strokeStyle = player.orbit.aegis ? 'rgba(255,224,138,0.85)' : 'rgba(20,30,40,0.55)';
+        ctx.lineWidth = player.orbit.aegis ? 2.2 : 1.8;
+        roundRect(ctx,-11,-5.5,22,11,2.5); ctx.fill(); ctx.stroke();
+        const stud = op.outer ? '#9a5f12' : '#8f161d';
+        drawStudG(ctx,-5,0,3,stud); drawStudG(ctx,5,0,3,stud);
+      }
       ctx.restore();
     }
   }
