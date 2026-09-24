@@ -859,28 +859,38 @@ const VORTEX_MAX_R = 210;
    pulse: half the reach, half the hit, and it comes round twice as often — a
    spell you feel every few seconds rather than a bomb you wait for. */
 const FREEZE_MAX_R = 290;
-const BLAST_MAX_PIERCE = 8;
-/* A blaster brick shatters on the first thing it touches until you buy it the
-   right to carry on, and every foe it goes through costs it a slice of its
-   damage — 15% a foe at one pierce, easing to 10% once you have bought the lot,
-   so stacking pierce is worth more than the first rank suggested it would be. */
-const BLAST_FALL_MAX = 0.15;
-const BLAST_FALL_MIN = 0.10;
-function blastPierceFall(p){
-  if(p <= 0) return 0;
-  const t = Math.min(1, (p-1) / Math.max(1, BLAST_MAX_PIERCE-1));
-  return BLAST_FALL_MAX + (BLAST_FALL_MIN - BLAST_FALL_MAX)*t;
-}
-/* A blaster brick's total, across every foe one shard walks through. */
-function blastPierceTotal(p){
-  const f = blastPierceFall(p);
-  let t = 0;
-  for(let i=0; i<=p; i++) t += Math.pow(1-f, i);
-  return t;
+/* ===================== THE ARROW =====================
+   The bow's basic attack. Every arrow is the whole arrow: a second one from
+   Split Arrow is not a share of the first. Pierce wears an arrow down the same
+   way it used to wear a Brick Blaster brick down; Chaos Arrow pierces everything and is not
+   worn at all. ONE of three legendaries per run turns the arrow into something
+   else, and each carries its own conversion -- applied FIRST, the way a PoE
+   gem's is, so the hero's own conversion shares what is left. */
+const ARROW_MAX_N      = 5;      /* arrows a shot */
+const ARROW_SPREAD     = 0.14;   /* radians between the arrows of one shot */
+const ARROW_LIFE       = 0.95;
+const ARROW_MAX_PIERCE = 8;
+const ARROW_PIERCE_ALL = 99;     /* Chaos Arrow: everything in the line */
+const ARROW_FORK_N     = 4;      /* Lightning Arrow: bodies one landing forks to */
+const ARROW_FORK_R     = 190;
+const ARROW_FORK_SHARE = 0.5;
+const ARROW_BLAST_R    = 80;     /* Fire Arrow: the burst round the body it hit */
+const ARROW_BLAST_LESS = 0.45;   /* ...and everything else in it takes 45% less */
+const ARROW_KINDS = {
+  light:{ name:'Lightning Arrow', to:'shock', conv:0.75, ail:0.25, col:'#ffd84a' },
+  fire: { name:'Fire Arrow',      to:'fire',  conv:0.80, ail:0.20, col:'#ff7a2a' },
+  chaos:{ name:'Chaos Arrow',     to:'chaos', conv:0.75, ail:0.25, col:'#8ede4a' },
+};
+const ARROW_SOURCES = new Set(['arrow', 'arrowfork', 'arrowblast']);
+/* the tree's Ricochet keystone: an arrow that would stop finds another body */
+const RICO_MAX = 2, RICO_R = 260;
+/* how much an arrow is worn by each body it has already gone through */
+function pierceFall(n){
+  if(n <= 0) return 0;
+  const t = Math.min(1, (n-1) / Math.max(1, ARROW_MAX_PIERCE-1));
+  return 0.15 + (0.10 - 0.15)*t;
 }
 const ORBIT_MAX_N = 15;                   /* guardian bricks in the ring */
-const BLAST_MAX_N = 40;                   /* bricks per volley */
-const BLAST_MAX_SHOTS = 40;               /* projectiles per volley, shards included */
 const FREEZE_MIN_RATE = 2.2;
 /* ===================== ACCURACY AND EVASION =====================
    ONE CONTEST, NOT TWO ROLLS. A flat dodge chance -- which is what a shade had
@@ -1053,13 +1063,6 @@ const TOTEM_LIFE  = [0, 9, 12];
 const TOTEM_MUL   = [0, 1/3, 0.55];       /* share of vortex damage it deals */
 const TOTEM_TICK = 0.3;
 const FREEZE_STUN_T = 4.5;                /* Absolute Zero: frozen solid this long */
-const BLAST_SPLIT_MAX = 2;                /* Scattershot: 3 shards, then 9 */
-/* Scattershot used to DIVIDE the damage among the shards, so three shards of a
-   third were exactly the brick you started with: coverage for free and power
-   for nothing. Each shard keeps a SHARE of the whole now -- half at the first
-   rank, a quarter at the second -- so three halves beat one whole and nine
-   quarters beat three halves. It finally earns its legendary slot. */
-const BLAST_SPLIT_KEEP = [1, 0.50, 0.25];
 /* ===================== THE GUARDIAN GUARDS =====================
    Tidal Orbit made the ring breathe in and out, which was a different way of
    dealing the same damage. The two legendaries that replace it change what the
@@ -1128,7 +1131,7 @@ const ORBIT_SPD_BASE = 2.6;
 /* the storm brick sits at a flat 2.00s and has no rate brick of its own any
    more — its old `Charged Storm` slot is the shock-chance brick now, so the way
    to make the storm come round faster is to own more bricks, not to buy speed */
-const BLAST_RATE_BASE = 2.4, CHAIN_RATE_BASE = 2.0, STORM_RATE_BASE = 6.5;
+const CHAIN_RATE_BASE = 2.0, STORM_RATE_BASE = 6.5;
 const VORTEX_RATE_BASE = 9, FREEZE_RATE_BASE = 5.5, BOMB_RATE_BASE = 7;
 /* BRICKBANE. A cloud of green gas coughed out in a wedge in front of you. It
    hits once when the front washes over a body, and then it KEEPS hitting — the
@@ -1241,7 +1244,6 @@ function syncStats(){
   p.critBase = weapon.crit;
   p.dash.cdMax = paceOf(DASH_BASE, i.roll, DASH_CD_MIN);
   p.orbit.spd = Math.min(ORBIT_MAX_SPD, pool(ORBIT_SPD_BASE, 0, castInc(i.orbitSpd), 1));
-  p.blaster.rate = paceOf(BLAST_RATE_BASE, castInc(i.blastRate), BLAST_MIN_RATE);
   p.chain.rate   = paceOf(CHAIN_RATE_BASE, castInc(i.chainRate), CHAIN_MIN_RATE);
   p.storm.rate   = paceOf(STORM_RATE_BASE, castInc(i.stormRate), STORM_MIN_RATE);
   p.vortex.rate  = paceOf(VORTEX_RATE_BASE, castInc(i.vortexRate), VORTEX_MIN_RATE);
@@ -1338,13 +1340,6 @@ function regenScale(){
    seconds of it, which is what makes a thirty-second rest after a boss a rest. */
 const REGEN_BREAK_MUL = 2;
 const HEART_CHANCE_MAX = 2.0;    /* +200% of a very small base, not +200 points */
-/* THE BLASTER'S FLOOR SAT ALMOST ON ITS OWN BASE. 2.40s base against a 2.00s
-   floor is 17% of headroom — one brick's worth for a sword hero, and none at
-   all for a staff, whose +20% cast speed landed it exactly on the floor from
-   the first wave and made `Rapid Blaster` a card that could never be offered.
-   1.20s gives the line the same 100% of room the storm brick has (2.20 → 1.00)
-   and is still nowhere near a machine gun with a volley this size. */
-const BLAST_MIN_RATE = 1.20;
 const STORM_MIN_RATE = 2.00;
 const VORTEX_MIN_RATE = 3.00;
 const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
@@ -1372,7 +1367,6 @@ const CHAIN_MAX_ZAPPERS = 5;
    they have always been. */
 function capUp(k){ return (player && player.capUp && player.capUp[k]) || 0; }
 function orbitMaxN(){ return ORBIT_MAX_N + capUp('orbit'); }
-function blastMaxN(){ return BLAST_MAX_N + capUp('blaster'); }
 /* ranks of bladestorm that still fit under the sword ceiling */
 function stormMaxN(){
   return Math.max(1, Math.floor(STORM_MAX_BLADES / Math.max(1, player.storm.count)));
@@ -1414,10 +1408,10 @@ const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead o
    more than once a second however much tempo the hero buys, and a bomb volley
    never more than once every two. Read by the gate on the cast-speed brick and
    by the character sheet, so neither can drift from what syncStats() enforces. */
-const SPELL_FLOOR = { blaster:BLAST_MIN_RATE, chain:CHAIN_MIN_RATE, storm:STORM_MIN_RATE,
+const SPELL_FLOOR = { chain:CHAIN_MIN_RATE, storm:STORM_MIN_RATE,
                       vortex:VORTEX_MIN_RATE, freeze:FREEZE_MIN_RATE, bomb:BOMB_MIN_RATE,
                       bane:BANE_MIN_RATE };
-const SPELL_NAME = { orbit:'Guardian Brick', blaster:'Brick Blaster', chain:'Storm Brick',
+const SPELL_NAME = { orbit:'Guardian Brick', chain:'Storm Brick',
                      storm:'Bladestorm', vortex:'Blade Vortex', freeze:'Block Freeze',
                      bomb:'Bomb Volley', bane:'Brickbane' };
 /* Is a global cast-speed brick worth anything to this hero? Only while at least
@@ -1735,7 +1729,25 @@ const WEAPONS = {
     /* a courtesy for the bare-handed opening of a caster’s run */
     acc:0.72,
     attr:{ str:0, int:22, dex:4 },
-    boltSpd:520, boltR:46 }
+    boltSpd:520, boltR:46 },
+  /* THE BOW DOES NOT SWING EITHER. Its basic attack is an ARROW: physical, an
+     ATTACK -- so it rolls accuracy, crits off the weapon, and can open a wound --
+     fired at the pointer, from as far away as you like. It trades the melee
+     kit for that range: no reach, no spin, no lifesteal and no mitigation of
+     its own; what it has instead is a little EVASION, because the archer
+     survives by not being where the hit lands. Dexterity's weapon. */
+  bow: { id:'bow', name:'BOW', col:'#6ee06e',
+    blurb:'Looses arrows instead of swinging. Physical, precise, and never close.',
+    shoot:true,
+    dmg:1.25, rate:0.46, reach:0, spinReach:0, crit:0.07, critMult:165,
+    bleed:0.8, spin:1.00, kb:0.60, hold:'bow', throw:'blade',
+    lessTaken:0, suppress:0.10, leech:0, leechChance:0,
+    /* the precise one at range: a bow finds what it is aimed at */
+    acc:1.25,
+    /* and the one weapon that starts with some evasion of its own */
+    evaBase:120,
+    attr:{ str:2, int:0, dex:22 },
+    arrowSpd:780 }
 };
 /* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
    with RANGE — it never has to be where the monsters are. A melee hero has no
@@ -1823,7 +1835,7 @@ const ARMOUR_VALUE_MAX = ARMOUR_FLAT_MAX * (1 + ARMOUR_INC_MAX);
 /* Spell suppression is a separate layer on SPELL hits: a suppressed hit lands
    for half. At 100% chance every applicable spell hit is suppressed. */
 const SUPPRESS_TAKEN  = 0.5;
-const SPELL_SOURCES = new Set(['orbit','blaster','chain','bomb','bane']);
+const SPELL_SOURCES = new Set(['orbit','chain','bomb','bane']);
 /* what counts as a SWING. The sword, its whirl, the vortex and the lingering
    totem all report as 'sword'; bladestorm blades report as 'storm'. Only these
    can open a wound. */
@@ -2179,8 +2191,40 @@ function exposeCount(e){
    the number is MADE OF, which is the only thing mitigation needs to know. */
 function convFrom(source){ return SOURCE_ELEM[source] || 'phys'; }
 /* AN ATTACK, not a spell. A bare source is the weapon's own swing. */
+/* AN ARROW LEGENDARY'S OWN AILMENT CHANCE -- shock for Lightning Arrow,
+   ignite for Fire Arrow, poison for Chaos Arrow -- on arrows only, adding to
+   whatever the build bought, the way a gem's "chance to" does */
+function arrowAilBonus(source, type){
+  const k = player && player.bow && player.bow.kind;
+  if(!k || !ARROW_SOURCES.has(source)) return 0;
+  const K = ARROW_KINDS[k];
+  return (K && K.to === type) ? K.ail : 0;
+}
+/* THE ARROW'S OWN CONVERSION. The skill converts FIRST, the way a PoE gem's
+   does: its share comes off the top of the physical, and the hero's own
+   conversion shares out only what is left. Every other row -- and every
+   GAIN -- is the hero's, untouched. Built per arrow hit; it is a handful of
+   numbers, and caching it would mean invalidating it on every card. */
+function convTableFor(source){
+  const base = player && player.conv;
+  const k = player && player.bow && player.bow.kind;
+  if(!k || !ARROW_SOURCES.has(source)) return base;
+  const K = ARROW_KINDS[k];
+  const c = blankConv();
+  c.conv.phys[K.to] = K.conv;
+  if(base){
+    const row = convShares(base, 'phys');
+    for(const to in row) c.conv.phys[to] = (c.conv.phys[to] || 0) + row[to] * (1 - K.conv);
+    for(const a of CONV_ORDER){
+      if(a !== 'phys') for(const to in base.conv[a]) c.conv[a][to] = base.conv[a][to];
+      for(const to in base.gain[a]) c.gain[a][to] = base.gain[a][to];
+    }
+  }
+  c.on = true;
+  return c;
+}
 function isAttack(source){
-  return source === undefined || MELEE_SOURCES.has(source)
+  return source === undefined || MELEE_SOURCES.has(source) || ARROW_SOURCES.has(source)
       || source === 'slamfire' || source === 'slamfrost' || source === 'slamshock';
 }
 function convKind(source){
@@ -2214,10 +2258,11 @@ function convSplit(source){
      of exactly one — arithmetically the code that was here before any of this.
      Most heroes take this branch on most hits, so it comes first and allocates
      nothing. */
-  if(!player || !player.conv || !player.conv.on) return CONV_PLAIN[from];
+  const C = player ? convTableFor(source) : null;
+  if(!C || !C.on) return CONV_PLAIN[from];
   const kind = convKind(source);
   const plain = 1 + incTotal(kind, CONV_ELEM[from]);
-  const parts = convParts(1, from, player.conv, (k, via)=> 1 + incVia(kind, via));
+  const parts = convParts(1, from, C, (k, via)=> 1 + incVia(kind, via));
   let total = 0;
   for(const pt of parts) total += pt.amount;
   const share = {};
@@ -2527,7 +2572,8 @@ function ailChanceOf(type, source, crit){
      that has bought physical damage still hits for physical -- it just does not
      cut. (A bare source is the weapon's own swing.) */
   if(type === 'phys' && !isAttack(source)) return 0;
-  let ch = (AIL_BASE[type] || 0) + (crit ? (AIL_CRIT[type] || 0) : 0) + (p.ailChance || 0);
+  let ch = (AIL_BASE[type] || 0) + (crit ? (AIL_CRIT[type] || 0) : 0) + (p.ailChance || 0)
+         + arrowAilBonus(source, type);
   /* a wound is still the weapon's: an axe cuts clean and barely bleeds, a mace
      mangles. Everything else in here is the build's, not the weapon's. */
   if(type === 'phys') ch += (p.bleedChance || 0);
@@ -2684,6 +2730,8 @@ function dealtTypes(){
   /* the weapon in your hands */
   if(isCaster()) add(convFrom(weapon.elem || 'fire'));
   else add('phys');
+  /* an arrow that has become lightning, fire or chaos deals it */
+  if(isArcher() && player.bow && player.bow.kind) add(ARROW_KINDS[player.bow.kind].to);
   /* a mace running SLAM OF THE ELEMENTS cycles through all three, so it has a
      source of every one of them, not just whichever is loaded this second */
   if(isSlammer()){
@@ -2837,7 +2885,7 @@ function dmgColour(source, mix){
    hand you a fifth stop being offered, and everything that deepens the four you
    already have keeps coming. */
 const SPELL_MAX = 4;
-const SPELL_KEYS = ['orbit','blaster','chain','storm','vortex','freeze','bomb','bane'];
+const SPELL_KEYS = ['orbit','chain','storm','vortex','freeze','bomb','bane'];
 function spellHas(k){ const sp = player && player[k]; return !!(sp && sp.n > 0); }
 function spellsOwned(){ let n = 0; for(const k of SPELL_KEYS) if(spellHas(k)) n++; return n; }
 /* you may always deepen a spell you already cast; a NEW one needs a free slot */
@@ -3420,7 +3468,7 @@ function newPlayer(){
     /* offence, in PoE terms */
     flatPhys:0,           /* flat added PHYSICAL damage — whatever you are holding */
     incMelee:0,           /* increased melee damage — sword, bladestorm, vortex */
-    incSpell:0,           /* increased spell damage — orbit, blaster, storm bricks, bombs */
+    incSpell:0,           /* increased spell damage — orbit, storm bricks, bombs */
     incAll:0,             /* increased damage, everything (+5% per level) */
     moreAll:1,            /* product of every `more damage` multiplier */
     critBase:CRIT_BASE, incCrit:0, critMultPct:CRIT_MULT_BASE,
@@ -3466,7 +3514,7 @@ function newPlayer(){
           /* CHAOS IS NOT ELEMENTAL, so it gets its own increase and takes no
              part in the elemental one. That is the entire difference. */
           chaos:0,
-          orbitSpd:0, blastRate:0, chainRate:0, stormRate:0,
+          orbitSpd:0, chainRate:0, stormRate:0,
           vortexRate:0, freezeRate:0, bombRate:0, bombR:0, baneRate:0, baneR:0,
           /* INCREASED DAMAGE OVER TIME — every lingering damage the hero deals,
              whatever inflicted it. Brickbane's poison is the first; it will not
@@ -3506,9 +3554,10 @@ function newPlayer(){
     regenRate:0, regenAcc:0, regenStall:0, regenBoostT:0, heartStacks:0,
     crit:0.1, studMul:1, heartChance:0,
     orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], aegis:0, twin:0, brk:[], brk2:[] },
-    /* the base interval sits just above the 2s floor, so Rapid Blaster is worth
-       exactly one pick and the volley can never become a spray of piercing bricks */
-    blaster:{ n:0, dmg:2, rate:BLAST_RATE_BASE, cd:0.8, spd:560, pierce:0, split:0 },
+    /* the bow's arrow: how many a shot, how far through, a flat bonus of its
+       own, a LESS for the Ricochet keystone, and which of the three it became */
+    bow:{ n:1, pierce:0, flat:0, more:1, kind:null },
+    ricochet:0,
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
@@ -3556,7 +3605,7 @@ function newPlayer(){
     chain:{ n:0, zappers:0, dmg:2, rate:CHAIN_RATE_BASE, r:430, cds:[1.5], gap:0, fork:0 },
     bomb:{ n:0, dmg:2, r:BOMB_R_BASE, rate:BOMB_RATE_BASE, cd:3, cluster:0 },
     /* raised by a favourite's starting perk, once, at the beginning of a run */
-    capUp:{ orbit:0, blaster:0, chain:0, bomb:0 },
+    capUp:{ orbit:0, chain:0, bomb:0 },
     studs:0, kills:0, face:{x:0,y:1}, walk:0, moving:false, blink:0, blinkT:rnd(2,4),
     dead:false, deadT:0, stepT:0, streak:0, streakT:0
   };
@@ -5495,7 +5544,8 @@ function accuracyValue(){
 function evasionValue(){
   const p = player;
   if(!p) return 0;
-  return Math.max(0, (p.evaFlat || 0) * (1 + (p.inc.eva || 0) + dexOf()*ATTR_DEX_EVA));
+  return Math.max(0, ((p.evaFlat || 0) + ((weapon && weapon.evaBase) || 0))
+                     * (1 + (p.inc.eva || 0) + dexOf()*ATTR_DEX_EVA));
 }
 /* what a hero actually lands against a body, and what a body lands on them */
 function heroHitChance(e){ return hitChance(accuracyValue(), (e && e.evasion) || 0); }
@@ -5578,6 +5628,11 @@ function boltDamage(more){
   return Math.max(0, d);
 }
 function isCaster(){ return !!(weapon && weapon.cast); }
+/* THE BOW: neither a caster nor a melee weapon. Most of the game asked
+   "!isCaster()" to mean "swings a blade" -- which was true until a weapon
+   arrived that does neither -- so the blade-only gates ask isMelee() now. */
+function isArcher(){ return !!(weapon && weapon.shoot); }
+function isMelee(){ return !isCaster() && !isArcher(); }
 /* the mace, and anything else that ever earns the ground slam */
 function isSlammer(){ return !!(weapon && weapon.slam); }
 /* Block Freeze's own damage. It is elemental, so it reads the elemental pool
@@ -6402,7 +6457,7 @@ function startWave(n){
      they are the thing worth reading before the break runs out */
   const modLine = waveMods.length
     ? waveMods.map(m=>m.name).join('  ·  ')
-    : (n===1 ? biomeName()+' · '+(isCaster()?'Cast':isSlammer()?'Slam':'Slash')+
+    : (n===1 ? biomeName()+' · '+(isCaster()?'Cast':isSlammer()?'Slam':isArcher()?'Shoot':'Slash')+
                ' with LMB · SPACE to roll!' : '');
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
     boss ? (bname+' approaches...' + (waveMods.length ? '   ['+waveMods.map(m=>m.name).join(' · ')+']' : ''))
@@ -6561,6 +6616,7 @@ function updateWave(dt){
     }
   }
 }
+
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
   common:   { name:'COMMON',   col:'#9ba19d', mult:1.0 },
@@ -6688,7 +6744,7 @@ const ICONS = {
   coin:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
   range:'<circle cx="12" cy="12" r="3.5"/><path d="M12 6 V2 M12 22 v-4 M6 12 H2 M22 12 h-4"/>',
   orbit:'<circle cx="12" cy="12" r="3.6"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(-24 12 12)"/>',
-  blaster:'<path d="M3 12 h7"/><path d="M10 6 L19 12 L10 18 Z"/><path d="M10 4 L17 4 M10 20 L17 20"/>',
+  bow:'<path d="M7 3 C17 7 17 17 7 21"/><path d="M7 3 V21"/><path d="M3 12 H19"/><path d="M16 9.5 L19 12 L16 14.5"/>',
   storm:'<path d="M12 3 v4 M12 17 v4 M3 12 h4 M17 12 h4 M5.6 5.6 l2.8 2.8 M15.6 15.6 l2.8 2.8 M18.4 5.6 l-2.8 2.8 M8.4 15.6 l-2.8 2.8"/><circle cx="12" cy="12" r="2.4"/>',
   vortex:'<path d="M12 12 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0"/><path d="M12 12 m-5.5 0 a5.5 5.5 0 1 1 5.5 -5.5"/><path d="M12 12 m-9 0 a9 9 0 1 1 9 -9"/>',
   freeze:'<path d="M12 2 v20 M2 12 h20 M5 5 l14 14 M19 5 L5 19"/><circle cx="12" cy="12" r="3"/>',
@@ -7019,7 +7075,7 @@ const UPGRADES = [
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     /* a staff has no reach to lengthen — it throws. Nor has a mace: it does not
        swing at all any more, so reach would buy it nothing. */
-    req:()=>!isCaster() && !isSlammer() && player.reach < REACH_MAX,
+    req:()=>isMelee() && !isSlammer() && player.reach < REACH_MAX,
     calc:m=>({v:Math.round(10*m+8)}),
     desc:c=>`+${c.v} melee reach (cap ${weapon.reach+REACH_MAX})`,
     apply:c=>{ player.reachFlat += c.v; syncStats(); } },
@@ -7027,7 +7083,7 @@ const UPGRADES = [
     req:()=>player.atkRate > atkFloor(),
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ATTACK SPEED — swings and casts alike `+
-      `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':'swing'})`,
+      `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':isArcher()?'shot':'swing'})`,
     apply:c=>{ player.inc.atk += c.v; syncStats(); } },
   /* THE GLOBAL CAST SPEED. `Quickening` is the hero's own hands — it shortens
      the swing or the bolt. This is every ABILITY the hero owns, all at once,
@@ -7106,14 +7162,14 @@ const UPGRADES = [
      often is a steadier drip, more per swing is a bigger gulp. Neither is
      offered to a caster — the staff is never in reach to drink. */
   { id:'leech', name:'Vampiric Edge', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && player.leech < LEECH_MAX,
+    req:()=>isMelee() && player.leech < LEECH_MAX,
     calc:m=>({v:0.015+0.012*m}),
     desc:c=>`Your swings leech +${(c.v*100).toFixed(1)}% of the damage they land `+
       `(cap ${Math.round(LEECH_MAX*100)}%, and never more than `+
       `${Math.round(LEECH_HIT_CAP*100)}% of your hearts in one swing)`,
     apply:c=>{ player.leechFlat += c.v; syncStats(); } },
   { id:'leechrate', name:'Thirsting Grip', icon:'heart', cls:'DEFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && player.leechChance < LEECH_CHANCE_MAX,
+    req:()=>isMelee() && player.leechChance < LEECH_CHANCE_MAX,
     calc:m=>({v:0.05+0.045*m}),
     desc:c=>`+${Math.round(c.v*100)}% chance for a swing to leech at all `+
       `(cap ${Math.round(LEECH_CHANCE_MAX*100)}%)`,
@@ -7160,32 +7216,6 @@ const UPGRADES = [
     calc:m=>({v:0.22+0.12*m}),
     desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
     apply:c=>{ player.inc.orbitSpd += c.v; syncStats(); } },
-  { id:'blaster', name:'Brick Blaster', icon:'blaster', cls:'SPELL', minRar:'uncommon',
-    req:()=>canTakeSpell('blaster') && player.blaster.n < blastMaxN(),
-    calc:m=>({n:spellCount(m)}),
-    desc:(c,owned)=> owned>0 ? `+${c.n} brick${c.n>1?'s':''} per volley (cap ${blastMaxN()})`
-      : `Spell: ${c.n} brick${c.n>1?'s':''} fan out toward your cursor (max ${blastMaxN()})`,
-    apply:c=>{ player.blaster.n = Math.min(blastMaxN(), player.blaster.n + c.n); } },
-  { id:'blastpow', name:'Blaster Power', icon:'blaster', cls:'SPELL', req:()=>player.blaster.n>0,
-    calc:m=>({v: byRar(m, FLAT_SPELL)}),
-    desc:c=>`+${fmtHp(c.v)} FLAT base damage to every blaster brick — before any increase`,
-    apply:c=>{ player.blaster.dmg = Math.round((player.blaster.dmg + c.v)*100)/100; } },
-  { id:'blastpierce', name:'Piercing Bricks', icon:'blaster', cls:'SPELL', minRar:'uncommon',
-    req:()=>player.blaster.n>0 && player.blaster.pierce<BLAST_MAX_PIERCE,
-    calc:m=>({p: byRar(m, [1, 1, 2, 3, 4])}),
-    desc:c=>{
-      const now = player.blaster.pierce;
-      const next = Math.min(BLAST_MAX_PIERCE, now + c.p);
-      const loss = Math.round(blastPierceFall(next)*100);
-      return `+${next-now} pierce (cap ${BLAST_MAX_PIERCE}) — a brick walks through `+
-        `${next+1} foes instead of ${now+1}, losing ${loss}% of its damage on each one`;
-    },
-    apply:c=>{ player.blaster.pierce = Math.min(BLAST_MAX_PIERCE, player.blaster.pierce + c.p); } },
-  { id:'blastrate', name:'Rapid Blaster', icon:'clock', cls:'SPELL',
-    req:()=>player.blaster.n>0 && player.blaster.rate > BLAST_MIN_RATE,
-    calc:m=>({v:0.13+0.06*m}),
-    desc:c=>`Blaster fires ${Math.round(c.v*100)}% faster (floor ${BLAST_MIN_RATE.toFixed(2)}s)`,
-    apply:c=>{ player.inc.blastRate += c.v; syncStats(); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
     req:()=>incRoom('spell'),
     calc:m=>({v:0.07+0.045*m}),
@@ -7232,7 +7262,7 @@ const UPGRADES = [
       `ordinary hit`,
     apply:c=>{ player.ailChanceFlat += c.v; syncStats(); } },
   { id:'storm', name:'Bladestorm', icon:'storm', cls:'SPELL', minRar:'uncommon',
-    req:()=>!isCaster() && canTakeSpell('storm') && player.storm.n < stormMaxN(),
+    req:()=>isMelee() && canTakeSpell('storm') && player.storm.n < stormMaxN(),
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=>{
       const cnt = player.storm.count;
@@ -7248,23 +7278,23 @@ const UPGRADES = [
        so a sword hero was offered upgrades to a Bladestorm they had never
        picked up. gate2.js walks every spell tree against a hero who owns
        nothing and fails on anything that answers yes. */
-    req:()=>!isCaster() && player.storm.n>0,
+    req:()=>isMelee() && player.storm.n>0,
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every bladestorm blade — before any increase`,
     apply:c=>{ player.storm.dmg = Math.round((player.storm.dmg + c.v)*100)/100; } },
   { id:'stormsize', name:'Broad Blades', icon:'storm', cls:'SPELL',
-    req:()=>!isCaster() && player.storm.n>0 && player.storm.size<STORM_MAX_SIZE,
+    req:()=>isMelee() && player.storm.n>0 && player.storm.size<STORM_MAX_SIZE,
     calc:m=>({s:0.15*m}),
     desc:c=>`+${Math.round(c.s*100)}% blade size (cap ×${STORM_MAX_SIZE.toFixed(1)}) — `+
       `a bigger blade sweeps a wider spiral and catches more on the way out`,
     apply:c=>{ player.storm.size = Math.min(STORM_MAX_SIZE, player.storm.size + c.s); } },
   { id:'stormrate', name:'Storm Caller', icon:'clock', cls:'SPELL',
-    req:()=>!isCaster() && player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
+    req:()=>isMelee() && player.storm.n>0 && player.storm.rate > STORM_MIN_RATE,
     calc:m=>({v:0.14+0.06*m}),
     desc:c=>`Bladestorm triggers ${Math.round(c.v*100)}% faster (floor ${STORM_MIN_RATE.toFixed(2)}s)`,
     apply:c=>{ player.inc.stormRate += c.v; syncStats(); } },
   { id:'vortex', name:'Blade Vortex', icon:'vortex', cls:'SPELL', minRar:'uncommon',
-    req:()=>!isCaster() && canTakeSpell('vortex'),
+    req:()=>isMelee() && canTakeSpell('vortex'),
     calc:m=>({n:spellCount(m)}),
     desc:(c,owned)=> owned>0 ? `+${c.n} stack${c.n>1?'s':''} — longer & wider whirlwind`
       : 'Spell: spin like a whirlwind, shredding everything around you (scales with Blade Mastery)',
@@ -7273,17 +7303,17 @@ const UPGRADES = [
     /* ONE req, not two. A second `req:` key on the same object silently wins,
        so this brick was offered to a hero who owns no vortex at all — and then
        moved nothing, because every vortex probe reads player.vortex.n. */
-    req:()=>!isCaster() && player.vortex.n>0,
+    req:()=>isMelee() && player.vortex.n>0,
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
     desc:c=>`+${fmtHp(c.v)} FLAT base damage to every vortex tick — before any increase`,
     apply:c=>{ player.vortex.dmg = Math.round((player.vortex.dmg + c.v)*100)/100; } },
   { id:'vortexarea', name:'Vortex Reach', icon:'vortex', cls:'SPELL',
-    req:()=>!isCaster() && player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
+    req:()=>isMelee() && player.vortex.n>0 && player.vortex.r < VORTEX_MAX_R,
     calc:m=>({v:Math.round(8*m)}),
     desc:c=>`+${c.v} blade vortex radius (cap ${VORTEX_MAX_R})`,
     apply:c=>{ player.vortex.r = Math.min(VORTEX_MAX_R, player.vortex.r + c.v); } },
   { id:'vortexrate', name:'Vortex Speed', icon:'clock', cls:'SPELL',
-    req:()=>!isCaster() && player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
+    req:()=>isMelee() && player.vortex.n>0 && (player.vortex.rate > VORTEX_MIN_RATE || player.vortex.hitMul > VORTEX_MIN_HITMUL),
     calc:m=>({v:0.13+0.06*m}),
     desc:c=>`Vortex triggers ${Math.round(c.v*100)}% faster & spins quicker`,
     apply:c=>{ player.inc.vortexRate += c.v; syncStats(); } },
@@ -7434,12 +7464,64 @@ const UPGRADES = [
     },
     apply:c=>{ player.bomb.cluster = Math.min(CLUSTER_MAX, player.bomb.cluster + 1); } },
   { id:'stormback', name:'Returning Blades', icon:'boomerang', cls:'SPELL', minRar:'legendary',
-    req:()=>!isCaster() && player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
+    req:()=>isMelee() && player.storm.n>0 && player.storm.boomer < BOOMER_MAX,
     calc:m=>({n:1}),
     desc:c=> player.storm.boomer===0
       ? 'Storm blades stop fading at the end of their flight — each one wheels around and cuts its way back to you'
       : 'You catch every returning blade and hurl it straight back out: four passes per blade',
     apply:c=>{ player.storm.boomer = Math.min(BOOMER_MAX, player.storm.boomer + 1); } },
+  /* ---- THE BOW. The arrow is upgraded by everything a weapon attack reads --
+     flat physical, increased physical, attack speed, crit, accuracy, bleed --
+     and by these, which are its own. ---- */
+  { id:'arrowmulti', name:'Split Arrow', icon:'bow', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>isArcher() && player.bow.n < ARROW_MAX_N,
+    calc:m=>({n:1}),
+    desc:c=>`+1 ARROW every shot (${player.bow.n} \u2192 ${Math.min(ARROW_MAX_N, player.bow.n+1)}, cap ${ARROW_MAX_N}), `+
+      `fanned out beside the first. Every arrow is the whole arrow, not a share of one`,
+    apply:c=>{ player.bow.n = Math.min(ARROW_MAX_N, player.bow.n + 1); } },
+  { id:'arrowpierce', name:'Piercing Shot', icon:'bow', cls:'OFFENSE',
+    req:()=>isArcher() && player.bow.kind !== 'chaos' && player.bow.pierce < ARROW_MAX_PIERCE,
+    calc:m=>({p: byRar(m, [1, 1, 2, 2, 3])}),
+    desc:c=>{
+      const now = player.bow.pierce, next = Math.min(ARROW_MAX_PIERCE, now + c.p);
+      return `+${next-now} pierce (cap ${ARROW_MAX_PIERCE}) \u2014 an arrow goes on through ${next} `+
+        `bod${next===1?'y':'ies'} after the first, ${Math.round(pierceFall(next)*100)}% less for each one it has passed`;
+    },
+    apply:c=>{ player.bow.pierce = Math.min(ARROW_MAX_PIERCE, player.bow.pierce + c.p); } },
+  { id:'arrowflat', name:'Barbed Arrows', icon:'bow', cls:'OFFENSE',
+    req:()=>isArcher(),
+    calc:m=>({v: byRar(m, [0.3, 0.5, 0.8, 1.2, 1.8])}),
+    desc:c=>`+${c.v} FLAT physical damage to every arrow \u2014 before any increase, so every `+
+      `increase multiplies it (an arrow is ${fmtHp(arrowDamage())} now)`,
+    apply:c=>{ player.bow.flat = Math.round((player.bow.flat + c.v)*100)/100; } },
+  /* ONE OF THREE. Taking any closes the other two: the arrow becomes one thing */
+  { id:'arrowlight', name:'Lightning Arrow', icon:'chain', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isArcher() && !player.bow.kind,
+    calc:m=>({n:1}),
+    desc:c=>`Your arrows become LIGHTNING: ${Math.round(ARROW_KINDS.light.conv*100)}% of their physical `+
+      `damage is converted to lightning, and every arrow that lands FORKS \u2014 a bolt leaps from the `+
+      `body it hit to up to ${ARROW_FORK_N} others within ${ARROW_FORK_R}px, each for `+
+      `${Math.round(ARROW_FORK_SHARE*100)}% of the arrow, once and never onward. `+
+      `+${Math.round(ARROW_KINDS.light.ail*100)}% chance to SHOCK with arrows. `+
+      `One arrow legendary a run: this closes Fire Arrow and Chaos Arrow`,
+    apply:c=>{ player.bow.kind = 'light'; } },
+  { id:'arrowfire', name:'Fire Arrow', icon:'flame', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isArcher() && !player.bow.kind,
+    calc:m=>({n:1}),
+    desc:c=>`Your arrows become FIRE: ${Math.round(ARROW_KINDS.fire.conv*100)}% of their physical damage `+
+      `is converted to fire, and every arrow BURSTS where it lands \u2014 the body it hit takes the whole `+
+      `arrow and everything within ${ARROW_BLAST_R}px takes ${Math.round(ARROW_BLAST_LESS*100)}% less. `+
+      `+${Math.round(ARROW_KINDS.fire.ail*100)}% chance to IGNITE with arrows. `+
+      `One arrow legendary a run: this closes Lightning Arrow and Chaos Arrow`,
+    apply:c=>{ player.bow.kind = 'fire'; } },
+  { id:'arrowchaos', name:'Chaos Arrow', icon:'bane', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isArcher() && !player.bow.kind,
+    calc:m=>({n:1}),
+    desc:c=>`Your arrows become CHAOS: ${Math.round(ARROW_KINDS.chaos.conv*100)}% of their physical damage `+
+      `is converted to chaos, and every arrow PIERCES EVERYTHING in its line, unworn. `+
+      `+${Math.round(ARROW_KINDS.chaos.ail*100)}% chance to POISON with arrows. `+
+      `One arrow legendary a run: this closes Lightning Arrow and Fire Arrow`,
+    apply:c=>{ player.bow.kind = 'chaos'; } },
   { id:'orbitaegis', name:'Aegis Ring', icon:'ward', cls:'SPELL', minRar:'legendary',
     req:()=>player.orbit.n>0 && !player.orbit.aegis,
     calc:m=>({n:1}),
@@ -7480,20 +7562,6 @@ const UPGRADES = [
       syncStats();
       /* you keep the same share of a bigger bar */
       p.hp = Math.min(p.maxHp, Math.round(p.hp * (p.maxHp/Math.max(1,before))*100)/100); } },
-  { id:'blastsplit', name:'Scattershot Bricks', icon:'split', cls:'SPELL', minRar:'legendary',
-    req:()=>player.blaster.n>0 && (player.blaster.split||0) < BLAST_SPLIT_MAX,
-    calc:m=>({n:1}),
-    desc:c=>{
-      const lv = (player.blaster.split||0) + 1;
-      return lv===1
-        ? `Every blaster brick shatters into 3 smaller ones, each keeping `+
-          `${Math.round(BLAST_SPLIT_KEEP[1]*100)}% of the brick's damage — `+
-          `${(3*BLAST_SPLIT_KEEP[1]).toFixed(1)}× the punch, spread wide`
-        : `The smaller bricks shatter again: 9 shards per brick at `+
-          `${Math.round(BLAST_SPLIT_KEEP[2]*100)}% each — `+
-          `${(9*BLAST_SPLIT_KEEP[2]).toFixed(2)}× the punch, a shotgun instead of a pistol`;
-    },
-    apply:c=>{ player.blaster.split = Math.min(BLAST_SPLIT_MAX, (player.blaster.split||0) + 1); } },
   { id:'chainfork', name:'Crackling Storm', icon:'fork', cls:'SPELL', minRar:'legendary',
     req:()=>player.chain.n>0 && (player.chain.fork||0) < CHAIN_FORK_MAX,
     calc:m=>({n:1}),
@@ -7510,7 +7578,7 @@ const UPGRADES = [
        for the ground slam, and the AXE swings twice — a chop and a backswing —
        which is its own rhythm, with its own legendary to go with it. Asked of
        the combo table, so a fifth weapon opts in by having a spin. */
-    req:()=>!isCaster() && !isSlammer() && comboSteps().indexOf('spin') >= 0
+    req:()=>isMelee() && !isSlammer() && comboSteps().indexOf('spin') >= 0
             && player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
     desc:c=> player.blademaster===0
@@ -7525,7 +7593,7 @@ const UPGRADES = [
      the ceiling is thirty and the generation is nothing — so this is the card
      that makes it a build at all, and the tree deepens it afterwards. */
   { id:'ragehit', name:'Warpath', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && player.rageOnHit < stackCap('rage'),
+    req:()=>isMelee() && player.rageOnHit < stackCap('rage'),
     calc:m=>({v: byRar(m, [0.5, 0.8, 1.2, 1.8, 2.6])}),
     desc:c=>`Your swings build RAGE: +${c.v.toFixed(1)} a hit (now `+
       `${(player.rageOnHit||0).toFixed(1)}). Every point of rage is `+
@@ -7534,7 +7602,7 @@ const UPGRADES = [
       `have gone ${HERO_STACKS.rage.grace}s without landing or taking one`,
     apply:c=>{ player.rageOnHit += c.v; } },
   { id:'ragehurt', name:'Spite', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && player.rageOnHurt < stackCap('rage'),
+    req:()=>isMelee() && player.rageOnHurt < stackCap('rage'),
     calc:m=>({v: byRar(m, [0.6, 1.0, 1.5, 2.2, 3.2])}),
     desc:c=>`Being hit builds RAGE: +${c.v.toFixed(1)} a hit taken (now `+
       `${(player.rageOnHurt||0).toFixed(1)}) — what is done to you is worth `+
@@ -7674,7 +7742,7 @@ const UPGRADES = [
         `${REAVE_AIR_R2} axes may fly at once.`,
     apply:c=>{ player.reave = Math.min(REAVE_MAX, player.reave + 1); } },
   { id:'vortextotem', name:'Lingering Vortex', icon:'totem', cls:'SPELL', minRar:'legendary',
-    req:()=>!isCaster() && player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
+    req:()=>isMelee() && player.vortex.n>0 && (player.vortex.totem||0) < TOTEM_MAX,
     calc:m=>({n:1}),
     desc:c=>{
       const lv = (player.vortex.totem||0) + 1;
@@ -7874,7 +7942,7 @@ const META_STATS = {
   slamDmg:    { n:'flat damage to every tooth',          w:(p,v)=>{ p.slam.flat += v; }, only:['mace'] },
   slamArc:    { n:'wider fault',                  deg:1, w:(p,v)=>{ p.slam.arcFlat += v*Math.PI/180; }, only:['mace'] },
   slamRange:  { n:'increased slam range',         pct:1, w:(p,v)=>{ p.slam.rangeInc += v; }, only:['mace'] },
-  spellCap:   { n:'to every spell stack cap',            w:(p,v)=>{ p.capUp.orbit+=v; p.capUp.blaster+=v;
+  spellCap:   { n:'to every spell stack cap',            w:(p,v)=>{ p.capUp.orbit+=v;
                                                                     p.capUp.chain+=v; p.capUp.bomb+=v; } },
   /* ---- ONE ABILITY AT A TIME. A tree that only ever says "+5% damage" has no
      opinions about anything. A node that says "+1 damage with the Guardian
@@ -7885,9 +7953,6 @@ const META_STATS = {
   orbitDmg:   { n:'damage with Guardian Brick',          w:(p,v)=>{ p.orbit.dmg += v; } },
   orbitR:     { n:'to the Guardian Brick orbit',  px:1,  w:(p,v)=>{ p.orbit.r = Math.min(ORBIT_MAX_R, p.orbit.r+v); } },
   orbitSpd:   { n:'increased Guardian Brick speed', pct:1,w:(p,v)=>{ p.inc.orbitSpd += v; } },
-  blastDmg:   { n:'damage with Brick Blaster',           w:(p,v)=>{ p.blaster.dmg += v; } },
-  blastPierce:{ n:'Brick Blaster pierce',                w:(p,v)=>{ p.blaster.pierce = Math.min(BLAST_MAX_PIERCE, p.blaster.pierce+v); } },
-  blastRate:  { n:'increased Brick Blaster fire rate', pct:1, w:(p,v)=>{ p.inc.blastRate += v; } },
   chainDmg:   { n:'damage with Storm Brick',             w:(p,v)=>{ p.chain.dmg += v; } },
   chainFork:  { n:'Storm Brick fork',                    w:(p,v)=>{ p.chain.fork = Math.min(CHAIN_FORK_MAX, (p.chain.fork||0)+v); } },
   chainRate:  { n:'increased Storm Brick rate',   pct:1, w:(p,v)=>{ p.inc.chainRate += v; } },
@@ -7920,6 +7985,13 @@ const META_STATS = {
                 w:(p)=>{ p.ghostReaver = true; } },
   zealot:     { n:'your regeneration fills your ENERGY SHIELD, and never your hearts',
                 w:(p)=>{ p.zealot = true; } },
+  /* ---- THE BOW ---- */
+  arrowFlat:  { n:'flat physical damage to arrows',       w:(p,v)=>{ p.bow.flat += v; }, only:['bow'] },
+  arrowPierce:{ n:'arrow pierce',                         w:(p,v)=>{ p.bow.pierce = Math.min(ARROW_MAX_PIERCE, p.bow.pierce + v); },
+                only:['bow'] },
+  ricochet:   { n:'chance for an arrow that would stop to RICOCHET to another body, up to twice', pct:1,
+                w:(p,v)=>{ p.ricochet = (p.ricochet||0) + v; }, only:['bow'] },
+  arrowLess:  { n:'LESS arrow damage', pct:1, w:(p,v)=>{ p.bow.more *= (1 - v); }, only:['bow'] },
   noReroll:   { n:'NO rerolls, ever',                    w:(p)=>{ p.noReroll = true; } },
   /* ---- AND THE NEW SWITCHES. Every one of these changes a RULE rather than a
      number, which is the only thing worth walking to the edge of the map for.
@@ -8044,7 +8116,7 @@ const META_ICON_EXACT = {
   speed:'boot', roll:'roll', magnet:'magnet', studs:'coin', xp:'xp',
   str:'fist', dex:'boot', int:'arcane', ember:'ember', spellCap:'prism',
   orbitDmg:'orbit', orbitR:'orbit', orbitSpd:'orbit',
-  blastDmg:'blaster', blastPierce:'blaster', blastRate:'blaster',
+
   chainDmg:'chain', chainFork:'fork', chainRate:'chain',
   stormDmg:'boomerang', stormSize:'boomerang', stormRate:'boomerang',
   vortexDmg:'vortex', vortexR:'vortex', vortexRate:'vortex',
@@ -8063,7 +8135,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  prolif:'bane', lessDot:'bane', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
+  prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -8113,7 +8185,7 @@ function metaSectorAt(x, y){
 }
 /* WHICH COUNTRY EACH WEAPON CALLS HOME. The one table to extend when a weapon
    is added: its door, its own nodes and its half of the map all follow. */
-const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int' };
+const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int', bow:'dex' };
 /* ==================== SIX BEGINNINGS, TWO PER COUNTRY ====================
    FOUR WEAPONS IS NOT A SYMMETRICAL NUMBER. Red held two doors, green one and
    blue one, so the map had a crowded side and a bare one and every door sat
@@ -8122,8 +8194,8 @@ const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int' };
 
    Two more doors, one in green and one in blue, and the circle they all stand
    on is pushed out to DOOR_R: six doors sixty degrees apart, each with its own
-   quarter of sky to fan into. Two of them are NOT FINISHED — there is no bow
-   and no wand in the game yet — so they are drawn, locked, and say so. A door
+   quarter of sky to fan into. One of them is NOT FINISHED — there is no wand
+   in the game yet — so it is drawn, locked, and says so. A door
    that is coming is worth more on the map than a gap where one should be: it
    tells you the shape of the thing, which is the whole point of a tree you can
    see all of at once. */
@@ -8132,13 +8204,17 @@ const DOOR_R = 900;
    below that they draw in towards the middle of their own country. Even spacing
    put a door 27 degrees from a border and a red keystone came out cheaper from
    the axe's door than from either of the two that live in red -- the countries
-   are not decoration and a prize of one has to be nearest to it. */
-const DOOR_SPREAD = 0.70;
+   are not decoration and a prize of one has to be nearest to it.
+   0.80 AND NOT 0.70 SINCE THE BOW. The bow's door was drawn at 0.70 while it
+   was locked and nobody measured from it; once it opened, the two red prizes
+   standing just inside red's border (the Open Guard and the orbit legend) came
+   out a point cheaper from the bow than from the sword. At 0.80 the lanes out
+   of the doors fall so that both are the sword's again, and every door is
+   still 33 degrees clear of a border. */
+const DOOR_SPREAD = 0.80;
 const META_DOORS = [
   ...WEAPON_KEYS.map(wk=>({ id:wk, weap:wk, home:META_HOME[wk] || 'str',
                             name:'THE ' + ((WEAPONS[wk] && WEAPONS[wk].name) || wk).toUpperCase() })),
-  { id:'bow',  weap:null, home:'dex', name:'THE BOW',
-    soon:'a bow is not built yet — this door is here so the map is the shape it will be' },
   { id:'wand', weap:null, home:'int', name:'THE WAND',
     soon:'a wand is not built yet — this door is here so the map is the shape it will be' },
 ];
@@ -8226,6 +8302,11 @@ const META_BRANCH = {
     [['Openings','incCrit',0.04],     ['Precision','incCrit',0.05],    ['Savagery','critMult',0.10]],
     [['Bloodletting','bleedChance',0.04],['Gutting','bleedShare',0.03],['Septic','incDot',0.05]],
     [['Surefoot','speed',0.03],       ['Vaulting','roll',0.10],        ['Warpaint','frostRes',0.05]]],
+  bow:  [
+    [['Draw','incMelee',0.03],        ['Full Draw','incMelee',0.035],  ['Barbed','arrowFlat',0.3]],
+    [['Nock','incAtk',0.03],          ['Quick Nock','incAtk',0.035],   ['Fleet','speed',0.03]],
+    [['Sighted','acc',30],            ['Steady','incCrit',0.04],       ['Marked','critMult',0.08]],
+    [['Light Step','eva',40],         ['Slip','incEva',0.08],          ['Quiver','arrowPierce',1]]],
   staff:[
     [['First Words','incSpell',0.03], ['Second Words','incSpell',0.04],['Cadence','incCast',0.04]],
     [['Kindle','incElem',0.03],       ['Smoulder','incFire',0.05],     ['Charged','incElem',0.045]],
@@ -8544,7 +8625,7 @@ const META_KEYSTONES = [
     keystone:{ name:'Glass Bricks', note:'everything you own hits far harder, and you die to anything',
                mods:[['incAll',0.35],['moreHp',-0.30]] } },
   { id:'k_perf',  name:'THE BARREL',   sp:'prec',home:'dex', d:[3,4], shape:'fan',
-    minors:[['Hot Load','blastDmg',1],['Rifling','blastPierce',1],['Autoloader','blastRate',0.12]],
+    minors:[['Hot Load','arrowFlat',0.4],['Rifling','arrowPierce',1],['Autoloader','incAtk',0.06]],
     keystone:{ name:'Perfect Strike', note:'every swing is a critical, and nothing else is',
                mods:[['incCrit',1.50],['critMult',-0.50]] } },
   { id:'k_live',  name:'THE STORMHEAD',sp:'elem',home:'int', d:[3,4], shape:'arc',
@@ -8650,6 +8731,13 @@ const META_KEYSTONES = [
     minors:[['Glacial','ailMag',0.20],['Static','incShock',0.07],['Hoar','incFrost',0.07]],
     keystone:{ name:'The Deep Cold', note:'every chill and shock lands full force, and nothing you leave burns',
                mods:[['ailFull',null],['incDot',-0.60]] } },
+
+  /* THE ARCHER'S KEYSTONE. An arrow that would stop has a chance to find one
+     more body, and then another -- bought with a little off every arrow. */
+  { id:'k_rico',  name:'THE RICOCHET', sp:'prec', home:'dex', d:[4,4], shape:'arc',
+    minors:[['Fletched','arrowPierce',1],['Barbed','arrowFlat',0.4],['Quick Draw','incAtk',0.05]],
+    keystone:{ name:'Ricochet', note:'an arrow that should stop finds another body, and hits a little softer',
+               mods:[['ricochet',0.40],['arrowLess',0.15]] } },
 
   /* ==================== THE SHIELD'S THREE ENDINGS ====================
      PoE's energy-shield keystones, each a trade only a shield build wins.
@@ -10431,7 +10519,7 @@ const FAV_WEIGHT = 3.2;
 /* WHICH BRICK HANDS YOU A SPELL YOU DO NOT HAVE. The reward screen needs this to
    mark the card, and the chest needs it to refuse one — those are the only two
    places that care, so it lives here rather than as a flag on each brick. */
-const SPELL_GRANT = { orbit:'orbit', blaster:'blaster', chain:'chain', storm:'storm',
+const SPELL_GRANT = { orbit:'orbit', chain:'chain', storm:'storm',
                       vortex:'vortex', bombplus:'bomb', freeze:'freeze', bane:'bane' };
 function grantsNewSpell(u){
   const k = SPELL_GRANT[u && u.id];
@@ -10461,9 +10549,6 @@ const FAV_PERKS = {
   orbit: { attr:{ str:6, dex:0, int:6 }, grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
-  blaster: { attr:{ str:0, dex:8, int:4 }, grants:'blaster', lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
-                    '+1 pierce — bricks carry through one foe instead of shattering'],
-    apply(p){ p.capUp.blaster += 1; p.blaster.n = 1; p.blaster.pierce += 1; } },
   chain: { attr:{ str:0, dex:4, int:8 }, grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
                   'Its bolt already leaps to a second foe'],
     apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
@@ -10483,6 +10568,10 @@ const FAV_PERKS = {
                                 '+0.4 poison damage a second'],
     apply(p){ p.bane.n = 1; p.bane.arc = Math.max(p.bane.arc, 90*Math.PI/180);
       p.baneDotFlat += 0.4; } },
+  /* THE BOW'S OPENING HAND */
+  arrow: { attr:{ str:0, dex:12, int:0 }, lines:['+1 pierce on every arrow', '+10% attack speed',
+                  '+60 accuracy'],
+    apply(p){ p.bow.pierce += 1; p.inc.atk += 0.10; p.accFlat += 60; } },
   elem: { attr:{ str:0, dex:0, int:12 }, lines:['+1 flat elemental damage', '+12% increased elemental damage',
                  '+8% increased cast speed'],
     apply(p){ p.flatElem += 1; p.inc.elem += 0.12; p.inc.atk += 0.08; } },
@@ -10545,12 +10634,14 @@ const FAVOURITES = [
   { id:'slam',    name:'Earthshaker',  icon:'fist',  melee:true, slam:true,
     ids:['slampow','slamarc','slamrange','slamspd','dmg','aspd','bladem','moredmg'] },
   { id:'orbit',   name:'Guardian Brick',icon:'orbit',  ids:['orbit','orbitpow','orbitring','orbitspd','orbm'] },
-  { id:'blaster', name:'Brick Blaster',icon:'blaster', ids:['blaster','blastpow','blastpierce','blastrate','orbm'] },
   { id:'chain',   name:'Storm Brick',  icon:'chain',   ids:['chain','chainbrick','chainpow','ailchance','eleminc','shockinc','orbm'] },
   { id:'storm',   name:'Bladestorm',   icon:'storm', melee:true, ids:['storm','stormpow','stormsize','stormrate','stormback','bladem','moredmg'] },
   { id:'vortex',  name:'Blade Vortex', icon:'vortex',melee:true, ids:['vortex','vortexpow','vortexarea','vortexrate','bladem','moredmg'] },
   { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','freezf','eleminc','elemflat'] },
   /* the caster's own opening hand — the staff equivalent of Sword & Steel */
+  /* the bow's own opening hand -- the archer's Sword & Steel */
+  { id:'arrow',   name:'Deadeye',      icon:'bow', bow:true,
+    ids:['arrowmulti','arrowpierce','arrowflat','aspd','crit','critpow','acc','bladem','moredmg'] },
   { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
     ids:['elemflat','eleminc','firinc','boltarea','aspd','crit','critpow','orbm','moredmg'] },
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
@@ -10599,6 +10690,10 @@ function weaponTagHtml(u){
 }
 /* which favourites this weapon can actually make use of */
 function favAllowed(f){
+  /* the bow is its own hand: nothing that swings, nothing that casts, and
+     Deadeye for nobody else */
+  if(f.bow && !isArcher()) return false;
+  if(isArcher() && (f.melee || f.swing || f.slam)) return false;
   if(f.melee && isCaster()) return false;
   if(f.cast && !isCaster())  return false;
   /* a slam favourite is no use to a weapon that swings, and Sword & Steel is no
@@ -10670,7 +10765,26 @@ function weaponTip(w){
   if(!isBase) L.push('<i>hero with nothing in them</i>');
   if(!isBase) L.push('');
   L.push(row('Base damage',     w.dmg.toFixed(2),                  d(w.dmg, b.dmg)));
-  if(w.cast){
+  if(w.shoot){
+    /* A BOW HAS NO REACH AND NO SPIN either — it has range, a steadier eye
+       and quick feet, so those are its lines. */
+    L.push(row('Draw time',       w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
+    L.push(row('Crit chance',     Math.round(w.crit*100)+'%',        d(w.crit, b.crit)));
+    L.push(row('Crit multiplier', '\u00d7'+(w.critMult/100).toFixed(2), d(w.critMult, b.critMult)));
+    L.push(row('Bleed chance',    '\u00d7'+w.bleed.toFixed(2),        d(w.bleed, b.bleed)));
+    L.push(row('Accuracy',        '\u00d7'+(w.acc||1).toFixed(2),     d(w.acc||1, b.acc||1)));
+    L.push('');
+    L.push(row('Evasion',         '+'+Math.round(w.evaBase||0),       (w.evaBase||0) > 0 ? '<b class="up">\u25b2</b>' : ''));
+    L.push(row('Spell suppression','+'+Math.round((w.suppress||0)*100)+'%',
+      (w.suppress||0) > 0 ? '<b class="up">\u25b2</b>' : ''));
+    L.push('');
+    L.push('IT DOES NOT SWING. Its basic attack is an ARROW:');
+    L.push('physical, it bleeds, it rolls to hit, and it flies');
+    L.push('until something stops it. Its bricks add arrows,');
+    L.push('pierce and barbs, and ONE legendary a run turns it');
+    L.push('into Lightning, Fire or Chaos Arrow. No lifesteal,');
+    L.push('no armour, and none of the swing\u2019s own bricks.');
+  } else if(w.cast){
     /* A CASTER HAS NO REACH, NO BLEED AND NO SPIN, so printing them as -100%
        against a sword would be technically true and completely useless. It
        gets the lines that mean something to it instead. */
@@ -10719,7 +10833,7 @@ function weaponTip(w){
                       * (1 + x.crit*(x.critMult/100 - 1));
     /* MELEE GETS ITS COMBO COUNTED. Every third swing is the spin, and leaving
        that out made a caster look twice the weapon it is. */
-    const combo = x.cast ? 1 : (2 + x.spin)/3;
+    const combo = (x.cast || x.shoot) ? 1 : (2 + x.spin)/3;
     return hit * combo / (x.rate / (1 + (x.incAtk||0)));
   };
   L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
@@ -10765,14 +10879,14 @@ function comboPreview(favId){
     syncStats();
   };
   build();
-  const p = player, cast = isCaster();
-  const hit = cast ? boltDamage() : physDamage();
+  const p = player, cast = isCaster(), shoot = isArcher();
+  const hit = cast ? boltDamage() : shoot ? arrowDamage() : physDamage();
   const out = {
     hearts: p.maxHp,
-    hitLabel: cast ? 'Bolt damage' : 'Weapon hit',
+    hitLabel: cast ? 'Bolt damage' : shoot ? 'Arrow hit' : 'Weapon hit',
     hit,
     rate: 1/p.atkRate,
-    rateLabel: cast ? 'Casts a second' : 'Swings a second',
+    rateLabel: cast ? 'Casts a second' : shoot ? 'Shots a second' : 'Swings a second',
     dps: cast ? hit/p.atkRate : swordDps(),
     crit: critChance()*100,
     critMult: critMultPct(),
@@ -10960,15 +11074,17 @@ function comboLayers(){
   out.tree = snap();
   /* the ABILITIES list is read off the hero you would actually start with */
   out.abilities = [];
-  const wname = isCaster() ? 'Fireball' : isSlammer() ? 'Ground Slam' : 'Weapon swing';
-  const wicon = isCaster() ? 'flame' : isSlammer() ? 'fist' : 'sword';
+  const wname = isCaster() ? 'Fireball' : isSlammer() ? 'Ground Slam' : isArcher() ? 'Arrow' : 'Weapon swing';
+  const wicon = isCaster() ? 'flame' : isSlammer() ? 'fist' : isArcher() ? 'bow' : 'sword';
   out.abilities.push({ id:'weapon', icon:wicon, name:wname,
-    head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : physDamage()),
+    head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : isArcher() ? arrowDamage() : physDamage()),
     tip:`${weapon.name}, every ${hero.atkRate.toFixed(2)}s\n`+
         `${fmtHp(swordDps())} a second sustained, crits folded in\n`+
         (isCaster() ? `${Math.round(boltRadius())} burst radius, `+
             `${Math.round(ailChanceOf('fire','fire',false)*100)}% to set a fire (a crit always does)`
          : isSlammer() ? `A fault of ${SLAM_MAX_HITS} teeth, ${Math.round(SLAM_SHARE*100)}% of a swing each`
+         : isArcher() ? `${clamp(hero.bow.n|0,1,ARROW_MAX_N)} arrow a shot, pierces ${hero.bow.pierce}; `+
+            `a legendary makes it Lightning, Fire or Chaos Arrow`
          : `${Math.round(hero.reach)} reach, every third swing is the spin combo`) });
   try { for(const sp of spellSummaries()) out.abilities.push(sp); } catch(e){}
   out.favBricks = null;
@@ -11180,7 +11296,7 @@ const BENCH_SECTIONS = [
   { name:'LIFESTEAL',       ids:['leech','leechrate'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
-  { name:'BRICK BLASTER',   ids:['blaster','blastpow','blastpierce','blastrate','blastsplit'] },
+  { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -11539,25 +11655,6 @@ function spellSummaries(){
       (p.orbit.aegis ? `\nAegis Ring: each brick stops one shot, then rebuilds in ${AEGIS_REFORM}s` : '')+
       (p.orbit.twin ? `\nTwin Ring: ${p.orbit.n} more, turning the other way at ${Math.round(twinRadius(p.orbit))}` : '') });
   }
-  if(p.blaster.n>0){
-    const d = calcDamage(p.blaster.dmg,'spell');
-    const shards = Math.pow(3, p.blaster.split||0);
-    const each = d * (BLAST_SPLIT_KEEP[p.blaster.split||0] || 1);
-    out.push({ id:'blaster', icon:'blaster', name:'Brick Blaster',
-      head:per(each)+(shards>1?' per shard':' per brick'), tip:
-      `${p.blaster.n} brick${p.blaster.n>1?'s':''} per volley, every ${p.blaster.rate.toFixed(2)}s\n`+
-      (shards>1
-        ? `Scattershot ×${p.blaster.split}: each brick becomes ${shards} shards of ${per(each)} — `+
-          `${Math.round(BLAST_SPLIT_KEEP[p.blaster.split]*100)}% of the ${per(d)} apiece, `+
-          `${per(d*shards*BLAST_SPLIT_KEEP[p.blaster.split])} a brick\n`
-        : `${per(d)} each — ${p.blaster.dmg} base × (1 + ${Math.round(incTotal('spell')*100)}% increased)${moreShown()>1?` × ${moreShown().toFixed(2)} more`:''}\n`)+
-      (p.blaster.pierce>0
-        ? `Pierces ${p.blaster.pierce} extra foe${p.blaster.pierce===1?'':'s'} — `+
-          `${Math.round(blastPierceFall(p.blaster.pierce)*100)}% less on each one, `+
-          `${per(each*blastPierceTotal(p.blaster.pierce))} down a full line\n`
-        : `Shatters on the first foe it touches — take Piercing Bricks to carry on\n`)+
-      `Full volley: ${per(d*p.blaster.n)} across ${p.blaster.n*shards} projectile${p.blaster.n*shards>1?'s':''}` });
-  }
   if(p.chain.n>0 && p.chain.zappers>0){
     const d = shockDamage();
     const leaps = p.chain.n - 1;
@@ -11667,7 +11764,7 @@ function spellSummaries(){
    a PROBE: hovering a reward applies it to a copy of the hero, reads every probe
    again, and lists only what actually moved, as now -> next. Because the probes
    include every spell's damage, one "+18% increased spell damage" card shows its
-   effect on the blaster, the storm brick and the bombs all at once, on separate
+   effect on the guardian ring, the storm brick and the bombs all at once, on separate
    lines, which is the only honest way to read it. */
 function swordDps(){
   const p = player;
@@ -11678,6 +11775,10 @@ function swordDps(){
      at SLAM_MAX_HITS, and only worth counting for a body actually standing in
      the fault, which is what this number is for. */
   if(isSlammer()) return slamSpikeDamage() * SLAM_MAX_HITS * (1/swingT) * critAvg;
+  /* AN ARCHER HAS NO COMBO either. One body in the line takes one arrow a
+     shot; the volley's other arrows fan out to other bodies, so they are not
+     this number's to count. */
+  if(isArcher()) return arrowDamage() * (1/swingT) * critAvg;
   const light = physDamage(), spin = light*weapon.spin;
   return ((light*2 + spin)/3) * (1/swingT) * critAvg;
 }
@@ -11723,13 +11824,6 @@ const STAT_WHY = {
   'GUARDIAN BRICK|Ring reach':'the radius they hold. Wider covers more but spends longer away from any one body',
   'GUARDIAN BRICK|Brick size':'a bigger brick overlaps more of a body, so it connects more reliably',
   'GUARDIAN BRICK|Spin speed':'radians a second. CAST SPEED turns the ring faster, up to its own cap',
-  'BRICK BLASTER|Damage per brick':'one brick out of the volley, hitting one body',
-  'BRICK BLASTER|Bricks per volley':'they fan toward your cursor, so a wide volley trades focus for coverage',
-  'BRICK BLASTER|Volley damage':'the whole volley into one body — only honest at point blank',
-  'BRICK BLASTER|Pierce':   'bodies one brick carries through before it shatters. Scattershot pays for it in damage',
-  'BRICK BLASTER|Damage down a line':'the volley against a QUEUE of foes, counting pierce — the number that matters in a corridor',
-  'BRICK BLASTER|Interval': 'seconds between volleys. CAST SPEED shortens it, down to its own floor',
-  'BRICK BLASTER|Volley DPS':'sustained, one target, at your current interval',
   'STORM BRICK|Targets per bolt':'how many bodies one bolt walks through in total',
   'STORM BRICK|1st leap':   'each leap carries less than the one before it — this is the second body',
   'STORM BRICK|2nd leap':   'the third body, and so on down the chain',
@@ -11873,24 +11967,39 @@ const STAT_PROBES = [
      the hit itself uses — so if the sheet and the monster ever disagree, one of
      them is wrong and you can see which. */
   ...CONV_ORDER.map(k=>({ g:'CONVERSION', k:CONV_NAME[k]+' share',
-    get:()=> (player ? convSplit(isCaster() ? 'fire' : 'sword').share[k] || 0 : 0)*100,
+    get:()=> (player ? convSplit(isCaster() ? 'fire' : isArcher() ? 'arrow' : 'sword').share[k] || 0 : 0)*100,
     fmt:v=>Math.round(v)+'%', zero:true,
     why:'how much of one ordinary hit arrives as '+CONV_NAME[k].toLowerCase()+
         '. Each part pays its OWN resistance, and only the PHYSICAL part ever meets armour' })),
   { g:'CONVERSION', k:'Conversion multiplier',
-    get:()=> player ? convSplit(isCaster() ? 'fire' : 'sword').mul : 1,
+    get:()=> player ? convSplit(isCaster() ? 'fire' : isArcher() ? 'arrow' : 'sword').mul : 1,
     fmt:v=>v.toFixed(2)+'×', zero:true,
     why:'what conversion does to the SIZE of a hit, before any monster sees it. Above one means the '+
         'increases on what it became beat the increases on what it was; GAIN AS EXTRA always pushes it up' },
-  { g:'PHYSICAL', k:'Weapon hit', basic:'OFFENCE',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
-  { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Weapon hit', basic:'OFFENCE',     get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Sustained DPS', basic:'OFFENCE',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
-    why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth' },
+    why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth; '+
+        'for a bow it is one arrow a shot into one body' },
   { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && !isSlammer() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
   { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : (isSlammer() ? slamBase() : physBase()), fmt:v=>v.toFixed(2), zero:true },
   { g:'PHYSICAL', k:'Swing rate', basic:'OFFENCE',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
-  { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
+  /* THE ARROW. Zero on everything that is not a bow, like the fireball's rows
+     on everything that is not a staff. */
+  { g:'ARROW', k:'Arrow hit', basic:'OFFENCE', get:()=> isArcher() ? arrowDamage() : 0, fmt:v=>fmtHp(v), zero:true,
+    why:'one arrow, before crits: (base + flat + barbs) × (1 + increased) × each more. Every arrow of a volley is this' },
+  { g:'ARROW', k:'Arrows a shot', basic:'OFFENCE', get:()=> isArcher() ? clamp(player.bow.n|0, 1, ARROW_MAX_N) : 0,
+    fmt:v=>Math.round(v)+'', zero:true,
+    why:'how many arrows one draw looses, fanned. They go to different bodies; one body in the line takes one' },
+  { g:'ARROW', k:'Pierce', get:()=> isArcher() ? (player.bow.kind === 'chaos' ? ARROW_PIERCE_ALL : player.bow.pierce) : 0,
+    fmt:v=>v >= ARROW_PIERCE_ALL ? 'every body' : Math.round(v)+'', zero:true,
+    why:'bodies an arrow goes THROUGH before it stops. Each one it passes costs it a little of its damage; Chaos Arrow passes them all unworn' },
+  { g:'ARROW', k:'Barbs (flat)', get:()=> isArcher() ? player.bow.flat || 0 : 0, fmt:v=>v.toFixed(2), zero:true,
+    why:'flat physical added to arrows only, before any increase multiplies it' },
+  { g:'ARROW', k:'Ricochet chance', get:()=> isArcher() ? (player.ricochet || 0)*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'the Ricochet keystone: an arrow that would stop rolls this to leap to the nearest body it has not hit, up to '+RICO_MAX+' times' },
   { g:'PHYSICAL', k:'Crit chance', basic:'OFFENCE',    get:()=> critChance()*100,         fmt:v=>v.toFixed(1)+'%' },
   /* ONE ROW PER AILMENT, and the row is the chance the hit actually rolls. These
      read ailChanceOf, so nothing here can drift away from what applyAilments does
@@ -12096,15 +12205,6 @@ const STAT_PROBES = [
   { g:'GUARDIAN BRICK', k:'Twin ring at',   get:()=> (player.orbit.n && player.orbit.twin) ? twinRadius(player.orbit) : 0,
     fmt:v=>Math.round(v)+' px', zero:true,
     why:'Twin Ring: a second ring, turning the other way, far enough out never to touch the first' },
-  { g:'BRICK BLASTER', k:'Damage per brick',get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell') : 0, fmt:v=>v.toFixed(2), zero:true },
-  { g:'BRICK BLASTER', k:'Bricks per volley',get:()=> player.blaster.n, fmt:v=>Math.round(v)+'', zero:true },
-  { g:'BRICK BLASTER', k:'Volley damage',   get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n : 0, fmt:v=>v.toFixed(1), zero:true },
-  { g:'BRICK BLASTER', k:'Pierce',          get:()=> player.blaster.n ? player.blaster.pierce : 0, fmt:v=>Math.round(v)+'', zero:true },
-  { g:'BRICK BLASTER', k:'Damage down a line',get:()=> player.blaster.n
-      ? calcDamage(player.blaster.dmg,'spell')/Math.pow(3,player.blaster.split||0)*blastPierceTotal(player.blaster.pierce) : 0,
-    fmt:v=>v.toFixed(1), zero:true },
-  { g:'BRICK BLASTER', k:'Interval',        get:()=> player.blaster.n ? player.blaster.rate : 0, fmt:v=>v.toFixed(2)+'s', hi:false, zero:true },
-  { g:'BRICK BLASTER', k:'Volley DPS',       get:()=> player.blaster.n ? calcDamage(player.blaster.dmg,'spell')*player.blaster.n/player.blaster.rate : 0, fmt:v=>v.toFixed(1), zero:true },
   { g:'STORM BRICK', k:'Opening strike',    get:()=> player.chain.n ? shockDamage() : 0, fmt:v=>v.toFixed(2), zero:true,
     why:'LIGHTNING damage, so it reads the flat elemental pool and both the spell and elemental increases — not just spell damage' },
   { g:'STORM BRICK', k:'Targets per bolt',  get:()=> player.chain.n, fmt:v=>Math.round(v)+'', zero:true },
@@ -12639,6 +12739,25 @@ function renderCharSheet(){
         `multiplier — four marks is ×${Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)} fire taken.\n\n`+
         `Burning is damage over time, so it reads your increased damage over\n`+
         `time (${Math.round(p.inc.dot*100)}%) exactly like poison and bleed.`)
+    ] : isArcher() ? [
+      sRow('Arrow', arrowDamage().toFixed(1)+' dmg',
+        `${clamp(p.bow.n|0,1,ARROW_MAX_N)} a shot \u00b7 `+
+        (p.bow.kind === 'chaos' ? 'pierces every body' : `pierces ${p.bow.pierce}`)+
+        (p.bow.kind ? ` \u00b7 ${ARROW_KINDS[p.bow.kind].name}` : ''),
+        `A bow does not swing. Every draw looses ${clamp(p.bow.n|0,1,ARROW_MAX_N)} arrow`+
+        `${(p.bow.n|0) > 1 ? 's, fanned,' : ''} at what you aim at. An arrow is an ATTACK: it\n`+
+        `rolls to hit against evasion, reads your increased melee damage, and bleeds.\n\n`+
+        (p.bow.kind === 'light'
+          ? `LIGHTNING ARROW: ${Math.round(ARROW_KINDS.light.conv*100)}% of it arrives as lightning, and every arrow that\n`+
+            `lands forks to up to ${ARROW_FORK_N} bodies within ${ARROW_FORK_R}px for ${Math.round(ARROW_FORK_SHARE*100)}% each.\n\n`
+        : p.bow.kind === 'fire'
+          ? `FIRE ARROW: ${Math.round(ARROW_KINDS.fire.conv*100)}% of it arrives as fire, and it bursts where it lands:\n`+
+            `everything within ${ARROW_BLAST_R}px takes it ${Math.round(ARROW_BLAST_LESS*100)}% LESS.\n\n`
+        : p.bow.kind === 'chaos'
+          ? `CHAOS ARROW: ${Math.round(ARROW_KINDS.chaos.conv*100)}% of it arrives as chaos, and it passes through\n`+
+            `every body in its line without losing anything.\n\n`
+        : '')+
+        ((p.ricochet||0) > 0 ? `RICOCHET: ${Math.round(p.ricochet*100)}% for an arrow that would stop to leap on, up to ${RICO_MAX} times.` : ''))
     ] : isSlammer() ? [
       sRow('One tooth', slamSpikeDamage().toFixed(1)+' dmg',
         `${Math.round(p.slamArc*57.3)}\u00b0 fault \u00b7 ${Math.round(p.slamRange)} px \u00b7 `+
@@ -12673,17 +12792,18 @@ function renderCharSheet(){
       `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
       `it is up and cannot roll out of anything. The blade turns aside `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% of the missiles that reach it.`)] : []),
-    sRow(isCaster() ? 'Cast rate' : isSlammer() ? 'Slam rate' : 'Swing rate', swings.toFixed(2)+'/s',
+    sRow(isCaster() ? 'Cast rate' : isSlammer() ? 'Slam rate' : isArcher() ? 'Shot rate' : 'Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
         ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
         : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
-    sRow('Sustained DPS', (isSlammer() ? swordDps() : comboAvg*swings*critAvg).toFixed(1),
-      isSlammer() ? 'one body held in the fault, crits included' : 'average combo, crits included, one target'),
+    sRow('Sustained DPS', ((isSlammer() || isArcher()) ? swordDps() : comboAvg*swings*critAvg).toFixed(1),
+      isSlammer() ? 'one body held in the fault, crits included'
+      : isArcher() ? 'one arrow a shot into one body, crits included' : 'average combo, crits included, one target'),
     /* the second speed stat, and the one that is easy to confuse with the first */
     sRow('Cast speed', Math.round(castInc(0)*100)+'%',
       'every ABILITY, not the hands',
       `ATTACK SPEED above is your own hands — the swing or the bolt.\n`+
-      `CAST SPEED is every ability you own: guardian ring, blaster, storm brick,\n`+
+      `CAST SPEED is every ability you own: guardian ring, storm brick,\n`+
       `bladestorm, vortex, block freeze, bombs, brickbane.\n\n`+
       `They are increases, so they SUM into one pool per ability and none of them\n`+
       `multiplies: an ability's own rate bricks + ${Math.round(p.inc.cast*100)}% global cast speed`+
@@ -12736,7 +12856,7 @@ function renderCharSheet(){
       `Adds into the same pool as your increased damage, for physical only.\n\n`+
       `${weapon.name}: (${weapon.dmg} + ${fmtHp(p.flatPhys)} flat) × (1 + ${Math.round(incTotal('melee')*100)}%) = `+
       `${((weapon.dmg+p.flatPhys)*(1+incTotal('melee'))).toFixed(2)} before more multipliers.`),
-    sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, blaster, bombs & storm bricks',
+    sRow('Increased spell', Math.round(p.incSpell*100)+'%', 'orbit, bombs & storm bricks',
       `The spell half of the same pool. Bladestorm and vortex are melee, not spells.\n\n`+
       `A 5-base spell hit: 5 × (1 + ${Math.round(incTotal('spell')*100)}%) × ${moreShown().toFixed(2)} = `+
       `${calcDamage(5,'spell').toFixed(2)}`),
@@ -12794,6 +12914,10 @@ function renderCharSheet(){
       ? sRow('One tooth', slamSpikeDamage().toFixed(2),
           `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.slam.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
           `× ${moreShown().toFixed(2)} × ${SLAM_SHARE} share`)
+      : isArcher()
+      ? sRow('Arrow hit', arrowDamage().toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.bow.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
+          `× ${moreShown().toFixed(2)}${p.bow.more !== 1 ? ' × '+p.bow.more.toFixed(2)+' arrow' : ''}`)
       : sRow(isCaster() ? 'Bolt hit' : 'Sword hit', light.toFixed(2),
           `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
   ]);
@@ -12816,7 +12940,7 @@ function renderCharSheet(){
   /* WHAT A HIT IS MADE OF. Only shown to a hero who converts something — a card
      of five zeroes teaches nobody anything. It reads the SAME split the hit
      itself reads, so if this card and the monster ever disagree you can see it. */
-  const csp = convSplit(isCaster() ? (weapon.elem || 'fire') : 'sword');
+  const csp = convSplit(isCaster() ? (weapon.elem || 'fire') : isArcher() ? 'arrow' : 'sword');
   const conversion = convAny() ? sBlock('CONVERSION', CONV_ORDER
     .filter(k=>csp.share[k] > 0)
     .map(k=>sRow(CONV_NAME[k], Math.round(csp.share[k]*100)+'%',
@@ -12889,8 +13013,8 @@ function renderCharSheet(){
       `${el} resistance effectively ${Math.round((1-elemTake(el))*100)}%.`)),
     sRow('Whose effect is that?', 'pale = yours', 'deep = theirs',
       `Anything YOU put on the floor is drawn bleached toward white — your bombs `+
-      `land as pale gold craters, your blaster bricks are cream, your lightning is `+
-      `white-blue.\n\nAnything a MONSTER puts down is deep and saturated: ember-red `+
+      `land as pale gold craters, your lightning is pale yellow.\n\n`+
+      `Anything a MONSTER puts down is deep and saturated: ember-red `+
       `fire, dark amber lightning.\n\nSame hue for the same element, so a firebomb `+
       `still reads as fire — the brightness tells you whether to stand in it.`)
   ]);
@@ -13108,7 +13232,7 @@ function renderSpellbook(){
 /* which bench section belongs to which spell, so the book can head a section
    with that spell's live numbers */
 const SECTION_SPELL = {
-  'GUARDIAN BRICK':'orbit', 'BRICK BLASTER':'blaster', 'STORM BRICK':'chain',
+  'GUARDIAN BRICK':'orbit', 'STORM BRICK':'chain',
   'BLADESTORM':'storm', 'BLADE VORTEX':'vortex', 'BOMB VOLLEY':'bombplus',
   'BLOCK FREEZE':'freeze', 'BRICKBANE':'bane'
   /* NB: the bomb summary is filed under its brick id, not the spell key */
@@ -13428,6 +13552,7 @@ function updatePlayer(dt){
   }
   if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
     if(isCaster())      castBolt(aimA);
+    else if(isArcher())  fireArrow(aimA);
     else if(isSlammer()) startSlam(aimA);
     else                startSwing(aimA);
   }
@@ -13528,35 +13653,6 @@ function updatePlayer(dt){
     };
     ring(orb.r, 1, orb.brk, 'orbCd', false);
     if(orb.twin && orb.aegis) ring(twinRadius(orb), -1, orb.brk2, 'orbCd2', true);
-  }
-  const bl = p.blaster;
-  if(bl.n>0 && casting){
-    bl.cd -= dt;
-    if(bl.cd<=0){
-      bl.cd = bl.rate;
-      /* Scattershot: every brick shatters into 3, then those into 3 again, and
-         each shard keeps a share of the brick's full damage rather than a slice
-         of it — coverage AND power, which is what a legendary should buy. */
-      const shards = Math.pow(3, bl.split||0);
-      const each = calcDamage(bl.dmg,'spell') * (BLAST_SPLIT_KEEP[bl.split||0] || 1);
-      const sz = Math.pow(0.62, bl.split||0);
-      /* the ceiling is on PROJECTILES, so Scattershot trades brick count for
-         shard count rather than multiplying its way to three hundred of them */
-      const bricks = Math.max(1, Math.min(bl.n, Math.floor(BLAST_MAX_SHOTS/shards)));
-      for(let i=0;i<bricks;i++){
-        const ang = aimA + (i-(bricks-1)/2)*0.17;
-        for(let k=0;k<shards;k++){
-          const spread = shards>1 ? (k-(shards-1)/2) * (0.30/Math.max(1,shards-1)) * (shards>3?2.2:1) : 0;
-          projectiles.push({ kind:'pbrick',
-            x:p.x, y:p.y-14,
-            vx:Math.cos(ang+spread)*bl.spd*rnd(0.94,1.06),
-            vy:Math.sin(ang+spread)*bl.spd*rnd(0.94,1.06),
-            life:1.15, dmg:each, sz, pierce:bl.pierce, pfall:blastPierceFall(bl.pierce),
-            hit:new Set(), spin:rnd(TAU) });
-        }
-      }
-      SFX.zap();
-    }
   }
   /* bladestorm — the cooldown starts when the CAST ENDS, never while the burst
      is still pouring out of the hero. Same rule the vortex already followed. */
@@ -13938,6 +14034,75 @@ function castBolt(aim){
     dmg: boltDamage(), r: boltRadius(),
     life:1.35, spin:rnd(TAU), seed:rnd(TAU) });
   SFX.zap();
+}
+/* ================================ THE ARROW ================================ */
+function arrowDamage(){
+  const b = player.bow;
+  return calcDamage(physBase() + (b.flat || 0), 'melee', b.more !== 1 ? [b.more] : undefined);
+}
+function fireArrow(aim){
+  const p = player, b = p.bow;
+  p.combo = 0; p.comboTimer = 0;
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  p.castT = 0.16;
+  retPulse = 1;
+  const n = clamp(b.n|0, 1, ARROW_MAX_N);
+  const spd = weapon.arrowSpd || 780;
+  const dmg = arrowDamage();
+  const pierce = b.kind === 'chaos' ? ARROW_PIERCE_ALL : b.pierce;
+  for(let i=0;i<n;i++){
+    const a = aim + (i - (n-1)/2) * ARROW_SPREAD;
+    const sx = p.x + Math.cos(a)*14, sy = p.y - 16 + Math.sin(a)*10;
+    projectiles.push({ kind:'parrow', x:sx, y:sy, px:sx, py:sy,
+      vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, life:ARROW_LIFE, dmg, pierce,
+      pfall: b.kind === 'chaos' ? 0 : pierceFall(b.pierce), hit:new Set(), el:b.kind, rico:0 });
+  }
+  SFX.whoosh();
+}
+/* WHAT A LANDING DOES, beyond the hit itself -- the two legendaries that do
+   something at the body: Fire Arrow bursts, Lightning Arrow forks. Both are
+   arrow sources, so they carry the arrow's conversion and its ailment chance. */
+function arrowOnHit(pr, e, dmg){
+  if(pr.el === 'fire'){
+    for(const o of enemiesNear(e.x, e.y, ARROW_BLAST_R + 60)){
+      if(o === e || o.dead || o.state !== 'active') continue;
+      if(dist(o, e) > ARROW_BLAST_R + hitR(o)) continue;
+      hitEnemy(o, dmg * (1 - ARROW_BLAST_LESS), angTo(e, o), 60, 'arrowblast', {});
+    }
+    addRing(e.x, e.y - 10, 8, 320, ARROW_BLAST_R, ARROW_KINDS.fire.col, 5, 0.35);
+    addSparks(e.x, e.y - 16, 8, '#ffb07c');
+  } else if(pr.el === 'light'){
+    /* ONE TO MANY, never onward: the body the arrow found throws a bolt at each
+       of its nearest neighbours, and none of those throws one again */
+    const near = [];
+    for(const o of enemies){
+      if(o === e || o.dead || o.state !== 'active' || pr.hit.has(o)) continue;
+      const d = dist(o, e);
+      if(d <= ARROW_FORK_R) near.push([d, o]);
+    }
+    near.sort((a, z)=>a[0] - z[0]);
+    for(const [, o] of near.slice(0, ARROW_FORK_N)){
+      addZap(e.x, e.y - 18, o.x, o.y - 18, 0, false);
+      hitEnemy(o, dmg * ARROW_FORK_SHARE, angTo(e, o), 40, 'arrowfork', {});
+    }
+  }
+}
+/* THE RICOCHET KEYSTONE: an arrow about to stop may find one more body */
+function arrowRicochet(pr){
+  const ch = (player && player.ricochet) || 0;
+  if(!(ch > 0) || pr.rico >= RICO_MAX || Math.random() >= ch) return false;
+  let best = null, bd = RICO_R;
+  for(const o of enemies){
+    if(o.dead || o.state !== 'active' || pr.hit.has(o)) continue;
+    const d = Math.hypot(o.x - pr.x, (o.y - 16) - pr.y);
+    if(d < bd){ bd = d; best = o; }
+  }
+  if(!best) return false;
+  const a = Math.atan2((best.y - 16) - pr.y, best.x - pr.x), sp = Math.hypot(pr.vx, pr.vy);
+  pr.vx = Math.cos(a)*sp; pr.vy = Math.sin(a)*sp;
+  pr.pierce = 0; pr.rico++; pr.life = ARROW_LIFE*0.7;
+  addSparks(pr.x, pr.y, 4, '#e8f0c8');
+  return true;
 }
 /* ============================== THE GROUND SLAM ============================= */
 /* A mace hero does not swing. They drive the head into the floor and a FAULT
@@ -16711,20 +16876,21 @@ function updateProjectiles(dt){
         }
       }
     }
-    else if(pr.kind==='pbrick'){
-      pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*12;
-      if(pr.life<=0) pr.dead=true;
-      for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
+    else if(pr.kind==='parrow'){
+      pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
+      if(pr.life<=0) pr.dead = true;
+      for(const so of solids) if(dist(pr, so) < so.r){ pr.dead = true; addDust(pr.x, pr.y, 2); break; }
+      if(!pr.dead) for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
             Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 90)){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
-        if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 15*(pr.sz||1))){
-          /* each foe it has already gone through has taken a slice out of it */
-          const worn = Math.pow(1 - (pr.pfall||0), pr.hit.size);
+        if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 8)){
+          /* each body already gone through has worn it down a little */
+          const d = pr.dmg * Math.pow(1 - (pr.pfall||0), pr.hit.size);
           pr.hit.add(e);
-          hitEnemy(e, pr.dmg*worn, Math.atan2(pr.vy,pr.vx), 150, 'blaster', {spin:true});
-          addSparks(pr.x, pr.y, 3, FX.friend.spark);
+          hitEnemy(e, d, Math.atan2(pr.vy, pr.vx), 90, 'arrow', {});
+          arrowOnHit(pr, e, d);
           pr.pierce--;
-          if(pr.pierce<0){ pr.dead=true; break; }
+          if(pr.pierce < 0){ if(!arrowRicochet(pr)) pr.dead = true; break; }
         }
       }
     }
@@ -17812,6 +17978,12 @@ function drawFigure(c, o){
     drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
+  if(o.weapon==='bow' && o.bladeAng===undefined){
+    c.save(); c.translate(handR2.x,handR2.y);
+    c.rotate(heldAng !== null ? heldAng : aR+0.2);
+    drawBowArt(c, s*0.95, false);
+    c.restore();
+  }
   if(o.weapon==='pstaff' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
     c.rotate(heldAng !== null ? heldAng : aR+0.6);
@@ -18231,6 +18403,19 @@ function drawStaffArt(c, s, bright){
   c.fillStyle = 'rgba(255,255,255,0.75)';
   c.beginPath(); c.arc(31*s, -2*s, 2.2*s, 0, TAU); c.fill();
 }
+/* A SHORT BOW: a curved stave, a string, a grip in the middle of it. Drawn
+   pointing along +x like every other held weapon. */
+function drawBowArt(c, s, bright){
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 5*s;
+  c.beginPath(); c.moveTo(-4*s, -17*s); c.quadraticCurveTo(12*s, 0, -4*s, 17*s); c.stroke();
+  c.strokeStyle = bright ? '#e8d0a0' : '#8a5a2b'; c.lineWidth = 3.2*s;
+  c.beginPath(); c.moveTo(-4*s, -17*s); c.quadraticCurveTo(12*s, 0, -4*s, 17*s); c.stroke();
+  c.strokeStyle = '#efe8d8'; c.lineWidth = 1*s;
+  c.beginPath(); c.moveTo(-4*s, -17*s); c.lineTo(-4*s, 17*s); c.stroke();
+  c.fillStyle = '#3f2c1b';
+  c.fillRect(1.5*s, -3.2*s, 3.2*s, 6.4*s);
+}
 /* ONE DISPATCHER. Everywhere that used to hardcode a sword asks for art by name
    instead, so a new weapon draws itself across the whole game the moment its
    row names an art. */
@@ -18239,6 +18424,7 @@ function drawWeaponArt(c, s, bright, kind){
   if(kind==='axe')   return drawAxe(c, s, bright);
   if(kind==='mace')  return drawMace(c, s);
   if(kind==='staff' || kind==='pstaff') return drawStaffArt(c, s, bright);
+  if(kind==='bow') return drawBowArt(c, s, bright);
   return drawBlade(c, s, bright);
 }
 /* IS THE AXE IN YOUR HANDS? While it is out reaping, it is not — you cannot
@@ -19775,12 +19961,18 @@ function render(){
       ctx.beginPath(); ctx.arc(-R*0.18,-R*0.18,R*0.26,0,TAU); ctx.fill();
       ctx.restore();
     }
-    else if(pr.kind==='pbrick'){
-      const z = pr.sz || 1;
-      ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(pr.spin); ctx.scale(z, z);
-      ctx.fillStyle = FX.friend.brick; ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=1.6/z;
-      roundRect(ctx,-8,-4.5,16,9,2); ctx.fill(); ctx.stroke();
-      drawStudG(ctx,-3.5,0,2,FX.friend.brickStud); drawStudG(ctx,3.5,0,2,FX.friend.brickStud);
+    else if(pr.kind==='parrow'){
+      /* shaft, fletching and head, coloured by what the arrow has become */
+      const a = Math.atan2(pr.vy, pr.vx), K = pr.el && ARROW_KINDS[pr.el];
+      ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(a);
+      if(K){ ctx.strokeStyle = K.col; ctx.globalAlpha = 0.35; ctx.lineWidth = 5;
+             ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(4, 0); ctx.stroke(); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = '#8a6a3e'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(7, 0); ctx.stroke();
+      ctx.fillStyle = K ? K.col : '#c9d2d8'; ctx.strokeStyle = 'rgba(20,30,40,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(5, -3.4); ctx.lineTo(5, 3.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f2efe6';
+      ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(-20, -3.6); ctx.lineTo(-13, 0); ctx.lineTo(-20, 3.6); ctx.closePath(); ctx.fill();
       ctx.restore();
     }
     else if(pr.kind==='wblade'){
@@ -19905,8 +20097,7 @@ function render(){
           ctx.strokeStyle='rgba(20,30,40,0.6)'; ctx.lineWidth=3; ctx.stroke();
           ctx.restore();
         }, true);
-    }
-  }
+    }  }
   const vg = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw,ch)*0.36, cw/2, ch/2, Math.max(cw,ch)*0.72);
   vg.addColorStop(0,'rgba(8,14,18,0)'); vg.addColorStop(1,'rgba(8,14,18,0.36)');
   ctx.fillStyle = vg; ctx.fillRect(0,0,cw,ch);
@@ -20771,7 +20962,7 @@ function clogTabAt(x, y){
    own, because a spell is not a damage type. */
 const DPS_COLS = {
   sword:CONV_COL.phys, slam:CONV_COL.phys, storm:'#9fe8ff', vortex:'#b98cff',
-  orbit:'#ffd166', blaster:'#ffe9b0', bomb:'#ffb04a', whirl:'#e6e6e6',
+  orbit:'#ffd166', arrow:'#e8f0c8', bomb:'#ffb04a', whirl:'#e6e6e6',
   chain:CONV_COL.shock, fire:CONV_COL.fire, frost:CONV_COL.frost, bane:DOT_COL.bane,
   burn:DOT_COL.burn, bleed:DOT_COL.bleed, poison:DOT_COL.bane, ember:'#ffb02e',
   slamfire:CONV_COL.fire, slamfrost:CONV_COL.frost, slamshock:CONV_COL.shock
@@ -21595,12 +21786,6 @@ function renderHUD(){
     roundRect(ctx,-8,-4,16,8,2); ctx.fill(); ctx.stroke();
     drawStudG(ctx,-3.5,0,1.8,'#8f161d'); drawStudG(ctx,3.5,0,1.8,'#8f161d');
     ctx.restore();
-  }});
-  if(p.blaster.n>0) autos.push({f:clamp(p.blaster.cd/p.blaster.rate,0,1), label:'BLAST ×'+p.blaster.n, icon:(x,y)=>{
-    ctx.strokeStyle='#ff8a8a'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.lineJoin='round';
-    ctx.beginPath(); ctx.moveTo(x-9,y); ctx.lineTo(x+3,y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+3,y-5); ctx.lineTo(x+10,y); ctx.lineTo(x+3,y+5); ctx.closePath();
-    ctx.fillStyle='#ff8a8a'; ctx.fill();
   }});
   if(p.storm.n>0) autos.push({
     f: p.storm.queued>0 ? 0 : clamp(p.storm.cd/p.storm.rate,0,1),

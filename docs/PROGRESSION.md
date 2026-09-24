@@ -536,7 +536,7 @@ share their inner corridor.
 ### One ability at a time
 
 The outer ring is now eight clusters that each name a single brick: `+1 damage with the
-Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Guardian Brick`, `+1 arrow pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
 Volley rate`, a wider Block Freeze, a heavier bomb. A tree that only ever says *+5% damage*
 has no opinions about anything; a node that names one of your bricks makes the map worth
 re-reading every time the deck hands you something new.
@@ -2566,3 +2566,37 @@ Zealot's cluster. Nothing else in the tree uses flat regen; it is *increased* re
 the rest.
 
 10 new breaks, 60 tests green.
+
+## Twenty-ninth pass — the bow
+
+> *"Let's add the Bow — ranged, dexterity, it shoots arrows, has an arrow favourite. I erase the
+> Brick Blaster ... instead of that legendary we change it to 3 options and you can only pick one."*
+
+The bow is `shoot:true` on its weapon row, and `isArcher()` joins `isCaster()` and `isSlammer()`
+as the third thing that is not a swing. **A lot of gates said `!isCaster()` and meant "swings a
+blade"**; sixteen of them were melee-only in truth (reach, leech, the whirl, Bladestorm, Blade
+Vortex, the rage cards) and read `isMelee()` now, while the shared attack cards — damage, crit,
+accuracy, bleed — stay open to the bow. The Brick Blaster's flight loop, sweep test and pierce
+falloff became the arrow's; everything else of it is deleted, and the bridge was scrubbed of its
+exports before they could throw at boot.
+
+**The conversion is a parcel.** `convTableFor(source)` builds a table per arrow hit: the legendary's
+share off the top of physical, the hero's own physical row scaled into what is left, every other
+row and every gain copied. Only the three arrow sources read it, so a Lightning Arrow never leaks
+into a swing's split.
+
+**The tree moved, and two tests said so honestly.** The bow's door had been drawn since the map was
+built, but locked, so nobody measured from it. Opened, two red prizes standing a few degrees inside
+red's border came out a point cheaper from the bow than from the sword. `DOOR_SPREAD` went 0.70 →
+0.80 — every door still 33° clear of a border — and both are the sword's again. Two thresholds were
+restated rather than met: the home-vs-away margin (×1.12 → ×1.10; measured ×1.116, every per-prize
+pairing still home-first), and one prize's spread across the doors (≥3 → ≥2), because the bow's four
+first steps are walkable by everyone and joined four inner hubs that were not joined before.
+
+**Three fixture bugs in the bow's own test.** A ring of fork targets stood in the arrow's line and
+got hit first; poison ticks were read as "Chaos Arrow was not worn" (it is now *nothing less than one
+arrow*); and a map prop in the firing line stopped Chaos Arrow on one run in five, which is the arrow
+behaving correctly. Two breaks survived until their fixtures stopped coinciding: an arrow and a
+swing are the same number with no barbs on, and a far fork target was never among the four nearest.
+
+36 new breaks, 61 tests green.

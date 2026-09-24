@@ -74,10 +74,10 @@ at you.
 **A run may cast four spells and no more.** Once you have four, the bricks that would hand
 you a fifth stop being offered and everything that deepens the four you have keeps coming.
 
-`Guardian Brick` · `Brick Blaster`
-`Storm Brick` · `Bladestorm`
-`Blade Vortex` · `Block Freeze`
-`Bomb Volley` · **`Brickbane`**
+`Guardian Brick` · `Storm Brick`
+`Bladestorm` · `Blade Vortex`
+`Block Freeze` · `Bomb Volley`
+**`Brickbane`**
 
 Pick a **favourite** at the menu — including `Sword & Steel` or `Tough Bricks`, which spend
 no slot at all — and its bricks turn up more often, plus a starting kit to match. The panels
@@ -91,14 +91,15 @@ with](#the-combination-panel).
 
 ### 🗡️ Pick a weapon
 
-`SWORD` · `AXE` · `MACE` · `STAFF`
+`SWORD` · `AXE` · `MACE` · `STAFF` · **`BOW`**
 
 Your weapon is a **table row**, not a special case in the code — base damage, swing time,
 reach, crit, bleed, and what it is worth defensively. The art follows it: you hold what you
 picked, you swing it, and your spells throw it.
 
 The **staff does not swing at all**. It casts fireballs, and it trades the whole melee kit
-for the elemental one.
+for the elemental one. The **bow** does not swing either: it looses arrows, and one legendary a
+run makes them [Lightning, Fire or Chaos Arrow](#the-bow).
 
 Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
 comparison against the sword.
@@ -179,9 +180,10 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
 | **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
 | **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
+| **BOW** | 1.25 | 0.46s | *arrow* | 7% | ×1.65 | ×0.8 | — |
 
-**Two of the four do not swing at all.** The staff casts a fireball; the mace opens a
-**ground slam**. Both trade the whole melee kit — reach, the spin combo, the whirl — for an
+**Three of the five do not swing at all.** The staff casts a fireball; the mace opens a
+**ground slam**; the bow looses an [arrow](#the-bow). Both trade the whole melee kit — reach, the spin combo, the whirl — for an
 attack of their own, and both are offered the sword's bricks no more than a staff is
 offered the axe's.
 
@@ -193,6 +195,7 @@ offered the axe's.
 | **AXE** | 45% | 25% | **20% of swings, for 9.0%** | — |
 | **MACE** | **60%** | **30%** | 10% of swings, for 3.5% | — |
 | **STAFF** | — | — | — | **+8% to all three** |
+| **BOW** | — | 10% | — | — · **+120 evasion** |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
@@ -543,18 +546,13 @@ brick works with every weapon and no build is locked to one.
 
 **A weapon's attack speed is attack speed.** The staff's **+20% increased cast speed** is
 not a property of its fireball — it sums into the cooldown pool of *every* spell you own, the
-way an increase is supposed to. A staff hero's Brick Blaster fires every **2.00s** against a
-sword hero's 2.40s, its Storm Brick every 1.83s against 2.20s, Bomb Volley 5.83s against
+way an increase is supposed to. A staff hero's Storm Brick fires every 1.83s against a
+sword hero's 2.20s, Bomb Volley 5.83s against
 7.00s, Brickbane 3.50s against 4.20s, and the guardian ring turns at **3.12 rad/s** against
 2.60. One pool per spell, the weapon's contribution added to each, so nothing compounds and
 nothing is missed.
 
-That change exposed a floor that had been sitting almost on its own base: the blaster's was
-**2.00s against a 2.40s base**, 17% of headroom — one brick's worth for a sword hero, and
-none at all for a staff, whose cast speed landed it exactly on the floor from the first wave
-and made `Rapid Blaster` a card that could never be offered. The floor is **1.20s** now,
-which gives the line the same 100% of room the storm brick has (2.20 → 1.00) and is still
-nowhere near a machine gun with a volley that size.
+(The Brick Blaster that paragraph used to describe is gone; the bow's arrow took its place.)
 
 **The art follows the weapon too.** You hold what you picked, you swing it, and your spells
 throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
@@ -649,7 +647,7 @@ a rare wearing a different colour:
 
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
-| Sharpened Blade, Heavy Orbit, Blaster Power,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
+| Sharpened Blade, Heavy Orbit,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
 
 Every **spell brick that grants stacks** reads off a second shared ladder, for the same
 reason — rare and epic used to land in the same bucket, so an epic roll of a spell was a
@@ -657,7 +655,7 @@ disappointment every time:
 
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
-| Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
+| Guardian Brick, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
 
 **It is checked rather than asserted.** The audit takes twenty-seven bricks three times
 over — forward, reverse and shuffled — and compares all **85** stats the game exposes. Every
@@ -1024,8 +1022,8 @@ offered at all.
 |---|--:|---|--:|---|--:|
 | Armour reduction | 85% | Guardian bricks | 15 | Rage | ×2 |
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
-| Critical chance | **80%** | Blaster bricks | 40 | Fortune | ×2 |
-| Critical multiplier | **300%** | Blaster pierce | 8 | Heart stacks | 5 |
+| Critical chance | **80%** | Arrows a shot | 5 | Fortune | ×2 |
+| Critical multiplier | **300%** | Arrow pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
@@ -1078,10 +1076,10 @@ much tempo the hero buys:
 
 | | floor | | floor |
 |---|--:|---|--:|
-| Brick Blaster | 1.20s | Block Freeze | 3.50s |
-| Storm Brick | 1.00s\* | Bomb Volley | 2.00s |
-| Bladestorm | 2.00s | Brickbane | 1.10s |
-| Blade Vortex | 3.00s | Guardian ring | 7.5 rad/s |
+| Storm Brick | 1.00s\* | Block Freeze | 3.50s |
+| Bladestorm | 2.00s | Bomb Volley | 2.00s |
+| Blade Vortex | 3.00s | Brickbane | 1.10s |
+| Guardian ring | 7.5 rad/s | | |
 
 Runic Tempo stops being offered once every ability you actually own sits on its floor.
 
@@ -1127,9 +1125,9 @@ a free win.
 not a second — everything landing on you counts, and a crowd is a crowd.
 
 Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth two and a
-half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
-rank, easing to 10% once all eight are bought; a fully pierced brick deals 6.13× one hit
-down a full line.
+half, never five. Arrow pierce costs the arrow **15% of its damage per body** it has gone
+through at one rank, easing to 10% once all eight are bought. Chaos Arrow pierces everything
+and pays nothing for it — that is the legendary.
 
 **Scattershot** no longer divides the damage it spreads. Each shard keeps a share of the
 whole brick — **50%** at the first rank, **25%** at the second — so three shards are worth
@@ -1550,7 +1548,7 @@ away from the nearest lane until there is room.
 
 **The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
 WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
-Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Guardian Brick`, `+1 arrow pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
 Volley rate`. A tree that only ever says *+5% damage* has no opinions; a node that names one
 of your bricks makes you re-read the map every time the deck hands you something new.
 
@@ -2448,6 +2446,44 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### The bow
+
+A dexterity weapon, and the fifth door on the tree. It does not swing: the attack button looses
+an **arrow** — physical, it bleeds, it rolls to hit against evasion like any attack, and it
+flies until something stops it. It carries **+120 evasion** and ×1.25 accuracy and none of the
+melee kit: no reach, no spin, no lifesteal, no armour, and the swing-only bricks (reach,
+Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own bricks:
+
+- **Split Arrow** — +1 arrow a shot, fanned, up to 5.
+- **Piercing Shot** — +1 pierce, up to 8; each body an arrow has gone through costs it 15%.
+- **Barbed Arrows** — flat physical to arrows only.
+
+**One arrow legendary a run.** The three are exclusive; taking one closes the others.
+
+| | converts | ailment | at the body |
+|---|---|---|---|
+| **Lightning Arrow** | 75% physical → lightning | +25% shock | forks to the **4** nearest bodies within 190px, 50% each, once and never onward |
+| **Fire Arrow** | 80% physical → fire | +20% ignite | bursts: everything within 80px takes the arrow **45% less** |
+| **Chaos Arrow** | 75% physical → chaos | +25% poison | pierces **every** body in its line, unworn |
+
+The arrow converts **first**, the way a PoE skill gem does: its share comes off the top, and
+your own conversion shares out what is left — Lightning Arrow on a hero with 50% physical to
+fire is 75% lightning, 12.5% fire, 12.5% physical. Nothing but an arrow ever reads the
+arrow's table, so the rest of your kit is untouched.
+
+![Lightning Arrow forking off the first body](docs/bow-lightning.png)
+![Fire Arrow bursting](docs/bow-fire.png)
+
+**Deadeye** is the bow's favourite: +1 pierce, +10% attack speed, +60 accuracy and twelve
+dexterity. On the tree, the bow's door opens into draw, nock, sight and light-step lanes, THE
+BARREL is arrows now, and **THE RICOCHET** keystone in dexterity's country reads:
+
+> **Ricochet** — *40% chance for an arrow that would stop to leap to the nearest body it has
+> not hit, up to twice · 15% LESS arrow damage.*
+
+**The Brick Blaster is gone.** It was a physical projectile spell that fitted nothing; its
+flight code, pierce falloff and cards are the arrow's now.
+
 ### The shield's three endings
 
 Three keystones on the rim of intelligence's country, straight out of PoE — each a trade only a
@@ -2500,7 +2536,8 @@ and which damage line they feed:
 | Reaver's Edge | 4 | 8 | |
 | Earthshaker · Tough Bricks | 12 | | |
 | Guardian Brick | 6 | | 6 |
-| Brick Blaster · Brickbane | | 8 | 4 |
+| Brickbane | | 8 | 4 |
+| Deadeye | | 12 | |
 | Storm Brick | | 4 | 8 |
 | Bladestorm | 4 | 8 | |
 | Blade Vortex | 6 | 6 | |
