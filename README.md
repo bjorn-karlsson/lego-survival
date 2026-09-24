@@ -2446,6 +2446,45 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### Breach
+
+The first league mechanic. From **wave 6**, an ordinary (non-boss) wave has a **45%** chance to
+carry a **Breach hand** — and never more than two ordinary waves go by without one. A few
+seconds into the fight a clawed fist of void bricks pushes up through the floor 380–760px away,
+with a marker on the screen's edge while it is out of sight.
+
+![A breach hand surfacing](docs/breach-hand.png)
+
+**Walk into it and it opens.** A circle of somewhere else grows out of the spot to 540px across
+five seconds, and one of the five **Breach Lords** pours its swarm in through the rim: bodies
+you already know, re-cast in the lord's colours, 30% softer, hitting with the lord's element.
+
+| lord | | swarm hits with | the ring (per rank, up to III) |
+|---|---|---|---|
+| **Xoph**, Dark Embers | 🟧 | fire | gain 5% of physical as extra fire · 12% increased fire · +6% fire res |
+| **Tul**, Creeping Avalanche | 🟦 | cold | the same, in cold |
+| **Esh**, Forked Thought | 🟨 | lightning | the same, in lightning |
+| **Uul-Netol**, Unburdened Flesh | 🟫 | harder physical | 15% increased physical · +40 armour |
+| **Chayula**, Who Dreamt | 🟪 | chaos | gain 5% as extra chaos · 12% increased chaos · +8% chaos res · +3 energy shield |
+
+**It is on a clock, and killing inside it buys the clock back.** Eight seconds with nothing
+killed; every death inside the circle — anybody's, the wave's too — adds **0.28s**, up to twelve
+on the clock. A build that clears fast keeps it open and walks out rich; one that stalls
+watches it snap shut, and whatever of the swarm is still standing is pulled back through and
+pays nothing. The wave cannot end while a breach is open.
+
+![An open breach](docs/breach-open.png)
+
+**What it pays is splinters.** One a body, three from a magic one. **Sixty of a lord's
+splinters fuse into a breachstone**, and a breachstone is that lord's ring — or one rank deeper
+into the ring you already wear. Kill **34** inside one breach and **the Hand of the Lord** steps
+through: an elite at about a quarter of a boss's health, which holds the breach open while it
+stands (up to 20s) and drops the ring outright, plus fifteen splinters. A ring already at rank
+III pays studs instead.
+
+Splinter counts sit top-right under your studs, only for the lords you have met; the character
+sheet grows a **BREACH** block with each ring's rank and what it is giving you.
+
 ### The bow
 
 A dexterity weapon, and the fifth door on the tree. It does not swing: the attack button looses
@@ -2520,8 +2559,9 @@ two legendaries that replace it change what the ring is **for**:
 
 ![Aegis and Twin Ring, two bricks rebuilding](docs/twin-ring.png)
 
-Measured on a 40-arrow volley from every direction: a bare hero takes all of it, the Aegis stops
-about a quarter, the Twin Ring about three fifths.
+Measured on an 80-arrow volley from every direction: a bare hero takes all of it, the Aegis stops
+about 22 of them and the Twin Ring about 45. One ring runs out of bricks partway through a volley
+that long — each rebuilds 2.4s after it breaks — which is exactly what the second ring is for.
 
 ### Every hand carries attributes
 

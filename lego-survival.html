@@ -3348,6 +3348,9 @@ let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
 let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[], pspikes=[];
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, done:0 };
+/* the wave's BREACH, if it carries one (see BREACH), and how many ordinary
+   waves in a row have gone without */
+let breach = null, breachMiss = 0;
 let banner = null;
 let choices = [], taken = {};
 let upgradeMode = 'wave';
@@ -3558,6 +3561,8 @@ function newPlayer(){
        own, a LESS for the Ricochet keystone, and which of the three it became */
     bow:{ n:1, pierce:0, flat:0, more:1, kind:null },
     ricochet:0,
+    /* BREACH: splinters of each lord, and the rank of each lord's ring */
+    splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
@@ -5254,6 +5259,10 @@ function poisonTick(e, dt){
 function killEnemy(e, source){
   e.dead = true; player.kills++;
   logKill(e);
+  /* a death INSIDE an open breach feeds its clock, whoever it was; a breach
+     body pays its lord's splinters wherever it falls */
+  if(breach) breachOnKill(e);
+  if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
      should pay for all three, and it will, because each of those goes through
@@ -6424,6 +6433,7 @@ function shuffleArr(a){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
+  breachRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
      the numbers on your sheet have already changed when you read the banner. */
@@ -6596,7 +6606,7 @@ function updateWave(dt){
         wave.spawnT = 0.6;
       }
     }
-    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn){
+    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn && !breachOpenNow()){
       wave.state = 'cleared'; wave.t = 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
@@ -6617,6 +6627,371 @@ function updateWave(dt){
   }
 }
 
+/* ================================== BREACH ==================================
+   THE LEAGUE. From wave BREACH_FROM, an ordinary wave may carry a HAND: a
+   clawed fist of void bricks pushed up through the floor somewhere off to one
+   side. Walk into it and it OPENS -- a circle of somewhere else grows out of
+   the spot, and while it is open its monsters pour in from the rim: bodies
+   you already know, re-cast in the colours of one of the five Breach Lords
+   and hitting with that lord's element.
+   IT IS ON A CLOCK, and killing inside it buys the clock back. Every death in
+   the circle -- anybody's -- adds a little time, so a build that clears fast
+   keeps it open and walks out rich, and one that stalls watches it snap shut.
+   When it closes, whatever of the breach is still standing is pulled back.
+   WHAT IT PAYS is SPLINTERS of its lord, one a body. Enough of them fuse into
+   a BREACHSTONE, and a breachstone is that lord's RING -- or one rank deeper
+   into the ring you already wear. Kill enough inside one breach and a HAND OF
+   THE LORD steps through after them: an elite that drops the ring outright. */
+const BREACH_FROM = 6;
+const BREACH_CHANCE = 0.45;
+const BREACH_PITY = 3;               /* the third ordinary wave in a row without one always has one */
+const BREACH_HAND_DELAY = [3, 8];    /* seconds into the fight before the hand shows */
+const BREACH_HAND_DIST = [380, 760]; /* ...and how far from the hero it surfaces */
+const BREACH_TOUCH_R = 44;
+const BREACH_R0 = 60, BREACH_R_MAX = 540, BREACH_GROW = 5;
+const BREACH_TIME = 8;               /* seconds open, with nothing killed inside */
+const BREACH_KILL_T = 0.28;          /* ...bought back by every death inside the circle */
+const BREACH_T_MAX = 12;             /* and never more than this on the clock */
+const BREACH_SPAWN_T = 0.38;
+const BREACH_BATCH = [1, 3];
+const BREACH_ALIVE_MAX = 34;
+const BREACH_HP = 0.7, BREACH_XP = 0.6;  /* a swarm: softer, and paid in splinters, not studs */
+const BREACH_MAGIC = 0.08;
+const BREACH_LORD_AT = 34;           /* deaths inside before a Hand of the Lord comes through */
+const BREACH_LORD_HP = 4;            /* ...its health, against an elite of its kind: a quarter of a boss or so */
+const BREACH_LORD_HOLD = 20;         /* ...and while it stands the breach cannot close, for up to this long */
+const BREACH_CLOSE_T = 1.2;
+const BREACH_STONE = 60;             /* splinters that fuse into one breachstone */
+const SPLINTER_MAGIC = 3, SPLINTER_LORD = 15;
+const LORD_RING_MAX = 3;
+const BREACH_LORDS = {
+  xoph:    { name:'XOPH',      title:'Dark Embers',        el:'fire',  col:'#ff6a2a', dim:'#6e1c0a', ring:"Xoph's Ring" },
+  tul:     { name:'TUL',       title:'Creeping Avalanche', el:'frost', col:'#8fd8ff', dim:'#1d4a66', ring:"Tul's Ring" },
+  esh:     { name:'ESH',       title:'Forked Thought',     el:'shock', col:'#ffe14a', dim:'#6b5a0a', ring:"Esh's Ring" },
+  uul:     { name:'UUL-NETOL', title:'Unburdened Flesh',   el:'phys',  col:'#e8c9a0', dim:'#5a4030', ring:"Uul-Netol's Ring" },
+  chayula: { name:'CHAYULA',   title:'Who Dreamt',         el:'chaos', col:'#b77cff', dim:'#3a1a5e', ring:"Chayula's Ring" },
+};
+const BREACH_LORD_KEYS = Object.keys(BREACH_LORDS);
+/* ONE RANK OF A RING. An elemental lord's ring makes you a little bit theirs:
+   part of your physical gained as their element on top, more of that element,
+   and more resistance to it. Uul-Netol is the flesh -- physical and armour.
+   Chayula is the dream -- chaos, and a shield. */
+const RING_RANK = { gain:0.05, inc:0.12, res:0.06, physInc:0.15, armour:40, chaosRes:0.08, es:3 };
+const RING_ROMAN = ['', 'I', 'II', 'III'];
+function ringText(k, n){
+  const L = BREACH_LORDS[k], R = RING_RANK, pc = v=>Math.round(v*n*100)+'%';
+  if(L.el === 'phys') return `${pc(R.physInc)} increased physical damage · +${R.armour*n} armour`;
+  if(L.el === 'chaos') return `gain ${pc(R.gain)} of physical as extra chaos · ${pc(R.inc)} increased chaos `+
+    `· +${pc(R.chaosRes)} chaos res · +${R.es*n} energy shield`;
+  const nm = CONV_NAME[L.el] ? CONV_NAME[L.el].toLowerCase() : L.el;
+  return `gain ${pc(R.gain)} of physical as extra ${nm} · ${pc(R.inc)} increased ${nm} · +${pc(R.res)} ${nm} res`;
+}
+function ringApply(p, k, n){
+  const L = BREACH_LORDS[k], R = RING_RANK;
+  for(let i=0;i<n;i++){
+    if(L.el === 'phys'){ p.incMelee += R.physInc; p.armourFlat += R.armour; }
+    else if(L.el === 'chaos'){
+      convGain(p.conv, 'phys', 'chaos', R.gain);
+      p.inc.chaos = (p.inc.chaos || 0) + R.inc;
+      p.resFlat.chaos += R.chaosRes;
+      p.esFlat = (p.esFlat || 0) + R.es;
+    } else {
+      convGain(p.conv, 'phys', L.el, R.gain);
+      p.inc[L.el] = (p.inc[L.el] || 0) + R.inc;
+      p.resFlat[L.el] += R.res;
+    }
+  }
+}
+function breachOpenNow(){ return !!(breach && (breach.state === 'open' || breach.state === 'closing')); }
+function breachRoll(n){
+  breach = null;
+  if(sandbox || n < BREACH_FROM || n % 5 === 0) return;
+  if(breachMiss < BREACH_PITY - 1 && Math.random() >= BREACH_CHANCE){ breachMiss++; return; }
+  breachMiss = 0;
+  const lord = BREACH_LORD_KEYS[(Math.random()*BREACH_LORD_KEYS.length)|0];
+  breach = { lord, state:'wait', delay:rnd(BREACH_HAND_DELAY[0], BREACH_HAND_DELAY[1]),
+             x:0, y:0, r:0, rClose:0, age:0, t:0, kills:0, spawnT:0, closeT:0, lordOut:false, spl:0 };
+}
+/* somewhere off to one side: far enough to be a decision, near enough to see */
+function breachSpot(){
+  const lo = W.wall+120, hiX = W.w-W.wall-120, hiY = W.h-W.wall-120;
+  for(let i=0;i<60;i++){
+    const a = rnd(TAU), rr = rnd(BREACH_HAND_DIST[0], BREACH_HAND_DIST[1]);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(x < lo || x > hiX || y < lo || y > hiY) continue;
+    let bad = false;
+    for(const so of solids) if(dist({x,y}, so) < so.r + 40){ bad = true; break; }
+    for(const w of waters) if(x>w.x-40 && x<w.x+w.w+40 && y>w.y-40 && y<w.y+w.h+40) bad = true;
+    if(!bad) return { x, y };
+  }
+  return randomSpawnPos();
+}
+function breachOpen(){
+  const B = breach, L = BREACH_LORDS[B.lord];
+  B.state = 'open'; B.age = 0; B.t = BREACH_TIME; B.r = BREACH_R0; B.spawnT = 0.35; B.kills = 0;
+  showBanner('BREACH', L.name+' — '+L.title.toUpperCase(), L.col, 1.8, 50);
+  logEvent('   THE BREACH OPENS — '+L.name+', '+L.title, L.col);
+  addRing(B.x, B.y, 16, 520, 220, L.col, 8, 0.6);
+  addShake(0.4); SFX.roar();
+}
+/* WHAT COMES THROUGH. Walkers and runners, never a caster or a siege body: the
+   breach is a crowd you cut through, and the lord's element is the threat. */
+function breachTypes(n){
+  const t = ['imp', 'skeleton', 'stalker'];
+  if(n >= 10) t.push('lancer', 'knight');
+  if(n >= 16) t.push('brute');
+  if(n >= 24) t.push('superimp');
+  return t;
+}
+function breachRim(B){
+  const lo = W.wall+50, hiX = W.w-W.wall-50, hiY = W.h-W.wall-50;
+  for(let i=0;i<12;i++){
+    const a = rnd(TAU), rr = B.r * rnd(0.82, 0.98);
+    const x = clamp(B.x + Math.cos(a)*rr, lo, hiX), y = clamp(B.y + Math.sin(a)*rr, lo, hiY);
+    let bad = false;
+    for(const so of solids) if(dist({x,y}, so) < so.r + 16){ bad = true; break; }
+    if(!bad) return { x, y };
+  }
+  return { x:B.x, y:B.y };
+}
+function breachify(e, lord){
+  const L = BREACH_LORDS[lord];
+  e.breach = lord;
+  e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP));
+  e.xp *= BREACH_XP; e.studs = { a:0, b:0 };
+  e.col = { head:L.col, torso:L.dim, legs:'#17121f', hands:L.col, hair:L.dim };
+  if(L.el === 'phys') e.dmg = Math.ceil(e.dmg * 1.15);   /* the flesh hits harder instead */
+  else e.touchElem = L.el;
+  /* it STEPS THROUGH, half made already -- it is not assembled brick by brick */
+  e.buildT = Math.max(e.buildT || 0, 0.5);
+}
+function breachSpawn(B){
+  const at = breachRim(B), types = breachTypes(wave.n);
+  const n0 = enemies.length;
+  spawnEnemy(types[(Math.random()*types.length)|0], at.x, at.y, false, Math.random() < BREACH_MAGIC);
+  if(enemies.length > n0) breachify(enemies[enemies.length-1], B.lord);
+}
+function breachLord(B){
+  const L = BREACH_LORDS[B.lord];
+  B.lordOut = true;
+  const at = breachRim(B), n0 = enemies.length;
+  spawnEnemy(wave.n >= 14 ? 'jugg' : 'brute', at.x, at.y, true, false);
+  if(enemies.length === n0) return;
+  const e = enemies[enemies.length-1];
+  breachify(e, B.lord);
+  e.breachLord = true;
+  e.hp = e.maxHp = Math.ceil(e.maxHp * BREACH_LORD_HP);
+  e.scale *= 1.2; e.r *= 1.12; e.xp *= 6;
+  B.hand = e; B.hold = BREACH_LORD_HOLD;
+  showBanner('THE HAND OF '+L.name, 'it carries '+L.ring, L.col, 2.0, 46);
+  logEvent('   THE HAND OF '+L.name+' steps through', L.col);
+  addRing(at.x, at.y, 14, 420, 160, L.col, 7, 0.5);
+  SFX.roar(); addShake(0.35);
+}
+function breachClose(B){
+  const L = BREACH_LORDS[B.lord];
+  B.state = 'closing'; B.closeT = BREACH_CLOSE_T; B.rClose = B.r;
+  let pulled = 0;
+  for(const e of enemies) if(e.breach && !e.dead){
+    e.dead = true; pulled++;
+    addSparks(e.x, e.y-14, 5, L.col);
+  }
+  logEvent('   the breach closes — '+B.kills+' killed inside, '+B.spl+' splinters'+
+           (pulled ? ', '+pulled+' pulled back through' : ''), L.col);
+  addRing(B.x, B.y, 12, -420, B.r, L.col, 6, 0.5);
+}
+function updateBreach(dt){
+  const B = breach;
+  if(!B || !player) return;
+  B.age += dt;
+  if(B.state === 'wait' || B.state === 'hand'){
+    /* a wave that ends with the hand untouched takes the hand with it */
+    if(wave.state === 'cleared'){
+      if(B.state === 'hand') logEvent('   the breach hand sinks back, unopened', BREACH_LORDS[B.lord].col);
+      breach = null; return;
+    }
+    if(B.state === 'wait'){
+      if(wave.state !== 'fight') return;
+      B.delay -= dt;
+      if(B.delay > 0) return;
+      const at = breachSpot();
+      B.x = at.x; B.y = at.y; B.state = 'hand'; B.age = 0;
+      const L = BREACH_LORDS[B.lord];
+      logEvent('   A BREACH HAND reaches through — '+L.name+', '+L.title, L.col);
+      addDmg(B.x, B.y-64, 'BREACH', L.col, 20);
+      return;
+    }
+    if(!player.dead && Math.hypot(player.x - B.x, player.y - B.y) < BREACH_TOUCH_R + 12) breachOpen();
+    return;
+  }
+  if(B.state === 'open'){
+    const g = clamp(B.age / BREACH_GROW, 0, 1);
+    B.r = BREACH_R0 + (BREACH_R_MAX - BREACH_R0) * (1 - (1-g)*(1-g));
+    B.t -= dt;
+    B.spawnT -= dt;
+    if(B.spawnT <= 0){
+      B.spawnT = BREACH_SPAWN_T;
+      let alive = 0; for(const e of enemies) if(e.breach && !e.dead) alive++;
+      const k = Math.min(irnd(BREACH_BATCH[0], BREACH_BATCH[1]), BREACH_ALIVE_MAX - alive);
+      for(let i=0;i<k;i++) breachSpawn(B);
+    }
+    if(!B.lordOut && B.kills >= BREACH_LORD_AT) breachLord(B);
+    /* THE HAND HOLDS IT OPEN. Pulling it back through halfway down its health
+       bar would take the ring out of your hands for fighting it too slowly */
+    if(B.hand && !B.hand.dead && B.hold > 0){ B.hold -= dt; B.t = Math.max(B.t, 1); }
+    if(B.t <= 0) breachClose(B);
+    return;
+  }
+  if(B.state === 'closing'){
+    B.closeT -= dt;
+    B.r = B.rClose * clamp(B.closeT / BREACH_CLOSE_T, 0, 1);
+    if(B.closeT <= 0) breach = null;
+  }
+}
+function breachOnKill(e){
+  const B = breach;
+  if(B.state !== 'open') return;
+  if(Math.hypot(e.x - B.x, e.y - B.y) > B.r) return;
+  B.kills++;
+  B.t = Math.min(BREACH_T_MAX, B.t + BREACH_KILL_T);
+}
+function breachSpoils(e){
+  const p = player, k = e.breach, L = BREACH_LORDS[k];
+  if(!L) return;
+  const n = e.breachLord ? SPLINTER_LORD : e.magic ? SPLINTER_MAGIC : 1;
+  p.splinters[k] = (p.splinters[k] || 0) + n;
+  if(breach && breach.lord === k) breach.spl += n;
+  addSparks(e.x, e.y-18, 2 + n, L.col);
+  if(e.breachLord){
+    addDmg(e.x, e.y-70, L.ring.toUpperCase()+'!', L.col, 20);
+    ringGain(k, 'hand');
+  }
+  while(p.splinters[k] >= BREACH_STONE){
+    p.splinters[k] -= BREACH_STONE;
+    logEvent('   '+BREACH_STONE+' '+L.name+' splinters fuse into a BREACHSTONE', L.col);
+    ringGain(k, 'stone');
+  }
+}
+function ringGain(k, why){
+  const p = player, L = BREACH_LORDS[k];
+  const have = p.rings[k] || 0;
+  if(have >= LORD_RING_MAX){
+    const bonus = 40 + wave.n*4;
+    spawnStuds(p.x, p.y-20, bonus);
+    showBanner(L.ring.toUpperCase()+' IS WHOLE', '+'+bonus+' studs instead', L.col, 1.6, 40);
+    logEvent('   '+L.ring+' is already whole — +'+bonus+' studs', L.col);
+    return;
+  }
+  p.rings[k] = have + 1;
+  ringApply(p, k, 1);
+  syncStats();
+  showBanner(L.ring.toUpperCase()+(have ? ' — RANK '+RING_ROMAN[have+1] : ''),
+    ringText(k, 1)+(have ? ' more' : ''), L.col, 2.4, 44);
+  logEvent('   '+L.ring+' '+RING_ROMAN[have+1]+(why === 'hand' ? ' — from the Hand' : ' — from a breachstone')+
+           ': '+ringText(k, have+1), L.col);
+  SFX.levelup();
+}
+/* ---- drawn ---- */
+function drawBreachHand(c, x, y, col, pulse, open, s){
+  c.save(); c.translate(x, y); c.scale(s || 1, s || 1);
+  const pr = prs(col);
+  c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${0.14 + 0.12*pulse})`;
+  c.beginPath(); c.arc(0, -26, 36, 0, TAU); c.fill();
+  const spread = open ? 0.62 : 0.2;
+  for(let i=0;i<4;i++){
+    c.save(); c.rotate((i - 1.5) * spread);
+    c.fillStyle = '#241a36'; c.strokeStyle = 'rgba(8,4,16,0.85)'; c.lineWidth = 2;
+    roundRect(c, -4.5, -46 + Math.abs(i-1.5)*5, 9, 42 - Math.abs(i-1.5)*5, 4); c.fill(); c.stroke();
+    c.fillStyle = col;
+    const ty = -46 + Math.abs(i-1.5)*5;
+    c.beginPath(); c.moveTo(-4, ty+1); c.lineTo(4, ty+1); c.lineTo(0, ty-9); c.closePath(); c.fill();
+    c.restore();
+  }
+  c.save(); c.rotate(open ? -1.1 : -0.8);
+  c.fillStyle = '#241a36'; c.strokeStyle = 'rgba(8,4,16,0.85)'; c.lineWidth = 2;
+  roundRect(c, -4.5, -30, 9, 26, 4); c.fill(); c.stroke();
+  c.fillStyle = col; c.beginPath(); c.moveTo(-4, -29); c.lineTo(4, -29); c.lineTo(0, -37); c.closePath(); c.fill();
+  c.restore();
+  c.fillStyle = '#2e2244'; c.strokeStyle = 'rgba(8,4,16,0.85)'; c.lineWidth = 2;
+  roundRect(c, -17, -12, 34, 15, 5); c.fill(); c.stroke();
+  drawStudG(c, -8, -5, 2.6, col); drawStudG(c, 0, -5, 2.6, col); drawStudG(c, 8, -5, 2.6, col);
+  c.restore();
+}
+function drawBreach(){
+  const B = breach, c = ctx;
+  if(B && (B.state === 'hand' || B.state === 'open' || B.state === 'closing')){
+    const L = BREACH_LORDS[B.lord], pr = prs(L.col);
+    const pulse = 0.5 + 0.5*Math.sin(vtime*4);
+    if(B.state === 'hand'){
+      c.fillStyle = 'rgba(18,8,32,0.62)';
+      c.beginPath(); c.ellipse(B.x, B.y, 44, 19, 0, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${0.45 + 0.4*pulse})`; c.lineWidth = 3;
+      c.beginPath(); c.ellipse(B.x, B.y, 44 + 8*pulse, 19 + 3.5*pulse, 0, 0, TAU); c.stroke();
+      drawBreachHand(c, B.x, B.y, L.col, pulse, false, 1);
+    } else {
+      const R = Math.max(2, B.r);
+      const gr = c.createRadialGradient(B.x, B.y, R*0.08, B.x, B.y, R);
+      gr.addColorStop(0, 'rgba(12,5,24,0.46)');
+      gr.addColorStop(0.78, 'rgba(26,10,46,0.30)');
+      gr.addColorStop(1, `rgba(${pr[0]},${pr[1]},${pr[2]},0.24)`);
+      c.fillStyle = gr;
+      c.beginPath(); c.arc(B.x, B.y, R, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},0.85)`; c.lineWidth = 4;
+      c.beginPath(); c.arc(B.x, B.y, R, 0, TAU); c.stroke();
+      c.setLineDash([18, 14]); c.lineDashOffset = -vtime*40;
+      c.strokeStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},0.4)`; c.lineWidth = 2;
+      c.beginPath(); c.arc(B.x, B.y, R + 9, 0, TAU); c.stroke();
+      c.setLineDash([]); c.lineDashOffset = 0;
+      /* the void drifting in it */
+      c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},0.5)`;
+      for(let i=0;i<30;i++){
+        const a = i*2.399 + vtime*0.25*(i%2 ? 1 : -1);
+        const rr = R * (((i*0.137) + vtime*0.04) % 1);
+        c.beginPath(); c.arc(B.x + Math.cos(a)*rr, B.y + Math.sin(a)*rr, 1.6 + (i%3), 0, TAU); c.fill();
+      }
+      c.globalAlpha = B.state === 'closing' ? clamp(B.closeT/BREACH_CLOSE_T, 0, 1) : 0.85;
+      drawBreachHand(c, B.x, B.y, L.col, pulse, true, 1.15);
+      c.globalAlpha = 1;
+    }
+  }
+  /* a stain of its lord under every breach body, so the swarm reads as one
+     thing even when it is mixed into the wave */
+  for(const e of enemies){
+    if(!e.breach || e.dead || !onScreen(e, 40)) continue;
+    const pr = prs(BREACH_LORDS[e.breach].col);
+    c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${e.breachLord ? 0.38 : 0.24})`;
+    c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.5, (e.r||12)*0.62, 0, 0, TAU); c.fill();
+  }
+}
+/* the clock and the count, under the wave block, and the splinters in the corner */
+function drawBreachHud(){
+  const p = player;
+  const B = breach;
+  if(B && B.state === 'open'){
+    const L = BREACH_LORDS[B.lord];
+    const bw = Math.min(360, cw-80), bx = cw/2 - bw/2, by = hudWaveBottom() + 8;
+    ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+    const held = B.hand && !B.hand.dead && B.hold > 0;
+    const head = 'BREACH · '+L.name+' · '+(held ? 'THE HAND HOLDS IT OPEN' : B.lordOut ? 'THE HAND IS DOWN'
+      : B.kills+' / '+BREACH_LORD_AT+' for the Hand');
+    ctx.strokeText(head, cw/2, by); ctx.fillStyle = L.col; ctx.fillText(head, cw/2, by);
+    ctx.fillStyle = 'rgba(15,20,25,0.55)'; roundRect(ctx, bx, by+10, bw, 8, 4); ctx.fill();
+    ctx.fillStyle = L.col; roundRect(ctx, bx, by+10, Math.max(3, bw*clamp(B.t/BREACH_T_MAX, 0, 1)), 8, 4); ctx.fill();
+  }
+  /* splinters and rings, top right under the studs -- only the lords you have met */
+  let y = 66;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '700 12px Fredoka';
+  for(const k of BREACH_LORD_KEYS){
+    const sp = (p.splinters && p.splinters[k]) || 0, rk = (p.rings && p.rings[k]) || 0;
+    if(!sp && !rk) continue;
+    const L = BREACH_LORDS[k];
+    const txt = L.name+'  '+sp+'/'+BREACH_STONE+(rk ? '  ◆'+RING_ROMAN[rk] : '');
+    ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+    ctx.strokeText(txt, cw-24, y); ctx.fillStyle = L.col; ctx.fillText(txt, cw-24, y);
+    y += 17;
+  }
+}
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
   common:   { name:'COMMON',   col:'#9ba19d', mult:1.0 },
@@ -12922,6 +13297,16 @@ function renderCharSheet(){
           `(${weapon.dmg} + ${fmtHp(p.flatPhys)}) × (1 + ${Math.round(incTotal('melee')*100)}%) × ${moreShown().toFixed(2)}`)
   ]);
 
+  const breachRows = BREACH_LORD_KEYS
+    .filter(k=>(p.splinters && p.splinters[k]) || (p.rings && p.rings[k]))
+    .map(k=>{ const L = BREACH_LORDS[k], rk = p.rings[k] || 0;
+      return sRow(L.ring, rk ? 'rank '+RING_ROMAN[rk] : '\u2014',
+        (p.splinters[k]||0)+' / '+BREACH_STONE+' splinters',
+        `${L.name}, ${L.title}. Splinters drop from ${L.name}'s breach monsters; ${BREACH_STONE} of them `+
+        `fuse into a breachstone, and a breachstone is the ring \u2014 or one rank deeper, to ${LORD_RING_MAX}. `+
+        `The Hand of ${L.name} drops the ring outright.\n\n`+
+        (rk ? 'Yours now: '+ringText(k, rk)+'.' : 'Each rank: '+ringText(k, 1)+'.')); });
+  const breachBlock = breachRows.length ? sBlock('BREACH', breachRows) : '';
   const loot = sBlock('LOOT & XP', [
     sRow('Studs held', String(p.studs), `next reroll costs ${rerollCost()}`),
     sRow('Stud gain', '×'+p.studMul.toFixed(2), ''),
@@ -13102,7 +13487,7 @@ function renderCharSheet(){
   if(!sheetNerd){
     document.getElementById('charBody').innerHTML =
       `<div class="seclabel">STATS &mdash; HOVER ANY ROW</div>
-       <div class="sgrid">${simpleStatBlocks()}</div>
+       <div class="sgrid">${simpleStatBlocks()}${breachBlock}</div>
        <div class="seclabel">SPELLS</div>
        <div class="spellgrid">${spellHtml}</div>
        <div class="seclabel">BRICKS TAKEN</div>
@@ -13111,7 +13496,7 @@ function renderCharSheet(){
   }
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
-     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${resist}${ail}${curseBlock}${loot}${run}</div>
+     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${resist}${ail}${curseBlock}${breachBlock}${loot}${run}</div>
      <div class="seclabel">SPELLS</div>
      <div class="spellgrid">${spellHtml}</div>
      <div class="seclabel">EVERY STAT &mdash; HOVER ANY ROW</div>
@@ -19051,6 +19436,7 @@ function render(){
       }
     }
   }
+  drawBreach();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
     const k = clamp(h.life/h.max,0,1);
@@ -20097,7 +20483,13 @@ function render(){
           ctx.strokeStyle='rgba(20,30,40,0.6)'; ctx.lineWidth=3; ctx.stroke();
           ctx.restore();
         }, true);
-    }  }
+    }
+    /* an unopened breach is worth walking to, so it is on the rim like a chest */
+    if(breach && breach.state === 'hand'){
+      const col = BREACH_LORDS[breach.lord].col;
+      edgeMarker(breach.x, breach.y, col, (x,y)=> drawBreachHand(ctx, x, y+9, col, 0.5, false, 0.36), true);
+    }
+  }
   const vg = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw,ch)*0.36, cw/2, ch/2, Math.max(cw,ch)*0.72);
   vg.addColorStop(0,'rgba(8,14,18,0)'); vg.addColorStop(1,'rgba(8,14,18,0.36)');
   ctx.fillStyle = vg; ctx.fillRect(0,0,cw,ch);
@@ -21607,6 +21999,7 @@ function renderHUD(){
       }
     }
   }
+  drawBreachHud();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
     const bname = boss.bname || 'BOSS';
@@ -22007,6 +22400,7 @@ function resetRun(demo){
                                      earned:metaPointsEarned(m0) } : null; }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
+  breach = null; breachMiss = 0;
   rollRoster();
   if(demo){
     for(let i=0;i<4;i++){ const sp = randomSpawnPos();
@@ -22304,6 +22698,7 @@ function update(dt, raw){
     enemies = enemies.filter(e=>!e.dead);
     updateProjectiles(dt);
     updateWave(dt);
+    updateBreach(dt);
     updateFx(dt);
     if(player.swing){
       const sw = player.swing;

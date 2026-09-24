@@ -2600,3 +2600,38 @@ behaving correctly. Two breaks survived until their fixtures stopped coinciding:
 swing are the same number with no barbs on, and a far fork target was never among the four nearest.
 
 36 new breaks, 61 tests green.
+
+## Thirtieth pass — Breach
+
+> *"Let's introduce some of the league mechanics into the game like Breach ... try to flesh this
+> one out."*
+
+One `breach` object per wave, rolled in `startWave` beside the modifiers: `wait` (a few seconds
+into the fight) → `hand` (surfaced, on the edge markers) → `open` → `closing` → gone. The whole
+mechanic hangs off four existing seams rather than a parallel system: the swarm is ordinary
+`spawnEnemy` bodies passed through `breachify` (colours, element, softer, no studs); the death hook
+is two lines at the top of `killEnemy`; the ring is five hand-written rank deltas into the same
+pools cards write (`convGain`, `inc[el]`, `resFlat`, `incMelee`, `armourFlat`, `esFlat`), so it
+survives every `syncStats` rebuild with nobody having to know it exists; and the wave's clear
+check gained one clause, because an empty field under an open breach is not a cleared wave.
+
+**Tuned once against the bosses it sits between.** The Hand of the Lord first came out at 495
+health on wave 8 against a 1,607 boss — a third of a boss as a side objective, with a clock that
+could pull it back through half-dead. It is ×4 an elite now (about a quarter of a boss), and while
+it stands the breach cannot close, for up to twenty seconds.
+
+**The test steps the breach by hand.** The game loop is parked and `updateBreach` is called in
+fixed steps, so the clock, the growth and the hold are exact instead of racing a frame timer. The
+wave-clear rule is tested through the wave's own update, not by asking the helper it calls.
+
+`RING_MAX` already existed — the boss's pull ring — and a second `const` of the same name was a
+boot-time `SyntaxError`, caught before anything else ran. The lords' cap is `LORD_RING_MAX`.
+
+**And one of the previous pass's tests was a coin-flip.** The Aegis check asked for the ring to
+cut a 40-arrow volley's loss to under 0.85 of a bare hero's; across runs it measured 0.72–0.88,
+so it failed about one run in six. Doubling the volley did not rescue the bar — at eighty arrows
+the ring runs out of bricks and the ratio centres near 0.83 — because the bar was the wrong claim.
+It asks now what a block is *worth*: every arrow the wall reports stopping must show up as hearts
+not lost, at least 30% of an average arrow each. All ten Aegis breaks are still caught by it.
+
+38 new breaks, 62 tests green.
