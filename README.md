@@ -2448,6 +2448,27 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### The shield's three endings
+
+Three keystones on the rim of intelligence's country, straight out of PoE — each a trade only a
+shield build wins:
+
+> **Chaos Inoculation** — *one heart, a far deeper shield, and chaos cannot touch you.*
+> Maximum hearts become **1**. Every heart you gave up comes back as **2 energy shield**, before
+> the increases, so every increased-shield card multiplies it too. The chaos part of any hit does
+> not arrive; a dose never takes hold.
+
+> **Ghost Reaver** — *what you steal becomes your shield, never your blood.*
+> Lifesteal fills the energy shield instead of the hearts.
+
+> **Zealot's Oath** — *what mends you mends your shield, never your hearts.*
+> Regeneration fills the energy shield instead of the hearts — without waiting for the recharge
+> clock, because it is regeneration and not recharge.
+
+Chaos is the damage type that walks past a shield; CI is the answer that makes you immune to
+it. The other two cost exactly what they redirect: with no shield to fill, they are a leech or a
+regen thrown away.
+
 ### The guardian guards
 
 Tidal Orbit made the ring breathe in and out — a different way of dealing the same damage. The

@@ -951,7 +951,8 @@ function mobAccuracyOf(d){
    The hero and the monsters use the same three functions, because a shield is a
    shield -- which is what makes "some bosses have one" a row in a table rather
    than a second system. */
-const ES_DELAY = 2.5;    /* seconds untouched before it starts coming back */
+const ES_DELAY = 2.5;
+const CI_ES_PER_HEART = 2;   /* Chaos Inoculation: shield paid back per heart given up */    /* seconds untouched before it starts coming back */
 const ES_RATE  = 0.22;   /* of the maximum, per second, once it does */
 const ES_COL   = '#7fd8ff';
 /* WHAT A HIT DOES TO A SHIELDED BODY. Returns what is LEFT for the health bar.
@@ -1262,7 +1263,16 @@ function syncStats(){
      in it is kept, clamped, rather than refilled: a rebuild mid-fight must not
      be a free heal. A shield that has just GROWN keeps what it had. */
   { const was = p.esMax || 0;
-    p.esMax = Math.max(0, (p.esFlat||0) * (1 + (p.inc.es||0) + intOf()*ATTR_INT_ES));
+    /* CHAOS INOCULATION: the hearts are worked out as usual, then everything
+       above one is handed back as shield -- before the increases, so every
+       increased-shield card multiplies what CI paid you as well */
+    p.ciEs = 0;
+    if(p.chaosInoc){
+      p.ciEs = Math.max(0, p.maxHp - 1) * CI_ES_PER_HEART;
+      p.maxHp = 1;
+      if(p.hp > 1) p.hp = 1;
+    }
+    p.esMax = Math.max(0, ((p.esFlat||0) + p.ciEs) * (1 + (p.inc.es||0) + intOf()*ATTR_INT_ES));
     p.es = (was <= 0) ? p.esMax : Math.min(p.es || 0, p.esMax); }
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
   /* --- everything that used to be capped where the card wrote it ------------
@@ -1530,6 +1540,7 @@ const PSN_MAX_STACKS = 8;
 function poisonPlayer(dps, dur){
   const p = player;
   if(!p || p.dead || !(dps > 0)) return;
+  if(p.chaosInoc) return;               /* a dose cannot even take hold */
   if(!p.psn) p.psn = { list:[], acc:0 };
   /* a fresh dose replaces the weakest one once you are full, so standing in a
      deeper pool still means something */
@@ -4869,6 +4880,17 @@ function leechFrom(d){
   const p = player;
   if(!p || p.dead || godMode) return;
   if(!(p.leech > 0) || !(p.leechChance > 0)) return;
+  /* GHOST REAVER: the same steal, into the shield and never the hearts */
+  if(p.ghostReaver){
+    if(!(p.esMax > 0) || p.es >= p.esMax) return;
+    if(Math.random() >= p.leechChance) return;
+    const gain = Math.min(d * p.leech, p.esMax * LEECH_HIT_CAP, p.esMax - p.es);
+    if(gain <= 0.005) return;
+    p.es = Math.round((p.es + gain)*100)/100;
+    addDmg(p.x, p.y - 58, '+'+fmtHp(gain), ES_COL, 14);
+    clogRun.leeched = (clogRun.leeched||0) + gain;
+    return;
+  }
   if(p.hp >= p.maxHp) return;
   if(Math.random() >= p.leechChance) return;
   const heal = Math.min(d * p.leech, p.maxHp * LEECH_HIT_CAP, p.maxHp - p.hp);
@@ -5816,6 +5838,8 @@ function applyAilment(elem, src, stacks){
 function ailmentDamage(n, quiet, type){
   const p = player;
   if(godMode || p.dead || state!=='play') return;
+  /* Chaos Inoculation: a dose is chaos over time, and chaos does not arrive */
+  if(type === 'chaos' && p.chaosInoc) return;
   /* the weapon's mitigation reaches what is already eating you too — an
      ailment is damage taken like any other */
   n = n * weaponLessTaken();
@@ -5978,6 +6002,15 @@ function playerDamage(n, src, elem, spell){
      After mitigation and after the log, so a hit that was evaded or suppressed
      away to nothing still counts as a hit — being swung at is the trigger. */
   if(p.rageOnHurt > 0) stackAdd('rage', p.rageOnHurt);
+  /* CHAOS INOCULATION: the chaos part of a hit simply does not arrive -- not
+     at the shield, not at the one heart. A rotted boss's body hits for what
+     is left; a pure chaos hit is nothing at all. */
+  if(p.chaosInoc){
+    const ci = (elem === 'chaos') ? 1 : clamp(((src && (src.chaosShare
+               || (src.src && src.src.chaosShare))) || 0), 0, 1);
+    n = n * (1 - ci);
+    if(n <= 0.001){ addDmg(p.x, p.y-56, 'IMMUNE', '#8ede4a', 15); p.invuln = IFRAME_T; return; }
+  }
   /* THE SHIELD TAKES IT. After the log, so what you read is the hit that was
      thrown at you; what reaches the hearts is what is left of it. A monster's
      chaos -- a venomous boss, a rotted one -- walks straight past. */
@@ -5989,8 +6022,8 @@ function playerDamage(n, src, elem, spell){
        anybody, and an arrow from a rotted boss is still an arrow -- what makes
        the late fights bite is the thing standing on top of you, which is
        exactly what this covers. */
-    const cs = (src && (src.chaosShare
-                || (src.src && src.src.chaosShare))) || 0;
+    const cs = p.chaosInoc ? 0 : ((src && (src.chaosShare
+                || (src.src && src.src.chaosShare))) || 0);
     n = esAbsorb(p, n, null, cs);
     const ate = was - (p.es || 0);
     if(ate > 0.01){
@@ -7879,6 +7912,14 @@ const META_STATS = {
   chestCards: { n:'cards from every chest',              w:(p,v)=>{ p.chestCards = Math.max(p.chestCards||1, v); } },
   bankMul:    { n:'× the studs you bank',           w:(p,v)=>{ p.bankMul *= v; } },
   noRegen:    { n:'NO regeneration at all',              w:(p)=>{ p.noRegen = true; } },
+  /* ---- THE THREE SHIELD KEYSTONES, straight out of PoE. Each one is a trade
+     only an energy-shield build can win. ---- */
+  chaosInoc:  { n:'maximum hearts become 1 — every heart you gave up is 2 ENERGY SHIELD — and chaos cannot touch you',
+                w:(p)=>{ p.chaosInoc = true; } },
+  ghostReaver:{ n:'your lifesteal fills your ENERGY SHIELD, and never your hearts',
+                w:(p)=>{ p.ghostReaver = true; } },
+  zealot:     { n:'your regeneration fills your ENERGY SHIELD, and never your hearts',
+                w:(p)=>{ p.zealot = true; } },
   noReroll:   { n:'NO rerolls, ever',                    w:(p)=>{ p.noReroll = true; } },
   /* ---- AND THE NEW SWITCHES. Every one of these changes a RULE rather than a
      number, which is the only thing worth walking to the edge of the map for.
@@ -8022,7 +8063,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  prolif:'bane', lessDot:'bane', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
+  prolif:'bane', lessDot:'bane', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -8609,6 +8650,28 @@ const META_KEYSTONES = [
     minors:[['Glacial','ailMag',0.20],['Static','incShock',0.07],['Hoar','incFrost',0.07]],
     keystone:{ name:'The Deep Cold', note:'every chill and shock lands full force, and nothing you leave burns',
                mods:[['ailFull',null],['incDot',-0.60]] } },
+
+  /* ==================== THE SHIELD'S THREE ENDINGS ====================
+     PoE's energy-shield keystones, each a trade only a shield build wins.
+     CHAOS INOCULATION -- one heart, every heart you gave up paid back as two
+       of shield, and chaos simply does not arrive: the one damage type that
+       walks past a shield is the one damage type you are immune to.
+     GHOST REAVER -- your lifesteal fills the shield instead of the hearts.
+     ZEALOT'S OATH -- your regeneration fills the shield instead of the hearts.
+     The last two cost exactly what they redirect: with no shield to fill,
+     they are a leech or a regen thrown away. */
+  { id:'k_ci',    name:'THE INOCULATION', sp:'arc', home:'int', d:[4,4], shape:'ring',
+    minors:[['Sterile','es',4],['Hollow','incEs',0.12],['Inured','chaosRes',0.10]],
+    keystone:{ name:'Chaos Inoculation', note:'one heart, a far deeper shield, and chaos cannot touch you',
+               mods:[['chaosInoc',null]] } },
+  { id:'k_ghost', name:'THE GHOST REAVER', sp:'arc', home:'int', d:[4,4], shape:'arc',
+    minors:[['Siphoning','leech',0.02],['Thirsting','leechRate',0.05],['Warded','es',3]],
+    keystone:{ name:'Ghost Reaver', note:'what you steal becomes your shield, never your blood',
+               mods:[['ghostReaver',null]] } },
+  { id:'k_zeal',  name:"THE ZEALOT'S OATH", sp:'arc', home:'int', d:[4,4], shape:'fan',
+    minors:[['Devout','incRegen',0.12],['Oathbound','incEs',0.12],['Steadfast','incRegen',0.10]],
+    keystone:{ name:"Zealot's Oath", note:'what mends you mends your shield, never your hearts',
+               mods:[['zealot',null]] } },
 
   /* all three charges at once, on a body that cannot take a hit. The charge
      build's own ending, and the reason to raise three ceilings. */
@@ -13255,7 +13318,15 @@ function updatePlayer(dt){
   esTick(p, dt);
   p.esFlash = Math.max(0, (p.esFlash||0) - dt*3);
   const regen = p.regenStall > 0 ? 0 : cursedRegen();
-  if(regen > 0 && p.hp < p.maxHp){
+  /* ZEALOT'S OATH: the same regeneration, into the shield -- and none of it
+     into the hearts. It does not wait for the recharge clock: it is regen, not
+     recharge, which is the whole difference between the two. */
+  if(p.zealot){
+    if(regen > 0 && p.esMax > 0 && p.es < p.esMax)
+      p.es = Math.min(p.esMax, (p.es||0) + regen*dt);
+    p.regenAcc = 0;
+  }
+  else if(regen > 0 && p.hp < p.maxHp){
     p.regenAcc += regen*dt;
     if(p.regenAcc >= 0.01){
       const gain = Math.floor(p.regenAcc*100)/100;

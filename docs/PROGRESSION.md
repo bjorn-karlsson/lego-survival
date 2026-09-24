@@ -2549,3 +2549,20 @@ The deleted constants were still exported by the test bridge: a boot-time `Refer
 same trap the log already describes.
 
 10 new breaks, 59 tests green.
+
+## Twenty-eighth pass — the shield's three endings
+
+Chaos Inoculation, Ghost Reaver and Zealot's Oath, as three rim keystones in intelligence's country.
+CI works out the hearts as usual and then hands everything above one back as shield
+(`CI_ES_PER_HEART = 2`) *before* the increases, strips the chaos share from every hit before it
+reaches the shield, and closes the two chaos-over-time doors (`ailmentDamage('chaos')` and
+`poisonPlayer`). Ghost Reaver and Zealot's Oath redirect the leech and the regen tick; Zealot's does
+not wait for the recharge clock, which is the difference between regeneration and recharge.
+
+The layout held: three new clusters and `meta`, `roads`, `nodes`, `shapes` and `metaplay` all stayed
+green, and the home power budget did not move. The one thing that went red was the rule you set two
+passes ago — **no node prints a figure under 0.2** — which caught a 0.03 flat-regen minor on the
+Zealot's cluster. Nothing else in the tree uses flat regen; it is *increased* regeneration now, like
+the rest.
+
+10 new breaks, 60 tests green.
