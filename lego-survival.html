@@ -306,9 +306,7 @@
     padding:6px 11px;font-size:12px;font-weight:600;color:#e8ebe9;cursor:pointer}
   .cheatbtn:hover{background:rgba(255,185,0,.25);border-color:#ffb900;color:#fff}
   .cheatbtn.got{border-color:#4b9b41;color:#a5e06e}
-  /* seven a row: three more hands took the sword's list to thirteen, and at six
-     a row the last one sat alone on a third line */
-  #favRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:600px;margin:0 auto}
+  #favRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:540px;margin:0 auto}
   .fav{display:flex;flex-direction:column;align-items:center;gap:2px;width:74px;padding:6px 3px 5px;
     background:rgba(9,13,17,.34);border:2px solid rgba(255,255,255,.18);border-radius:13px;
     cursor:pointer;transition:transform .1s, background .1s, border-color .1s}
@@ -751,6 +749,43 @@ const rnd = (a=1,b)=> b===undefined ? Math.random()*a : a+Math.random()*(b-a);
 const irnd = (a,b)=> Math.floor(rnd(a,b+1));
 const clamp = (v,a,b)=> v<a?a:v>b?b:v;
 const lerp = (a,b,t)=> a+(b-a)*t;
+/* ===================== A NEGATIVE NUMBER TAKES ITS OWN WORD =====================
+   PoE never writes "-25% increased" or "-20% more". A negative increase is
+   REDUCED and a negative more is LESS, and the minus sign goes, because the word
+   is carrying it. The game printed the sign for years -- a keystone read
+   "-25% increased damage", a curse "-20% MORE damage" -- because every one of
+   eighty-odd texts builds "N% increased" from a number that is usually positive.
+   Auditing eighty sites by hand is eighty chances to miss one, so it is done
+   ONCE, where text leaves for the screen: esc(), sRow(), the tree's mod text and
+   the reward card. Two shapes:
+     - free text: "-25% increased X" -> "25% reduced X", "-20% MORE" -> "20% LESS"
+     - a LABEL beside its VALUE ("Increased melee | -25%"): the label flips and
+       the value loses its sign; a MORE multiplier under x1 flips to LESS.
+   The case of the word is kept: increased/Increased/INCREASED. A range like
+   "10-20% increased" is not a negative number, so a minus straight after a
+   digit is left alone. */
+function caseAs(w, to){
+  if(w === w.toUpperCase()) return to.toUpperCase();
+  if(w[0] === w[0].toUpperCase()) return to[0].toUpperCase() + to.slice(1);
+  return to;
+}
+const SIGN_WORD_INC  = /(?<![\d.])\+?[\u2212-]\s?(\d+(?:\.\d+)?)%(\s+)(increased|Increased|INCREASED)\b/g;
+const SIGN_WORD_MORE = /(?<![\d.])\+?[\u2212-]\s?(\d+(?:\.\d+)?)%(\s+)(more|More|MORE)\b/g;
+function signWords(t){
+  return String(t)
+    .replace(SIGN_WORD_INC,  (m, n, sp, w)=> n + '%' + sp + caseAs(w, 'reduced'))
+    .replace(SIGN_WORD_MORE, (m, n, sp, w)=> n + '%' + sp + caseAs(w, 'less'));
+}
+function signLabel(label, value){
+  const L = String(label), v = String(value);
+  if(/^\s*[\u2212-]\s?\d/.test(v) && /\b(increased|Increased|INCREASED)\b/.test(L))
+    return [L.replace(/\b(increased|Increased|INCREASED)\b/, w=>caseAs(w, 'reduced')),
+            v.replace(/^\s*[\u2212-]\s?/, '')];
+  const x = /^\s*\u00d7\s?(\d*\.?\d+)/.exec(v);
+  if(x && +x[1] < 1 && /\b(more|More|MORE)\b/.test(L))
+    return [L.replace(/\b(more|More|MORE)\b/, w=>caseAs(w, 'less')), v];
+  return [L, v];
+}
 const dist = (a,b)=> Math.hypot(a.x-b.x, a.y-b.y);
 const angTo = (a,b)=> Math.atan2(b.y-a.y, b.x-a.x);
 const angDiff = (a,b)=>{ let d=(a-b)%TAU; if(d>Math.PI)d-=TAU; if(d<-Math.PI)d+=TAU; return d; };
@@ -1139,7 +1174,11 @@ function dotRate(base, flat, chaos){
   /* a POISON reads increased chaos damage on top of increased damage over time,
      because it is both. Nothing else that lingers is chaos. */
   const inc = dotInc() + (chaos && player ? (player.inc.chaos || 0) : 0);
-  return pool(base, flat || 0, Math.min(INC_DMG_CAP, inc), 1);
+  /* ...and every LESS on damage over time multiplies after, outside the pool,
+     the way a PoE keystone's does. It had no such slot: nothing in the game
+     could ever make lingering damage smaller, which is why the one keystone
+     built on it could not be given a cost it would actually feel. */
+  return pool(base, flat || 0, Math.min(INC_DMG_CAP, inc), (player && player.dotMore) || 1);
 }
 /* whether an increased-damage-over-time brick is worth anything to this hero —
    the single place to extend when a second source of it arrives */
@@ -2494,7 +2533,10 @@ function applyAilments(e, d, source, mix, crit, opts){
       const n = Math.max((opts && opts.ailN) || 0, ailStacks(e, part, native));
       if(t === 'frost'){ if(n > 0) chillEnemy(e, n); }
       else if(t === 'shock'){ if(n > 0) shockEnemy(e, n); }
-      else if(t === 'chaos') poisonEnemy(e, part * CHAOS_POISON_S, CHAOS_POISON_T);
+      /* THROUGH dotRate, like the burn and the wound beside it. It was handed a
+         raw rate, so increased damage over time, increased chaos and any LESS on
+         lingering damage never touched a dose that a chaos hit left behind */
+      else if(t === 'chaos') poisonEnemy(e, dotRate(part * CHAOS_POISON_S, 0, true), CHAOS_POISON_T);
     }
   }
 }
@@ -3447,7 +3489,7 @@ function newPlayer(){
     chargeKill:0, chargeCrit:0, chargeHurt:0,
     /* EXPOSURE: the chance a hit strips the resistance of whatever it arrived
        as, and the radius a corpse spreads its ailments in. */
-    exposeChanceFlat:0, exposeChance:0, prolifR:0, ailMagInc:0,
+    exposeChanceFlat:0, exposeChance:0, prolifR:0, ailMagInc:0, dotMore:1,
     /* ACCURACY AND EVASION. Accuracy opens at ACC_BASE and is only ever added
        to; evasion opens at NOTHING, because it is the defence you choose. */
     accFlat:0, evaFlat:0,
@@ -7664,6 +7706,7 @@ const META_STATS = {
                 only:['sword','axe','mace'] },
   /* ailments and everything that lingers */
   incDot:     { n:'increased damage over time',   pct:1, w:(p,v)=>{ p.inc.dot += v; } },
+  lessDot:    { n:'LESS damage over time',        pct:1, w:(p,v)=>{ p.dotMore *= (1 - v); } },
   bleedChance:{ n:'chance to open a wound',       pct:1, w:(p,v)=>{ p.bleedChanceFlat += v; } },
   bleedShare: { n:'of the hit bleeds',            pct:1, w:(p,v)=>{ p.bleedShareFlat += v; } },
   poisonDot:  { n:'poison damage a second',              w:(p,v)=>{ p.baneDotFlat += v; } },
@@ -7793,7 +7836,7 @@ const META_STATS = {
      number, which is the only thing worth walking to the edge of the map for.
      They live in the tree and nowhere else: a reward screen is not the place to
      hand somebody a sentence they cannot give back. ---- */
-  prolif:     { n:'px — what dies spreads its BURN, POISON and WOUNDS', px:1,
+  prolif:     { n:'reach — what dies spreads its BURN, POISON and WOUNDS that far', px:1,
                 w:(p,v)=>{ p.prolifR = Math.max(p.prolifR||0, v); } },
   critAilAll: { n:'every CRITICAL leaves every ailment its damage can',
                 w:(p)=>{ p.critAilAll = true; } },
@@ -7808,6 +7851,12 @@ function metaModText(m){
   const v = m[1];
   if(m[0] === 'grant') return 'START THE RUN WITH '+(SPELL_NAME[v] || v).toUpperCase();
   if(v === undefined || v === null) return st.n;
+  /* A STAT NAMED FOR ITS COST ("LESS damage over time") prints the way PoE
+     prints one: "50% less", no plus -- and a negative one is simply MORE */
+  if(/\bLESS\b/.test(st.n)){
+    const n2 = st.pct ? Math.round(Math.abs(v)*1000)/10+'%' : Math.round(Math.abs(v)*100)/100;
+    return n2+' '+(v < 0 ? st.n.replace(/\bLESS\b/, 'MORE') : st.n);
+  }
   const sign = v < 0 ? '−' : '+';
   const a = Math.abs(v);
   const num = st.pct ? Math.round(a*1000)/10+'%'
@@ -7815,7 +7864,7 @@ function metaModText(m){
             : st.deg ? Math.round(a)+'°'
             : st.col ? Math.round(a)               /* an attribute is a whole number */
             : (Math.round(a*100)/100);
-  return sign+num+' '+st.n;
+  return signWords(sign+num+' '+st.n);
 }
 /* ---- EVERY CONVERSION THE PIPELINE ALLOWS, GENERATED --------------------
    Ten legal pairs and two forms of each is twenty writers, and writing twenty
@@ -7854,6 +7903,12 @@ function metaModGood(m){
   const v = m[1];
   if(m[0] === 'noRegen' || m[0] === 'noReroll' || m[0] === 'noArmour') return false;
   if(m[0] === 'grant') return true;
+  /* a stat whose NAME is a cost -- "LESS damage over time" -- is bad when it is
+     positive; reading the sign alone painted The Long Dying's price green. Less
+     damage TAKEN is the other way round, and stays a bonus. */
+  const st = META_STATS[m[0]];
+  if(st && /\bLESS\b/.test(st.n) && !/\btaken\b/.test(st.n))
+    return !(typeof v === 'number' && v > 0);
   return !(typeof v === 'number' && v < 0);
 }
 
@@ -7919,7 +7974,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  prolif:'bane', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
+  prolif:'bane', lessDot:'bane', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -8474,13 +8529,17 @@ const META_KEYSTONES = [
      a big minor node, and the tree already has plenty of those. */
 
   /* what dies keeps killing. The one the ailment builds have never had: three
-     single-target damage-over-time builds become wave clear in one sentence,
-     which is exactly why it costs a walk to the rim and a flat 25% off
-     everything you hit directly. */
+     single-target damage-over-time builds become wave clear in one sentence.
+     IT WAS PRICED IN THE WRONG CURRENCY. The cost was 25% off everything you HIT
+     -- and the build that walks here barely hits; its damage is the part that
+     lingers, which the cost never touched. With a 210px spread on top it was
+     the strongest node on the map. The spread is a room, not a screen, now, and
+     the cost is paid in the thing the build is made of: HALF of every burn,
+     wound and dose. Clear a pack, and a single boss takes twice as long. */
   { id:'k_prolif',name:'THE LONG DYING',sp:'aff', home:'dex', d:[4,4], shape:'arc',
     minors:[['Lingering','incDot',0.08],['Seeding','poisonDot',0.3],['Festering','bleedShare',0.04]],
-    keystone:{ name:'The Long Dying', note:'what you kill keeps killing; nothing you touch dies fast',
-               mods:[['prolif',210],['incAll',-0.25]] } },
+    keystone:{ name:'The Long Dying', note:'what you kill keeps killing, at half the rate',
+               mods:[['prolif',120],['lessDot',0.5]] } },
 
   /* the crit tree's other ending: stop hitting harder, start leaving
      everything. Pairs with the ailment table rather than fighting it. */
@@ -10275,71 +10334,83 @@ function grantsNewSpell(u){
    all of that for a little of everything.
    `lines` is what the hover panel shows; `apply` is what actually happens. */
 const FAV_PERKS = {
-  none: { lines:['+0.5 flat physical damage', '+1 max heart', '+10 armour',
+  none: { attr:{ str:4, dex:4, int:4 }, lines:['+0.5 flat physical damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
     apply(p){ p.flatPhys += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
       p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
-  sword: { lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
+  sword: { attr:{ str:8, dex:4, int:0 }, lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
     apply(p){ p.flatPhys += 1; p.inc.atk += 0.09;
       p.reachFlat += 8; } },
-  axe: { lines:['+40% increased critical chance', '+25% critical damage',
+  axe: { attr:{ str:4, dex:8, int:0 }, lines:['+40% increased critical chance', '+25% critical damage',
                 '+1 to the maximum stack of MOMENTUM'],
     apply(p){ p.incCrit += 0.40; p.critMultFlat += 25; p.stackMax.momentum += 1; } },
-  slam: { lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
+  slam: { attr:{ str:12, dex:0, int:0 }, lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
                  '+15% slam range'],
     apply(p){ p.slam.flat += 1; p.slam.arcFlat += 20*Math.PI/180; p.slam.rangeInc += 0.15; } },
-  orbit: { grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
+  orbit: { attr:{ str:6, dex:0, int:6 }, grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
-  blaster: { grants:'blaster', lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
+  blaster: { attr:{ str:0, dex:8, int:4 }, grants:'blaster', lines:['Start with 1 blaster brick', '+1 to the volley cap (41)',
                     '+1 pierce — bricks carry through one foe instead of shattering'],
     apply(p){ p.capUp.blaster += 1; p.blaster.n = 1; p.blaster.pierce += 1; } },
-  chain: { grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
+  chain: { attr:{ str:0, dex:4, int:8 }, grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
                   'Its bolt already leaps to a second foe'],
     apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
-  storm: { grants:'storm', lines:['Start with 1 bladestorm', '+2 blades per burst',
+  storm: { attr:{ str:4, dex:8, int:0 }, grants:'storm', lines:['Start with 1 bladestorm', '+2 blades per burst',
                   '-10% bladestorm cooldown'],
     apply(p){ p.storm.n = 1; p.storm.count += 2; p.inc.stormRate += 0.11; } },
-  vortex: { grants:'vortex', lines:['Start with 1 blade vortex', '+20% vortex radius',
+  vortex: { attr:{ str:6, dex:6, int:0 }, grants:'vortex', lines:['Start with 1 blade vortex', '+20% vortex radius',
                    '-10% vortex cooldown'],
     apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
       p.inc.vortexRate += 0.11; } },
-  freeze: { grants:'freeze', lines:['Start with Block Freeze', '+20% freeze radius',
+  freeze: { attr:{ str:0, dex:0, int:12 }, grants:'freeze', lines:['Start with Block Freeze', '+20% freeze radius',
                    '+0.5s freeze duration'],
     apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
-  bomb: { grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
+  bomb: { attr:{ str:0, dex:6, int:6 }, grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
     apply(p){ p.capUp.bomb += 1; p.bomb.n = 1; p.inc.bombR += 0.15; } },
-  bane: { grants:'bane', lines:['Start with Brickbane', 'The wedge opens to 90° already',
+  bane: { attr:{ str:0, dex:8, int:4 }, grants:'bane', lines:['Start with Brickbane', 'The wedge opens to 90° already',
                                 '+0.4 poison damage a second'],
     apply(p){ p.bane.n = 1; p.bane.arc = Math.max(p.bane.arc, 90*Math.PI/180);
       p.baneDotFlat += 0.4; } },
-  elem: { lines:['+1 flat elemental damage', '+12% increased elemental damage',
+  elem: { attr:{ str:0, dex:0, int:12 }, lines:['+1 flat elemental damage', '+12% increased elemental damage',
                  '+8% increased cast speed'],
     apply(p){ p.flatElem += 1; p.inc.elem += 0.12; p.inc.atk += 0.08; } },
-  tough: { lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
+  tough: { attr:{ str:12, dex:0, int:0 }, lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
     apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
       for(const el of ELEMENTS) p.resFlat[el] += 0.08;
-      p.regenFlat += 0.02; } },
-  /* ---- ONE HAND PER ATTRIBUTE. Everything the last three passes added --
-     accuracy, evasion, energy shield, the attributes that feed them -- was a
-     brick you could be offered and never a way to START. Each attribute already
-     owns a defence (strength the hearts, dexterity the dodge, intelligence the
-     shield), so each gets the opening hand that leans on it: some of the
-     attribute, the defence it pays for, and its bricks up more often. ---- */
-  might: { lines:['+16 STRENGTH (+8% physical damage, +8% max hearts)', '+1 max heart',
-                  '+20 armour'],
-    apply(p){ p.attr.str += 16; p.hpFlat += 1; p.hp += 1; p.armourFlat += 20; } },
-  finesse: { lines:['+16 DEXTERITY (+32 accuracy, +3% evasion, +5% crit and swing rate)',
-                    '+160 evasion — you begin hard to catch', '+60 accuracy'],
-    apply(p){ p.attr.dex += 16; p.evaFlat += 160; p.accFlat += 60; } },
-  ward: { lines:['+16 INTELLIGENCE (+8% spell damage, +3% energy shield)',
-                 'Start with a 3-point energy shield', '+20% increased energy shield'],
-    apply(p){ p.attr.int += 16; p.esFlat += 3; p.inc.es += 0.20; } }
+      p.regenFlat += 0.02; } }
 };
+/* EVERY HAND CARRIES SOME ATTRIBUTES, and every hand carries the SAME TWELVE,
+   split by what the hand is: a sword leans on strength, a poison on dexterity,
+   a frost caster on intelligence, and No Favourite takes four of each. Twelve
+   for all of them is the balance -- no hand is ahead on attributes alone; what
+   differs is which of the three defences and damage lines they feed. Written
+   as data and printed from the data, so the hover line cannot drift from what
+   is applied. */
+const FAV_ATTR_TOTAL = 12;
+function favAttrLine(f){
+  const a = f && f.attr;
+  if(!a) return '';
+  const parts = [];
+  if(a.str) parts.push('+'+a.str+' STR');
+  if(a.dex) parts.push('+'+a.dex+' DEX');
+  if(a.int) parts.push('+'+a.int+' INT');
+  return parts.join(' \u00b7 ');
+}
+function favLines(f){
+  if(!f) return [];
+  const a = favAttrLine(f);
+  return a ? f.lines.concat([a]) : f.lines.slice();
+}
 function applyFavPerks(){
   const f = FAV_PERKS[favourite.id];
   if(f) try { f.apply(player); } catch(e){}
+  if(f && f.attr){
+    player.attr.str += f.attr.str || 0;
+    player.attr.dex += f.attr.dex || 0;
+    player.attr.int += f.attr.int || 0;
+  }
   /* the spell the kit handed you counts as taken, so the reward screen offers
      it as the UPGRADE it would be and never again as a first pick */
   if(f && f.grants) taken[f.grants] = (taken[f.grants]||0) + 1;
@@ -10374,16 +10445,7 @@ const FAVOURITES = [
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
   { id:'bane',    name:'Brickbane',    icon:'bane',    ids:['bane','banearc','baner','banerate','banedot','banedotinc','orbm'] },
   { id:'tough',   name:'Tough Bricks', icon:'shield',
-    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] },
-  /* the three attribute hands. None is gated: every weapon has hearts, every
-     weapon can dodge, every weapon can carry a shield -- and a card a weapon
-     cannot use (accuracy on a staff) is already kept out by its own `req` */
-  { id:'might',   name:'Brute Strength', icon:'fist',
-    ids:['attstr','attall','hp','heart','armor','armorinc','dmg'] },
-  { id:'finesse', name:'Fleetfoot',      icon:'boot',
-    ids:['attdex','attall','eva','evainc','acc','accinc','crit','aspd'] },
-  { id:'ward',    name:'Arcane Ward',    icon:'ward',
-    ids:['attint','attall','es','esinc','chaosres','resall','suppress'] }
+    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
 ];
 let favourite = FAVOURITES[0];
 let godMode = false;
@@ -10828,11 +10890,12 @@ function comboStatRows(L, all){
     const dead = !v.bare && !v.weap && !v.fav && !v.tree;
     if(dead && !q.zero) continue;                 /* a probe that is off for everyone */
     const why = statWhy(q.g, q.k) || '';
+    const [lab, val] = signLabel(q.k, cpFmt(v.tree, q));
     const html = `<div class="cprow cpstat${dead?' cpdim':''}${why?' cptip':''}"`+
       `${why?` data-why="${esc(why)}"`:''}>`+
       /* the W/F/T chips need the legend the long list prints above them; the
          short list has no legend, so it has no chips -- a number, not a sum */
-      `<span>${esc(q.k)}</span><b>${cpFmt(v.tree, q)}${all ? chips.join('') : ''}</b></div>`;
+      `<span>${esc(lab)}</span><b>${esc(val)}${all ? chips.join('') : ''}</b></div>`;
     if(!all){ (short[q.basic] = short[q.basic] || []).push(html); continue; }
     if(q.g !== group){
       group = q.g;
@@ -10908,7 +10971,7 @@ function buildComboPanel(){
     `<h4>${weapon.name} \u00d7 ${esc(f.name).toUpperCase()}</h4>
      <div class="cpsub">${esc(weapon.blurb)}</div>` +
     (perk ? `<div class="cphead">YOU START WITH</div><ul>${
-        perk.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>` : '') +
+        favLines(perk).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>` : '') +
     `<div class="cphead">ABILITIES</div>
      <div class="cpvs">what you open with. Hover one for its damage</div>` +
     abil +
@@ -11267,7 +11330,7 @@ function buildFavRow(){
   if(!row) return;
   row.innerHTML = FAVOURITES.filter(favAllowed).map(f=>{
     const perk = FAV_PERKS[f.id];
-    const tip = perk ? 'YOU START WITH\n' + perk.lines.map(l=>'· '+l).join('\n') +
+    const tip = perk ? 'YOU START WITH\n' + favLines(perk).map(l=>'· '+l).join('\n') +
       (f.ids.length ? '\n\nand its bricks come up more often' : '') : '';
     return `<div class="fav" data-fav="${f.id}"${tip?` data-tip="${esc(tip)}"`:''}>
       <svg viewBox="0 0 24 24" fill="none" stroke="#ffd76e" stroke-width="2"
@@ -12270,7 +12333,7 @@ function renderCards(){
     el.innerHTML = `${stacks}${isNew}<div class="band" style="background:${R.col}"><i></i><i></i><i></i></div>
       <svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">${ICONS[card.t.icon]}</svg>
-      <h3>${card.t.name}</h3><p>${card.t.desc(card.c, owned)}</p>
+      <h3>${card.t.name}</h3><p>${signWords(card.t.desc(card.c, owned))}</p>
       <div class="rtag" style="background:${R.col}">${R.name}</div>
       ${weaponTagHtml(card.t)}
       <div class="ctag" style="background:${CLS_COL[card.t.cls]||'#555'}">${card.t.cls}</div>
@@ -12294,10 +12357,13 @@ function renderCards(){
       + (rerollsUsed>0 ? ` · ${rerollsUsed} bought so far` : '');
 }
 /* =============================== CHARACTER SHEET =============================== */
-const esc = t=> String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+/* every string headed for the page comes through here, which makes it the one
+   place a negative "increased" can be caught -- see signWords */
+const esc = t=> signWords(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 /* `tip` turns the row into a hover card: what the stat IS, and what it is doing
    for you right now. The cards themselves stay terse — the glossary lives here. */
 function sRow(label, value, sub, tip){
+  [label, value] = signLabel(label, value);
   const cls = tip ? ' class="srow tip" data-tip="'+esc(tip)+'"' : ' class="srow"';
   return `<div${cls}><span>${label}${sub?`<small>${esc(sub)}</small>`:''}</span><b>${esc(value)}</b></div>`;
 }

@@ -2185,13 +2185,22 @@ Every one of these is a **trade**, and both halves are real. That is the only th
 keystone worth the walk: a node that is simply good is a big minor node, and the tree already
 has plenty of those.
 
-> **The Long Dying** — *what you kill keeps killing; nothing you touch dies fast.*
-> Burns, poisons and wounds spread from a corpse to everything within 210px, at 60% strength.
-> **−25% increased damage.**
+> **The Long Dying** — *what you kill keeps killing, at half the rate.*
+> Burns, poisons and wounds spread from a corpse to everything within 120px, at 60% strength.
+> **50% LESS damage over time.**
 
 That one is the answer to *"ailment proliferation is too strong to just add"*: it turns three
-single-target damage-over-time builds into wave clear in one sentence, so it costs a walk to the
-edge of the map and a flat quarter off everything you hit directly.
+single-target damage-over-time builds into wave clear in one sentence. It used to cost a quarter
+off everything you **hit** — and the build that walks there barely hits, so the price was paid
+in a currency it did not spend, and with a 210px spread it was the strongest node on the map.
+The spread is a room now, not a screen, and the cost is paid in the thing the build is made of:
+half of every burn, wound and dose. A pack melts; a single boss takes twice as long.
+
+(Damage over time had no LESS slot at all before this — nothing in the game could make lingering
+damage smaller. `dotRate` multiplies one in now, after the increased pool, the way PoE's keystones
+do. And the poison a chaos-converted hit leaves behind goes through `dotRate` like the burn and the
+wound beside it: it used to be handed a raw rate, so increased damage over time and increased
+chaos never touched it.)
 
 > **Blood and Salt** — *your criticals stop hitting harder and start leaving everything.*
 > Every critical inflicts every ailment its damage can. **−55% critical multiplier.**
@@ -2439,21 +2448,38 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
-### Three more opening hands
+### Every hand carries attributes
 
-Accuracy, evasion, energy shield and the attributes that feed them were things you could be
-*offered* and never a way to *start*. Each attribute already owns a defence, so each gets the
-hand that leans on it:
+Every favourite hands over **twelve attribute points**, split by what the hand is — the same
+twelve for all of them, so no hand is ahead on attributes alone; what differs is which defence
+and which damage line they feed:
 
-| hand | you start with | bricks up more often |
-|---|---|---|
-| **Brute Strength** | +16 STR (+8% physical, +8% hearts) · +1 heart · +20 armour | strength, hearts, armour |
-| **Fleetfoot** | +16 DEX · +160 evasion · +60 accuracy | dexterity, evasion, accuracy, crit, speed |
-| **Arcane Ward** | +16 INT · a 3-point energy shield · +20% increased shield | intelligence, shield, chaos and elemental res |
+| hand | STR | DEX | INT |
+|---|--:|--:|--:|
+| No Favourite | 4 | 4 | 4 |
+| Sword & Steel | 8 | 4 | |
+| Reaver's Edge | 4 | 8 | |
+| Earthshaker · Tough Bricks | 12 | | |
+| Guardian Brick | 6 | | 6 |
+| Brick Blaster · Brickbane | | 8 | 4 |
+| Storm Brick | | 4 | 8 |
+| Bladestorm | 4 | 8 | |
+| Blade Vortex | 6 | 6 | |
+| Block Freeze · Elemental Arts | | | 12 |
+| Bomb Volley | | 6 | 6 |
 
-None is locked to a weapon: every weapon has hearts, can dodge and can carry a shield, and a
-brick a weapon cannot use (accuracy on a staff) is already kept out by its own gate. The row
-lays out seven a line now so the thirteenth hand is not left alone on a third.
+The split is data on the card and the hover line is printed from it, so the two cannot drift.
+
+### Reduced and less
+
+PoE never writes "−25% increased" or "−20% more". A negative increase is **reduced**, a negative
+more is **less**, and the minus sign goes because the word carries it. This game printed the
+sign — a keystone read "−25% increased damage" — because eighty-odd texts build "N% increased"
+from a number that is usually positive. Rather than audit eighty sites and miss one, the rule is
+applied once, where text leaves for the screen: the page's escaper, every character-sheet row,
+the tree's mod text and the reward card. A label beside its value flips too — *Reduced melee 25%*,
+*Less damage ×0.80* — and a stat named for its cost reads the PoE way: *50% LESS damage over
+time*, no plus. A range like "10–20% increased" is left alone.
 
 ### The weapon card stands beside its button
 

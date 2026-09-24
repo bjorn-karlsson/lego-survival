@@ -2462,3 +2462,62 @@ pass that listed it. Two thousand samples puts the window at five sigma; four ru
 0.243–0.258, and both fireball breaks still fail by a mile.
 
 33 new breaks, 57 tests green, wave-50 soak clean.
+
+## Twenty-sixth pass — attributes on every hand, reduced and less, and The Long Dying repriced
+
+> *"I don't like that you added three separate favourite cards for STR/DEX/INT. I meant include
+> some of those attributes into all the cards, for balance. The Long Dying is extremely
+> overpowered — the spread is too wide, and there should be a 50% reduction for damage over time.
+> And we never say 'reduced' or 'less' — we say −50% increased or −50% more, which makes no
+> sense. Change the keyword when it goes negative, in all cases."*
+
+### I misread the favourites
+
+Three new hands was not what was asked. They are gone, and every existing hand carries **twelve**
+attribute points, split by what it is — Sword & Steel 8/4/0, Brickbane 0/8/4, Block Freeze
+0/0/12, No Favourite 4/4/4. Twelve for all of them is the balance. The split is a field on the card
+and the hover line is printed from it.
+
+**It moved the power budget, and the reason is worth knowing.** A red build that stays home went
+from ×3.47 to ×3.81 against a declared ×3.60 — while its damage ratio *fell*. It buys "+1 heart
+for every 5 INTELLIGENCE", and No Favourite's four INT took it from 6 to 10: over the threshold,
+nine hearts became ten. Bisected, not guessed: the same test on a build with the attributes switched
+off reads ×3.472. The ceiling is restated to ×3.95 with that written beside it — trimming the
+attributes to fit an old number would have been the test deciding the design.
+
+### Reduced and less, once
+
+Eighty-seven texts build "N% increased" or "N% more" from a number that is usually positive. The
+rule is applied where text leaves for the screen instead: `esc()`, `sRow()`, the tree's mod text
+and the reward card. Two shapes — free text ("−25% increased" → "25% reduced") and a label beside
+its value ("Increased melee | −25%" → "Reduced melee | 25%"; "More damage ×0.80" → "Less damage").
+Case is kept, and a range ("10-20% increased") is not a negative number.
+
+A stat named for its cost printed "+50% LESS damage over time", and `metaModGood` read the sign
+alone and painted that cost green. Both fixed, with the obvious trap avoided: **LESS damage
+*taken*** is a bonus and stays one.
+
+**Two breaks survived, and both were holes in the test.** Removing the rewrite from `esc()` passed,
+because nothing on the fixture hero printed a negative increase inside a tooltip; removing it from
+the reward card passed, because no real card can print a negative at all — every card prints its
+own value. The fixture now carries a negative armour increase (its formula tooltip reads
+"(1 + N% increased)"), and the reward check renders a card that says a negative through the reward
+screen's own renderer. Both now fail on their breaks.
+
+### The Long Dying, priced in its own currency
+
+It cost 25% off everything you **hit**, and the build that walks there barely hits — its damage is
+what lingers. With a 210px spread it was the strongest node on the map. Now: 120px, and **50% LESS
+damage over time**.
+
+That needed a slot that did not exist: `dotRate` had an increased pool and no MORE/LESS at all, so
+nothing in the game could make lingering damage smaller. It multiplies `dotMore` after the pool now.
+And checking that every lingering damage goes through `dotRate` found one that did not: the dose a
+chaos-converted hit leaves was handed a raw rate, so increased damage over time and increased chaos
+never touched it. It goes through `dotRate` like the burn and the wound beside it. That is a buff
+to chaos-conversion poison builds, and it is the reason the keystone's cost reaches them at all.
+
+Also fixed while there: the spread read **"+120 px px"** — the stat's name began with "px" and the
+formatter added another.
+
+20 new breaks, 58 tests green, wave-50 soak clean.
