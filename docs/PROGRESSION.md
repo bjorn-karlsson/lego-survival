@@ -2635,3 +2635,18 @@ It asks now what a block is *worth*: every arrow the wall reports stopping must 
 not lost, at least 30% of an average arrow each. All ten Aegis breaks are still caught by it.
 
 38 new breaks, 62 tests green.
+
+## Thirty-first pass — excess is time
+
+> *"Sometimes I get like 3 magnets in a row but I can only have one active at once ... I want the
+> excess to basically increase the time. Instead of taking two magnets in a row making it only
+> reset the timer to 30s, it now instantly adds another +30 seconds."*
+
+One helper, `buffExtend(p, key, full)`, owned by all four ground buffs. `full` is decided *before*
+the pickup levels anything: a magnet has no levels so it is always full; rage and fortune are full
+once they are at ×2 (which the first pickup already reaches); the ward is full at its second stack.
+Full and running → `+BUFF_T`, held at `BUFF_T_MAX = 150`. Anything else starts or restarts the
+clock at thirty, as before. Each buff remembers its clock's full length (`magnetMax`, …) so the HUD
+ring drains against 90s when there are 90s on it, instead of reading "already over" past thirty.
+
+The test drops real pickups on the hero and lets the game collect them. 9 breaks, 63 tests green.

@@ -794,6 +794,13 @@ An **elite rolls every line eight times over**.
 fortune and for a golden heart (at 0.6× that), and 12% each for rage and ward — the two
 that take you straight to a cap stay scarce even here.
 
+**A second one is never wasted.** Pick up a magnet, fortune, rage or ward while that buff is
+already running at its ceiling and it **adds 30s to the clock** instead of putting it back to
+30: three magnets in a row is 90 seconds of magnet. The ward's second pickup is still its second
+stack (×1 → ×2, clock back to 30); from the third on, every ward is time. The clock holds at most
+**150s** — five pickups' worth — and the ring round the buff's icon drains against however long
+that clock actually is. Hearts are unchanged: they already stack five deep.
+
 **Generous Smith** *increases* the heart chance rather than adding to it — it caps at
 **+200% increased**, which is ×3 the base, or 3.00% a monster.
 

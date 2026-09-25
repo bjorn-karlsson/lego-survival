@@ -1353,6 +1353,25 @@ const CLUSTER_FALLOFF = 0.45;             /* each split generation hits for this
 const FORTUNE_CAP = 2;
 const RAGE_CAP = 2;
 const BUFF_T = 30;             /* every ground buff runs the same thirty seconds */
+/* EXCESS IS TIME. A buff you pick up while that buff is already running at its
+   ceiling -- a second magnet, a third ward, a rage on a hero already at x2 --
+   used to do nothing but put the clock back to thirty. It adds thirty to what
+   is left instead, up to five pickups' worth on the clock at once. */
+const BUFF_T_MAX = 150;
+/* `full`: the buff is already as strong as it gets, so this pickup can only be
+   time. Returns the seconds it added (0 when it only started or levelled up). */
+function buffExtend(p, key, full){
+  const tk = key + 'T', mk = key + 'Max';
+  const had = Math.max(0, p[tk] || 0);
+  if(full && had > 0){
+    p[tk] = Math.min(BUFF_T_MAX, had + BUFF_T);
+    p[mk] = Math.max(BUFF_T, p[tk]);
+    return p[tk] - had;
+  }
+  p[tk] = Math.max(had, BUFF_T);
+  p[mk] = Math.max(BUFF_T, p[tk]);
+  return 0;
+}
 const HEART_REGEN_T = 30;      /* how long a heart lifts your regeneration for */
 const HEART_REGEN_MUL = 1.5;   /* what the first one is worth */
 const HEART_STACK_MAX = 5;     /* and how many can be live at once */
@@ -14311,31 +14330,37 @@ function updatePlayer(dt){
         addRing(pk.x, pk.y, 8, 300, 90, '#ffd166', 6, 0.5);
         SFX.heart(); SFX.levelup();
       } else if(pk.kind==='magnet'){
-        p.magnetT = BUFF_T;
-        addDmg(p.x, p.y-52, 'MAGNET!', '#9b45d6', 20);
-        logEvent('magnet for 30s', '#9b45d6');
+        const addM = buffExtend(p, 'magnet', true);
+        addDmg(p.x, p.y-52, addM ? '+'+Math.round(addM)+'s MAGNET!' : 'MAGNET!', '#9b45d6', 20);
+        logEvent(addM ? 'magnet +'+Math.round(addM)+'s — '+Math.ceil(p.magnetT)+'s left' : 'magnet for 30s', '#9b45d6');
         addRing(pk.x, pk.y, 8, 300, 90, '#9b45d6', 6, 0.5);
         SFX.magnet();
       } else if(pk.kind==='rage'){
-        p.rageMul = Math.min(RAGE_CAP, p.rageMul*2);
-        p.rageT = BUFF_T;
-        addDmg(p.x, p.y-52, 'RAGE ×'+p.rageMul+'!', '#ff5a4a', 21);
+        const fullR = p.rageT > 0 && p.rageMul >= RAGE_CAP;
+        if(!fullR) p.rageMul = Math.min(RAGE_CAP, p.rageMul*2);
+        const addR = buffExtend(p, 'rage', fullR);
+        addDmg(p.x, p.y-52, addR ? '+'+Math.round(addR)+'s RAGE ×'+p.rageMul+'!' : 'RAGE ×'+p.rageMul+'!', '#ff5a4a', 21);
         addRing(pk.x, pk.y, 8, 320, 100, '#ff5a4a', 7, 0.5);
-        logEvent('rage ×'+p.rageMul+' for '+BUFF_T+'s', '#ff5a4a');
+        logEvent(addR ? 'rage ×'+p.rageMul+' +'+Math.round(addR)+'s — '+Math.ceil(p.rageT)+'s left'
+                      : 'rage ×'+p.rageMul+' for '+Math.ceil(p.rageT)+'s', '#ff5a4a');
         SFX.levelup();
       } else if(pk.kind==='ward'){
-        p.wardN = Math.min(WARD_MAX, p.wardN+1);
-        p.wardT = BUFF_T;
-        addDmg(p.x, p.y-52, 'WARD ×'+p.wardN+'!', '#8fd4ff', 21);
+        const fullW = p.wardT > 0 && p.wardN >= WARD_MAX;
+        if(!fullW) p.wardN = Math.min(WARD_MAX, p.wardN+1);
+        const addW = buffExtend(p, 'ward', fullW);
+        addDmg(p.x, p.y-52, addW ? '+'+Math.round(addW)+'s WARD ×'+p.wardN+'!' : 'WARD ×'+p.wardN+'!', '#8fd4ff', 21);
         addRing(pk.x, pk.y, 8, 320, 100, '#8fd4ff', 7, 0.5);
         logEvent('ward ×'+p.wardN+' — +'+wardArmour()+' armour, +'+
-          Math.round(wardRes()*100)+'% all resistances', '#8fd4ff');
+          Math.round(wardRes()*100)+'% all resistances'+
+          (addW ? ' · +'+Math.round(addW)+'s, '+Math.ceil(p.wardT)+'s left' : ''), '#8fd4ff');
         SFX.freeze();
       } else if(pk.kind==='fortune'){
-        p.fortuneMul = Math.min(FORTUNE_CAP, p.fortuneMul*2);
-        p.fortuneT = BUFF_T;
-        addDmg(p.x, p.y-52, 'FORTUNE ×'+p.fortuneMul+'!', '#fe8a18', 20);
-        logEvent('fortune ×'+p.fortuneMul+' for 30s', '#fe8a18');
+        const fullF = p.fortuneT > 0 && p.fortuneMul >= FORTUNE_CAP;
+        if(!fullF) p.fortuneMul = Math.min(FORTUNE_CAP, p.fortuneMul*2);
+        const addF = buffExtend(p, 'fortune', fullF);
+        addDmg(p.x, p.y-52, addF ? '+'+Math.round(addF)+'s FORTUNE ×'+p.fortuneMul+'!' : 'FORTUNE ×'+p.fortuneMul+'!', '#fe8a18', 20);
+        logEvent(addF ? 'fortune ×'+p.fortuneMul+' +'+Math.round(addF)+'s — '+Math.ceil(p.fortuneT)+'s left'
+                      : 'fortune ×'+p.fortuneMul+' for '+Math.ceil(p.fortuneT)+'s', '#fe8a18');
         addRing(pk.x, pk.y, 8, 300, 90, '#fe8a18', 6, 0.5);
         SFX.fortune();
       } else {
@@ -22244,15 +22269,15 @@ function renderHUD(){
     ctx.moveTo(x+2,y-9); ctx.lineTo(x+11,y); ctx.lineTo(x+2,y+9); ctx.stroke();
   }, 'SPACE');
   if(p.magnetT>0)
-    ab(cw-214, BUFF_T-p.magnetT, BUFF_T, (x,y)=> drawMagnetIcon(x,y), Math.ceil(p.magnetT)+'s');
+    ab(cw-214, (p.magnetMax||BUFF_T)-p.magnetT, (p.magnetMax||BUFF_T), (x,y)=> drawMagnetIcon(x,y), Math.ceil(p.magnetT)+'s');
   if(p.fortuneT>0)
-    ab(cw-288, BUFF_T-p.fortuneT, BUFF_T, (x,y)=> drawFortuneIcon(x,y,p.fortuneMul),
+    ab(cw-288, (p.fortuneMax||BUFF_T)-p.fortuneT, (p.fortuneMax||BUFF_T), (x,y)=> drawFortuneIcon(x,y,p.fortuneMul),
        '×'+p.fortuneMul+' · '+Math.ceil(p.fortuneT)+'s');
   if(p.rageT>0)
-    ab(cw-362, BUFF_T-p.rageT, BUFF_T, (x,y)=> drawRageIcon(x,y,p.rageMul),
+    ab(cw-362, (p.rageMax||BUFF_T)-p.rageT, (p.rageMax||BUFF_T), (x,y)=> drawRageIcon(x,y,p.rageMul),
        '×'+p.rageMul+' dmg · '+Math.ceil(p.rageT)+'s');
   if(p.wardT>0)
-    ab(cw-436, BUFF_T-p.wardT, BUFF_T, (x,y)=> drawWardIcon(x,y,p.wardN),
+    ab(cw-436, (p.wardMax||BUFF_T)-p.wardT, (p.wardMax||BUFF_T), (x,y)=> drawWardIcon(x,y,p.wardN),
        '+'+wardArmour()+' arm · '+Math.ceil(p.wardT)+'s');
   if(p.regenBoostT>0)
     ab(cw-510, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
