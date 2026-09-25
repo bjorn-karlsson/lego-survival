@@ -2462,9 +2462,13 @@ with a marker on the screen's edge while it is out of sight.
 
 ![A breach hand surfacing](docs/breach-hand.png)
 
-**Walk into it and it opens.** A circle of somewhere else grows out of the spot to 540px across
-five seconds, and one of the five **Breach Lords** pours its swarm in through the rim: bodies
-you already know, re-cast in the lord's colours, 30% softer, hitting with the lord's element.
+**Walk into it and it opens** — and a breach is not a spawner, it is **another layer of the same
+ground**. The moment it opens, the whole map is filled with one **Breach Lord**'s monsters,
+standing in packs of three to six where they stand, and none of them exists for you until the
+circle reaches them. The circle grows at 110px a second and keeps growing, **all the way to the
+far corners of the map** if you can keep it open. Inside it they are there; outside it they are
+not — not drawn, not hittable — and a breach body cannot walk out of its own circle. They are
+bodies you already know, re-cast in the lord's colours, 30% softer, hitting with its element.
 
 | lord | | swarm hits with | the ring (per rank, up to III) |
 |---|---|---|---|
@@ -2474,18 +2478,25 @@ you already know, re-cast in the lord's colours, 30% softer, hitting with the lo
 | **Uul-Netol**, Unburdened Flesh | 🟫 | harder physical | 15% increased physical · +40 armour |
 | **Chayula**, Who Dreamt | 🟪 | chaos | gain 5% as extra chaos · 12% increased chaos · +8% chaos res · +3 energy shield |
 
-**It is on a clock, and killing inside it buys the clock back.** Eight seconds with nothing
-killed; every death inside the circle — anybody's, the wave's too — adds **0.28s**, up to twelve
-on the clock. A build that clears fast keeps it open and walks out rich; one that stalls
-watches it snap shut, and whatever of the swarm is still standing is pulled back through and
-pays nothing. The wave cannot end while a breach is open.
+**It is on a clock, and every breach monster you kill buys some of it back — by less the wider
+the circle is.** Eight seconds with nothing killed, never more than twelve on the clock. A kill
+is worth **0.7s** while the circle is small, then shrinks as it grows: 0.29s at 500px, 0.12s at
+1000, 0.05s at 2000. The same kills that held a small breach open barely hold a big one, so
+keeping a wide breach open means killing a great many more. When the clock runs out, the circle
+collapses and whatever of the breach is still standing is pulled back through and pays nothing.
+The wave cannot end while a breach is open.
 
-![An open breach](docs/breach-open.png)
+Measured with a hero killing breach monsters at a steady rate: **2 a second** holds one for about
+15s, **4 a second** about 23s, **8 a second** about 28s, and a hero who kills everything the
+moment it appears opens it across almost the whole map and runs the layer dry in about 34s. The
+layer is finite (roughly 300 bodies), so there is no build that holds a breach open forever.
+
+![A breach opened wide](docs/breach-open.png)
 
 **What it pays is splinters.** One a body, three from a magic one. **Sixty of a lord's
 splinters fuse into a breachstone**, and a breachstone is that lord's ring — or one rank deeper
-into the ring you already wear. Kill **34** inside one breach and **the Hand of the Lord** steps
-through: an elite at about a quarter of a boss's health, which holds the breach open while it
+into the ring you already wear. Kill **34** in one breach and **the Hand of the Lord** steps
+through beside you: an elite at about a quarter of a boss's health, which holds the breach open while it
 stands (up to 20s) and drops the ring outright, plus fifteen splinters. A ring already at rank
 III pays studs instead.
 

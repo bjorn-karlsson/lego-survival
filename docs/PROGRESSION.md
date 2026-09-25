@@ -2669,3 +2669,38 @@ boulder prop stops it unharmed; torches and crystals are air.
 
 The bow test's firing range now clears props as well as solids — they stop arrows now, and a crate
 in the line would be the same one-run-in-five flake the solids were. 11 breaks, 63 tests green.
+
+## Thirty-third pass — the breach is another layer
+
+> *"The breach is bugged, it never finishes: it spawns mobs and when I kill them it refills the
+> timer, so it's an infinite loop. Breach monsters only visible/hit/rendered inside the ring, and
+> the ring should expand to the whole map ... Breach is like another dimension, another layer of
+> hidden monsters that the circle reveals. The bigger the circle gets the harder it will be to keep
+> it open."*
+
+**The loop was arithmetic.** The swarm refilled at up to three bodies every 0.38s to a standing cap
+of 34, and every death bought back a flat 0.28s: a build killing five a second earned 1.4 seconds of
+breach for every second it spent, forever. Nothing in the test measured a breach's *length* — it
+only checked that a kill bought time and that the clock had a cap — so an infinite breach passed.
+
+**The layer.** Opening a breach lays its lord's monsters across the whole floor as plain records —
+packs of 3–6, ~20 bodies per million px² (about 300 on this map), one kind per pack — sorted by
+distance from the hand. The circle grows at `BREACH_SPD` = 110px/s to the farthest corner, and
+revealing is a walk down that sorted list: a record the edge has passed becomes a monster where it
+stood, up to 60 standing at once. `breachSees(e)` is the one rule for "is it here": the draw list,
+`hitEnemy` and the death-time clock all ask it, and `breachHold` keeps every breach body on the
+inside of the edge.
+
+**The clock.** Only a breach kill buys time, and `breachKillT(r) = 0.7 · (250 / max(250, r))^1.25`.
+The rim — where the monsters are met — grows only as fast as r, so time bought per second of perfect
+killing falls as r^-0.25: a wide breach is a race that gets harder. And because the layer is
+finite, even perfect killing ends it.
+
+**The test asks the question that was missing:** how long does a breach last? A hero killing every
+breach body the instant it appears must see it end (34s, circle at 98% of the map, layer empty); four
+kills a second must get a real breach (about 15–23s) that is smaller than the perfect one. "Not drawn
+outside the circle" is read off the screen — a bright yellow Esh body is 0 yellow pixels outside the
+edge and ~20 inside it. 18 new breaks plus the 32 old ones that still apply; all 50 caught.
+
+The ember test's loopback check waited a fixed 1.4s of wall clock and failed once under load; it
+waits for the embers to land now. 63 tests green.

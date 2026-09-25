@@ -4737,6 +4737,7 @@ const KB_SCALE = 0.45;
 function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
+  if(e.breach && !breachSees(e)) return;          /* outside its circle it is not there to hit */
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
      a swing has to catch a body that is moving, a fireball arrives where it was
      aimed. A tick or a drain is not a fresh swing and never re-rolls -- the
@@ -6651,12 +6652,17 @@ function updateWave(dt){
    THE LEAGUE. From wave BREACH_FROM, an ordinary wave may carry a HAND: a
    clawed fist of void bricks pushed up through the floor somewhere off to one
    side. Walk into it and it OPENS -- a circle of somewhere else grows out of
-   the spot, and while it is open its monsters pour in from the rim: bodies
-   you already know, re-cast in the colours of one of the five Breach Lords
-   and hitting with that lord's element.
-   IT IS ON A CLOCK, and killing inside it buys the clock back. Every death in
-   the circle -- anybody's -- adds a little time, so a build that clears fast
-   keeps it open and walks out rich, and one that stalls watches it snap shut.
+   the spot and keeps growing, all the way to the edges of the map if you let
+   it. The breach is ANOTHER LAYER OF THE SAME GROUND: the moment it opens, the
+   whole map is filled with its lord's monsters, standing in packs where they
+   stand, and none of them exists for you until the circle reaches them. Inside
+   the circle they are there; outside it they are not -- not drawn, not
+   hittable, and a breach body cannot walk out of its own circle.
+   IT IS ON A CLOCK, and killing breach monsters buys the clock back -- by less
+   the wider the circle has grown, so the same kills that held a small breach
+   open for a while barely hold a big one: to keep a wide breach open you have
+   to kill a great many more of them. The layer is FINITE, so even a build
+   that kills everything it sees runs out of breach in the end.
    When it closes, whatever of the breach is still standing is pulled back.
    WHAT IT PAYS is SPLINTERS of its lord, one a body. Enough of them fuse into
    a BREACHSTONE, and a breachstone is that lord's RING -- or one rank deeper
@@ -6668,13 +6674,19 @@ const BREACH_PITY = 3;               /* the third ordinary wave in a row without
 const BREACH_HAND_DELAY = [3, 8];    /* seconds into the fight before the hand shows */
 const BREACH_HAND_DIST = [380, 760]; /* ...and how far from the hero it surfaces */
 const BREACH_TOUCH_R = 44;
-const BREACH_R0 = 60, BREACH_R_MAX = 540, BREACH_GROW = 5;
+const BREACH_R0 = 60;                /* how wide it opens */
+const BREACH_SPD = 110;              /* px a second it grows, until it covers the map */
 const BREACH_TIME = 8;               /* seconds open, with nothing killed inside */
-const BREACH_KILL_T = 0.28;          /* ...bought back by every death inside the circle */
+/* WHAT A KILL BUYS, and how that shrinks: 0.7s while the circle's radius is
+   under 250px, then (250 / r)^1.25 of that -- 0.35s at 440px, 0.22s at 630,
+   0.12s at 1000, 0.05s at 2000. The rim, where the monsters are met, only grows
+   as fast as r does, so a wide breach is a race that gets harder to win. */
+const BREACH_KILL_T0 = 0.7, BREACH_KILL_REF = 250, BREACH_KILL_EXP = 1.25;
 const BREACH_T_MAX = 12;             /* and never more than this on the clock */
-const BREACH_SPAWN_T = 0.38;
-const BREACH_BATCH = [1, 3];
-const BREACH_ALIVE_MAX = 34;
+/* THE OTHER LAYER: packs of three to six, this many bodies to a million
+   square px of floor (the map is ~21 of those), each pack of one kind */
+const BREACH_DENSITY = 20, BREACH_PACK = [3, 6];
+const BREACH_ALIVE_MAX = 60;         /* revealed and standing at once; the rest wait their turn */
 const BREACH_HP = 0.7, BREACH_XP = 0.6;  /* a swarm: softer, and paid in splinters, not studs */
 const BREACH_MAGIC = 0.08;
 const BREACH_LORD_AT = 34;           /* deaths inside before a Hand of the Lord comes through */
@@ -6748,7 +6760,8 @@ function breachSpot(){
 }
 function breachOpen(){
   const B = breach, L = BREACH_LORDS[B.lord];
-  B.state = 'open'; B.age = 0; B.t = BREACH_TIME; B.r = BREACH_R0; B.spawnT = 0.35; B.kills = 0;
+  B.state = 'open'; B.age = 0; B.t = BREACH_TIME; B.r = BREACH_R0; B.kills = 0;
+  breachLayer(B);
   showBanner('BREACH', L.name+' — '+L.title.toUpperCase(), L.col, 1.8, 50);
   logEvent('   THE BREACH OPENS — '+L.name+', '+L.title, L.col);
   addRing(B.x, B.y, 16, 520, 220, L.col, 8, 0.6);
@@ -6763,14 +6776,14 @@ function breachTypes(n){
   if(n >= 24) t.push('superimp');
   return t;
 }
-function breachRim(B){
-  const lo = W.wall+50, hiX = W.w-W.wall-50, hiY = W.h-W.wall-50;
-  for(let i=0;i<12;i++){
-    const a = rnd(TAU), rr = B.r * rnd(0.82, 0.98);
-    const x = clamp(B.x + Math.cos(a)*rr, lo, hiX), y = clamp(B.y + Math.sin(a)*rr, lo, hiY);
-    let bad = false;
-    for(const so of solids) if(dist({x,y}, so) < so.r + 16){ bad = true; break; }
-    if(!bad) return { x, y };
+function breachNear(B){
+  for(let i=0;i<20;i++){
+    const a = rnd(TAU), rr = rnd(200, 320);
+    let x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    const dx = x - B.x, dy = y - B.y, d = Math.hypot(dx, dy), lim = Math.max(0, B.r - 40);
+    if(d > lim && d > 0){ x = B.x + dx/d*lim; y = B.y + dy/d*lim; }
+    x = clamp(x, W.wall+50, W.w-W.wall-50); y = clamp(y, W.wall+50, W.h-W.wall-50);
+    if(breachFloorOk(x, y)) return { x, y };
   }
   return { x:B.x, y:B.y };
 }
@@ -6785,16 +6798,58 @@ function breachify(e, lord){
   /* it STEPS THROUGH, half made already -- it is not assembled brick by brick */
   e.buildT = Math.max(e.buildT || 0, 0.5);
 }
-function breachSpawn(B){
-  const at = breachRim(B), types = breachTypes(wave.n);
+/* THE LAYER. Laid across the whole floor the moment the breach opens, sorted by
+   distance from the hand, so revealing is a walk down one list as the circle
+   grows. Nothing in it is a monster yet -- a record of where one is standing. */
+function breachFloorOk(x, y){
+  for(const so of solids) if(Math.hypot(x - so.x, y - so.y) < so.r + 16) return false;
+  for(const w of waters) if(x>w.x-24 && x<w.x+w.w+24 && y>w.y-24 && y<w.y+w.h+24) return false;
+  return true;
+}
+function breachLayer(B){
+  const lo = W.wall+60, hiX = W.w-W.wall-60, hiY = W.h-W.wall-60;
+  const types = breachTypes(wave.n), avg = (BREACH_PACK[0] + BREACH_PACK[1]) / 2;
+  const packs = Math.round((hiX-lo) * (hiY-lo) / 1e6 * BREACH_DENSITY / avg);
+  const L = [];
+  for(let i=0;i<packs;i++){
+    const cx = rnd(lo, hiX), cy = rnd(lo, hiY);
+    if(Math.hypot(cx - B.x, cy - B.y) < 150) continue;      /* not on top of the hand */
+    const n = irnd(BREACH_PACK[0], BREACH_PACK[1]);
+    const type = types[(Math.random()*types.length)|0], magic = Math.random() < BREACH_MAGIC;
+    for(let k=0;k<n;k++){
+      const a = rnd(TAU), rr = rnd(0, 26 + n*9);
+      const x = clamp(cx + Math.cos(a)*rr, lo, hiX), y = clamp(cy + Math.sin(a)*rr, lo, hiY);
+      if(!breachFloorOk(x, y)) continue;
+      L.push({ x, y, type, magic, d:Math.hypot(x - B.x, y - B.y) });
+    }
+  }
+  L.sort((a, z)=>a.d - z.d);
+  B.layer = L; B.li = 0;
+  /* the circle's last size: the farthest corner of the floor from the hand */
+  B.rEnd = Math.max(Math.hypot(W.wall - B.x, W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.wall - B.y),
+                    Math.hypot(W.wall - B.x, W.h-W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.h-W.wall - B.y));
+}
+function breachReveal(B, rec){
   const n0 = enemies.length;
-  spawnEnemy(types[(Math.random()*types.length)|0], at.x, at.y, false, Math.random() < BREACH_MAGIC);
+  spawnEnemy(rec.type, rec.x, rec.y, false, rec.magic);
   if(enemies.length > n0) breachify(enemies[enemies.length-1], B.lord);
+}
+function breachKillT(r){
+  return BREACH_KILL_T0 * Math.pow(BREACH_KILL_REF / Math.max(BREACH_KILL_REF, r), BREACH_KILL_EXP);
+}
+/* IS IT HERE? A breach body exists only inside its own circle. */
+function breachSees(e){
+  const B = breach;
+  if(!e.breach) return true;
+  if(!B || !(B.state === 'open' || B.state === 'closing')) return false;
+  return Math.hypot(e.x - B.x, e.y - B.y) <= B.r + (e.r || 12);
 }
 function breachLord(B){
   const L = BREACH_LORDS[B.lord];
   B.lordOut = true;
-  const at = breachRim(B), n0 = enemies.length;
+  /* it steps through NEAR YOU: once the circle is the width of the map, its rim
+     is somewhere you will never walk to */
+  const at = breachNear(B), n0 = enemies.length;
   spawnEnemy(wave.n >= 14 ? 'jugg' : 'brute', at.x, at.y, true, false);
   if(enemies.length === n0) return;
   const e = enemies[enemies.length-1];
@@ -6845,16 +6900,14 @@ function updateBreach(dt){
     return;
   }
   if(B.state === 'open'){
-    const g = clamp(B.age / BREACH_GROW, 0, 1);
-    B.r = BREACH_R0 + (BREACH_R_MAX - BREACH_R0) * (1 - (1-g)*(1-g));
+    B.r = Math.min(B.rEnd || BREACH_R0, B.r + BREACH_SPD*dt);
     B.t -= dt;
-    B.spawnT -= dt;
-    if(B.spawnT <= 0){
-      B.spawnT = BREACH_SPAWN_T;
-      let alive = 0; for(const e of enemies) if(e.breach && !e.dead) alive++;
-      const k = Math.min(irnd(BREACH_BATCH[0], BREACH_BATCH[1]), BREACH_ALIVE_MAX - alive);
-      for(let i=0;i<k;i++) breachSpawn(B);
+    /* the circle reaches them, and they are there */
+    let alive = 0; for(const e of enemies) if(e.breach && !e.dead) alive++;
+    while(B.layer && B.li < B.layer.length && B.layer[B.li].d <= B.r && alive < BREACH_ALIVE_MAX){
+      breachReveal(B, B.layer[B.li++]); alive++;
     }
+    breachHold(B);
     if(!B.lordOut && B.kills >= BREACH_LORD_AT) breachLord(B);
     /* THE HAND HOLDS IT OPEN. Pulling it back through halfway down its health
        bar would take the ring out of your hands for fighting it too slowly */
@@ -6868,12 +6921,21 @@ function updateBreach(dt){
     if(B.closeT <= 0) breach = null;
   }
 }
+/* A BREACH BODY CANNOT LEAVE ITS CIRCLE: one that walks to the edge is held on
+   the inside of it, like a wall only it can feel */
+function breachHold(B){
+  for(const e of enemies){
+    if(!e.breach || e.dead) continue;
+    const dx = e.x - B.x, dy = e.y - B.y, d = Math.hypot(dx, dy), lim = Math.max(0, B.r - (e.r || 12));
+    if(d > lim && d > 0){ e.x = B.x + dx/d*lim; e.y = B.y + dy/d*lim; }
+  }
+}
 function breachOnKill(e){
   const B = breach;
-  if(B.state !== 'open') return;
-  if(Math.hypot(e.x - B.x, e.y - B.y) > B.r) return;
+  if(B.state !== 'open' || !e.breach) return;
+  if(Math.hypot(e.x - B.x, e.y - B.y) > B.r + (e.r || 12)) return;
   B.kills++;
-  B.t = Math.min(BREACH_T_MAX, B.t + BREACH_KILL_T);
+  B.t = Math.min(BREACH_T_MAX, B.t + breachKillT(B.r));
 }
 function breachSpoils(e){
   const p = player, k = e.breach, L = BREACH_LORDS[k];
@@ -6977,7 +7039,7 @@ function drawBreach(){
   /* a stain of its lord under every breach body, so the swarm reads as one
      thing even when it is mixed into the wave */
   for(const e of enemies){
-    if(!e.breach || e.dead || !onScreen(e, 40)) continue;
+    if(!e.breach || e.dead || !onScreen(e, 40) || !breachSees(e)) continue;
     const pr = prs(BREACH_LORDS[e.breach].col);
     c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${e.breachLord ? 0.38 : 0.24})`;
     c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.5, (e.r||12)*0.62, 0, 0, TAU); c.fill();
@@ -6994,7 +7056,7 @@ function drawBreachHud(){
     ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
     const held = B.hand && !B.hand.dead && B.hold > 0;
     const head = 'BREACH · '+L.name+' · '+(held ? 'THE HAND HOLDS IT OPEN' : B.lordOut ? 'THE HAND IS DOWN'
-      : B.kills+' / '+BREACH_LORD_AT+' for the Hand');
+      : B.kills+' / '+BREACH_LORD_AT+' for the Hand')+' · +'+breachKillT(B.r).toFixed(2)+'s a kill';
     ctx.strokeText(head, cw/2, by); ctx.fillStyle = L.col; ctx.fillText(head, cw/2, by);
     ctx.fillStyle = 'rgba(15,20,25,0.55)'; roundRect(ctx, bx, by+10, bw, 8, 4); ctx.fill();
     ctx.fillStyle = L.col; roundRect(ctx, bx, by+10, Math.max(3, bw*clamp(B.t/BREACH_T_MAX, 0, 1)), 8, 4); ctx.fill();
@@ -20082,6 +20144,7 @@ function render(){
     list.push({y:p.y, f:()=>drawProp(ctx,p)});
   for(const e of enemies){
     if(!onScreen(e, 120)) continue;
+    if(e.breach && !breachSees(e)) continue;      /* the other layer, where the circle has not reached */
     /* THE SHIELD GOES ON OUTSIDE drawEnemy, not inside it. That function is
        seven shapes behind five early returns -- golems, bats, minis, the bat
        boss and the minifigs -- and putting the bubble on the minifig path gave
