@@ -2528,18 +2528,30 @@ Lancers still lunge, and the lunge is the hit; ranged monsters still shoot and c
 walks into your middle any more — a body pushed into you steps back out to your edge, and one
 pushed into a skeleton shares the step with it. Monsters carry what they fight with: the
 crypt's skeletons and revenants a blade, knights a sword behind the shield, archers and
-marksmen their bow even while they walk, casters their staff.
+marksmen their bow even while they walk, casters their staff. **Knights** hold off behind the
+shield between blows and step in to strike whenever the sword is ready — before, they held off
+forever and never hit anything.
 
 ### The scepter
 
 The last door on the tree, intelligence's second weapon, and a summoner in the PoE mould. **The
 hero hits nothing.** Holding attack **raises skeletons** out of the floor where you point — one a
 raising, three at a time to begin with — and they walk to whatever is near you and cut it down.
-They die; you raise more.
+They die; you raise more. A raising always lands on floor: point into a lake or at a boulder
+and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
+water and rocks the way you do.
 
-- **A mixed legion.** Each raising rolls what rises: a **spearman** (36%), a **swordsman** (36%)
-  — shorter reach, a harder and quicker blow — or a **bone archer** (28%) that keeps its distance
-  and looses arrows from 330px.
+- **A mixed legion.** Each raising rolls what rises: a **spearman** (36%, ×1.25 the scepter's
+  hit), a **swordsman** (36%, ×1.35 — shorter reach, a quicker blow) or a **bone archer** (28%,
+  ×0.9) that shoots from **480px**. Mages reach **520px**.
+- **The back line moves.** Archers and mages do not plant their feet: in range, each keeps a spot
+  in a loose arc on your side of the fight and picks a fresh one every second or so, shooting as
+  it goes; anything that gets inside its comfort, it steps back from.
+- **Greater Multiple Projectiles.** An archer's arrow and a mage's bolt become a **fan**:
+  **Bone Volley** (uncommon and up, six takes) adds one each; **Greater Multiple Projectiles**
+  (legendary, once) adds four for **25% LESS** projectile damage; the tree's *Bone Rain* adds two.
+  All of it together is **13 a shot**. The fan widens with the count (to about 85°), so a body far
+  off takes one or two and a body close enough to stand in the middle of it takes many.
 - **At a full legion the oldest crumbles.** Raising with every place taken breaks the FIRST
   skeleton you raised and stands the new one where you point: the legion is always the newest of
   your dead. A dead hero raises nothing.
@@ -2552,9 +2564,9 @@ They die; you raise more.
   and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
-- **Two epics, and only epics.** **Bone Golem** (twice): one more of your melee skeletons becomes
-  a golem — 3.5× the life, 2.2× the hit, and every blow a slam that lands on everything in front
-  of it; archers and mages stay what they are. **Bone Overseer** (once): a staff-bearing lord
+- **Two epics, and only epics.** **Bone Golem** (up to **five** times): one more of your melee
+  skeletons becomes a golem — 3.5× the life, 2.75× the scepter's hit, and every blow a slam that
+  lands on everything in front of it; archers and mages stay what they are. **Bone Overseer** (once): a staff-bearing lord
   rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
   damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's 1.60 + minion flat) ×
@@ -2563,7 +2575,11 @@ They die; you raise more.
   pool. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
   that is lost rises again at your side.
 - **Bricks:** Bone Legion (+1 skeleton, to 10), Grim Feast (minion damage), Bone Armour (minion
-  life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (two a raising).
+  life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (two a raising),
+  Bone Volley (+1 projectile).
+- **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
+  (**LEGION 5/7**), its ring filling as the legion does, and the buff list spells it out: how many
+  spears, swords, archers, golems, and whether the overseer is up.
 - **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
   reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%
   of a blade's hit. Every bolt is its element and leaves its element's ailment.
@@ -2573,12 +2589,18 @@ They die; you raise more.
 ![A legion of three, and the scepter](docs/scepter-legion.png)
 ![Skeleton Mages: fire, cold and lightning](docs/scepter-mages.png)
 ![A golem slamming, the overseer at your shoulder, and the crypt fighting back](docs/legion-fight.png)
+![Archers under Greater Multiple Projectiles, and the LEGION badge](docs/legion-volley.png)
 
 **On the tree:** the scepter's door opens into minion damage, minion life, minion speed and
 energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. Intelligence's
 spell country carries minion nodes too — **BONEWORK** and **GRAVECALL** (minion damage, life and
-speed) and the notable cluster **THE CRYPT** (*Crypt Keeper*: +15% minion life, +6% minion speed) —
-so a summoner can wander into the spell half without leaving the legion behind. And two keystones:
+speed), the notable cluster **THE CRYPT** (*Crypt Keeper*: +15% minion life, +6% minion speed) and
+**THE VOLLEY** (*Bone Rain*: +2 minion projectiles, +6% minion damage). And **every small node in
+blue feeds the legion as well**: spell and elemental damage carry 80% of themselves as minion
+damage (60% for a single element), cast speed as minion attack speed, energy shield and
+resistances as minion life. The second line is scepter-only, so to every other weapon the node is
+what it always was — and a summoner can walk the whole of intelligence's country without leaving
+the legion behind. And two keystones:
 
 > **Mirrored Legion** — *your legion fights the way you do.* Your minions gain **three quarters
 > of your own increased damage** — physical, elemental and spell — and **your conversions**, on
@@ -2973,8 +2995,16 @@ Everything below is written by hand in one `<script>`, against a 2D canvas.
 - **Bodies are capsules, not circles.** Every projectile, sweep, beam and blast tests
   against a segment running from the feet to the top of the head, so a bolt that crosses a
   chest connects with it.
-- **A\* on an 8-connected grid**, string-pulled, with a per-frame search budget, local
-  steering, and a stuck-detector that rescues anything that has walked itself into a rock.
+- **A flow field for the chase.** Every monster is after the same hero, so one Dijkstra search
+  runs outward from the hero's cell over a 40px grid (redone when the hero changes cell, about
+  2ms) and every monster walks downhill, string-pulled to the farthest step still in sight. The
+  sight line cannot slip between two blocked cells that touch at a corner, and a body-wide check
+  stops it grazing a lake's edge. Small props are left to local steering — until something gets
+  wedged on one, at which point the grid **learns** it for the rest of the run; a big rock that
+  breaks is taken back off the grid. Local steering slides round what is in front, and a slide
+  can no longer point a body back the way it came. A monster after a skeleton still asks for its
+  own budgeted A\* path. On 40 random maps, one monster at a time from 500–950px, **640 of 640**
+  reach the hero (the old per-monster A\* managed 495, and no knight ever closed in).
 - **A uniform bucket grid** for every "what is near me" question — separation, sword
   swings, whirls, chain targeting — instead of scanning the whole roster.
 - **View-frustum culling** at 1.25× the window for every draw pass.
@@ -2985,7 +3015,15 @@ Everything below is written by hand in one `<script>`, against a 2D canvas.
   arriving is one sound.
 - **Seven biomes** — the Greenwood, the Dust Flats, the Grey Reach, the Mire, the White
   Waste, the Cinder Fields, the Long Meadow — each with its own props, palette and lakes,
-  generated per run.
+  generated per run. Lakes are laid **on the stud grid**, whole cells only, so every stud in the
+  water sits exactly over a stud of the floor and none is cut by the rim; the rim is a plate a
+  cell, a 1×1 on every corner, and some lakes are two plates — an L, a T, a pond with a bay. How
+  wet a run is rolls too. **Ruins** stand where they fall: rings of pillars with a gap or two to
+  walk in by, colonnades you have to go round, heaps of boulders — some pillars snapped to a
+  stump — so no two runs route the same way.
+
+![A two-plate lake on the stud grid](docs/map-lake.png)
+![A ring of ruined pillars](docs/map-ruins.png)
 
 <details>
 <summary><b>Developer note — the test bench</b> (mild spoiler)</summary>

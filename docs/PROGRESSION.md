@@ -2835,3 +2835,86 @@ both cards epic-only, two golems at most and never from archers, a golem slam hi
 the overseer's MORE and its return, 39 minion nodes in blue, and the scepter's pixels standing
 taller than wide. 25 breaks, 25 caught (`nospace` survived the first draft — the approach code
 alone kept the gap — so the test now shoves bodies into each other). 66 tests green.
+
+## Thirty-eighth pass — the volley, the floor, and the way across it
+
+> *"Make the basic minions deal a little bit more damage ... a way to give them 'Greater Multiple
+> Projectiles' ... at least 10-15 at once ... increase the range for the ranged/mages minions, they
+> never move ... i dont want the maximum summon to be only 2 ... combine more of the skilltree so
+> they also grant minion stats in the intellect realm ... show how many minions i have alive ... you
+> cannot spawn minions on obstacles ... fix the blue water sites, their lego-blocks are out of
+> order/symmetry ... add other obstacles, make every run feel a little different ... take a look at
+> how A* pathfinding is doing."*
+
+**The legion.** Spearman ×1.25, swordsman ×1.35, archer ×0.9 of the scepter's hit (were 1.0, 1.1,
+0.7); the golem ×2.75, so it stays 2.2× a spearman. `minionProj()` is 1 + `minions.proj` (hard cap
++14); `minionShoot` fans the whole volley over `min(1.5, 0.11·(n−1))` rad, each shot carrying
+`minions.projMore`. Bone Volley (uncommon+, six takes, +1), Greater Multiple Projectiles
+(legendary, once, +4, 25% LESS) and the tree's *Bone Rain* (+2) reach **13**. The sheet counts a
+volley as `1 + (n−1)·0.4` shots on one body. Archers reach 480px (330), mages 520 (380), and look
+as far as they can shoot. In range, a ranged skeleton keeps a spot in an arc on the hero's side of
+the target and picks a new one at least 50px away every 0.9–1.6s, shooting as it goes. Bone Golem
+takes five times. A skull badge in the ability row counts `LEGION up/max`, and a buff pill names
+the kinds.
+
+**Intelligence feeds the legion.** After the tree is built, every one-stat minor node standing in
+the blue sector — cluster, road or weapon door — gets a *minion sister* from `MINION_SISTERS`:
+spell/elemental damage → 80% as minion damage (60% for one element), cast speed → minion speed,
+shield, resistances and regeneration → minion life. The sisters are `only:['scepter']` stats, so
+to every other weapon the node is unchanged; the meta budget test still passes. A new notable
+cluster, THE VOLLEY, carries *Bone Rain*.
+
+**Floor, not water.** `floorAt(x, y, r)` shoves a point out of lakes and off solids (three passes,
+then a short spiral) and `raiseAt` goes through it, as does the leash's re-rise. `minionStep` now
+slides round solids and runs `collideWorld`, so a skeleton walks the shore instead of the water.
+
+**The lakes were never on the grid.** They were placed at arbitrary pixels, so the per-cell studs
+were clipped by the rim and the rim's 26px plates matched nothing. Lakes are now whole 40px cells,
+so every water stud is centred over a floor stud; the rim is a plate a cell with two studs and a
+1×1 on each corner; 45% of lakes hook a second plate onto a side (an L, a T, a bay), and the edges
+inside the water are never laid. How many lakes a run gets rolls ×0.6–1.4. `lakeGroups` holds the
+plates of each lake for drawing; `waters` still holds plain rectangles, so nothing that collides,
+paths or spawns had to learn a new shape. **Landmarks** — pillar rings with one or two doors,
+colonnades, boulder heaps — are placed per run by `buildLandmarks`; pillars are indestructible
+solids big enough to be on the nav grid, 28% of them snapped to a stump.
+
+**The way across.** A probe — one monster at a time, six kinds, 500–950px from a hero standing
+beside a lake, 40 random maps — found two bugs and one design flaw. Knights held at 70–95px behind
+the shield and *never* came within striking range: 0 of 120 arrived. They now step in whenever the
+sword is ready. The sight line was Bresenham over 72px cells, which could step diagonally between
+two blocked cells and run along a lake's edge inside an "open" cell. And every monster ran its own
+budgeted A\* and followed a cached path, so a body whose turn had not come walked the straight line
+into the shore meanwhile. Now: a 40px grid (big solids and lakes only, padded by a body's width); a
+**flow field** — one Dijkstra from the hero's cell, redone when the hero changes cell, ~2.3ms — that
+every monster after the hero walks downhill, string-pulled to the farthest step in sight; a
+supercover sight line that refuses a diagonal squeeze; `segHitsWater`, a body-wide check against
+the lakes; `navLearn`, which puts a small prop on the grid the first time something is wedged on
+it; and `navRefresh`, which takes a broken rock back off. Monsters after a skeleton keep their own
+A\*. One more came out of chasing the last stragglers: `slideAroundSolids` picks a side of an
+obstacle and holds it for 0.55s so a body does not dither, but a side picked while it wanted one
+direction could point straight back once it wanted another — a brute lunging up past a lake's
+corner was slid *down*, walked back, wound up, and was slid down again forever (a lancer did the
+same). The held side now flips whenever it would point against where the body wants to go. Same
+probe, before → after: **495 → 640 of 640** (excluding knights, 495/520).
+
+**Proof.** `legion2`: the kinds' numbers; volley takes, cap and rarity; GMP legendary-only, +4,
+0.75; Bone Rain +2 to 13; a shot is a 13-wide fan of distinct angles within 1.5 rad, archer and
+mage alike; the sheet's weighting; a hit at 450px; a back line that walks >120px through ≥2 spots in
+4s and never leaves range; no raising in a lake by `raiseAt` or by the scepter; no walking across a
+lake and no wading on after a shove; every spell minor in blue carries a minion sister; the sister
+is scepter-only; the badge reads `LEGION 3/5` for a scepter and never shows for a sword. `nav2`: 14
+maps with every lake plate on the grid, composites, varying lake counts, ruins in every map, stumps,
+pillars solid and on the grid; every water stud drawn at a cell centre and inside the water; the
+corner squeeze refused; the body-wide lake check; the field going round a lake and pointing a body
+along the shore; out-of-sight bodies steered by the field and none by private A\*; a pinch learnt;
+a broken rock forgotten; a knight that strikes; the brute's lunge past a lake corner never slid
+backwards, in the scene and as a direct call with a held side that points back; and 32 lone
+monsters on real maps all arriving (a lancer counts from inside its lunge range). 32 breaks, 32
+caught — `wetwalk` survived the first
+draft (sliding alone kept a walker dry, so the test now shoves one over the shore) and `noflow`
+survived because the repaired A\* also brings a lone body home (so the test now asks what steers
+it), and `slideback` survived one run of the lunge scene on the dice (so it is also a direct call).
+Two old fixtures were tightened after an intermittent failure each: `rage` now clears missiles and
+pools left over from earlier sections before counting a swing's rage, and `ember` holds its bodies
+still, since with the new routing two neighbours can take different ways round a lake. The Necromancer favourite's brick panel overflowed with the two new cards on it; they live on
+THE LEGION bench only. 68 tests green.

@@ -3387,7 +3387,7 @@ let vtime = 0;
 let frameRaw = 1/60;   /* real seconds of the frame being drawn */
 let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
-let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[], pspikes=[];
+let props=[], solids=[], waters=[], lakeGroups=[], flowers=[], hazards=[], spikes=[], pspikes=[];
 let minions = [];      /* the hero's raised dead */
 /* THE HERO, always -- `player` is the hero too, except for the length of one
    monster's update when that monster has a skeleton for a target (see enemyTarget) */
@@ -3610,7 +3610,8 @@ function newPlayer(){
        OWN pools -- a minion's damage is not yours, and nothing you buy for your
        own hits reaches it unless something says so (Mirrored Legion does). */
     minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
-              mages:false, mirror:false, instab:false, golems:0, overseer:false, overseerCd:0 },
+              mages:false, mirror:false, instab:false, golems:0, overseer:false, overseerCd:0,
+              proj:0, projMore:1, volleys:0, gmp:false },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
@@ -3769,17 +3770,34 @@ function buildGround(){
   }
   /* the whole surface is one biome, rolled per run */
   runBiome = BIOME_ORDER[(rng()*BIOME_ORDER.length)|0];
-  /* scattered lakes — count scales with the map, none in the spawn clearing or a cave */
-  waters = [];
-  const lakeTarget = Math.round(W.w*W.h/800000);
-  for(let tries=0; tries<400 && waters.length<lakeTarget; tries++){
-    const ww = 200+rng()*260, wh = 140+rng()*200;
-    const wx = 180+rng()*(W.w-360-ww), wy = 180+rng()*(W.h-360-wh);
-    const mx = wx+ww/2, my = wy+wh/2;
-    if(Math.hypot(mx-CX, my-CY) < 700) continue;
-    if(inCave(mx,my)) continue;
-    if(waters.some(o=> wx < o.x+o.w+150 && wx+ww > o.x-150 && wy < o.y+o.h+150 && wy+wh > o.y-150)) continue;
-    waters.push({x:wx, y:wy, w:ww, h:wh});
+  /* Scattered lakes -- count scales with the map, and rolls wetter or drier per
+     run; none in the spawn clearing or a cave. A lake is laid ON the stud grid,
+     whole cells only, so its studs sit exactly where the ground's do and none is
+     ever cut in half by the rim. Some are two plates overlapped: an L, a T, a
+     pond with a bay. Every part is an ordinary rectangle in `waters`, so the
+     collision, the nav grid and the spawners never had to learn a new shape. */
+  waters = []; lakeGroups = [];
+  const lakeTarget = Math.max(2, Math.round(W.w*W.h/800000 * (0.6 + rng()*0.8)));
+  const cellsX = Math.floor(W.w/CS), cellsY = Math.floor(W.h/CS);
+  for(let tries=0; tries<400 && lakeGroups.length<lakeTarget; tries++){
+    const cw = 5 + ((rng()*7)|0), ch = 4 + ((rng()*5)|0);
+    const gx = 5 + ((rng()*(cellsX - 10 - cw))|0), gy = 5 + ((rng()*(cellsY - 10 - ch))|0);
+    const cells = [[gx, gy, cw, ch]];
+    if(rng() < 0.45){
+      /* a second plate hooked onto one side, overlapping by two cells both ways */
+      const lw = 3 + ((rng()*4)|0), lh = 3 + ((rng()*4)|0), side = (rng()*4)|0;
+      if(side === 0)      cells.push([gx+cw-2, gy + (((rng()*(ch+lh-3))|0) - (lh-2)), lw+2, lh]);
+      else if(side === 1) cells.push([gx-lw,   gy + (((rng()*(ch+lh-3))|0) - (lh-2)), lw+2, lh]);
+      else if(side === 2) cells.push([gx + (((rng()*(cw+lw-3))|0) - (lw-2)), gy+ch-2, lw, lh+2]);
+      else                cells.push([gx + (((rng()*(cw+lw-3))|0) - (lw-2)), gy-lh,   lw, lh+2]);
+    }
+    const parts = cells.map(([x, y, w2, h2])=>({ x:x*CS, y:y*CS, w:w2*CS, h:h2*CS }));
+    if(parts.some(q=> q.x < 180 || q.y < 180 || q.x+q.w > W.w-180 || q.y+q.h > W.h-180)) continue;
+    if(parts.some(q=> Math.hypot(q.x+q.w/2-CX, q.y+q.h/2-CY) < 700 || inCave(q.x+q.w/2, q.y+q.h/2))) continue;
+    if(parts.some(q=> waters.some(o=> q.x < o.x+o.w+150 && q.x+q.w > o.x-150 && q.y < o.y+o.h+150 && q.y+q.h > o.y-150))) continue;
+    const g = lakeGroups.length;
+    for(const q of parts){ q.g = g; waters.push(q); }
+    lakeGroups.push(parts);
   }
   flowers = [];
   const flowerTarget = Math.round(W.w*W.h/62000);
@@ -3802,6 +3820,66 @@ function wallBrick(bx,by,w,h){
   drawStudG(ctx, bx+w*0.3, by+h/2, 7.5, base);
   drawStudG(ctx, bx+w*0.7, by+h/2, 7.5, base);
 }
+/* A LAKE, BUILT. Sand shelf, then a rim of 1x2 plates round every outside edge --
+   one plate a cell, two studs a plate, a 1x1 on each corner -- then the water on
+   transparent blue plates with a stud on every cell. Everything sits on the
+   40px stud grid the ground is built on, so it lines up with the floor around it
+   and with itself. Where two plates of one lake overlap, the edges inside the
+   water are simply never laid. */
+function lakeInside(parts, x, y, self){
+  for(const q of parts) if(q !== self && x > q.x && x < q.x+q.w && y > q.y && y < q.y+q.h) return true;
+  return false;
+}
+function drawLake(parts){
+  const rimC = '#d8c79b';
+  ctx.fillStyle = '#bda877';
+  for(const w of parts){ roundRect(ctx, w.x-18, w.y-16, w.w+36, w.h+36, 22); ctx.fill(); }
+  ctx.fillStyle = '#cbb98a';
+  for(const w of parts){ roundRect(ctx, w.x-18, w.y-18, w.w+36, w.h+36, 22); ctx.fill(); }
+  const plate = (x, y, w2, h2, studs, key)=>{
+    const col = sh(rimC, (hash2(key|0, (x+y)|0)-0.5)*0.16);
+    ctx.fillStyle = sh(col, -0.22); roundRect(ctx, x, y+1.5, w2, h2, 2); ctx.fill();
+    ctx.fillStyle = col; roundRect(ctx, x, y, w2, h2, 2); ctx.fill();
+    for(const [sx, sy] of studs) drawStudG(ctx, sx, sy, 3, rimC);
+  };
+  for(const w of parts){
+    const nx = w.w/CS, ny = w.h/CS;
+    for(let k=0;k<nx;k++){
+      const x0 = w.x + k*CS;
+      if(!lakeInside(parts, x0+CS/2, w.y-8, w))
+        plate(x0+2, w.y-14, CS-4, 11, [[x0+CS*0.27, w.y-8.5], [x0+CS*0.73, w.y-8.5]], 1);
+      if(!lakeInside(parts, x0+CS/2, w.y+w.h+8, w))
+        plate(x0+2, w.y+w.h+3, CS-4, 11, [[x0+CS*0.27, w.y+w.h+8.5], [x0+CS*0.73, w.y+w.h+8.5]], 2);
+    }
+    for(let k=0;k<ny;k++){
+      const y0 = w.y + k*CS;
+      if(!lakeInside(parts, w.x-8, y0+CS/2, w))
+        plate(w.x-14, y0+2, 11, CS-4, [[w.x-8.5, y0+CS*0.27], [w.x-8.5, y0+CS*0.73]], 3);
+      if(!lakeInside(parts, w.x+w.w+8, y0+CS/2, w))
+        plate(w.x+w.w+3, y0+2, 11, CS-4, [[w.x+w.w+8.5, y0+CS*0.27], [w.x+w.w+8.5, y0+CS*0.73]], 4);
+    }
+    for(const [cx2, cy2] of [[w.x-8.5, w.y-8.5], [w.x+w.w+8.5, w.y-8.5], [w.x-8.5, w.y+w.h+8.5], [w.x+w.w+8.5, w.y+w.h+8.5]])
+      if(!lakeInside(parts, cx2, cy2, w) && !lakeInside(parts, cx2, cy2, null))
+        plate(cx2-5.5, cy2-5.5, 11, 11, [[cx2, cy2]], 5);
+  }
+  ctx.fillStyle = '#175c99';
+  for(const w of parts){ roundRect(ctx, w.x, w.y, w.w, w.h, 14); ctx.fill(); }
+  ctx.fillStyle = '#1f74bd';
+  for(const w of parts){ roundRect(ctx, w.x+3, w.y+3, w.w-6, w.h-6, 12); ctx.fill(); }
+  /* one stud per cell, centred where the floor's studs are */
+  const seen = new Set();
+  for(const w of parts)
+    for(let ix=w.x/CS; ix<(w.x+w.w)/CS; ix++)
+      for(let iy=w.y/CS; iy<(w.y+w.h)/CS; iy++){
+        const key = ix*4096 + iy;
+        if(seen.has(key)) continue; seen.add(key);
+        drawStudG(ctx, ix*CS+CS/2, iy*CS+CS/2, 10, '#2a80c8');
+      }
+  /* a lighter band where the light catches the surface */
+  const w0 = parts[0];
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  roundRect(ctx, w0.x+8, w0.y+6, w0.w-16, Math.min(w0.h*0.32, CS*2), 10); ctx.fill();
+}
 function drawGround(vx,vy,vw,vh){
   /* The backdrop used to be hardcoded forest green, and the studded cell tiles
      never quite meet on fractional device pixels — so a grass-green grid showed
@@ -3814,36 +3892,10 @@ function drawGround(vx,vy,vw,vh){
   const iy0 = Math.max(0, Math.floor(vy/CS)), iy1 = Math.min(Math.ceil(W.h/CS)-1, Math.ceil((vy+vh)/CS));
   for(let iy=iy0; iy<=iy1; iy++) for(let ix=ix0; ix<=ix1; ix++)
     ctx.drawImage(cellSprite(cellColorKey(ix,iy)), ix*CS, iy*CS, CS+1, CS+1);
-  for(const w of waters){
-    if(w.x > vx+vw || w.x+w.w < vx || w.y > vy+vh || w.y+w.h < vy) continue;
-    /* sand shelf */
-    ctx.fillStyle = '#bda877';
-    roundRect(ctx, w.x-18, w.y-16, w.w+36, w.h+38, 26); ctx.fill();
-    ctx.fillStyle = '#cbb98a';
-    roundRect(ctx, w.x-18, w.y-18, w.w+36, w.h+36, 26); ctx.fill();
-    /* a rim of 1x2 plates laid end to end around the pool */
-    const rimC = '#d8c79b';
-    for(let bx2=w.x-14; bx2<w.x+w.w+14; bx2+=26){
-      const bw = Math.min(24, w.x+w.w+14-bx2);
-      if(bw < 8) break;
-      ctx.fillStyle = sh(rimC, (hash2(bx2|0, w.y|0)-0.5)*0.18);
-      roundRect(ctx, bx2, w.y-14, bw, 11, 2); ctx.fill();
-      drawStudG(ctx, bx2+bw/2, w.y-9.5, 3, rimC);
-      ctx.fillStyle = sh(rimC, (hash2(bx2|0, (w.y+w.h)|0)-0.5)*0.18);
-      roundRect(ctx, bx2, w.y+w.h+3, bw, 11, 2); ctx.fill();
-      drawStudG(ctx, bx2+bw/2, w.y+w.h+7.5, 3, rimC);
-    }
-    /* water proper, on transparent blue plates */
-    ctx.fillStyle = '#175c99';
-    roundRect(ctx, w.x, w.y, w.w, w.h, 16); ctx.fill();
-    ctx.fillStyle = '#1f74bd';
-    roundRect(ctx, w.x+3, w.y+3, w.w-6, w.h-8, 14); ctx.fill();
-    for(let ix=Math.ceil(w.x/CS); ix<w.x/CS+w.w/CS; ix++)
-      for(let iy=Math.ceil(w.y/CS); iy<w.y/CS+w.h/CS; iy++)
-        drawStudG(ctx, ix*CS+20, iy*CS+20, 10, '#2a80c8');
-    /* a lighter band where the light catches the surface */
-    ctx.fillStyle = 'rgba(255,255,255,0.07)';
-    roundRect(ctx, w.x+8, w.y+6, w.w-16, w.h*0.32, 10); ctx.fill();
+  for(const parts of lakeGroups){
+    if(!waters.includes(parts[0])) continue;
+    if(!parts.some(w=> !(w.x-30 > vx+vw || w.x+w.w+30 < vx || w.y-30 > vy+vh || w.y+w.h+30 < vy))) continue;
+    drawLake(parts);
   }
   for(const f of flowers){
     if(f.x < vx-20 || f.x > vx+vw+20 || f.y < vy-20 || f.y > vy+vh+20) continue;
@@ -3878,6 +3930,7 @@ function buildProps(){
   const torchPos = [[CX-320,CY-200],[CX+320,CY-200],[CX-320,CY+200],[CX+320,CY+200]];
   for(const [tx,ty] of torchPos) addProp('torch', tx, ty, rng);
   const dens = (W.w*W.h)/(3600*2700);   /* quotas follow the map size */
+  buildLandmarks(rng, dens);
   const quotas = [
     ...(BIOME_PROPS[runBiome]||BIOME_PROPS.forest).map(([t,c])=>[runBiome,t,c]),
     /* Rock Raiders crystals & cave boulders, whatever the surface is */
@@ -3893,22 +3946,76 @@ function buildProps(){
       if(biomeAt(x,y)!==biome) continue;
       if(Math.hypot(x-CX,y-CY) < 420) continue;
       let bad = false;
-      for(const w of waters) if(x>w.x-50 && x<w.x+w.w+50 && y>w.y-50 && y<w.y+w.h+50) bad=true;
-      for(const p of props) if(Math.hypot(p.x-x,p.y-y) < 95) bad=true;
+      /* nothing small a body's width off a shore: that is a gap nothing fits through */
+      for(const w of waters) if(x>w.x-75 && x<w.x+w.w+75 && y>w.y-75 && y<w.y+w.h+75) bad=true;
+      for(const p of props) if(Math.hypot(p.x-x,p.y-y) < (p.landmark ? 120 : 95)) bad=true;
       if(bad) continue;
       addProp(type, x, y, rng); placed++;
     }
+  }
+}
+/* LANDMARKS. A few big set pieces per run, rolled like the biome: a ring of
+   pillars with a gap or two to get in by, a colonnade you have to go round, a
+   rock outcrop of boulders shouldered together. Where they land, and which ones,
+   is different every run -- so is every route across the map. All of them are
+   ordinary indestructible solids, so the collision, the nav grid and the
+   spawners already know what to do with them. */
+const LANDMARK_KINDS = ['ring', 'colonnade', 'outcrop'];
+function landmarkRoom(x, y, R){
+  if(x < 260+R || y < 260+R || x > W.w-260-R || y > W.h-260-R) return false;
+  if(Math.hypot(x-CX, y-CY) < 620 + R) return false;
+  for(const w of waters) if(x > w.x-R-120 && x < w.x+w.w+R+120 && y > w.y-R-120 && y < w.y+w.h+R+120) return false;
+  for(const p of props) if(p.landmark && Math.hypot(p.lx-x, p.ly-y) < R + p.lr + 260) return false;
+  return true;
+}
+function buildLandmarks(rng, dens){
+  const n = Math.max(2, Math.round((2 + rng()*3) * dens));
+  let made = 0;
+  for(let tries=0; tries<120 && made<n; tries++){
+    const kind = LANDMARK_KINDS[(rng()*LANDMARK_KINDS.length)|0];
+    const R = kind === 'ring' ? 150 + rng()*70 : kind === 'colonnade' ? 190 + rng()*90 : 90;
+    const x = 300 + rng()*(W.w-600), y = 300 + rng()*(W.h-600);
+    if(!landmarkRoom(x, y, R)) continue;
+    const put = (type, px, py)=>{ const q = addProp(type, px, py, rng); q.landmark = true; q.lx = x; q.ly = y; q.lr = R; return q; };
+    if(kind === 'ring'){
+      /* eight to eleven pillars round a courtyard, one or two missing: the doors */
+      const k = 8 + ((rng()*4)|0), gap1 = (rng()*k)|0, gap2 = rng() < 0.55 ? (gap1 + ((k/2)|0)) % k : -1;
+      const a0 = rng()*TAU;
+      for(let i=0;i<k;i++){
+        if(i === gap1 || i === gap2) continue;
+        const a = a0 + i/k*TAU;
+        put('pillar', x + Math.cos(a)*R, y + Math.sin(a)*R);
+      }
+    } else if(kind === 'colonnade'){
+      /* a straight line of pillars shoulder to shoulder: a wall with an end to walk round */
+      const a = rng()*Math.PI, k = Math.max(4, Math.round(R*2/62));
+      for(let i=0;i<k;i++){
+        const t = (i/(k-1) - 0.5)*2*R;
+        put('pillar', x + Math.cos(a)*t, y + Math.sin(a)*t);
+      }
+    } else {
+      /* three to five boulders in a heap */
+      const k = 3 + ((rng()*3)|0);
+      for(let i=0;i<k;i++){
+        const a = rng()*TAU, d = i ? 30 + rng()*45 : 0;
+        put('boulder', x + Math.cos(a)*d, y + Math.sin(a)*d);
+      }
+    }
+    made++;
   }
 }
 function addProp(type,x,y,rng){
   const p = { type, x, y, flash:0, seed:rng()*1000, dead:false,
     hp: type==='tree'?4 : type==='rock'?6 : type==='cactus'?3 : 2,
     r: type==='tree'?14 : type==='rock'?(rng()<0.5?21:14) : type==='crate'?15
-      : type==='cactus'?11 : type==='boulder'?(28+rng()*12) : type==='crystal'?12 : 6,
-    indestructible: type==='boulder' || type==='crystal' };
+      : type==='cactus'?11 : type==='boulder'?(28+rng()*12) : type==='crystal'?12
+      : type==='pillar'?(20+rng()*4) : 6,
+    indestructible: type==='boulder' || type==='crystal' || type==='pillar' };
+  if(type==='pillar') p.tall = rng() < 0.28 ? 0.45 + rng()*0.25 : 1;   /* some have fallen to a stump */
   props.push(p);
   /* boulders block movement; crystals are pure cosmetics */
   if(type!=='torch' && type!=='crystal') solids.push(p);
+  return p;
 }
 function breakProp(p){
   if(p.indestructible) return;
@@ -3929,6 +4036,7 @@ function breakProp(p){
     return;
   }
   p.dead = true; solids = solids.filter(s=>s!==p);
+  if(p.r >= NAV_SMALL) navRefresh(p.x, p.y, p.r);
   const cols = p.type==='tree'? [PAL.brown,'#3d7a2b','#4b9b41','#57a33c']
     : p.type==='rock'? ['#8b8f8a','#6d6e68','#9ba19d']
     : p.type==='cactus'? ['#3d7a2b','#4b9b41','#57a33c']
@@ -3980,6 +4088,27 @@ function shoveToFloor(o, pad){
     else if(m===rt) o.x = w.x + w.w + r;
     else if(m===t)  o.y = w.y - r;
     else            o.y = w.y + w.h + r;
+  }
+  return o;
+}
+/* the nearest point to (x,y) a body of radius r can stand on: out of the
+   lakes and off the rocks, and -- if shoving it out of one put it in another --
+   again, then a short spiral outward for a clear spot */
+function floorClear(x, y, r){
+  if(x < W.wall+r+4 || x > W.w-W.wall-r-4 || y < W.wall+r+4 || y > W.h-W.wall-r-4) return false;
+  for(const sd of solids) if(!sd.dead && Math.hypot(x-sd.x, y-sd.y) < sd.r + r) return false;
+  for(const w of waters) if(x > w.x-r && x < w.x+w.w+r && y > w.y-r && y < w.y+w.h+r) return false;
+  return true;
+}
+function floorAt(x, y, r){
+  const o = { x, y };
+  for(let i=0;i<3 && !floorClear(o.x, o.y, r);i++) shoveToFloor(o, r);
+  if(floorClear(o.x, o.y, r)) return o;
+  for(let ring=1; ring<=12; ring++){
+    for(let k=0;k<ring*6;k++){
+      const a = k/(ring*6)*TAU, px = x + Math.cos(a)*ring*24, py = y + Math.sin(a)*ring*24;
+      if(floorClear(px, py, r)) return { x:px, y:py };
+    }
   }
   return o;
 }
@@ -8033,6 +8162,23 @@ const UPGRADES = [
       `${Math.round((OVERSEER_SPD-1)*100)}% faster. It is not one of the legion, and if it falls it rises `+
       `again ${OVERSEER_BACK}s later`,
     apply:c=>{ player.minions.overseer = true; player.minions.overseerCd = 0; } },
+  /* THE VOLLEY: the legion's multiple projectiles, card by card and then the
+     legendary support that makes a fan of it */
+  { id:'bonevolley', name:'Bone Volley', icon:'split', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>isSummoner() && (player.minions.volleys || 0) < MINION_VOLLEY_MAX,
+    calc:m=>({n:1}),
+    desc:c=>`Your skeleton ARCHERS and MAGES loose +1 PROJECTILE a shot (${minionProj()} → `+
+      `${Math.min(1 + MINION_PROJ_CAP, minionProj() + 1)}), fanned out beside the first. `+
+      `Takes ${(player.minions.volleys || 0) + 1} of ${MINION_VOLLEY_MAX}`,
+    apply:c=>{ const M = player.minions; M.volleys = (M.volleys || 0) + 1; M.proj = (M.proj || 0) + 1; } },
+  { id:'bonegmp', name:'Greater Multiple Projectiles', icon:'split', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isSummoner() && !player.minions.gmp,
+    calc:m=>({n:1}),
+    desc:c=>`Your skeleton archers and mages loose +${MINION_GMP_N} PROJECTILES a shot `+
+      `(${minionProj()} → ${Math.min(1 + MINION_PROJ_CAP, minionProj() + MINION_GMP_N)}) in a wide fan, `+
+      `for ${Math.round(MINION_GMP_LESS*100)}% LESS projectile damage. A body close enough takes several`,
+    apply:c=>{ const M = player.minions; M.gmp = true; M.proj = (M.proj || 0) + MINION_GMP_N;
+      M.projMore = (M.projMore || 1) * (1 - MINION_GMP_LESS); } },
   { id:'skelmages', name:'Skeleton Mages', icon:'skull', cls:'OFFENSE', minRar:'legendary',
     req:()=>isSummoner() && !player.minions.mages,
     calc:m=>({n:1}),
@@ -8408,6 +8554,24 @@ const META_MASTERY = {
 /* ---- WHAT A NODE CAN GIVE YOU. One registry: the writer, the wording and the
    formatting all live together, so the tooltip, the stat panel and the hero can
    never drift apart. A node declares `mods` and everything else follows. ---- */
+/* INTELLIGENCE FEEDS THE LEGION. Every small node in blue that makes your
+   spells hit harder also makes your minions hit harder; what makes you cast
+   faster makes them attack faster; what shields you toughens them. The second
+   stat is scepter-only, so to every other weapon the node is what it always
+   was -- and a summoner can walk the whole of intelligence's country without
+   leaving the legion behind. [stat it rides on, minion stat, how much of it] */
+const MINION_SISTERS = {
+  incSpell:['minionDmg', 0.8], incElem:['minionDmg', 0.8], incAll:['minionDmg', 0.8],
+  incFire:['minionDmg', 0.6], incFrost:['minionDmg', 0.6], incShock:['minionDmg', 0.6], incChaos:['minionDmg', 0.6],
+  incCast:['minionSpd', 0.8],
+  es:['minionLife', 0.012], incEs:['minionLife', 0.5], allRes:['minionLife', 2],
+  fireRes:['minionLife', 1], frostRes:['minionLife', 1], shockRes:['minionLife', 1], incRegen:['minionLife', 0.5],
+};
+function minionSister(stat, v){
+  const s2 = MINION_SISTERS[stat];
+  if(!s2 || !(v > 0)) return null;
+  return [s2[0], Math.round(v * s2[1] * 1000)/1000];
+}
 const META_STATS = {
   incMelee:   { n:'increased physical damage',    pct:1, w:(p,v)=>{ p.incMelee += v; } },
   incSpell:   { n:'increased spell damage',       pct:1, w:(p,v)=>{ p.incSpell += v; } },
@@ -8551,6 +8715,7 @@ const META_STATS = {
   minionDmg:  { n:'increased minion damage', pct:1, w:(p,v)=>{ p.minions.inc += v; }, only:['scepter'] },
   minionLife: { n:'increased minion life',   pct:1, w:(p,v)=>{ p.minions.life += v; }, only:['scepter'] },
   minionSpd:  { n:'increased minion attack and cast speed', pct:1, w:(p,v)=>{ p.minions.spd += v; }, only:['scepter'] },
+  minionProj: { n:'projectile for your skeleton archers and mages', w:(p,v)=>{ p.minions.proj += v; }, only:['scepter'] },
   minionMax:  { n:'skeleton in your legion', w:(p,v)=>{ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + v); }, only:['scepter'] },
   minionLess: { n:'LESS minion damage', pct:1, w:(p,v)=>{ p.minions.more *= (1 - v); }, only:['scepter'] },
   minionMirror:{ n:'your minions gain three quarters of your increased damage, and your conversions',
@@ -8713,7 +8878,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
+  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionProj:'split', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
   prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
@@ -9100,6 +9265,10 @@ const META_NOTABLES = [
   { id:'n_crypt', name:'THE CRYPT',     sp:'arc', home:'int', d:[1,3], shape:'ring',
     minors:[['Crypt Dust','minionLife',0.08],['Grave Might','minionDmg',0.06],['Dark Pact','incSpell',0.04]],
     notable:{ name:'Crypt Keeper', mods:[['minionLife',0.15],['minionSpd',0.06]] } },
+  /* the legion's own multiple projectiles, on the tree */
+  { id:'n_volley', name:'THE VOLLEY',   sp:'arc', home:'int', d:[2,3], shape:'arc',
+    minors:[['Fletched Bone','minionDmg',0.06],['Quick Draw','minionSpd',0.05],['Grave Aim','incSpell',0.04]],
+    notable:{ name:'Bone Rain', mods:[['minionProj',2],['minionDmg',0.06]] } },
   { id:'n_chant', name:'THE CHANT',     sp:'arc', home:'int', d:[2,4], shape:'ring',
     minors:[['Harmonic','incSpell',0.05],['Cadence','incCast',0.05],['Attunement','allRes',0.03]],
     notable:{ name:'Archivist', mods:[['spellCap',1],['incCast',0.04]] } },
@@ -10185,6 +10354,15 @@ const RING_AT = [0, 5, 12, 22, 34];
     if(B.kind !== 'start' && B.req.indexOf(e[0]) < 0) B.req.push(e[0]);
   }
   META_TREE_UNPLACED = unplaced;
+  /* ---- 11. INTELLIGENCE FEEDS THE LEGION: every small node standing in blue,
+     wherever it came from -- a cluster, a road, a weapon's door -- gets its
+     minion sister (see MINION_SISTERS) */
+  for(const n of META_NODES){
+    if(n.kind !== 'minor' || n.mods.length !== 1) continue;
+    if(metaSectorAt(n.x, n.y) !== 'int') continue;
+    const sis = minionSister(n.mods[0][0], n.mods[0][1]);
+    if(sis) n.mods.push(sis);
+  }
 })();
 
 function metaCost(n){ return n && n.cost !== undefined ? n.cost : 1; }
@@ -11936,7 +12114,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
-  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','skelmages'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','bonevolley','bonegmp','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -12635,6 +12813,8 @@ const STAT_PROBES = [
     why:'how many may stand at once. At a full legion a raising replaces the oldest' },
   { g:'MINIONS', k:'Minion life', get:()=> isSummoner() ? minionMaxHp() : 0, fmt:v=>Math.round(v)+'', zero:true,
     why:'what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool' },
+  { g:'MINIONS', k:'Minion projectiles', get:()=> isSummoner() ? minionProj() : 0, fmt:v=>Math.round(v)+' a shot', zero:true,
+    why:'what an archer or a mage looses at once: one, +1 a Bone Volley, +4 from Greater Multiple Projectiles, and the tree' },
   { g:'MINIONS', k:'Minion attacks a second', get:()=> isSummoner() ? 1/minionRate(player.minions.mages) : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
   { g:'MINIONS', k:'Increased minion damage', get:()=> isSummoner() ? minionInc()*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
     why:'the minion pool plus the level pool, and three quarters of yours under Mirrored Legion' },
@@ -14821,7 +15001,7 @@ const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
 const MINION_GUARD = 260;            /* anything this close to you comes first */
 const MINION_WIND = 0.2;             /* a skeleton's raised-weapon beat */
 const MINION_CONTACT = 0.9;          /* a boss's body lands on a skeleton this often */
-const MAGE_RANGE = 380, MAGE_KEEP = 220, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 560;
+const MAGE_RANGE = 520, MAGE_KEEP = 260, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 560;
 const MAGE_ELEMS = ['fire', 'frost', 'shock'];
 const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
 const MIRROR_SHARE = 0.75;
@@ -14833,15 +15013,22 @@ const INSTAB_SHARE = 0.30, INSTAB_R = 110;
    OVERSEER at your shoulder. `dmg` and `rate` scale the legion's own numbers;
    `hp` its life. */
 const MINION_KINDS = {
-  spear:    { name:'Skeleton Spearman', dmg:1.00, rate:0.85, reach:34, range:0,   hp:1.0, spd:1.00, r:11 },
-  sword:    { name:'Skeleton Swordsman',dmg:1.10, rate:0.72, reach:26, range:0,   hp:1.1, spd:1.05, r:11 },
-  bow:      { name:'Skeleton Archer',   dmg:0.70, rate:1.00, reach:0,  range:330, keep:190, hp:0.8, spd:1.0, r:11 },
+  spear:    { name:'Skeleton Spearman', dmg:1.25, rate:0.85, reach:34, range:0,   hp:1.0, spd:1.00, r:11 },
+  sword:    { name:'Skeleton Swordsman',dmg:1.35, rate:0.72, reach:26, range:0,   hp:1.1, spd:1.05, r:11 },
+  bow:      { name:'Skeleton Archer',   dmg:0.90, rate:1.00, reach:0,  range:480, keep:240, hp:0.8, spd:1.0, r:11 },
   mage:     { name:'Skeleton Mage',     dmg:MAGE_SHARE, rate:MAGE_RATE, reach:0, range:MAGE_RANGE, keep:MAGE_KEEP, hp:0.8, spd:1.0, r:11 },
-  golem:    { name:'Bone Golem',        dmg:2.20, rate:1.25, reach:42, range:0,   hp:3.5, spd:0.80, r:17, aoe:62 },
+  golem:    { name:'Bone Golem',        dmg:2.75, rate:1.25, reach:42, range:0,   hp:3.5, spd:0.80, r:17, aoe:62 },
   overseer: { name:'Bone Overseer',     dmg:0,    rate:1,    reach:0,  range:0,   hp:4.0, spd:1.05, r:13 },
 };
 const MINION_MIX = [['spear', 0.36], ['sword', 0.36], ['bow', 0.28]];
-const BONE_GOLEM_MAX = 2;                 /* the golem epic, twice */
+const BONE_GOLEM_MAX = 5;                 /* the golem epic, up to five times */
+/* GREATER MULTIPLE PROJECTILES, for the legion. An archer's arrow and a mage's
+   bolt become a fan of them: +1 a Bone Volley (six at most), +4 from the
+   legendary, +2 from the tree's Bone Rain -- thirteen at the far end, fourteen
+   extra the hard cap. The fan widens with the count; a body close enough to
+   stand in the middle of it takes several. */
+const MINION_PROJ_CAP = 14, MINION_VOLLEY_MAX = 6, MINION_GMP_N = 4, MINION_GMP_LESS = 0.25;
+const MINION_PROJ_HIT = 0.4;              /* the share of a fan the sheet counts as landing on one body */
 const OVERSEER_R = 320, OVERSEER_MORE = 1.30, OVERSEER_SPD = 1.25, OVERSEER_BACK = 15;
 const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst']);
 const MINION_COLORS = { head:'#ede8ff', torso:'#5b4a8f', legs:'#3a2f5e', hands:'#ede8ff', hair:'#7d6ab8' };
@@ -14878,13 +15065,21 @@ function legionPlan(){
   for(let i=g;i<n;i++) out.push(M.mages ? 'mage' : null);
   return out;
 }
+/* how many an archer or a mage looses at once */
+function minionProj(){ return 1 + clamp(Math.round((player && player.minions.proj) || 0), 0, MINION_PROJ_CAP); }
+/* what one volley is worth on one body, relative to a single shot */
+function minionVolleyWorth(){
+  const n = minionProj();
+  return (1 + (n - 1)*MINION_PROJ_HIT) * ((player && player.minions.projMore) || 1);
+}
 function minionDps(){
   if(!isSummoner()) return 0;
   const crit = 1 + critChance()*(critMult() - 1);
+  const shot = k=>(k === 'bow' || k === 'mage') ? minionVolleyWorth() : 1;
   let dps = 0;
   for(const k of legionPlan()){
-    if(k) dps += minionDamage(k) / minionRate(k);
-    else for(const [mk, w] of MINION_MIX) dps += w * minionDamage(mk) / minionRate(mk);
+    if(k) dps += minionDamage(k) / minionRate(k) * shot(k);
+    else for(const [mk, w] of MINION_MIX) dps += w * minionDamage(mk) / minionRate(mk) * shot(mk);
   }
   return dps * crit;
 }
@@ -14924,6 +15119,8 @@ function raiseMinion(aim){
 let minionBorn = 0;
 function raiseAt(x, y, kind){
   const k = kind || nextKind(), K = kindOf(k), hp = minionMaxHp(k);
+  /* never out of a lake or a boulder: the nearest floor you could stand on */
+  const at = floorAt(x, y, K.r + 4); x = at.x; y = at.y;
   const m = { x, y, r:K.r, kind:k, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
               moving:false, flash:0, phase:rnd(TAU), slot:minionSlot(), castT:0, strikeT:0, drawT:0,
               born:++minionBorn, scale:k === 'golem' ? 0.62 : 0.82 };
@@ -14976,8 +15173,10 @@ function minionTarget(m){
     if(d < bd){ bd = d; best = e; }
   }
   if(best) return best;
-  bd = MINION_SEEK;
-  for(const e of enemiesNear(m.x, m.y, MINION_SEEK, _minBuf)){
+  /* an archer or a mage looks as far as it can shoot */
+  const seek = Math.max(MINION_SEEK, kindOf(m.kind).range || 0);
+  bd = seek;
+  for(const e of enemiesNear(m.x, m.y, seek, _minBuf)){
     if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
     if(Math.hypot(e.x - h.x, e.y - h.y) > MINION_LEASH) continue;   /* never far from you */
     const d = Math.hypot(e.x - m.x, e.y - m.y);
@@ -15002,12 +15201,18 @@ function knockProp(pr){
   addSparks(pr.x, pr.y-10, 3); SFX.hit();
   if(pr.hp <= 0) breakProp(pr);
 }
+/* a skeleton walks the same floor you do: round the rocks, along the shore,
+   never across the water */
 function minionStep(m, tx, ty, dt, spd){
   const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
   if(d < 2){ m.moving = false; return; }
-  const k = Math.min(1, spd*dt / d);
-  m.x = clamp(m.x + dx*k, W.wall+30, W.w-W.wall-30);
-  m.y = clamp(m.y + dy*k, W.wall+30, W.h-W.wall-30);
+  const v = Math.min(spd, d/Math.max(dt, 1e-4));
+  let vx = dx/d*v, vy = dy/d*v;
+  const slid = slideAroundSolids(m, vx, vy, dt);
+  if(slid){ vx = slid.x; vy = slid.y; }
+  m.x = clamp(m.x + vx*dt, W.wall+30, W.w-W.wall-30);
+  m.y = clamp(m.y + vy*dt, W.wall+30, W.h-W.wall-30);
+  collideWorld(m);
   m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
 }
 /* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
@@ -15033,16 +15238,21 @@ function minionBlow(m){
 function minionShoot(m, tx, ty){
   const sx = m.x + (m.face.x||0)*10, sy = m.y - 18;
   const ta = Math.atan2(ty - 14 - sy, tx - sx);
-  if(m.kind === 'mage'){
-    projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
-      vx:Math.cos(ta)*MAGE_BOLT_SPD, vy:Math.sin(ta)*MAGE_BOLT_SPD, life:1.1,
-      dmg:minionDamage('mage', m), el:m.el, src:'m'+m.el });
-  } else {
-    projectiles.push({ kind:'mbolt', arrow:true, owner:'player', x:sx, y:sy, px:sx, py:sy,
-      vx:Math.cos(ta)*640, vy:Math.sin(ta)*640, life:0.9,
-      dmg:minionDamage('bow', m), el:null, src:'minion' });
-    SFX.whoosh();
+  const n = minionProj(), arc = n > 1 ? Math.min(1.5, 0.11*(n - 1)) : 0;
+  const more = player.minions.projMore || 1;
+  for(let i=0;i<n;i++){
+    const a = ta + (n > 1 ? (i/(n - 1) - 0.5)*arc : 0);
+    if(m.kind === 'mage'){
+      projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
+        vx:Math.cos(a)*MAGE_BOLT_SPD, vy:Math.sin(a)*MAGE_BOLT_SPD, life:MAGE_RANGE*1.15/MAGE_BOLT_SPD,
+        dmg:minionDamage('mage', m)*more, el:m.el, src:'m'+m.el });
+    } else {
+      projectiles.push({ kind:'mbolt', arrow:true, owner:'player', x:sx, y:sy, px:sx, py:sy,
+        vx:Math.cos(a)*640, vy:Math.sin(a)*640, life:kindOf('bow').range*1.15/640,
+        dmg:minionDamage('bow', m)*more, el:null, src:'minion' });
+    }
   }
+  if(m.kind !== 'mage') SFX.whoosh();
 }
 function updateMinions(dt){
   const p = player, M = p && p.minions;
@@ -15062,7 +15272,8 @@ function updateMinions(dt){
     if(m.rise < 1){ m.rise += dt / MINION_RISE; continue; }
     /* lost: too far from you, and it simply rises again at your side */
     if(Math.hypot(m.x - h.x, m.y - h.y) > MINION_LEASH * 1.6){
-      const a = rnd(TAU); m.x = h.x + Math.cos(a)*60; m.y = h.y + Math.sin(a)*60; m.rise = 0.4;
+      const a = rnd(TAU), at = floorAt(h.x + Math.cos(a)*60, h.y + Math.sin(a)*60, m.r + 4);
+      m.x = at.x; m.y = at.y; m.rise = 0.4;
     }
     const K = kindOf(m.kind), spd = MINION_SPD * K.spd;
     if(m.kind === 'overseer'){
@@ -15091,11 +15302,36 @@ function updateMinions(dt){
     if(t){
       const d = Math.hypot(t.x - m.x, t.y - m.y), a = Math.atan2(t.y - m.y, t.x - m.x);
       if(K.range){
-        /* it stands off: closes to its range, backs off inside its comfort */
+        /* THE BACK LINE. It does not plant its feet: in range it keeps a spot
+           in a loose arc on your side of the fight, and picks a new one every
+           second or two, shooting as it goes; anything that gets inside its
+           comfort, it steps back from; out of range, it closes. */
         const want = prop ? 150 : K.range*0.9;
-        if(d > want) minionStep(m, t.x, t.y, dt, spd);
-        else if(!prop && d < K.keep*0.6) minionStep(m, m.x - Math.cos(a)*40, m.y - Math.sin(a)*40, dt, spd*0.7);
-        else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
+        if(prop){
+          if(d > want) minionStep(m, t.x, t.y, dt, spd); else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
+        } else if(d > want){
+          minionStep(m, t.x, t.y, dt, spd); m.spot = null;
+        } else if(d < K.keep*0.6){
+          minionStep(m, m.x - Math.cos(a)*40, m.y - Math.sin(a)*40, dt, spd*0.8); m.spot = null;
+        } else {
+          m.repoT = (m.repoT || 0) - dt;
+          if(!m.spot || m.repoT <= 0){
+            /* a fresh spot, never one it is already standing on */
+            const aT = Math.atan2(t.y - h.y, t.x - h.x);
+            let sx = m.x, sy = m.y;
+            for(let tries=0; tries<6 && Math.hypot(sx - m.x, sy - m.y) < 50; tries++){
+              const side = ((m.slot % 2) ? 1 : -1) * (0.35 + Math.random()*0.9) * (tries % 2 ? -1 : 1);
+              const rr = 70 + Math.random()*90;
+              sx = h.x - Math.cos(aT + side)*rr; sy = h.y - Math.sin(aT + side)*rr;
+              const ds = Math.hypot(sx - t.x, sy - t.y);
+              if(ds > K.range*0.85){ const k = K.range*0.8/ds; sx = t.x + (sx - t.x)*k; sy = t.y + (sy - t.y)*k; }
+            }
+            m.spot = floorAt(sx, sy, m.r + 2); m.repoT = 0.9 + Math.random()*0.7;
+          }
+          if(Math.hypot(m.spot.x - m.x, m.spot.y - m.y) > 14) minionStep(m, m.spot.x, m.spot.y, dt, spd*0.8);
+          else m.moving = false;
+          m.face = { x:Math.cos(a), y:Math.sin(a) };
+        }
         if(d <= Math.max(want, K.range) && m.atkCd <= 0){
           if(m.kind === 'mage'){ m.castT = 0.18; minionShoot(m, t.x, t.y); m.atkCd = minionRate('mage', m); }
           else { m.drawT = 0.3; m.shotAt = { x:t.x, y:t.y }; }
@@ -15154,6 +15390,19 @@ function minionDies(m){
       hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, 'mburst', {});
     }
   }
+}
+/* the ability-row badge: a little skull, and the count across its brow */
+function drawLegionIcon(x, y, n){
+  ctx.save(); ctx.translate(x, y - 2);
+  ctx.fillStyle = '#ede8ff'; ctx.strokeStyle = 'rgba(20,20,40,0.6)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(0, -2, 9, 0, TAU); ctx.fill(); ctx.stroke();
+  roundRect(ctx, -5, 4, 10, 6, 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#3a2f5e';
+  ctx.beginPath(); ctx.arc(-3.3, -2, 2.4, 0, TAU); ctx.arc(3.3, -2, 2.4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#b7a6ff'; ctx.font = '800 11px Fredoka'; ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(15,20,25,0.9)'; ctx.lineWidth = 3;
+  ctx.strokeText(String(n), 11, 12); ctx.fillText(String(n), 11, 12);
+  ctx.restore();
 }
 function drawMinion(c, m){
   if(m.rise < 1){
@@ -15398,12 +15647,32 @@ function startSwing(aim){
    blocked they ask for an A* path and follow its waypoints instead of grinding
    into a boulder. Searches are budgeted per frame and each path is cached, so a
    field of 500 monsters costs a handful of searches, not 500. */
-const NAV = { cs:72, w:0, h:0, blocked:null, gen:0 };
+const NAV = { cs:40, w:0, h:0, blocked:null, gen:0 };
 const NAV_BUDGET = 14;          /* A* searches allowed per frame */
+const NAV_PAD = 18;             /* a body's width kept off geometry */
+const NAV_SMALL = 18;           /* props thinner than this are left to local steering */
 let navBudget = NAV_BUDGET;
 /* scratch buffers reused by every search so the hot path allocates nothing */
 let navG = null, navF = null, navFrom = null, navSeen = null, navStamp = 0;
 
+/* A cell is blocked when its CENTRE is inside something big plus a body's width.
+   A sapling or a crate is not on the grid at all: walled off cell by cell, a wood
+   of them read as a maze with no way through, and one circle is exactly what the
+   local steering already slides round. Lakes, boulders, big rocks and the ruins
+   are what a body has to PLAN around, so they are what the grid knows. */
+function navCellBad(ix, iy){
+  const cs = NAV.cs, cx = ix*cs + cs/2, cy = iy*cs + cs/2, pad = NAV_PAD;
+  if(cx < W.wall+pad || cx > W.w-W.wall-pad || cy < W.wall+pad || cy > W.h-W.wall-pad) return true;
+  for(const so of solids){
+    if(so.dead || (so.r < NAV_SMALL && !so.navHard)) continue;
+    if(Math.abs(cx-so.x) > so.r+pad || Math.abs(cy-so.y) > so.r+pad) continue;
+    if(Math.hypot(cx-so.x, cy-so.y) < so.r + pad) return true;
+  }
+  for(const wa of waters){
+    if(cx > wa.x-pad && cx < wa.x+wa.w+pad && cy > wa.y-pad && cy < wa.y+wa.h+pad) return true;
+  }
+  return false;
+}
 function navBuild(){
   const cs = NAV.cs;
   NAV.w = Math.ceil(W.w/cs); NAV.h = Math.ceil(W.h/cs);
@@ -15411,23 +15680,33 @@ function navBuild(){
   NAV.blocked = new Uint8Array(n);
   navG = new Float32Array(n); navF = new Float32Array(n);
   navFrom = new Int32Array(n); navSeen = new Int32Array(n); navStamp = 0;
-  const pad = 16;   /* keep a body's width away from geometry */
-  /* The test is deliberately against the cell CENTRE, not the whole cell. Cells
-     are 72px and a tree is 14px across: marking every cell a sapling touches
-     would wall off 144px of ground per tree and turn open woodland into a maze
-     with no route through it. Small props are left to local steering instead. */
-  for(let iy=0; iy<NAV.h; iy++) for(let ix=0; ix<NAV.w; ix++){
-    const cx = ix*cs + cs/2, cy = iy*cs + cs/2;
-    let bad = false;
-    if(cx < W.wall+pad || cx > W.w-W.wall-pad || cy < W.wall+pad || cy > W.h-W.wall-pad) bad = true;
-    if(!bad) for(const so of solids){
-      if(Math.hypot(cx-so.x, cy-so.y) < so.r + pad){ bad = true; break; }
-    }
-    if(!bad) for(const wa of waters){
-      if(cx > wa.x-pad && cx < wa.x+wa.w+pad && cy > wa.y-pad && cy < wa.y+wa.h+pad){ bad = true; break; }
-    }
-    NAV.blocked[iy*NAV.w+ix] = bad ? 1 : 0;
+  FLOW.dist = new Float32Array(n); FLOW.heap = new Int32Array(n*4 + 16);
+  for(let iy=0; iy<NAV.h; iy++) for(let ix=0; ix<NAV.w; ix++)
+    NAV.blocked[iy*NAV.w+ix] = navCellBad(ix, iy) ? 1 : 0;
+  NAV.gen++;
+}
+/* THE GRID LEARNS. A crate a body's width from a lake is a gap the grid swears
+   is open and nothing can fit through; the field sent body after body into it.
+   The first time something is wedged against a small prop, that prop joins the
+   grid for the rest of the run, and every route in the field goes round it. */
+function navLearn(e){
+  if(!NAV.blocked) return false;
+  let learnt = false;
+  for(const so of solids){
+    if(so.dead || so.navHard || so.r >= NAV_SMALL) continue;
+    if(Math.hypot(so.x - e.x, so.y - e.y) > so.r + (e.r || 12) + 34) continue;
+    so.navHard = true; navRefresh(so.x, so.y, so.r); learnt = true;
   }
+  return learnt;
+}
+/* something big came apart: the cells it covered are floor again */
+function navRefresh(x, y, r){
+  if(!NAV.blocked) return;
+  const cs = NAV.cs, R = r + NAV_PAD + cs;
+  const x0 = clamp(Math.floor((x-R)/cs), 0, NAV.w-1), x1 = clamp(Math.floor((x+R)/cs), 0, NAV.w-1);
+  const y0 = clamp(Math.floor((y-R)/cs), 0, NAV.h-1), y1 = clamp(Math.floor((y+R)/cs), 0, NAV.h-1);
+  for(let iy=y0; iy<=y1; iy++) for(let ix=x0; ix<=x1; ix++)
+    NAV.blocked[iy*NAV.w+ix] = navCellBad(ix, iy) ? 1 : 0;
   NAV.gen++;
 }
 const navIdx = (ix,iy)=> iy*NAV.w+ix;
@@ -15462,12 +15741,17 @@ function navLineOpen(x1,y1,x2,y2){
   const dx = Math.abs(b.ix-x), dy = Math.abs(b.iy-y);
   const sx = x < b.ix ? 1 : -1, sy = y < b.iy ? 1 : -1;
   let err = dx - dy, guard = 0;
-  while(guard++ < 400){
+  while(guard++ < 800){
     if(NAV.blocked[navIdx(x,y)] === 1) return false;
     if(x === b.ix && y === b.iy) return true;
     const e2 = 2*err;
-    if(e2 > -dy){ err -= dy; x += sx; }
-    if(e2 <  dx){ err += dx; y += sy; }
+    const stepX = e2 > -dy, stepY = e2 < dx;
+    /* a diagonal step may not squeeze between two blocked cells that only
+       touch at a corner -- the line the old walk drew straight through a
+       lake's corner and into the water */
+    if(stepX && stepY && (NAV.blocked[navIdx(x+sx,y)] === 1 || NAV.blocked[navIdx(x,y+sy)] === 1)) return false;
+    if(stepX){ err -= dy; x += sx; }
+    if(stepY){ err += dx; y += sy; }
   }
   return true;
 }
@@ -15509,7 +15793,7 @@ function navFindPath(sx, sy, tx, ty){
     if(closed.has(cur)) continue;
     closed.add(cur);
     if(cur === goal) break;
-    if(++expanded > 3000) return null;          /* give up rather than stall a frame */
+    if(++expanded > 12000) return null;         /* give up rather than stall a frame */
     const cx = cur % NAV.w, cy = (cur / NAV.w) | 0;
     for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
       if(!dx && !dy) continue;
@@ -15563,7 +15847,8 @@ function nearBlockers(e, reach){
 function slideAroundSolids(e, vx, vy, dt){
   const sp = Math.hypot(vx, vy);
   if(sp < 1) return null;
-  let nx = vx/sp, ny = vy/sp, touched = false;
+  const wx = vx/sp, wy = vy/sp;               /* where it WANTS to go */
+  let nx = wx, ny = wy, touched = false;
   for(const so of nearBlockers(e, e.r + 10 + sp*0.35)){
     const dx = so.x - e.x, dy = so.y - e.y;
     const d = Math.hypot(dx, dy);
@@ -15580,7 +15865,14 @@ function slideAroundSolids(e, vx, vy, dt){
       e.slideSign = cross > 0 ? -1 : 1;      /* pick a side and keep it */
       e.slideT = 0.55;
     }
-    const tx = -dy/d * e.slideSign, ty = dx/d * e.slideSign;
+    /* A SLIDE NEVER TURNS IT ROUND. The side is held for half a second so it
+       does not dither, but a side picked while it wanted one thing can point
+       straight back the way it came once it wants another -- a brute lunging
+       up past a lake's corner was slid DOWN, walked back, wound up, and was slid
+       down again, forever. Held or not, the side is the one that still goes
+       forward. */
+    let tx = -dy/d * e.slideSign, ty = dx/d * e.slideSign;
+    if(tx*wx + ty*wy < 0){ e.slideSign = -e.slideSign; tx = -tx; ty = -ty; }
     const k = clamp((look - d) / Math.max(1, rr*0.75), 0, 1);
     nx = nx*(1-k) + tx*k; ny = ny*(1-k) + ty*k;
     const n2 = Math.hypot(nx, ny) || 1; nx /= n2; ny /= n2;
@@ -15656,10 +15948,142 @@ function enemiesNear(x, y, r, out){
   }
   return res;
 }
+/* THE FLOW FIELD. Every monster in the game is after the same hero, so instead of
+   each asking for its own A* path (fourteen a frame, cached, and a body whose turn
+   had not come walked straight into the lake meanwhile), ONE search runs outward
+   from the hero's cell and every open cell learns how far it is from the hero,
+   going round everything. A monster then only has to walk downhill. It is redone
+   when the hero changes cell (and at most every 0.12s), so it is always about
+   where the hero IS, and a field of five hundred costs the same as a field of one. */
+const FLOW = { dist:null, heap:null, ix:-1, iy:-1, gen:-1, t:0, built:0 };
+const FLOW_INF = 1e9;
+function flowBuild(tx, ty){
+  const W2 = NAV.w, H2 = NAV.h, dist = FLOW.dist, blk = NAV.blocked;
+  let heap = FLOW.heap;
+  dist.fill(FLOW_INF);
+  const t0 = navCell(tx, ty), t = navNearestOpen(t0.ix, t0.iy);
+  FLOW.ix = t0.ix; FLOW.iy = t0.iy; FLOW.gen = NAV.gen; FLOW.built++;
+  if(!t) return;
+  /* a binary heap of cell indices keyed on dist; stale entries are skipped on pop */
+  let n = 0;
+  const push = i=>{
+    if(n >= heap.length){ const h2 = new Int32Array(heap.length*2); h2.set(heap); heap = FLOW.heap = h2; }
+    let c = n++; heap[c] = i;
+    while(c > 0){ const q = (c-1)>>1; if(dist[heap[q]] <= dist[heap[c]]) break;
+      const s2 = heap[q]; heap[q] = heap[c]; heap[c] = s2; c = q; } };
+  const pop = ()=>{ const top = heap[0]; heap[0] = heap[--n]; let c = 0;
+    for(;;){ const l = 2*c+1, r2 = l+1; let m = c;
+      if(l < n && dist[heap[l]] < dist[heap[m]]) m = l;
+      if(r2 < n && dist[heap[r2]] < dist[heap[m]]) m = r2;
+      if(m === c) break; const s2 = heap[m]; heap[m] = heap[c]; heap[c] = s2; c = m; }
+    return top; };
+  const g = t.iy*W2 + t.ix;
+  dist[g] = 0; push(g);
+  const done = FLOW.done || (FLOW.done = new Uint8Array(W2*H2));
+  if(done.length !== W2*H2) FLOW.done = new Uint8Array(W2*H2);
+  const dn = FLOW.done; dn.fill(0);
+  while(n > 0){
+    const cur = pop();
+    if(dn[cur]) continue;
+    dn[cur] = 1;
+    const cx = cur % W2, cy = (cur / W2) | 0, dc = dist[cur];
+    for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+      if(!dx && !dy) continue;
+      const nx = cx+dx, ny = cy+dy;
+      if(nx<0 || ny<0 || nx>=W2 || ny>=H2) continue;
+      const ni = ny*W2 + nx;
+      if(blk[ni] === 1 || dn[ni]) continue;
+      if(dx && dy && (blk[cy*W2 + nx] === 1 || blk[ny*W2 + cx] === 1)) continue;
+      const nd = dc + (dx && dy ? 1.4142 : 1);
+      if(nd < dist[ni]){ dist[ni] = nd; push(ni); }
+    }
+  }
+}
+/* keep the field about the hero where the hero is now */
+function flowFresh(dt){
+  if(!NAV.blocked || !FLOW.dist || !heroObj) return;
+  FLOW.t -= dt;
+  const c = navCell(heroObj.x, heroObj.y);
+  if(FLOW.gen !== NAV.gen || ((c.ix !== FLOW.ix || c.iy !== FLOW.iy) && FLOW.t <= 0)){
+    flowBuild(heroObj.x, heroObj.y); FLOW.t = 0.12;
+  }
+}
+/* Does a body of radius r walking the segment cross a lake? The grid's sight
+   line runs cell centre to cell centre, and a cell can be open with its edge
+   against the water -- a lancer on a lake's corner saw straight past it and
+   walked into the shore forever. This is the real shape, checked only against
+   the lakes (the round things are what the local steering slides round). */
+function segHitsWater(x1, y1, x2, y2, r){
+  const dx = x2 - x1, dy = y2 - y1;
+  for(const w of waters){
+    const L = w.x - r, R = w.x + w.w + r, T = w.y - r, B = w.y + w.h + r;
+    if(Math.max(x1, x2) < L || Math.min(x1, x2) > R || Math.max(y1, y2) < T || Math.min(y1, y2) > B) continue;
+    let t0 = 0, t1 = 1;
+    if(Math.abs(dx) < 1e-9){ if(x1 < L || x1 > R) continue; }
+    else { let a = (L - x1)/dx, b = (R - x1)/dx; if(a > b){ const q = a; a = b; b = q; }
+      t0 = Math.max(t0, a); t1 = Math.min(t1, b); if(t0 > t1) continue; }
+    if(Math.abs(dy) < 1e-9){ if(y1 < T || y1 > B) continue; }
+    else { let a = (T - y1)/dy, b = (B - y1)/dy; if(a > b){ const q = a; a = b; b = q; }
+      t0 = Math.max(t0, a); t1 = Math.min(t1, b); if(t0 > t1) continue; }
+    return true;
+  }
+  return false;
+}
+/* the far end of the downhill walk that is still in plain sight of `e` */
+function flowAim(e){
+  const dist = FLOW.dist, W2 = NAV.w, H2 = NAV.h, blk = NAV.blocked;
+  const c0 = navCell(e.x, e.y);
+  let ix = c0.ix, iy = c0.iy, best = null;
+  if(dist[iy*W2+ix] >= FLOW_INF){
+    /* standing in the padded band round something: the open neighbour nearest home */
+    let bd = FLOW_INF, bx = -1, by = -1;
+    for(let r=1; r<=3 && bx < 0; r++)
+      for(let dy=-r; dy<=r; dy++) for(let dx=-r; dx<=r; dx++){
+        const nx = ix+dx, ny = iy+dy;
+        if(nx<0||ny<0||nx>=W2||ny>=H2) continue;
+        const d = dist[ny*W2+nx] + Math.hypot(dx, dy);
+        if(d < bd){ bd = d; bx = nx; by = ny; }
+      }
+    if(bx < 0) return null;                       /* cut off from the hero entirely */
+    return { x:navCX(bx), y:navCY(by) };
+  }
+  for(let step=0; step<10; step++){
+    let bd = dist[iy*W2+ix], nx0 = -1, ny0 = -1;
+    if(bd === 0) break;
+    for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+      if(!dx && !dy) continue;
+      const nx = ix+dx, ny = iy+dy;
+      if(nx<0||ny<0||nx>=W2||ny>=H2) continue;
+      if(dx && dy && (blk[iy*W2+nx] === 1 || blk[ny*W2+ix] === 1)) continue;
+      const d = dist[ny*W2+nx];
+      if(d < bd){ bd = d; nx0 = nx; ny0 = ny; }
+    }
+    if(nx0 < 0) break;
+    ix = nx0; iy = ny0;
+    const px = navCX(ix), py = navCY(iy);
+    if(step < 1 || (navLineOpen(e.x, e.y, px, py) && !segHitsWater(e.x, e.y, px, py, (e.r||12)*0.8))) best = { x:px, y:py };
+    else break;
+  }
+  return best;
+}
 /* Steer `e` toward the player, pathing around geometry only when it has to.
    Returns a unit direction, or null to fall back to the caller's own steering. */
 function navSteer(e, dt){
   if(!NAV.blocked) return null;
+  /* after the hero: walk the shared field downhill */
+  if(player === heroObj && FLOW.dist && FLOW.gen === NAV.gen){
+    e.path = null;
+    if(navLineOpen(e.x, e.y, player.x, player.y) && !navBlockedAt(e.x, e.y) &&
+       !segHitsWater(e.x, e.y, player.x, player.y, (e.r||12)*0.8)) return null;
+    e.flowT = (e.flowT || 0) - dt;
+    if(!e.flowAt || e.flowT <= 0 || Math.hypot(e.flowAt.x - e.x, e.flowAt.y - e.y) < NAV.cs*0.5){
+      e.flowAt = flowAim(e); e.flowT = 0.15;
+    }
+    if(!e.flowAt) return null;
+    const a = Math.atan2(e.flowAt.y - e.y, e.flowAt.x - e.x);
+    return { x: Math.cos(a), y: Math.sin(a) };
+  }
+  /* after a skeleton: its own A* path, on the budget */
   e.pathT -= dt;
   const losNow = navLineOpen(e.x, e.y, player.x, player.y);
   if(losNow && !navBlockedAt(e.x, e.y)){
@@ -16503,8 +16927,10 @@ function updateEnemyCore(e, dt){
     const dd = angDiff(toP, e.faceA);
     e.faceA += clamp(dd, -2.2*dt, 2.2*dt);
     e.face = {x:Math.cos(e.faceA), y:Math.sin(e.faceA)};
-    if(dP > 95){ vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed; }
-    else if(dP < 70){ vx = -Math.cos(toP)*e.speed*0.45; vy = -Math.sin(toP)*e.speed*0.45; }
+    /* it holds off behind the shield, and steps in to strike whenever its
+       sword is ready -- a knight that only ever held off never hit anything */
+    if(dP > 95 || (e.hitCd <= 0 && !e.docile)){ vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed; }
+    else if(dP < 70 && !(e.strikeT > 0)){ vx = -Math.cos(toP)*e.speed*0.45; vy = -Math.sin(toP)*e.speed*0.45; }
   }
   else if(e.type==='boss'){ updateBoss(e, dt, toP, dP); return; }
   else {
@@ -16549,7 +16975,8 @@ function updateEnemyCore(e, dt){
     if(e.stuckT > 0.35){
       e.stuckT = 0;
       /* whatever it was following is demonstrably not working */
-      e.path = null; e.pathT = 0; e.slideT = 0;
+      e.path = null; e.pathT = 0; e.slideT = 0; e.flowAt = null;
+      navLearn(e);
       /* inside the padded band the grid has a definite answer; wedged between
          two things it has never heard of, the normals do */
       const esc = navEscape(e.x, e.y) || openWayOut(e);
@@ -19968,6 +20395,36 @@ function drawProp(c, p){
     roundRect(c,-7,-4,14,6,2); c.fill(); c.stroke();
     drawStudG(c,-3,-1,2,'#2f9a63'); drawStudG(c,3,-1,2,'#2f9a63');
   }
+  /* a pillar of the ruins: 2x2 round bricks stacked, the run's own stone */
+  else if(p.type==='pillar'){
+    const r = p.r, OL = 'rgba(20,30,40,0.55)';
+    const base = runBiome==='desert' ? '#cdb888' : runBiome==='ash' ? '#5d5657'
+               : runBiome==='tundra' ? '#dfe6ea' : runBiome==='swamp' ? '#7d8a78' : '#a3a7a2';
+    const tiers = Math.max(1, Math.round(4 * (p.tall || 1))), th = 15;
+    /* the footing slab */
+    c.fillStyle = sh(base, -0.25); c.strokeStyle = OL; c.lineWidth = 2;
+    roundRect(c, -r-4, -8, (r+4)*2, 12, 3); c.fill(); c.stroke();
+    for(let i=0;i<tiers;i++){
+      const y0 = -8 - (i+1)*th, col = sh(base, (hash2(p.seed|0, i)-0.5)*0.14);
+      c.fillStyle = sh(col, -0.18);
+      roundRect(c, -r*0.78, y0, r*1.56, th+1, 3); c.fill(); c.stroke();
+      c.fillStyle = sh(col, 0.10);
+      c.fillRect(-r*0.78+3, y0+2, r*0.5, th-4);
+    }
+    const top = -8 - tiers*th;
+    c.fillStyle = sh(base, 0.06);
+    c.beginPath(); c.ellipse(0, top, r*0.78, r*0.36, 0, 0, TAU); c.fill(); c.stroke();
+    if((p.tall || 1) < 1){
+      /* snapped off: a jagged break and a fallen drum beside it */
+      c.fillStyle = sh(base, -0.3);
+      c.beginPath(); c.moveTo(-r*0.5, top); c.lineTo(-r*0.15, top-5); c.lineTo(r*0.2, top+1); c.lineTo(r*0.5, top-4);
+      c.lineTo(r*0.5, top+3); c.lineTo(-r*0.5, top+3); c.closePath(); c.fill();
+      c.fillStyle = sh(base, -0.1);
+      roundRect(c, r*0.55, -10, th+2, r*1.1, 3); c.fill(); c.stroke();
+    } else {
+      drawStudG(c, -r*0.3, top, 4, base); drawStudG(c, r*0.3, top, 4, base);
+    }
+  }
   /* NEW: giant indestructible cave boulder */
   else if(p.type==='boulder'){
     const r = p.r;
@@ -23133,6 +23590,13 @@ function renderHUD(){
   if(p.fortuneT > 0) buffs.push({ c:'#ffd166', t:'FORTUNE \u00d7'+p.fortuneMul+
                                    ' studs & XP \u00b7 '+Math.ceil(p.fortuneT)+'s' });
   if(p.magnetT > 0)  buffs.push({ c:'#9fd4ff', t:'MAGNET \u00b7 '+Math.ceil(p.magnetT)+'s' });
+  if(isSummoner()){
+    const L = legion(), kinds = {};
+    for(const m of L) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
+    const worth = Object.entries(kinds).map(([k, n])=>n+' '+(k === 'bow' ? 'archer' : k === 'spear' ? 'spear' : k)+(n > 1 ? 's' : ''));
+    if(minions.some(m=>m.kind === 'overseer' && !m.gone)) worth.push('overseer');
+    buffs.push({ c:'#b7a6ff', t:'LEGION '+L.length+'/'+minionMax(), more:worth });
+  }
   /* active ailments, so you can see why you're slow / on fire / getting crit */
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
@@ -23203,6 +23667,13 @@ function renderHUD(){
     ctx.fillText(label, x, ch-56+40);
   };
   const autos = [];
+  /* THE LEGION, COUNTED. In a crowd your skeletons are hard to pick out, so the
+     count sits in the ability row: how many stand of how many may, the ring
+     filling as the legion does */
+  if(isSummoner()){
+    const L = legion(), up = L.filter(m=>m.rise >= 1).length, mx = minionMax();
+    autos.push({ f: mx ? clamp(up/mx, 0, 1) : 1, label:'LEGION '+up+'/'+mx, icon:(x,y)=>drawLegionIcon(x, y, up) });
+  }
   if(p.orbit.n>0) autos.push({f:1, label:'ORBIT ×'+p.orbit.n, icon:(x,y)=>{
     ctx.save(); ctx.translate(x,y); ctx.rotate(vtime*2);
     ctx.fillStyle='#d3242b'; ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=1.4;
@@ -23724,6 +24195,7 @@ function update(dt, raw){
     mouse.wy = cam.y + (mouse.y - ch/2)/zoom;
     updatePlayer(dt);
     egridBuild();
+    flowFresh(dt);
     for(const e of enemies) updateEnemy(e, dt);
     separate();
     enemies = enemies.filter(e=>!e.dead);
