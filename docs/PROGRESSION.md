@@ -2722,4 +2722,12 @@ table's number against itself.
 Two old statistical checks that failed once each this round were sampled too thin: the Breach
 pixel count now subtracts a baseline read with the body nowhere near (a stud or a flower in the
 window read as nine yellow pixels), and the exposure-share check takes 2,000 hits instead of 400.
-64 tests green.
+
+**And I pushed this pass before reading its suite run, which had two failures.** Neither was in the
+bow; both were tests asking the wrong question. Breach's "a body inside its circle can be hit"
+swung a 1-damage *attack* at whatever body the layer rolled — a stalker dodges; it asks with no
+evasion now, because the question is whether it is there. And the ember loopback check wanted
+"more stacks after than before", but an ember that lands can throw more, and a pile that reaches
+the cap breaks into a BURNT mark and starts again from one: 2 before and 1 after can be twelve
+stacks' worth of fire. It counts fire laid now — stacks, plus a cap's worth per mark — and the
+break that stops embers landing is still caught. 63 tests green.
