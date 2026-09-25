@@ -2504,6 +2504,12 @@ Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own b
 - **Piercing Shot** — +1 pierce, up to 8; each body an arrow has gone through costs it 15%.
 - **Barbed Arrows** — flat physical to arrows only.
 
+**An arrow shoots things down.** Cross a monster's shot — an arrow, a skull, a bolt, a frost
+bolt, a hex, a bat — and both are gone: the arrow is spent taking it out of the air. A thrown
+boulder is the one thing it cannot stop; the arrow breaks on it and the boulder keeps coming.
+**It breaks things too:** crates, trees, rocks, cacti and chests take one knock an arrow, the
+same as a swing, and the arrow stops in them — so a bow opens a chest from across the field.
+
 **One arrow legendary a run.** The three are exclusive; taking one closes the others.
 
 | | converts | ailment | at the body |

@@ -2650,3 +2650,22 @@ clock at thirty, as before. Each buff remembers its clock's full length (`magnet
 ring drains against 90s when there are 90s on it, instead of reading "already over" past thirty.
 
 The test drops real pickups on the hero and lets the game collect them. 9 breaks, 63 tests green.
+
+## Thirty-second pass — an arrow meets things
+
+> *"Make sure that the arrow shots actually can deflect (this basically destroys both the arrow
+> AND the projectile it hits). Also make sure it can destroy chests and other breakable stuff."*
+
+Neither was true. The arrow's flight checked `solids` and bodies and nothing else: a crate or a tree
+stopped it without taking a knock, and a **chest is a prop but not a solid**, so an arrow flew
+straight through one — a bow hero could not open a chest without walking up to it.
+
+Two passes in the arrow's flight, before the solids. **Shots:** every enemy-owned projectile whose
+path crosses the arrow's this frame — swept segment against segment, since an arrow and a bolt close
+at over a thousand px/s — dies, and so does the arrow. A thrown boulder breaks the arrow and keeps
+coming. A shot the sword deflected is the hero's and is left alone. **Scenery:** the first breakable
+prop the arrow's path crosses takes one knock, exactly as a swing gives, and breaks at zero; a
+boulder prop stops it unharmed; torches and crystals are air.
+
+The bow test's firing range now clears props as well as solids — they stop arrows now, and a crate
+in the line would be the same one-run-in-five flake the solids were. 11 breaks, 63 tests green.

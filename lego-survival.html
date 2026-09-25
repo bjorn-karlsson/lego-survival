@@ -884,6 +884,7 @@ const ARROW_KINDS = {
 const ARROW_SOURCES = new Set(['arrow', 'arrowfork', 'arrowblast']);
 /* the tree's Ricochet keystone: an arrow that would stop finds another body */
 const RICO_MAX = 2, RICO_R = 260;
+const ARROW_SHOOT_R = 6;   /* an arrow's own half-width when it meets a monster's shot */
 /* how much an arrow is worn by each body it has already gone through */
 function pierceFall(n){
   if(n <= 0) return 0;
@@ -17289,7 +17290,40 @@ function updateProjectiles(dt){
     else if(pr.kind==='parrow'){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
       if(pr.life<=0) pr.dead = true;
-      for(const so of solids) if(dist(pr, so) < so.r){ pr.dead = true; addDust(pr.x, pr.y, 2); break; }
+      /* IT MEETS WHAT IS COMING THE OTHER WAY. An arrow that crosses a monster's
+         shot takes it out of the air and is spent doing it -- both are gone.
+         Swept against both paths, because two things closing at a thousand px/s
+         pass clean through each other between frames. A thrown boulder is the
+         one thing an arrow cannot stop: the arrow breaks on it, the boulder
+         keeps coming. */
+      if(!pr.dead) for(const q of projectiles){
+        if(q === pr || q.dead || q.owner !== 'enemy') continue;
+        if(Math.abs(q.x - pr.x) > 90 || Math.abs(q.y - pr.y) > 90) continue;
+        const rr = ARROW_SHOOT_R + (q.hitR !== undefined ? q.hitR : 7 + (q.big ? 5 : 0));
+        if(segSegDist(pr.px, pr.py, pr.x, pr.y, q.px ?? q.x, q.py ?? q.y, q.x, q.y) > rr) continue;
+        pr.dead = true;
+        if(q.kind !== 'frostrock'){ q.dead = true; player.shotDown = (player.shotDown || 0) + 1; }
+        addSparks(q.x, q.y, 7, '#ffe08a'); SFX.deflect();
+        break;
+      }
+      /* IT BREAKS WHAT IT HITS. Crates, trees, rocks, cacti and chests take an
+         arrow the way they take a swing -- one knock each -- and the arrow stops
+         in them. Chests are props but not solids, so without this an arrow flew
+         straight through a chest and a bow hero could never open one at range. */
+      if(!pr.dead) for(const prop of props){
+        if(prop.dead) continue;
+        if(Math.abs(prop.x - pr.x) > 120 || Math.abs(prop.y - pr.y) > 120) continue;
+        if(segDist(pr.px, pr.py, pr.x, pr.y, prop.x, prop.y) > prop.r + 3) continue;
+        if(prop.type === 'torch' || prop.type === 'crystal') continue;
+        pr.dead = true;
+        if(!prop.indestructible){
+          prop.hp--; prop.flash = 1;
+          addSparks(prop.x, prop.y-10, 3); SFX.hit();
+          if(prop.hp <= 0) breakProp(prop);
+        } else addDust(pr.x, pr.y, 2);
+        break;
+      }
+      if(!pr.dead) for(const so of solids) if(dist(pr, so) < so.r){ pr.dead = true; addDust(pr.x, pr.y, 2); break; }
       if(!pr.dead) for(const e of enemiesNear((pr.x+pr.px)/2, (pr.y+pr.py)/2,
             Math.hypot(pr.x-pr.px, pr.y-pr.py)/2 + 90)){
         if(e.dead||e.state!=='active'||pr.hit.has(e)) continue;
