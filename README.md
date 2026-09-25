@@ -91,7 +91,7 @@ with](#the-combination-panel).
 
 ### 🗡️ Pick a weapon
 
-`SWORD` · `AXE` · `MACE` · `STAFF` · **`BOW`**
+`SWORD` · `AXE` · `MACE` · `STAFF` · **`BOW`** · **`SCEPTER`**
 
 Your weapon is a **table row**, not a special case in the code — base damage, swing time,
 reach, crit, bleed, and what it is worth defensively. The art follows it: you hold what you
@@ -99,7 +99,8 @@ picked, you swing it, and your spells throw it.
 
 The **staff does not swing at all**. It casts fireballs, and it trades the whole melee kit
 for the elemental one. The **bow** does not swing either: it looses arrows, and one legendary a
-run makes them [Lightning, Fire or Chaos Arrow](#the-bow).
+run makes them [Lightning, Fire or Chaos Arrow](#the-bow). The **scepter** hits nothing at
+all — it [raises the dead](#the-scepter) and they fight for you.
 
 Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
 comparison against the sword.
@@ -181,9 +182,11 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
 | **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
 | **BOW** | 1.25 | 0.60s | *arrow* | 7% | ×1.65 | ×0.8 | — |
+| **SCEPTER** | 1.60 | 0.70s | *raise* | 5% | ×1.50 | — | — |
 
-**Three of the five do not swing at all.** The staff casts a fireball; the mace opens a
-**ground slam**; the bow looses an [arrow](#the-bow). Both trade the whole melee kit — reach, the spin combo, the whirl — for an
+**Four of the six do not swing at all.** The staff casts a fireball; the mace opens a
+**ground slam**; the bow looses an [arrow](#the-bow); the scepter [raises skeletons](#the-scepter)
+(its 1.60 is what one skeleton hits for, and 0.70s is one raising). Both trade the whole melee kit — reach, the spin combo, the whirl — for an
 attack of their own, and both are offered the sword's bricks no more than a staff is
 offered the axe's.
 
@@ -196,6 +199,7 @@ offered the axe's.
 | **MACE** | **60%** | **30%** | 10% of swings, for 3.5% | — |
 | **STAFF** | — | — | — | **+8% to all three** |
 | **BOW** | — | 10% | — | — · **+120 evasion** |
+| **SCEPTER** | — | 15% | — | — |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
@@ -2514,6 +2518,43 @@ land — a bomb goes over it, and a spin comes round it. Nothing without a shiel
 used to be a certainty: a knight facing you stopped every arrow ever loosed, which made it a wall
 for a bow. The bestiary lists the block chance.
 
+### The scepter
+
+The last door on the tree, intelligence's second weapon, and a summoner in the PoE mould. **The
+hero hits nothing.** Holding attack **raises skeletons** out of the floor where you point — one a
+raising, three at a time to begin with — and they walk to whatever is near you and cut it down.
+They are the wall, too: a monster touching a skeleton is held at half speed and fights it, and
+its touch lands on the skeleton instead of on you. They die; you raise more.
+
+- **At a full legion a raising is a RALLY:** every skeleton turns on the body nearest your
+  pointer for 3s. It is the one order a summoner gives.
+- **A minion's numbers are its own.** A skeleton hits for (the scepter's 1.60 + minion flat) ×
+  (1 + your level pool + the minion pool). Nothing you buy for your own hits reaches it, and your
+  conversions do not either. Its life is 10, plus 12% for every hero level, times the minion life
+  pool. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
+  that is lost rises again at your side.
+- **Bricks:** Bone Legion (+1 skeleton, to 10), Grim Feast (minion damage), Bone Armour (minion
+  life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (two a raising).
+- **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
+  reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%
+  of a blade's hit. Every bolt is its element and leaves its element's ailment.
+- **Necromancer** is its favourite: +1 skeleton, +15% minion damage, +20% minion life, and twelve
+  intelligence.
+
+![A legion of three, and the scepter](docs/scepter-legion.png)
+![Skeleton Mages: fire, cold and lightning](docs/scepter-mages.png)
+
+**On the tree:** the scepter's door opens into minion damage, minion life, minion speed and
+energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. And two keystones:
+
+> **Mirrored Legion** — *your legion fights the way you do.* Your minions gain **three quarters
+> of your own increased damage** — physical, elemental and spell — and **your conversions**, on
+> every hit they make. You deal **40% LESS damage** yourself. Build yourself and your army
+> follows; the price is the hits you still throw with your spells.
+
+> **Minion Instability** — *what falls, burns.* A skeleton that dies **bursts**, dealing 30% of
+> its life as fire to everything within 110px. 15% LESS minion damage.
+
 ### The bow
 
 A dexterity weapon, and the fifth door on the tree. It does not swing: the attack button looses
@@ -2613,6 +2654,7 @@ and which damage line they feed:
 | Guardian Brick | 6 | | 6 |
 | Brickbane | | 8 | 4 |
 | Deadeye | | 12 | |
+| Necromancer | | | 12 |
 | Storm Brick | | 4 | 8 |
 | Bladestorm | 4 | 8 | |
 | Blade Vortex | 6 | 6 | |

@@ -273,7 +273,9 @@
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  #weaponRow .diff{position:relative}
+  /* six weapons on one line: a little narrower than the difficulty buttons */
+  #weaponRow{gap:8px}
+  #weaponRow .diff{position:relative;min-width:88px;padding:7px 9px 6px}
   /* THE MACE AND THE STAFF DID NOT FIT. An absolutely positioned tip anchored
      above its row has no idea where the top of the window is, so the two
      longest ones ran off the screen. It is the same FIXED, viewport-clamped
@@ -1317,7 +1319,7 @@ const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
    wizard — a bolt that bursts and sets a fire has to land as an event you can
    see. Three a second is the fastest a staff will ever go. */
 const CAST_RATE_MIN = 0.34;
-function atkFloor(){ return isCaster() ? CAST_RATE_MIN : ATK_RATE_MIN; }
+function atkFloor(){ return (isCaster() || isSummoner()) ? CAST_RATE_MIN : ATK_RATE_MIN; }
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
@@ -1767,7 +1769,21 @@ const WEAPONS = {
     /* and the one weapon that starts with some evasion of its own */
     evaBase:120,
     attr:{ str:2, int:0, dex:22 },
-    arrowSpd:780 }
+    arrowSpd:780 },
+  /* THE SCEPTER DOES NOT SWING, CAST OR SHOOT. It RAISES THE DEAD: holding the
+     attack button stands skeletons up out of the floor where you point, and
+     they do the fighting. Its `dmg` is not the hero's hit -- it is what one
+     skeleton hits for before anything scales it -- and its `rate` is how long
+     one raising takes. Intelligence's second weapon, and the one that replaces
+     the wand the map had been keeping a door for. */
+  scepter: { id:'scepter', name:'SCEPTER', col:'#b7a6ff',
+    blurb:'Raises skeletons instead of swinging. They fight; you stand behind them.',
+    summon:true,
+    dmg:1.6, rate:0.70, reach:0, spinReach:0, crit:0.05, critMult:150,
+    bleed:0, spin:1.00, kb:0.80, hold:'scepter', throw:'blade',
+    lessTaken:0, suppress:0.15, leech:0, leechChance:0,
+    acc:0.80,
+    attr:{ str:2, int:22, dex:0 } }
 };
 /* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
    with RANGE — it never has to be where the monsters are. A melee hero has no
@@ -2135,7 +2151,9 @@ const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
                          They are converted ATTACK damage, so they meet armour
                          like the physical half does and then pay the monster's
                          resistance on top — one rule for all three. */
-                      slamfire:'fire', slamfrost:'frost', slamshock:'shock' };
+                      slamfire:'fire', slamfrost:'frost', slamshock:'shock',
+                      /* a skeleton mage's bolt is its element; a bursting skeleton is fire */
+                      mfire:'fire', mfrost:'frost', mshock:'shock', mburst:'fire' };
 /* a monster's resistance to one element, 0 when it has none. Capped below 1 for
    everything except an IMMUNE marker, so "max resistance" is a wall and not a
    divide-by-zero — you can still grind a fire golem down with fire, it is simply
@@ -2226,6 +2244,9 @@ function arrowAilBonus(source, type){
    GAIN -- is the hero's, untouched. Built per arrow hit; it is a handful of
    numbers, and caching it would mean invalidating it on every card. */
 function convTableFor(source){
+  /* A MINION'S HIT IS NOT YOURS: your conversions reach it only through the
+     mirror */
+  if(MINION_SOURCES.has(source) && !(player && player.minions && player.minions.mirror)) return null;
   const base = player && player.conv;
   const k = player && player.bow && player.bow.kind;
   if(!k || !ARROW_SOURCES.has(source)) return base;
@@ -3367,6 +3388,7 @@ let frameRaw = 1/60;   /* real seconds of the frame being drawn */
 let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
 let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[], pspikes=[];
+let minions = [];      /* the hero's raised dead */
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, done:0 };
 /* the wave's BREACH, if it carries one (see BREACH), and how many ordinary
    waves in a row have gone without */
@@ -3581,6 +3603,12 @@ function newPlayer(){
        own, a LESS for the Ricochet keystone, and which of the three it became */
     bow:{ n:1, pierce:0, flat:0, more:1, kind:null },
     ricochet:0,
+    /* THE LEGION. How many may stand, how many rise a cast, and the minions'
+       OWN pools -- a minion's damage is not yours, and nothing you buy for your
+       own hits reaches it unless something says so (Mirrored Legion does). */
+    minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
+              mages:false, mirror:false, instab:false },
+    rallyT:0, rallyTgt:null,
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
@@ -5670,7 +5698,10 @@ function isCaster(){ return !!(weapon && weapon.cast); }
    "!isCaster()" to mean "swings a blade" -- which was true until a weapon
    arrived that does neither -- so the blade-only gates ask isMelee() now. */
 function isArcher(){ return !!(weapon && weapon.shoot); }
-function isMelee(){ return !isCaster() && !isArcher(); }
+function isSummoner(){ return !!(weapon && weapon.summon); }
+/* what one use of the attack button is called, for the sheet's sentences */
+function swingWord(){ return isCaster() ? 'cast' : isArcher() ? 'shot' : isSummoner() ? 'raising' : isSlammer() ? 'slam' : 'swing'; }
+function isMelee(){ return !isCaster() && !isArcher() && !isSummoner(); }
 /* the mace, and anything else that ever earns the ground slam */
 function isSlammer(){ return !!(weapon && weapon.slam); }
 /* Block Freeze's own damage. It is elemental, so it reads the elemental pool
@@ -6496,7 +6527,7 @@ function startWave(n){
      they are the thing worth reading before the break runs out */
   const modLine = waveMods.length
     ? waveMods.map(m=>m.name).join('  ·  ')
-    : (n===1 ? biomeName()+' · '+(isCaster()?'Cast':isSlammer()?'Slam':isArcher()?'Shoot':'Slash')+
+    : (n===1 ? biomeName()+' · '+(isCaster()?'Cast':isSlammer()?'Slam':isArcher()?'Shoot':isSummoner()?'Raise the dead':'Slash')+
                ' with LMB · SPACE to roll!' : '');
   showBanner(boss ? 'WAVE '+n : 'WAVE '+n,
     boss ? (bname+' approaches...' + (waveMods.length ? '   ['+waveMods.map(m=>m.name).join(' · ')+']' : ''))
@@ -7218,6 +7249,7 @@ const ICONS = {
   coin:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
   range:'<circle cx="12" cy="12" r="3.5"/><path d="M12 6 V2 M12 22 v-4 M6 12 H2 M22 12 h-4"/>',
   orbit:'<circle cx="12" cy="12" r="3.6"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(-24 12 12)"/>',
+  skull:'<path d="M12 3 C7 3 4.5 6.4 4.5 10.2 c0 2.6 1.3 4.4 3 5.3 V19 h9 v-3.5 c1.7 -0.9 3 -2.7 3 -5.3 C19.5 6.4 17 3 12 3 Z"/><circle cx="9" cy="10.5" r="1.7"/><circle cx="15" cy="10.5" r="1.7"/><path d="M10 19 v2 M14 19 v2"/>',
   bow:'<path d="M7 3 C17 7 17 17 7 21"/><path d="M7 3 V21"/><path d="M3 12 H19"/><path d="M16 9.5 L19 12 L16 14.5"/>',
   storm:'<path d="M12 3 v4 M12 17 v4 M3 12 h4 M17 12 h4 M5.6 5.6 l2.8 2.8 M15.6 15.6 l2.8 2.8 M18.4 5.6 l-2.8 2.8 M8.4 15.6 l-2.8 2.8"/><circle cx="12" cy="12" r="2.4"/>',
   vortex:'<path d="M12 12 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0"/><path d="M12 12 m-5.5 0 a5.5 5.5 0 1 1 5.5 -5.5"/><path d="M12 12 m-9 0 a9 9 0 1 1 9 -9"/>',
@@ -7283,7 +7315,7 @@ const ICONS = {
 };
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
-    req:()=>!isCaster(),
+    req:()=>!isCaster() && !isSummoner(),
     /* common barely sharpens it; rare and epic are a real weapon upgrade */
     calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8])}),
     desc:c=>`+${fmtHp(c.v)} FLAT PHYSICAL damage — before any increase, whatever you are holding`,
@@ -7480,7 +7512,7 @@ const UPGRADES = [
     },
     apply:c=>{ player.ember = Math.min(EMBER_MAX, (player.ember||0) + 1); } },
   { id:'bladem', name:'Blade Mastery', icon:'fist', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && incRoom('melee'),
+    req:()=>!isCaster() && !isSummoner() && incRoom('melee'),
     calc:m=>({v:0.07+0.045*m}),
     desc:c=>`${Math.round(c.v*100)}% increased PHYSICAL damage — your weapon, bladestorm and vortex `+
       `${incCapTag('melee')}`,
@@ -7557,7 +7589,7 @@ const UPGRADES = [
     req:()=>player.atkRate > atkFloor(),
     calc:m=>({v:0.10+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ATTACK SPEED — swings and casts alike `+
-      `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':isArcher()?'shot':'swing'})`,
+      `(floor ${atkFloor().toFixed(2)}s per ${isCaster()?'cast':isArcher()?'shot':isSummoner()?'raising':'swing'})`,
     apply:c=>{ player.inc.atk += c.v; syncStats(); } },
   /* THE GLOBAL CAST SPEED. `Quickening` is the hero's own hands — it shortens
      the swing or the bolt. This is every ABILITY the hero owns, all at once,
@@ -7845,14 +7877,14 @@ const UPGRADES = [
   /* BLEED lives in the crit tree, not in a tree of its own: a swing bleeds
      because it crit, and these two decide how often and how deep. */
   { id:'bleedchance', name:'Serrated Edge', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>!isCaster() && player.bleedChance < 1,
+    req:()=>!isCaster() && !isSummoner() && player.bleedChance < 1,
     calc:m=>({v: byRar(m, [0.05, 0.08, 0.12, 0.18, 0.25])}),
     desc:c=>`+${Math.round(c.v*100)}% chance for an ATTACK to open a BLEED — a wound is `+
       `the one ailment a critical does not hand you, so this and Afflict are the only `+
       `things that open one (now ${Math.round(bleedChance(false)*100)}% on a swing)`,
     apply:c=>{ player.bleedChanceFlat += c.v; syncStats(); } },
   { id:'bleedpow', name:'Deep Cuts', icon:'sword', cls:'OFFENSE', minRar:'rare',
-    req:()=>!isCaster() && player.bleedShare < BLEED_SHARE_MAX,
+    req:()=>!isCaster() && !isSummoner() && player.bleedShare < BLEED_SHARE_MAX,
     calc:m=>({v: byRar(m, [0.03, 0.05, 0.08, 0.12, 0.18])}),
     desc:c=>{
       const next = Math.min(BLEED_SHARE_MAX, player.bleedShare + c.v);
@@ -7947,6 +7979,48 @@ const UPGRADES = [
   /* ---- THE BOW. The arrow is upgraded by everything a weapon attack reads --
      flat physical, increased physical, attack speed, crit, accuracy, bleed --
      and by these, which are its own. ---- */
+  /* ---- THE LEGION. The scepter's bricks: how many, how hard, how long ---- */
+  { id:'minionmax', name:'Bone Legion', icon:'skull', cls:'OFFENSE', minRar:'uncommon',
+    req:()=>isSummoner() && player.minions.max < MINION_MAX_CAP,
+    calc:m=>({n:1}),
+    desc:c=>`+1 SKELETON in your legion (${player.minions.max} → ${Math.min(MINION_MAX_CAP, player.minions.max+1)}, `+
+      `cap ${MINION_MAX_CAP}). Raise it with the scepter like the rest`,
+    apply:c=>{ player.minions.max = Math.min(MINION_MAX_CAP, player.minions.max + 1); } },
+  { id:'miniondmg', name:'Grim Feast', icon:'skull', cls:'OFFENSE',
+    req:()=>isSummoner(),
+    calc:m=>({v: byRar(m, [0.12, 0.18, 0.26, 0.36, 0.50])}),
+    desc:c=>`+${Math.round(c.v*100)}% increased MINION damage — their own pool, which nothing you buy for `+
+      `your own hits touches (a skeleton hits for ${fmtHp(minionDamage(player.minions.mages))} now)`,
+    apply:c=>{ player.minions.inc = Math.round((player.minions.inc + c.v)*1000)/1000; } },
+  { id:'minionlife', name:'Bone Armour', icon:'shieldplus', cls:'DEFENSE',
+    req:()=>isSummoner(),
+    calc:m=>({v: byRar(m, [0.15, 0.22, 0.32, 0.45, 0.65])}),
+    desc:c=>`+${Math.round(c.v*100)}% increased MINION life (a skeleton stands up with `+
+      `${Math.round(minionMaxHp())} now). Skeletons already standing keep what they rose with`,
+    apply:c=>{ player.minions.life = Math.round((player.minions.life + c.v)*1000)/1000; } },
+  { id:'minionspd', name:'Quickened Bones', icon:'tempo', cls:'OFFENSE',
+    req:()=>isSummoner() && player.minions.spd < 1.5,
+    calc:m=>({v: byRar(m, [0.08, 0.12, 0.16, 0.22, 0.30])}),
+    desc:c=>`+${Math.round(c.v*100)}% increased MINION attack and cast speed`,
+    apply:c=>{ player.minions.spd = Math.min(1.5, Math.round((player.minions.spd + c.v)*1000)/1000); } },
+  { id:'minionflat', name:'Sharpened Bones', icon:'sword', cls:'OFFENSE',
+    req:()=>isSummoner(),
+    calc:m=>({v: byRar(m, [0.3, 0.5, 0.8, 1.2, 1.8])}),
+    desc:c=>`+${c.v} FLAT damage to every minion hit, before any increase multiplies it`,
+    apply:c=>{ player.minions.flat = Math.round((player.minions.flat + c.v)*100)/100; } },
+  { id:'miniontwin', name:'Twin Raising', icon:'split', cls:'OFFENSE', minRar:'rare',
+    req:()=>isSummoner() && player.minions.perCast < 2,
+    calc:m=>({n:1}),
+    desc:c=>`Every raising stands up TWO skeletons instead of one`,
+    apply:c=>{ player.minions.perCast = 2; } },
+  { id:'skelmages', name:'Skeleton Mages', icon:'skull', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isSummoner() && !player.minions.mages,
+    calc:m=>({n:1}),
+    desc:c=>`EVERY SKELETON BECOMES A MAGE — the ones standing and every one you raise after. `+
+      `A mage stands off out of reach and throws fast bolts of fire, cold or lightning, a third of `+
+      `the legion each, for ${Math.round(MAGE_SHARE*100)}% of a blade's hit; each bolt is its element `+
+      `and leaves its element's ailment`,
+    apply:c=>{ player.minions.mages = true; minionsToMages(); } },
   { id:'arrowmulti', name:'Split Arrow', icon:'bow', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isArcher() && player.bow.n < ARROW_MAX_N,
     calc:m=>({n:1}),
@@ -8130,7 +8204,7 @@ const UPGRADES = [
      is common and cheap; evasion is a thing nobody has any of, so the first one
      you take is the whole of it. ---- */
   { id:'acc', name:'True Edge', icon:'target', cls:'OFFENSE',
-    req:()=>!isCaster(),
+    req:()=>!isCaster() && !isSummoner(),
     calc:m=>({v: byRar(m, [40, 70, 110, 170, 260])}),
     desc:c=>{
       const was = accuracyValue();
@@ -8142,7 +8216,7 @@ const UPGRADES = [
     },
     apply:c=>{ player.accFlat += c.v; } },
   { id:'accinc', name:'Practised Hand', icon:'target', cls:'OFFENSE', minRar:'rare',
-    req:()=>!isCaster() && player.accFlat > 0,
+    req:()=>!isCaster() && !isSummoner() && player.accFlat > 0,
     calc:m=>({v: byRar(m, [0.10, 0.16, 0.24, 0.36, 0.50])}),
     desc:c=>`${Math.round(c.v*100)}% increased ACCURACY — on the whole pool, `+
       `including your dexterity and the weapon's own (now ${Math.round(accuracyValue())})`,
@@ -8453,6 +8527,16 @@ const META_STATS = {
   noRegen:    { n:'NO regeneration at all',              w:(p)=>{ p.noRegen = true; } },
   /* ---- THE THREE SHIELD KEYSTONES, straight out of PoE. Each one is a trade
      only an energy-shield build can win. ---- */
+  /* THE LEGION's own pools -- worth nothing to anything but a scepter */
+  minionDmg:  { n:'increased minion damage', pct:1, w:(p,v)=>{ p.minions.inc += v; }, only:['scepter'] },
+  minionLife: { n:'increased minion life',   pct:1, w:(p,v)=>{ p.minions.life += v; }, only:['scepter'] },
+  minionSpd:  { n:'increased minion attack and cast speed', pct:1, w:(p,v)=>{ p.minions.spd += v; }, only:['scepter'] },
+  minionMax:  { n:'skeleton in your legion', w:(p,v)=>{ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + v); }, only:['scepter'] },
+  minionLess: { n:'LESS minion damage', pct:1, w:(p,v)=>{ p.minions.more *= (1 - v); }, only:['scepter'] },
+  minionMirror:{ n:'your minions gain three quarters of your increased damage, and your conversions',
+                w:(p)=>{ p.minions.mirror = true; }, only:['scepter'] },
+  minionInstab:{ n:'a skeleton that falls BURSTS: a share of its life as fire, to everything close',
+                w:(p)=>{ p.minions.instab = true; }, only:['scepter'] },
   chaosInoc:  { n:'maximum hearts become 1 — every heart you gave up is 2 ENERGY SHIELD — and chaos cannot touch you',
                 w:(p)=>{ p.chaosInoc = true; } },
   ghostReaver:{ n:'your lifesteal fills your ENERGY SHIELD, and never your hearts',
@@ -8609,6 +8693,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
+  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
   prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
@@ -8659,7 +8744,7 @@ function metaSectorAt(x, y){
 }
 /* WHICH COUNTRY EACH WEAPON CALLS HOME. The one table to extend when a weapon
    is added: its door, its own nodes and its half of the map all follow. */
-const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int', bow:'dex' };
+const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int', bow:'dex', scepter:'int' };
 /* ==================== SIX BEGINNINGS, TWO PER COUNTRY ====================
    FOUR WEAPONS IS NOT A SYMMETRICAL NUMBER. Red held two doors, green one and
    blue one, so the map had a crowded side and a bare one and every door sat
@@ -8689,8 +8774,6 @@ const DOOR_SPREAD = 0.80;
 const META_DOORS = [
   ...WEAPON_KEYS.map(wk=>({ id:wk, weap:wk, home:META_HOME[wk] || 'str',
                             name:'THE ' + ((WEAPONS[wk] && WEAPONS[wk].name) || wk).toUpperCase() })),
-  { id:'wand', weap:null, home:'int', name:'THE WAND',
-    soon:'a wand is not built yet — this door is here so the map is the shape it will be' },
 ];
 /* THE RINGS. Radius, how many hubs sit on it, and how far round it they are
    turned so no two rings line up. */
@@ -8781,6 +8864,11 @@ const META_BRANCH = {
     [['Nock','incAtk',0.03],          ['Quick Nock','incAtk',0.035],   ['Fleet','speed',0.03]],
     [['Sighted','acc',30],            ['Steady','incCrit',0.04],       ['Marked','critMult',0.08]],
     [['Light Step','eva',40],         ['Slip','incEva',0.08],          ['Quiver','arrowPierce',1]]],
+  scepter:[
+    [['Bone Craft','minionDmg',0.04], ['Grave Might','minionDmg',0.05],['Marrow','minionLife',0.06]],
+    [['Dark Pact','incSpell',0.03],   ['Incantation','incCast',0.04],  ['Deathless','minionLife',0.06]],
+    [['Command','minionSpd',0.04],    ['Drill','minionSpd',0.05],      ['Muster','minionDmg',0.05]],
+    [['Ward of Bone','es',3],         ['Grave Ward','incEs',0.06],     ['Scholar','int',5]]],
   staff:[
     [['First Words','incSpell',0.03], ['Second Words','incSpell',0.04],['Cadence','incCast',0.04]],
     [['Kindle','incElem',0.03],       ['Smoulder','incFire',0.05],     ['Charged','incElem',0.045]],
@@ -9222,6 +9310,24 @@ const META_KEYSTONES = [
      ZEALOT'S OATH -- your regeneration fills the shield instead of the hearts.
      The last two cost exactly what they redirect: with no shield to fill,
      they are a leech or a regen thrown away. */
+  /* ==================== THE LEGION ====================
+     The scepter's corner of intelligence's country. MIRRORED LEGION is the
+     keystone asked for by name: your minions fight the way you do -- three
+     quarters of your own increased damage, physical, elemental and spell, and
+     your conversions, ride on every minion hit -- and you pay for it in your
+     own hits, which is the trade a summoner is happy to make. MINION
+     INSTABILITY is PoE's: a skeleton that falls bursts into fire. */
+  { id:'k_mirror', name:'THE MIRROR',  sp:'arc', home:'int', d:[4,4], shape:'ring',
+    minors:[['Bone Craft','minionDmg',0.08],['Marrow','minionLife',0.10],['Drill','minionSpd',0.06]],
+    keystone:{ name:'Mirrored Legion', note:'your legion fights the way you do',
+               mods:[['minionMirror',null],['moreAll',-0.40]] } },
+  { id:'k_pyre',   name:'THE PYRE',    sp:'arc', home:'int', d:[3,4], shape:'arc',
+    minors:[['Kindling Bones','minionLife',0.10],['Grave Heat','minionDmg',0.08],['Brittle','minionSpd',0.05]],
+    keystone:{ name:'Minion Instability', note:'what falls, burns',
+               mods:[['minionInstab',null],['minionLess',0.15]] } },
+  { id:'n_ossuary', name:'THE OSSUARY', sp:'arc', home:'int', d:[2,3], shape:'ring',
+    minors:[['Ossuary','minionDmg',0.06],['Catacomb','minionLife',0.08],['Crypt','int',4]],
+    notable:{ name:'Lord of Bones', mods:[['minionDmg',0.14],['minionMax',1]] } },
   { id:'k_ci',    name:'THE INOCULATION', sp:'arc', home:'int', d:[4,4], shape:'ring',
     minors:[['Sterile','es',4],['Hollow','incEs',0.12],['Inured','chaosRes',0.10]],
     keystone:{ name:'Chaos Inoculation', note:'one heart, a far deeper shield, and chaos cannot touch you',
@@ -11043,6 +11149,9 @@ const FAV_PERKS = {
     apply(p){ p.bane.n = 1; p.bane.arc = Math.max(p.bane.arc, 90*Math.PI/180);
       p.baneDotFlat += 0.4; } },
   /* THE BOW'S OPENING HAND */
+  necro: { attr:{ str:0, dex:0, int:12 }, lines:['+1 skeleton in your legion', '+15% increased minion damage',
+                  '+20% increased minion life'],
+    apply(p){ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + 1); p.minions.inc += 0.15; p.minions.life += 0.20; } },
   arrow: { attr:{ str:0, dex:12, int:0 }, lines:['+1 pierce on every arrow', '+10% attack speed',
                   '+60 accuracy'],
     apply(p){ p.bow.pierce += 1; p.inc.atk += 0.10; p.accFlat += 60; } },
@@ -11114,6 +11223,9 @@ const FAVOURITES = [
   { id:'freeze',  name:'Block Freeze', icon:'freeze',cast:true,  ids:['freeze','freezr','freezc','freezf','eleminc','elemflat'] },
   /* the caster's own opening hand — the staff equivalent of Sword & Steel */
   /* the bow's own opening hand -- the archer's Sword & Steel */
+  /* the scepter's own opening hand */
+  { id:'necro',   name:'Necromancer',  icon:'skull', summon:true,
+    ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages','castspd'] },
   { id:'arrow',   name:'Deadeye',      icon:'bow', bow:true,
     ids:['arrowmulti','arrowpierce','arrowflat','aspd','crit','critpow','acc','bladem','moredmg'] },
   { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
@@ -11167,6 +11279,9 @@ function favAllowed(f){
   /* the bow is its own hand: nothing that swings, nothing that casts, and
      Deadeye for nobody else */
   if(f.bow && !isArcher()) return false;
+  /* the scepter's hand is the scepter's, and nothing that swings, casts or shoots is */
+  if(f.summon && !isSummoner()) return false;
+  if(isSummoner() && (f.melee || f.swing || f.slam || f.cast || f.bow)) return false;
   if(isArcher() && (f.melee || f.swing || f.slam)) return false;
   if(f.melee && isCaster()) return false;
   if(f.cast && !isCaster())  return false;
@@ -11239,7 +11354,23 @@ function weaponTip(w){
   if(!isBase) L.push('<i>hero with nothing in them</i>');
   if(!isBase) L.push('');
   L.push(row('Base damage',     w.dmg.toFixed(2),                  d(w.dmg, b.dmg)));
-  if(w.shoot){
+  if(w.summon){
+    /* A SCEPTER IS ITS LEGION: what one skeleton hits for, how long a raising
+       takes, how many stand -- and none of the hero's own hitting lines */
+    L.push(row('Raise time',      w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
+    L.push(row('Legion',          MINION_MAX_BASE+' skeletons',      ''));
+    L.push(row('Skeleton life',   String(MINION_HP_BASE),            ''));
+    L.push(row('Spell suppression','+'+Math.round((w.suppress||0)*100)+'%',
+      (w.suppress||0) > 0 ? '<b class="up">\u25b2</b>' : ''));
+    L.push('');
+    L.push('IT DOES NOT SWING. Holding attack RAISES THE DEAD');
+    L.push('where you point: skeletons that walk to whatever');
+    L.push('is near you and cut it down, and hold the crowd');
+    L.push('off you while they do. At a full legion a cast is');
+    L.push('a RALLY: all of them turn on the body you point at.');
+    L.push('Minion damage is its own pool. The legendary makes');
+    L.push('every one of them a SKELETON MAGE.');
+  } else if(w.shoot){
     /* A BOW HAS NO REACH AND NO SPIN either — it has range, a steadier eye
        and quick feet, so those are its lines. */
     L.push(row('Draw time',       w.rate.toFixed(2)+'s',             d(w.rate, b.rate, true)));
@@ -11307,7 +11438,7 @@ function weaponTip(w){
                       * (1 + x.crit*(x.critMult/100 - 1));
     /* MELEE GETS ITS COMBO COUNTED. Every third swing is the spin, and leaving
        that out made a caster look twice the weapon it is. */
-    const combo = (x.cast || x.shoot) ? 1 : (2 + x.spin)/3;
+    const combo = (x.cast || x.shoot) ? 1 : x.summon ? MINION_MAX_BASE * x.rate / MINION_RATE : (2 + x.spin)/3;
     return hit * combo / (x.rate / (1 + (x.incAtk||0)));
   };
   L.push(row('Damage a second', dps(w).toFixed(2),                 d(dps(w), dps(b))));
@@ -11353,14 +11484,14 @@ function comboPreview(favId){
     syncStats();
   };
   build();
-  const p = player, cast = isCaster(), shoot = isArcher();
-  const hit = cast ? boltDamage() : shoot ? arrowDamage() : physDamage();
+  const p = player, cast = isCaster(), shoot = isArcher(), summon = isSummoner();
+  const hit = cast ? boltDamage() : shoot ? arrowDamage() : summon ? minionDamage(p.minions.mages) : physDamage();
   const out = {
     hearts: p.maxHp,
-    hitLabel: cast ? 'Bolt damage' : shoot ? 'Arrow hit' : 'Weapon hit',
+    hitLabel: cast ? 'Bolt damage' : shoot ? 'Arrow hit' : summon ? 'Minion hit' : 'Weapon hit',
     hit,
     rate: 1/p.atkRate,
-    rateLabel: cast ? 'Casts a second' : shoot ? 'Shots a second' : 'Swings a second',
+    rateLabel: cast ? 'Casts a second' : shoot ? 'Shots a second' : summon ? 'Raisings a second' : 'Swings a second',
     dps: cast ? hit/p.atkRate : swordDps(),
     crit: critChance()*100,
     critMult: critMultPct(),
@@ -11548,15 +11679,18 @@ function comboLayers(){
   out.tree = snap();
   /* the ABILITIES list is read off the hero you would actually start with */
   out.abilities = [];
-  const wname = isCaster() ? 'Fireball' : isSlammer() ? 'Ground Slam' : isArcher() ? 'Arrow' : 'Weapon swing';
-  const wicon = isCaster() ? 'flame' : isSlammer() ? 'fist' : isArcher() ? 'bow' : 'sword';
+  const wname = isCaster() ? 'Fireball' : isSlammer() ? 'Ground Slam' : isArcher() ? 'Arrow' : isSummoner() ? 'Raise Skeleton' : 'Weapon swing';
+  const wicon = isCaster() ? 'flame' : isSlammer() ? 'fist' : isArcher() ? 'bow' : isSummoner() ? 'skull' : 'sword';
   out.abilities.push({ id:'weapon', icon:wicon, name:wname,
-    head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : isArcher() ? arrowDamage() : physDamage()),
+    head:fmtHp(isCaster() ? boltDamage() : isSlammer() ? slamSpikeDamage() : isArcher() ? arrowDamage()
+      : isSummoner() ? minionDamage(hero.minions.mages) : physDamage()),
     tip:`${weapon.name}, every ${hero.atkRate.toFixed(2)}s\n`+
         `${fmtHp(swordDps())} a second sustained, crits folded in\n`+
         (isCaster() ? `${Math.round(boltRadius())} burst radius, `+
             `${Math.round(ailChanceOf('fire','fire',false)*100)}% to set a fire (a crit always does)`
          : isSlammer() ? `A fault of ${SLAM_MAX_HITS} teeth, ${Math.round(SLAM_SHARE*100)}% of a swing each`
+         : isSummoner() ? `a legion of ${minionMax()} skeletons, ${Math.round(minionMaxHp())} life each; `+
+            `a legendary makes them Skeleton Mages`
          : isArcher() ? `${clamp(hero.bow.n|0,1,ARROW_MAX_N)} arrow a shot, pierces ${hero.bow.pierce}; `+
             `a legendary makes it Lightning, Fire or Chaos Arrow`
          : `${Math.round(hero.reach)} reach, every third swing is the spin combo`) });
@@ -11771,6 +11905,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -12253,6 +12388,8 @@ function swordDps(){
      shot; the volley's other arrows fan out to other bodies, so they are not
      this number's to count. */
   if(isArcher()) return arrowDamage() * (1/swingT) * critAvg;
+  /* A SUMMONER's number is the LEGION's: a full legion, each at its own rate */
+  if(isSummoner()) return minionDps();
   const light = physDamage(), spin = light*weapon.spin;
   return ((light*2 + spin)/3) * (1/swingT) * critAvg;
 }
@@ -12450,8 +12587,8 @@ const STAT_PROBES = [
     fmt:v=>v.toFixed(2)+'×', zero:true,
     why:'what conversion does to the SIZE of a hit, before any monster sees it. Above one means the '+
         'increases on what it became beat the increases on what it was; GAIN AS EXTRA always pushes it up' },
-  { g:'PHYSICAL', k:'Weapon hit', basic:'OFFENCE',     get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
-  { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Weapon hit', basic:'OFFENCE',     get:()=> (isCaster()||isSlammer()||isArcher()||isSummoner()) ? 0 : physDamage(),             fmt:v=>fmtHp(v), zero:true },
+  { g:'PHYSICAL', k:'Spin swing',     get:()=> (isCaster()||isSlammer()||isArcher()||isSummoner()) ? 0 : physDamage()*weapon.spin, fmt:v=>fmtHp(v), zero:true },
   { g:'PHYSICAL', k:'Sustained DPS', basic:'OFFENCE',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
     why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth; '+
         'for a bow it is one arrow a shot into one body' },
@@ -12459,7 +12596,19 @@ const STAT_PROBES = [
     fmt:v=>v.toFixed(1), zero:true },
   { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : (isSlammer() ? slamBase() : physBase()), fmt:v=>v.toFixed(2), zero:true },
   { g:'PHYSICAL', k:'Swing rate', basic:'OFFENCE',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
-  { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()||isArcher()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
+  { g:'PHYSICAL', k:'Reach',          get:()=> (isCaster()||isSlammer()||isArcher()||isSummoner()) ? 0 : weapon.reach+player.reach, fmt:v=>Math.round(v)+' px', zero:true },
+  /* THE LEGION. Zero on every weapon but the scepter */
+  { g:'MINIONS', k:'Minion hit', basic:'OFFENCE', get:()=> isSummoner() ? minionDamage(player.minions.mages) : 0, fmt:v=>fmtHp(v), zero:true,
+    why:'one skeleton hit: (scepter base + minion flat) x (1 + the level pool + the minion pool) x the minion more. A mage throws 80% of it' },
+  { g:'MINIONS', k:'Legion', basic:'OFFENCE', get:()=> isSummoner() ? minionMax() : 0, fmt:v=>Math.round(v)+' skeletons', zero:true,
+    why:'how many may stand at once. At a full legion a cast is a RALLY instead' },
+  { g:'MINIONS', k:'Minion life', get:()=> isSummoner() ? minionMaxHp() : 0, fmt:v=>Math.round(v)+'', zero:true,
+    why:'what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool' },
+  { g:'MINIONS', k:'Minion attacks a second', get:()=> isSummoner() ? 1/minionRate(player.minions.mages) : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
+  { g:'MINIONS', k:'Increased minion damage', get:()=> isSummoner() ? minionInc()*100 : 0, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'the minion pool plus the level pool, and three quarters of yours under Mirrored Legion' },
+  { g:'MINIONS', k:'Legion DPS', basic:'OFFENCE', get:()=> minionDps(), fmt:v=>v.toFixed(1), zero:true,
+    why:'a full legion on one body, crits folded in' },
   /* THE ARROW. Zero on everything that is not a bow, like the fireball's rows
      on everything that is not a staff. */
   { g:'ARROW', k:'Arrow hit', basic:'OFFENCE', get:()=> isArcher() ? arrowDamage() : 0, fmt:v=>fmtHp(v), zero:true,
@@ -13215,6 +13364,17 @@ function renderCharSheet(){
         `multiplier — four marks is ×${Math.pow(1+BURNT_STEP,BURNT_MAX).toFixed(2)} fire taken.\n\n`+
         `Burning is damage over time, so it reads your increased damage over\n`+
         `time (${Math.round(p.inc.dot*100)}%) exactly like poison and bleed.`)
+    ] : isSummoner() ? [
+      sRow('Legion', minions.length+' / '+minionMax()+' standing',
+        `${Math.round(minionMaxHp())} life · ${fmtHp(minionDamage(p.minions.mages))} a hit · `+
+        `${(1/minionRate(p.minions.mages)).toFixed(2)}/s`+(p.minions.mages ? ' · SKELETON MAGES' : ''),
+        `The scepter does not swing. Holding attack raises skeletons where you point, `+
+        `${p.minions.perCast} a cast, up to ${minionMax()}. They fight whatever is near you and hold `+
+        `the crowd off you: a monster touching one is slowed and fights it.\n\n`+
+        `At a full legion a cast is a RALLY: every skeleton turns on the body nearest your pointer `+
+        `for ${RALLY_T}s.\n\nMinion damage is its OWN pool: `+Math.round(minionInc()*100)+`% increased now`+
+        (p.minions.mirror ? ', three quarters of yours mirrored into it.' : '.')+
+        (p.minions.instab ? `\n\nMINION INSTABILITY: a skeleton that falls bursts for ${Math.round(INSTAB_SHARE*100)}% of its life as fire.` : ''))
     ] : isArcher() ? [
       sRow('Arrow', arrowDamage().toFixed(1)+' dmg',
         `${clamp(p.bow.n|0,1,ARROW_MAX_N)} a shot \u00b7 `+
@@ -13268,12 +13428,13 @@ function renderCharSheet(){
       `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
       `it is up and cannot roll out of anything. The blade turns aside `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% of the missiles that reach it.`)] : []),
-    sRow(isCaster() ? 'Cast rate' : isSlammer() ? 'Slam rate' : isArcher() ? 'Shot rate' : 'Swing rate', swings.toFixed(2)+'/s',
+    sRow(isCaster() ? 'Cast rate' : isSlammer() ? 'Slam rate' : isArcher() ? 'Shot rate' : isSummoner() ? 'Raise rate' : 'Swing rate', swings.toFixed(2)+'/s',
       (p.chill.stacks>0 || p.curse.haste>0)
-        ? `${swingT.toFixed(2)}s per swing — slowed from ${p.atkRate.toFixed(2)}s`
-        : `${p.atkRate.toFixed(2)}s per swing — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
-    sRow('Sustained DPS', ((isSlammer() || isArcher()) ? swordDps() : comboAvg*swings*critAvg).toFixed(1),
-      isSlammer() ? 'one body held in the fault, crits included'
+        ? `${swingT.toFixed(2)}s per ${swingWord()} — slowed from ${p.atkRate.toFixed(2)}s`
+        : `${p.atkRate.toFixed(2)}s per ${swingWord()} — ${weapon.rate.toFixed(2)}s ${weapon.name.toLowerCase()} base / (1 + ${Math.round(p.inc.atk*100)}%)`),
+    sRow('Sustained DPS', ((isSlammer() || isArcher() || isSummoner()) ? swordDps() : comboAvg*swings*critAvg).toFixed(1),
+      isSummoner() ? 'a full legion on one body, crits included'
+      : isSlammer() ? 'one body held in the fault, crits included'
       : isArcher() ? 'one arrow a shot into one body, crits included' : 'average combo, crits included, one target'),
     /* the second speed stat, and the one that is easy to confuse with the first */
     sRow('Cast speed', Math.round(castInc(0)*100)+'%',
@@ -13390,6 +13551,10 @@ function renderCharSheet(){
       ? sRow('One tooth', slamSpikeDamage().toFixed(2),
           `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.slam.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
           `× ${moreShown().toFixed(2)} × ${SLAM_SHARE} share`)
+      : isSummoner()
+      ? sRow('Minion hit', minionDamage(p.minions.mages).toFixed(2),
+          `(${weapon.dmg} + ${fmtHp(p.minions.flat||0)}) × (1 + ${Math.round(minionInc()*100)}%)`+
+          `${p.minions.more !== 1 ? ' × '+p.minions.more.toFixed(2) : ''}${p.minions.mages ? ' × '+MAGE_SHARE+' mage' : ''}`)
       : isArcher()
       ? sRow('Arrow hit', arrowDamage().toFixed(2),
           `(${weapon.dmg} + ${fmtHp(p.flatPhys + (p.bow.flat||0))}) × (1 + ${Math.round(incTotal('melee')*100)}%) `+
@@ -13426,7 +13591,7 @@ function renderCharSheet(){
   /* WHAT A HIT IS MADE OF. Only shown to a hero who converts something — a card
      of five zeroes teaches nobody anything. It reads the SAME split the hit
      itself reads, so if this card and the monster ever disagree you can see it. */
-  const csp = convSplit(isCaster() ? (weapon.elem || 'fire') : isArcher() ? 'arrow' : 'sword');
+  const csp = convSplit(isCaster() ? (weapon.elem || 'fire') : isArcher() ? 'arrow' : isSummoner() ? 'minion' : 'sword');
   const conversion = convAny() ? sBlock('CONVERSION', CONV_ORDER
     .filter(k=>csp.share[k] > 0)
     .map(k=>sRow(CONV_NAME[k], Math.round(csp.share[k]*100)+'%',
@@ -14039,6 +14204,7 @@ function updatePlayer(dt){
   if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
     if(isCaster())      castBolt(aimA);
     else if(isArcher())  fireArrow(aimA);
+    else if(isSummoner()) raiseMinion(aimA);
     else if(isSlammer()) startSlam(aimA);
     else                startSwing(aimA);
   }
@@ -14595,6 +14761,254 @@ function arrowRicochet(pr){
   pr.pierce = 0; pr.rico++; pr.life = ARROW_LIFE*0.7;
   addSparks(pr.x, pr.y, 4, '#e8f0c8');
   return true;
+}
+/* =============================== THE LEGION ===============================
+   A SUMMONER'S HERO HITS NOTHING. The scepter stands skeletons up out of the
+   floor where you point; they walk to the nearest body in reach of you and cut
+   it down, and they stand between you and the crowd while they do -- a monster
+   touching a skeleton is held there, half-speed, and fights it instead of
+   walking through it. They die, and you raise more.
+   - RAISING: one a cast (two with Twin Raising) up to the legion's size. At the
+     cap a cast is a RALLY instead: every skeleton turns on the body nearest
+     your pointer for a few seconds -- the one order a summoner gives.
+   - THEIR NUMBERS ARE THEIR OWN. Minion damage reads the level pool you gain
+     by levelling (so a legion keeps up with the run) plus the minion pool the
+     scepter's bricks and nodes fill -- and nothing you buy for your own hits.
+     MIRRORED LEGION is the keystone that says otherwise: three quarters of
+     your own increases, and your conversions, ride along.
+   - SKELETON MAGES, the legendary, turns every one of them into a caster that
+     stands off and throws fast bolts of fire, cold or lightning -- a third of
+     the legion each -- for 80% of a blade's hit.
+   - MINION INSTABILITY, the other keystone: a skeleton that falls bursts, and
+     everything close takes a share of its life as fire. */
+const MINION_MAX_BASE = 3, MINION_MAX_CAP = 10;
+const MINION_HP_BASE = 10, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
+const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
+const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
+const MINION_CONTACT = 0.9;          /* a monster's touch lands on a skeleton this often */
+const MAGE_RANGE = 380, MAGE_KEEP = 220, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 560;
+const MAGE_ELEMS = ['fire', 'frost', 'shock'];
+const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
+const MIRROR_SHARE = 0.75;
+const INSTAB_SHARE = 0.30, INSTAB_R = 110;
+const RALLY_T = 3, RALLY_R = 260;
+const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst']);
+const MINION_COLORS = { head:'#ede8ff', torso:'#5b4a8f', legs:'#3a2f5e', hands:'#ede8ff', hair:'#7d6ab8' };
+function minionMax(){ return Math.min(MINION_MAX_CAP, (player && player.minions.max) || MINION_MAX_BASE); }
+function minionMaxHp(){
+  const p = player, M = p.minions;
+  return MINION_HP_BASE * (1 + MINION_HP_LVL*(p.level - 1)) * (1 + (M.life || 0));
+}
+/* WHAT A MINION HIT IS WORTH: (the scepter's base + the minion flat) x (1 + the
+   level pool + the minion pool [+ 3/4 of yours, mirrored]) x the minion MORE */
+function minionInc(){
+  const p = player, M = p.minions;
+  let inc = p.incAll + (M.inc || 0);
+  if(M.mirror) inc += MIRROR_SHARE * (incMeleeAll() + incSpellAll() + (p.inc.elem || 0));
+  return Math.min(INC_DMG_CAP, inc);
+}
+function minionDamage(mage){
+  const M = player.minions;
+  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * (mage ? MAGE_SHARE : 1);
+}
+function minionRate(mage){
+  return (mage ? MAGE_RATE : MINION_RATE) / (1 + (player.minions.spd || 0));
+}
+function minionDps(){
+  if(!isSummoner()) return 0;
+  const M = player.minions, mage = !!M.mages;
+  const crit = 1 + critChance()*(critMult() - 1);
+  return minionMax() * minionDamage(mage) / minionRate(mage) * crit;
+}
+function raiseMinion(aim){
+  const p = player, M = p.minions;
+  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  p.castT = 0.2; retPulse = 1;
+  /* AT THE CAP A CAST IS AN ORDER: turn on the body nearest the pointer */
+  if(minions.length >= minionMax()){
+    let best = null, bd = RALLY_R;
+    for(const e of enemies){
+      if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+      const d = Math.hypot(e.x - mouse.wx, e.y - mouse.wy);
+      if(d < bd){ bd = d; best = e; }
+    }
+    if(best){ p.rallyT = RALLY_T; p.rallyTgt = best; addRing(best.x, best.y, 6, 260, 40, '#b7a6ff', 4, 0.35); }
+    return;
+  }
+  const d = Math.min(150, Math.hypot(mouse.wx - p.x, mouse.wy - p.y));
+  for(let i=0; i<(M.perCast || 1) && minions.length < minionMax(); i++){
+    const a = aim + (i ? rnd(-0.8, 0.8) : 0), rr = Math.max(40, d - i*26);
+    const x = clamp(p.x + Math.cos(a)*rr, W.wall+40, W.w-W.wall-40);
+    const y = clamp(p.y + Math.sin(a)*rr, W.wall+40, W.h-W.wall-40);
+    raiseAt(x, y);
+  }
+  SFX.build();
+}
+function raiseAt(x, y){
+  const M = player.minions, hp = minionMaxHp();
+  const m = { x, y, r:11, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
+              moving:false, flash:0, phase:rnd(TAU), mage:!!M.mages, el:null, slot:minionSlot(), castT:0 };
+  if(m.mage) m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length];
+  minions.push(m);
+  addRing(x, y, 6, 220, 46, '#b7a6ff', 4, 0.4);
+  spawnBricks(x, y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 5, 120);
+  return m;
+}
+/* a stable place in the formation, and a stable element for a mage */
+function minionSlot(){
+  const used = new Set(minions.map(m=>m.slot));
+  let i = 0; while(used.has(i)) i++;
+  return i;
+}
+/* SKELETON MAGES: every one standing turns, and every one raised after is one */
+function minionsToMages(){
+  for(const m of minions){ m.mage = true; m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length]; }
+}
+const _minBuf = [];
+function minionTarget(m){
+  const p = player;
+  if(p.rallyT > 0 && p.rallyTgt && !p.rallyTgt.dead && p.rallyTgt.state === 'active' &&
+     Math.hypot(p.rallyTgt.x - p.x, p.rallyTgt.y - p.y) < MINION_LEASH * 1.2) return p.rallyTgt;
+  let best = null, bd = MINION_SEEK;
+  for(const e of enemiesNear(m.x, m.y, MINION_SEEK, _minBuf)){
+    if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+    if(Math.hypot(e.x - p.x, e.y - p.y) > MINION_LEASH) continue;   /* never far from you */
+    const d = Math.hypot(e.x - m.x, e.y - m.y);
+    if(d < bd){ bd = d; best = e; }
+  }
+  return best;
+}
+function minionStep(m, tx, ty, dt, spd){
+  const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+  if(d < 2){ m.moving = false; return; }
+  const k = Math.min(1, spd*dt / d);
+  m.x = clamp(m.x + dx*k, W.wall+30, W.w-W.wall-30);
+  m.y = clamp(m.y + dy*k, W.wall+30, W.h-W.wall-30);
+  m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
+}
+function updateMinions(dt){
+  const p = player;
+  if(!p) return;
+  p.rallyT = Math.max(0, (p.rallyT || 0) - dt);
+  for(const m of minions){
+    m.flash = Math.max(0, m.flash - dt*4);
+    m.castT = Math.max(0, m.castT - dt);
+    if(m.rise < 1){ m.rise += dt / MINION_RISE; continue; }
+    /* lost: too far from you, and it simply rises again at your side */
+    if(Math.hypot(m.x - p.x, m.y - p.y) > MINION_LEASH * 1.6){
+      const a = rnd(TAU); m.x = p.x + Math.cos(a)*60; m.y = p.y + Math.sin(a)*60; m.rise = 0.4;
+    }
+    m.atkCd -= dt;
+    const e = minionTarget(m);
+    if(e){
+      const d = Math.hypot(e.x - m.x, e.y - m.y), a = Math.atan2(e.y - m.y, e.x - m.x);
+      if(m.mage){
+        /* it stands off: closes to its range, backs off inside its comfort */
+        if(d > MAGE_RANGE*0.9) minionStep(m, e.x, e.y, dt, MINION_SPD);
+        else if(d < MAGE_KEEP*0.6) minionStep(m, m.x - Math.cos(a)*40, m.y - Math.sin(a)*40, dt, MINION_SPD*0.7);
+        else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
+        if(d <= MAGE_RANGE && m.atkCd <= 0){
+          m.atkCd = minionRate(true); m.castT = 0.18;
+          const sx = m.x + Math.cos(a)*10, sy = m.y - 18;
+          const ta = Math.atan2(e.y - 14 - sy, e.x - sx);
+          projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
+            vx:Math.cos(ta)*MAGE_BOLT_SPD, vy:Math.sin(ta)*MAGE_BOLT_SPD, life:1.1,
+            dmg:minionDamage(true), el:m.el, src:'m'+m.el });
+        }
+      } else {
+        const reach = MINION_REACH + (e.r || 12);
+        /* each comes at it from its own side, so a legion SURROUNDS a body
+           instead of queueing behind one another on the same line */
+        const fa = a + ((m.slot % 5) - 2) * 0.55;
+        if(d > reach) minionStep(m, e.x - Math.cos(fa)*(reach-6), e.y - Math.sin(fa)*(reach-6), dt, MINION_SPD);
+        else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
+        if(d <= reach + 4 && m.atkCd <= 0){
+          m.atkCd = minionRate(false); m.castT = 0.15;
+          hitEnemy(e, minionDamage(false), a, 90, 'minion', {});
+        }
+      }
+    } else {
+      /* nothing to fight: a place in a loose ring round you */
+      const n = Math.max(1, minions.length), ang = m.slot / n * TAU + vtime*0.15;
+      const fx = p.x + Math.cos(ang)*(m.mage ? 90 : 62), fy = p.y + Math.sin(ang)*(m.mage ? 70 : 46);
+      if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, MINION_SPD*1.1);
+      else m.moving = false;
+    }
+    /* THE WALL. Whatever is touching it is held, and fights it: its touch lands
+       on the skeleton at the monster's own contact damage */
+    for(const en of enemiesNear(m.x, m.y, 40, _minBuf)){
+      if(en.dead || en.state !== 'active' || en.type === 'boss' && en.super) continue;
+      if(Math.hypot(en.x - m.x, en.y - m.y) > (en.r || 12) + m.r) continue;
+      en.slowT = Math.max(en.slowT || 0, 0.12);
+      m.hp -= (en.dmg || 1) * dt / MINION_CONTACT;
+      m.flash = Math.max(m.flash, 0.3);
+    }
+  }
+  /* and they keep a little room between them */
+  for(let i=0;i<minions.length;i++) for(let j=i+1;j<minions.length;j++){
+    const A = minions[i], B = minions[j];
+    const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy), want = A.r + B.r;
+    if(d > 0.01 && d < want){ const k = (want - d)/d * 0.5; A.x -= dx*k; A.y -= dy*k; B.x += dx*k; B.y += dy*k; }
+    else if(d <= 0.01){ A.x -= 3; B.x += 3; }
+  }
+  for(const m of minions) if(m.hp <= 0 && !m.gone) minionDies(m);
+  minions = minions.filter(m=>!m.gone);
+}
+function minionDies(m){
+  m.gone = true;
+  spawnBricks(m.x, m.y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 6, 150);
+  if(player.minions.instab){
+    const dmg = m.maxHp * INSTAB_SHARE * (1 + minionInc());
+    addRing(m.x, m.y, 8, 360, INSTAB_R, '#ff8a3c', 6, 0.4);
+    addSparks(m.x, m.y - 12, 10, '#ffb070');
+    for(const e of enemiesNear(m.x, m.y, INSTAB_R + 30, _minBuf).slice()){
+      if(e.dead || e.state !== 'active') continue;
+      if(Math.hypot(e.x - m.x, e.y - m.y) > INSTAB_R + (e.r || 12)) continue;
+      hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, 'mburst', {});
+    }
+  }
+}
+function drawMinion(c, m){
+  if(m.rise < 1){
+    /* bones climbing out of the floor */
+    const t = clamp(m.rise, 0, 1);
+    for(let k=0;k<6;k++){
+      const a = k/6*TAU + t*4, r = (1-t)*26;
+      c.save(); c.translate(m.x + Math.cos(a)*r, m.y - 8 + Math.sin(a)*r*0.5 - t*6); c.rotate(a);
+      c.globalAlpha = 0.4 + t*0.6; c.fillStyle = k%2 ? '#ede8ff' : '#5b4a8f';
+      c.fillRect(-5, -3, 10, 6); c.restore();
+    }
+    c.globalAlpha = 1;
+    return;
+  }
+  /* an ALLY: a violet ring at its feet, so it is never read as one of theirs */
+  c.strokeStyle = 'rgba(183,166,255,0.75)'; c.lineWidth = 2;
+  c.beginPath(); c.ellipse(m.x, m.y + 2, 15, 6, 0, 0, TAU); c.stroke();
+  const o = { x:m.x, y:m.y, s:0.82, face:m.face, walk:m.walk, moving:m.moving, flash:m.flash,
+    colors:MINION_COLORS, style:'skel', phase:m.phase, angry:false };
+  if(m.mage){ o.weapon = 'staff'; o.orbCol = MAGE_COL[m.el] || '#c9b8ff'; o.hoodCol = '#3a2f5e';
+    if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
+  else o.weapon = 'spear';
+  drawFigure(c, o);
+  if(m.hp < m.maxHp){
+    const w5 = 20;
+    c.fillStyle = 'rgba(15,20,25,0.6)'; c.fillRect(m.x - w5/2, m.y - 42, w5, 3.5);
+    c.fillStyle = '#b7a6ff'; c.fillRect(m.x - w5/2, m.y - 42, w5*clamp(m.hp/m.maxHp, 0, 1), 3.5);
+  }
+}
+function drawScepterArt(c, s, bright){
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 4.6*s;
+  c.beginPath(); c.moveTo(0, 12*s); c.lineTo(0, -12*s); c.stroke();
+  c.strokeStyle = bright ? '#d8ccff' : '#5b4a8f'; c.lineWidth = 3*s;
+  c.beginPath(); c.moveTo(0, 12*s); c.lineTo(0, -12*s); c.stroke();
+  /* the skull on top, and the stone in its jaw */
+  c.fillStyle = '#ede8ff'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 1.4*s;
+  c.beginPath(); c.arc(0, -16*s, 5.2*s, 0, TAU); c.fill(); c.stroke();
+  c.fillStyle = '#2a2140';
+  c.beginPath(); c.arc(-1.9*s, -16.6*s, 1.3*s, 0, TAU); c.arc(1.9*s, -16.6*s, 1.3*s, 0, TAU); c.fill();
+  c.fillStyle = '#b7a6ff';
+  c.beginPath(); c.arc(0, -12.4*s, 1.6*s, 0, TAU); c.fill();
 }
 /* ============================== THE GROUND SLAM ============================= */
 /* A mace hero does not swing. They drive the head into the floor and a FAULT
@@ -17368,6 +17782,19 @@ function updateProjectiles(dt){
         }
       }
     }
+    else if(pr.kind==='mbolt'){
+      /* a skeleton mage's bolt: its element, the first body it meets */
+      pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
+      if(pr.life<=0) pr.dead = true;
+      if(!pr.dead) for(const so of solids) if(dist(pr, so) < so.r){ pr.dead = true; break; }
+      if(!pr.dead) for(const e of enemiesNear(pr.x, pr.y, 80)){
+        if(e.dead || e.state!=='active') continue;
+        if(!sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 7)) continue;
+        hitEnemy(e, pr.dmg, Math.atan2(pr.vy, pr.vx), 50, pr.src, {});
+        addSparks(pr.x, pr.y, 4, MAGE_COL[pr.el] || '#fff');
+        pr.dead = true; break;
+      }
+    }
     else if(pr.kind==='parrow'){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
       if(pr.life<=0) pr.dead = true;
@@ -18503,6 +18930,12 @@ function drawFigure(c, o){
     drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
+  if(o.weapon==='scepter' && o.bladeAng===undefined){
+    c.save(); c.translate(handR2.x,handR2.y);
+    c.rotate(heldAng !== null ? heldAng : aR+0.3);
+    drawScepterArt(c, s*0.95, false);
+    c.restore();
+  }
   if(o.weapon==='bow' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
     /* A BOW IS HELD UPRIGHT, not pointed like a blade: a quarter turn clockwise
@@ -18954,6 +19387,7 @@ function drawWeaponArt(c, s, bright, kind){
   if(kind==='mace')  return drawMace(c, s);
   if(kind==='staff' || kind==='pstaff') return drawStaffArt(c, s, bright);
   if(kind==='bow') return drawBowArt(c, s, bright);
+  if(kind==='scepter') return drawScepterArt(c, s, bright);
   return drawBlade(c, s, bright);
 }
 /* IS THE AXE IN YOUR HANDS? While it is out reaping, it is not — you cannot
@@ -20176,6 +20610,7 @@ function render(){
     list.push({y:e.y, f:()=>{ drawEnemy(ctx, e);
       if(e.esMax > 0) drawShieldBubble(ctx, e, e.es/e.esMax, e.esFlash); }});
   }
+  for(const m of minions) if(onScreen(m, 80)) list.push({y:m.y, f:()=>drawMinion(ctx, m)});
   if(player && (!player.dead || player.deadT<0.05)) list.push({y:player.y, f:()=>drawHero(ctx)});
   list.sort((a,b)=>a.y-b.y);
   for(const it of list) it.f();
@@ -20491,6 +20926,15 @@ function render(){
       ctx.fillStyle = '#fff6d8';
       ctx.beginPath(); ctx.arc(-R*0.18,-R*0.18,R*0.26,0,TAU); ctx.fill();
       ctx.restore();
+    }
+    else if(pr.kind==='mbolt'){
+      const col = MAGE_COL[pr.el] || '#c9b8ff';
+      ctx.fillStyle = col; ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.arc(pr.x, pr.y, 9, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pr.x, pr.y, 3.2, 0, TAU); ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.moveTo(pr.x, pr.y); ctx.lineTo(pr.x - pr.vx*0.03, pr.y - pr.vy*0.03); ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     else if(pr.kind==='parrow'){
       /* shaft, fletching and head, coloured by what the arrow has become */
@@ -21499,7 +21943,7 @@ function clogTabAt(x, y){
    own, because a spell is not a damage type. */
 const DPS_COLS = {
   sword:CONV_COL.phys, slam:CONV_COL.phys, storm:'#9fe8ff', vortex:'#b98cff',
-  orbit:'#ffd166', arrow:'#e8f0c8', bomb:'#ffb04a', whirl:'#e6e6e6',
+  orbit:'#ffd166', arrow:'#e8f0c8', minion:'#c9b8ff', mfire:'#ff9a5a', mfrost:'#9fdcff', mshock:'#fff07a', mburst:'#ffb070', bomb:'#ffb04a', whirl:'#e6e6e6',
   chain:CONV_COL.shock, fire:CONV_COL.fire, frost:CONV_COL.frost, bane:DOT_COL.bane,
   burn:DOT_COL.burn, bleed:DOT_COL.bleed, poison:DOT_COL.bane, ember:'#ffb02e',
   slamfire:CONV_COL.fire, slamfrost:CONV_COL.frost, slamshock:CONV_COL.shock
@@ -22523,6 +22967,7 @@ let titleClock = 0;
 function resetRun(demo){
   seed = (Math.random()*1e9)|0;
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
+  minions=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave';
   rerollsUsed = 0; screenRerolls = 0; shunned = {};
@@ -22841,6 +23286,7 @@ function update(dt, raw){
     for(const e of enemies) updateEnemy(e, dt);
     separate();
     enemies = enemies.filter(e=>!e.dead);
+    updateMinions(dt);
     updateProjectiles(dt);
     updateWave(dt);
     updateBreach(dt);

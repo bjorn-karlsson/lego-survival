@@ -2748,3 +2748,40 @@ holds more than the first. The standing cap went 60 → 90 for the thicker swarm
 A row now says `shield:true, block:0.5`; `spawnEnemy` copies the chance onto the body only if the row
 carries a shield, and the roll happens on the shield side only. 2,000 arrows at a knight's face
 land 51% of the time; from behind, all of them. 10 breaks, 64 tests green.
+
+## Thirty-sixth pass — the scepter
+
+> *"Build the scepter summoner as its own round: skeleton minions, the skeleton-mages legendary,
+> minion nodes on the tree, and the keystone that gives minions ¾ of your damage types. Draw much
+> inspiration from PoE."*
+
+`summon:true` on the weapon row, and `isSummoner()` becomes the fourth thing that is not a swing.
+Minions are not monsters and not projectiles: a separate `minions` list, stepped by `updateMinions`
+after the monsters (so the monster grid is fresh), drawn through the same `drawFigure` every
+minifig uses — skeleton style, violet robes, a violet ring at the feet so a raised skeleton is never
+read as one of theirs. Their hits go through `hitEnemy` with their own sources (`minion`, and
+`mfire`/`mfrost`/`mshock` for mage bolts, `mburst` for Instability), so resistances, ailments,
+block, the DPS log and the damage colours all treat them like anything else — and
+`convTableFor` hands a minion source *no* conversion table unless the mirror is up.
+
+**Their pools are their own** (`player.minions`), filled only by the scepter's bricks, its favourite
+and `only:['scepter']` tree stats — plus the level pool, so a legion keeps pace with the run. The
+Mirrored Legion keystone is the one door between the two: three quarters of the hero's melee, spell
+and elemental increases, and the hero's conversions; its price is 40% LESS on the hero's own hits,
+tested to land there and not on the legion's.
+
+**The wall** is the cheapest version of "minions protect you" that is real: a monster overlapping a
+skeleton is slowed (the existing `slowT`) and its contact damage drains the skeleton at the rate it
+would have hit you. Monsters still *want* the hero; skeletons are what is in the way.
+
+**Six doors, all real.** The wand's locked door became the scepter's, which made three tree tests
+honest to restate: no unfinished door, 18 records (6 × 3), and one border prize. `k_slow` stands 4°
+inside red's line, and with a sixth door its home and away means met exactly (21.5 each); a prize
+within 6° of a border now has to be *no dearer* from home, every other one strictly cheaper. The
+Breach layer's spread check came down from 20% to 12% past 2000px (the hand's position decides how
+much far floor exists; a piled layer measures 7%). Six weapons now sit on one row of the title.
+
+**Three breaks survived the first draft of the test**, each a fixture that could not tell right from
+wrong: the rally target was also the nearest body; the leash's far body was also out of seek range —
+and, parked, the monster grid was stale so nothing was found at all; and every raise went through
+the function, never the attack button. All fixed; 30 breaks caught. 65 tests green.
