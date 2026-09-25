@@ -2731,3 +2731,20 @@ evasion now, because the question is whether it is there. And the ember loopback
 the cap breaks into a BURNT mark and starts again from one: 2 before and 1 after can be twelve
 stacks' worth of fire. It counts fire laid now — stacks, plus a cap's worth per mark — and the
 break that stops embers landing is still caught. 63 tests green.
+
+## Thirty-fifth pass — a fuller breach, and block
+
+> *"Make sure in Breach that monsters spawn more often as time goes on, it doesn't spawn enough in
+> the beginning or middle. A hidden cap of like 800, more on higher waves. The monsters with a
+> shield block 100% of the bow — make them have a block chance (introduce block as a general
+> mechanic): 50%. Monsters can only block if they carry a shield."*
+
+**The layer.** `breachLayerSize(n)` = 300 + 20 per wave past the first breach wave, to 800. Packs are
+placed around the hand at `rEnd · u^0.8` rather than evenly over the floor (`u^0.5`), so the count
+inside radius r goes as r^1.25: 110 of 800 inside the first 500px instead of ~16, and the second 500px
+holds more than the first. The standing cap went 60 → 90 for the thicker swarm.
+
+**Block.** The knight's rule was a certainty inside `hitEnemy`: anything from its front arc bounced.
+A row now says `shield:true, block:0.5`; `spawnEnemy` copies the chance onto the body only if the row
+carries a shield, and the roll happens on the shield side only. 2,000 arrows at a knight's face
+land 51% of the time; from behind, all of them. 10 breaks, 64 tests green.

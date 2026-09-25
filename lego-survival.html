@@ -4266,7 +4266,7 @@ const EDEF = {
              col:{head:'#8ac24a', torso:'#3d7a2b', legs:'#2f5e23', hands:'#8ac24a', hair:'#2f5e23'}, style:'spitter' },
   brute:   { hp:10, speed:44,  r:17, scale:1.5,  dmg:2, xp:8, studs:[6,10],
              col:{head:'#7fb646', torso:PAL.dgray, legs:'#4a4b47', hands:'#3d3e3b', hair:'#3d3e3b'}, style:'brute' },
-  knight:  { hp:9,  speed:46,  r:14, scale:1.15, dmg:2, xp:7, studs:[6,9],
+  knight:  { hp:9,  speed:46,  r:14, scale:1.15, dmg:2, xp:7, studs:[6,9], shield:true, block:0.5,
              col:{head:'#e8e4d8', torso:'#2b2f33', legs:'#23272b', hands:'#2b2f33', hair:'#2b2f33'}, style:'knight' },
   bomber:  { hp:4,  speed:108, r:12, scale:0.82, dmg:1, xp:4, studs:[4,8],
              col:{head:'#fe8a18', torso:'#3a3f44', legs:'#23272b', hands:'#fe8a18', hair:'#3a3f44'}, style:'bomber' },
@@ -4688,6 +4688,8 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
     evasion: Math.round(mobEvasionOf(d) * (elite?EVA_ELITE:1) * (magic?EVA_MAGIC:1)),
     accuracy: Math.round(mobAccuracyOf(d) * (elite?1.15:1) * (magic?1.08:1)),
     mini:d.mini||null, touchElem:d.elem||null,
+    /* BLOCK is a shield's, and only a body that carries one has any */
+    block: d.shield ? (d.block !== undefined ? d.block : BLOCK_BASE) : 0,
     path:null, pathI:0, pathT:0, pathGoal:null, slideT:0, slideSign:1 };
   /* LAST, so a modifier multiplies the finished number rather than a base the
      wave curve and the monster level have not been applied to yet */
@@ -4734,6 +4736,8 @@ function randomSpawnPos(){
 /* Knockback was throwing bodies far enough that a crowd came apart instead of
    closing in. Every impulse now goes through this one scale. */
 const KB_SCALE = 0.45;
+const BLOCK_BASE = 0.5;      /* a shield's block chance, unless its row names its own */
+const BLOCK_ARC = 1.05;      /* radians either side of where it faces */
 function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
@@ -4751,9 +4755,13 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     e.flash = 0.25;
     return;
   }
-  if(e.type==='knight' && source!=='bomb' && !opts.spin && !opts.quiet){
+  /* BLOCK. A body carrying a shield rolls its block chance against a hit that
+     comes at the shield side -- a shield covers one side of you, not all of
+     them. A bomb goes over it and a spin comes round it, as before. This used
+     to be a certainty: a knight facing you stopped every arrow ever loosed. */
+  if((e.block || 0) > 0 && source!=='bomb' && !opts.spin && !opts.quiet){
     const fromAtt = kdir + Math.PI;
-    if(Math.abs(angDiff(e.faceA, fromAtt)) < 1.05){
+    if(Math.abs(angDiff(e.faceA, fromAtt)) < BLOCK_ARC && Math.random() < e.block){
       const px2 = e.x + Math.cos(fromAtt)*16*e.scale, py2 = e.y - 20*e.scale + Math.sin(fromAtt)*10*e.scale;
       addSparks(px2, py2, 4, '#cfd6dd');
       addDmg(e.x, e.y-42*e.scale, 'BLOCKED', '#cfd6dd', 14);
@@ -6683,10 +6691,18 @@ const BREACH_TIME = 8;               /* seconds open, with nothing killed inside
    as fast as r does, so a wide breach is a race that gets harder to win. */
 const BREACH_KILL_T0 = 0.7, BREACH_KILL_REF = 250, BREACH_KILL_EXP = 1.25;
 const BREACH_T_MAX = 12;             /* and never more than this on the clock */
-/* THE OTHER LAYER: packs of three to six, this many bodies to a million
-   square px of floor (the map is ~21 of those), each pack of one kind */
-const BREACH_DENSITY = 20, BREACH_PACK = [3, 6];
-const BREACH_ALIVE_MAX = 60;         /* revealed and standing at once; the rest wait their turn */
+/* THE OTHER LAYER: packs of three to six, one kind to a pack. How many bodies
+   it holds grows with the wave -- 300 at the first breach wave, twenty more a
+   wave, 800 at most. And they are NOT spread evenly: a pack's distance from the
+   hand is rEnd * u^0.8 (evenly over the floor would be u^0.5), so the circle
+   meets far more of them while it is still small -- about 60 inside the first
+   500px on a full layer instead of 16 -- and the pace still climbs as it grows. */
+const BREACH_LAYER_MIN = 300, BREACH_LAYER_STEP = 20, BREACH_LAYER_MAX = 800;
+const BREACH_LAYER_EXP = 0.8, BREACH_PACK = [3, 6];
+const BREACH_ALIVE_MAX = 90;         /* revealed and standing at once; the rest wait their turn */
+function breachLayerSize(n){
+  return clamp(BREACH_LAYER_MIN + (n - BREACH_FROM)*BREACH_LAYER_STEP, BREACH_LAYER_MIN, BREACH_LAYER_MAX);
+}
 const BREACH_HP = 0.7, BREACH_XP = 0.6;  /* a swarm: softer, and paid in splinters, not studs */
 const BREACH_MAGIC = 0.08;
 const BREACH_LORD_AT = 34;           /* deaths inside before a Hand of the Lord comes through */
@@ -6808,13 +6824,17 @@ function breachFloorOk(x, y){
 }
 function breachLayer(B){
   const lo = W.wall+60, hiX = W.w-W.wall-60, hiY = W.h-W.wall-60;
-  const types = breachTypes(wave.n), avg = (BREACH_PACK[0] + BREACH_PACK[1]) / 2;
-  const packs = Math.round((hiX-lo) * (hiY-lo) / 1e6 * BREACH_DENSITY / avg);
+  const types = breachTypes(wave.n), want = breachLayerSize(wave.n);
+  /* the circle's last size: the farthest corner of the floor from the hand */
+  B.rEnd = Math.max(Math.hypot(W.wall - B.x, W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.wall - B.y),
+                    Math.hypot(W.wall - B.x, W.h-W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.h-W.wall - B.y));
   const L = [];
-  for(let i=0;i<packs;i++){
-    const cx = rnd(lo, hiX), cy = rnd(lo, hiY);
-    if(Math.hypot(cx - B.x, cy - B.y) < 150) continue;      /* not on top of the hand */
-    const n = irnd(BREACH_PACK[0], BREACH_PACK[1]);
+  for(let tries=0; L.length < want && tries < want*4; tries++){
+    const a0 = rnd(TAU), d0 = B.rEnd * Math.pow(Math.random(), BREACH_LAYER_EXP);
+    const cx = B.x + Math.cos(a0)*d0, cy = B.y + Math.sin(a0)*d0;
+    if(cx < lo || cx > hiX || cy < lo || cy > hiY) continue;  /* that part of the circle is off the floor */
+    if(d0 < 150) continue;                                    /* not on top of the hand */
+    const n = Math.min(irnd(BREACH_PACK[0], BREACH_PACK[1]), want - L.length);
     const type = types[(Math.random()*types.length)|0], magic = Math.random() < BREACH_MAGIC;
     for(let k=0;k<n;k++){
       const a = rnd(TAU), rr = rnd(0, 26 + n*9);
@@ -6825,9 +6845,6 @@ function breachLayer(B){
   }
   L.sort((a, z)=>a.d - z.d);
   B.layer = L; B.li = 0;
-  /* the circle's last size: the farthest corner of the floor from the hand */
-  B.rEnd = Math.max(Math.hypot(W.wall - B.x, W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.wall - B.y),
-                    Math.hypot(W.wall - B.x, W.h-W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.h-W.wall - B.y));
 }
 function breachReveal(B, rec){
   const n0 = enemies.length;
@@ -12892,6 +12909,8 @@ function mobStatRows(key){
     add('BASE', 'Accuracy', ac + (evasionValue() > 0
         ? '  (it hits ' + Math.round(hitChance(ac, evasionValue())*100) + '%)'
         : '  (you have no evasion)')); }
+  if(d.shield) add('BASE', 'Block', Math.round((d.block !== undefined ? d.block : BLOCK_BASE)*100)
+      + '% \u2014 carries a shield: a hit on its shield side may be stopped outright');
   if(d.shade) add('BASE', 'Shade', 'fades in and out of reach');
   if(d.golem) add('BASE', 'Golem kit', GOLEM_CONF[d.golem] ? GOLEM_CONF[d.golem].kit : d.golem);
   if(d.mini)  add('BASE', 'Mini', 'spawned by a '+d.mini+' golem');

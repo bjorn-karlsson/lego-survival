@@ -2463,8 +2463,9 @@ with a marker on the screen's edge while it is out of sight.
 ![A breach hand surfacing](docs/breach-hand.png)
 
 **Walk into it and it opens** — and a breach is not a spawner, it is **another layer of the same
-ground**. The moment it opens, the whole map is filled with one **Breach Lord**'s monsters,
-standing in packs of three to six where they stand, and none of them exists for you until the
+ground**. The moment it opens, the whole map is filled with one **Breach Lord**'s monsters —
+**300 of them on the first breach wave, twenty more every wave after, 800 at most** — standing in
+packs of three to six where they stand, thicker near the hand than out at the edges, and none of them exists for you until the
 circle reaches them. The circle grows at 110px a second and keeps growing, **all the way to the
 far corners of the map** if you can keep it open. Inside it they are there; outside it they are
 not — not drawn, not hittable — and a breach body cannot walk out of its own circle. They are
@@ -2486,10 +2487,12 @@ keeping a wide breach open means killing a great many more. When the clock runs 
 collapses and whatever of the breach is still standing is pulled back through and pays nothing.
 The wave cannot end while a breach is open.
 
-Measured with a hero killing breach monsters at a steady rate: **2 a second** holds one for about
-15s, **4 a second** about 23s, **8 a second** about 28s, and a hero who kills everything the
-moment it appears opens it across almost the whole map and runs the layer dry in about 34s. The
-layer is finite (roughly 300 bodies), so there is no build that holds a breach open forever.
+The layer is packed **towards the hand**, not evenly: about 110 of a full layer's 800 stand
+inside the first 500px, where an even spread would put 16, so the breach is busy from its first
+seconds — and the pace still climbs as the circle grows. Measured at wave 12 (420 bodies): **2
+kills a second** holds one for about 15s, **4 a second** about 30s and most of the map, and a hero
+who kills everything the moment it appears opens it across the whole map and runs the layer dry
+in about 33s. The layer is finite, so there is no build that holds a breach open forever.
 
 ![A breach opened wide](docs/breach-open.png)
 
@@ -2502,6 +2505,14 @@ III pays studs instead.
 
 Splinter counts sit top-right under your studs, only for the lords you have met; the character
 sheet grows a **BREACH** block with each ring's rank and what it is giving you.
+
+### Block
+
+A monster **carrying a shield** can block. The knight is the one that does: **50%** of hits on its
+shield side are stopped outright, `BLOCKED`. A shield covers one side — hits from behind always
+land — a bomb goes over it, and a spin comes round it. Nothing without a shield ever blocks. It
+used to be a certainty: a knight facing you stopped every arrow ever loosed, which made it a wall
+for a bow. The bestiary lists the block chance.
 
 ### The bow
 
