@@ -180,7 +180,7 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
 | **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
 | **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
-| **BOW** | 1.25 | 0.46s | *arrow* | 7% | ×1.65 | ×0.8 | — |
+| **BOW** | 1.25 | 0.60s | *arrow* | 7% | ×1.65 | ×0.8 | — |
 
 **Three of the five do not swing at all.** The staff casts a fireball; the mace opens a
 **ground slam**; the bow looses an [arrow](#the-bow). Both trade the whole melee kit — reach, the spin combo, the whirl — for an

@@ -1759,7 +1759,7 @@ const WEAPONS = {
   bow: { id:'bow', name:'BOW', col:'#6ee06e',
     blurb:'Looses arrows instead of swinging. Physical, precise, and never close.',
     shoot:true,
-    dmg:1.25, rate:0.46, reach:0, spinReach:0, crit:0.07, critMult:165,
+    dmg:1.25, rate:0.60, reach:0, spinReach:0, crit:0.07, critMult:165,
     bleed:0.8, spin:1.00, kb:0.60, hold:'bow', throw:'blade',
     lessTaken:0, suppress:0.10, leech:0, leechChance:0,
     /* the precise one at range: a bow finds what it is aimed at */
@@ -18486,7 +18486,10 @@ function drawFigure(c, o){
   }
   if(o.weapon==='bow' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(heldAng !== null ? heldAng : aR+0.2);
+    /* A BOW IS HELD UPRIGHT, not pointed like a blade: a quarter turn clockwise
+       from the sword's grip stands the limbs up and down with the belly out
+       front and the string towards the body */
+    c.rotate((heldAng !== null ? heldAng : aR+0.2) + BOW_HOLD_TURN);
     drawBowArt(c, s*0.95, false);
     c.restore();
   }
@@ -18911,6 +18914,7 @@ function drawStaffArt(c, s, bright){
 }
 /* A SHORT BOW: a curved stave, a string, a grip in the middle of it. Drawn
    pointing along +x like every other held weapon. */
+const BOW_HOLD_TURN = Math.PI/2;
 function drawBowArt(c, s, bright){
   c.lineCap = 'round';
   c.strokeStyle = 'rgba(20,30,40,0.55)'; c.lineWidth = 5*s;

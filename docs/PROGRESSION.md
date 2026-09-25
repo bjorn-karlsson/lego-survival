@@ -2704,3 +2704,22 @@ edge and ~20 inside it. 18 new breaks plus the 32 old ones that still apply; all
 
 The ember test's loopback check waited a fixed 1.4s of wall clock and failed once under load; it
 waits for the embers to land now. 63 tests green.
+
+## Thirty-fourth pass — the bow, held and slowed
+
+> *"I don't like how the player holds the bow, it should be rotated 90 degrees clockwise. Also,
+> please lower the initial attack speed of the bow."*
+
+The bow was drawn through the sword's grip — rotated to the blade's angle — so it stuck out flat from
+the hand like a blade. It turns a further `BOW_HOLD_TURN` = a quarter turn clockwise now: limbs up
+and down, belly out front, string towards the body. The test reads it off the screen — the bow's
+wood around the hero spans 9px wide and 32px tall; held the old way it was 32 by 10.
+
+Draw time 0.46s → **0.60s** (2.2 → 1.7 shots a second before any speed): slower than a mace swings,
+quicker than a staff casts. The test compares the live hero's draw against a live mace, not the
+table's number against itself.
+
+Two old statistical checks that failed once each this round were sampled too thin: the Breach
+pixel count now subtracts a baseline read with the body nowhere near (a stud or a flower in the
+window read as nine yellow pixels), and the exposure-share check takes 2,000 hits instead of 400.
+64 tests green.
