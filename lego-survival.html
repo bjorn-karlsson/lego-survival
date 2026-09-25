@@ -3389,6 +3389,9 @@ let tScale = 1;
 let enemies=[], projectiles=[], pickups=[], debris=[], particles=[], dmgTexts=[], sched=[];
 let props=[], solids=[], waters=[], flowers=[], hazards=[], spikes=[], pspikes=[];
 let minions = [];      /* the hero's raised dead */
+/* THE HERO, always -- `player` is the hero too, except for the length of one
+   monster's update when that monster has a skeleton for a target (see enemyTarget) */
+let heroObj = null;
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, done:0 };
 /* the wave's BREACH, if it carries one (see BREACH), and how many ordinary
    waves in a row have gone without */
@@ -3607,8 +3610,7 @@ function newPlayer(){
        OWN pools -- a minion's damage is not yours, and nothing you buy for your
        own hits reaches it unless something says so (Mirrored Legion does). */
     minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
-              mages:false, mirror:false, instab:false },
-    rallyT:0, rallyTgt:null,
+              mages:false, mirror:false, instab:false, golems:0, overseer:false, overseerCd:0 },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
@@ -6073,6 +6075,7 @@ function updateAilments(dt){
    hits meet armour — never both. */
 function playerDamage(n, src, elem, spell){
   const p = player;
+  if(p && p.isProxy){ minionHurt(p.minion, n, elem); return; }
   if(godMode) return;
   /* a VENOMOUS boss leaves something behind on every hit */
   if(src && src.venom && !p.dead && p.invuln<=0 && p.dash.t<=0)
@@ -8013,6 +8016,23 @@ const UPGRADES = [
     calc:m=>({n:1}),
     desc:c=>`Every raising stands up TWO skeletons instead of one`,
     apply:c=>{ player.minions.perCast = 2; } },
+  /* TWO EPICS, and only ever epic: the bone golem (twice) and the overseer */
+  { id:'bonegolem', name:'Bone Golem', icon:'skull', cls:'OFFENSE', minRar:'epic',
+    req:()=>isSummoner() && (player.minions.golems || 0) < BONE_GOLEM_MAX,
+    calc:m=>({n:1}),
+    desc:c=>`One more of your MELEE skeletons is a BONE GOLEM (${player.minions.golems || 0} \u2192 `+
+      `${(player.minions.golems || 0) + 1}, up to ${BONE_GOLEM_MAX}): ${kindOf('golem').hp}\u00d7 the life, `+
+      `${kindOf('golem').dmg}\u00d7 the hit, and every blow a slam that lands on everything in front of it. `+
+      `Archers and mages stay what they are`,
+    apply:c=>{ player.minions.golems = Math.min(BONE_GOLEM_MAX, (player.minions.golems || 0) + 1); minionsToGolems(); } },
+  { id:'boneoverseer', name:'Bone Overseer', icon:'skull', cls:'OFFENSE', minRar:'epic',
+    req:()=>isSummoner() && !player.minions.overseer,
+    calc:m=>({n:1}),
+    desc:c=>`A BONE OVERSEER rises at your shoulder and stays there. It does not fight; every minion `+
+      `within ${OVERSEER_R}px of it deals ${Math.round((OVERSEER_MORE-1)*100)}% MORE damage and attacks `+
+      `${Math.round((OVERSEER_SPD-1)*100)}% faster. It is not one of the legion, and if it falls it rises `+
+      `again ${OVERSEER_BACK}s later`,
+    apply:c=>{ player.minions.overseer = true; player.minions.overseerCd = 0; } },
   { id:'skelmages', name:'Skeleton Mages', icon:'skull', cls:'OFFENSE', minRar:'legendary',
     req:()=>isSummoner() && !player.minions.mages,
     calc:m=>({n:1}),
@@ -8957,6 +8977,13 @@ const META_GROUPS = [
   { id:'inoc',  name:'INOCULATION', sp:'aff', home:'dex', d:[2,4], shape:'chain',
     minors:[['Sour Blood','chaosRes',0.06],['Inured','chaosRes',0.05]] },
   /* ============ BLUE: spells, the elements, cast speed ============ */
+  /* THE LEGION IN BLUE. A summoner walks intelligence's country for its spells
+     and its shield; these are the small stops along the way that feed the
+     skeletons instead. Scepter-only stats -- worth nothing to anyone else. */
+  { id:'bones', name:'BONEWORK',    sp:'arc', home:'int', d:[0,3], shape:'chain', must:true,
+    minors:[['Bonework','minionDmg',0.05],['Marrow','minionLife',0.06]] },
+  { id:'grave', name:'GRAVECALL',   sp:'arc', home:'int', d:[1,4], shape:'chain', must:true,
+    minors:[['Gravecall','minionDmg',0.06],['Drill','minionSpd',0.04],['Deathless','minionLife',0.08]] },
   { id:'focus', name:'FOCUS',       sp:'arc', home:'int', d:[0,3], shape:'ring',
     minors:[['Focus','incSpell',0.035],['Study','incSpell',0.03],['Resonant','incSpell',0.025]] },
   { id:'cad',   name:'CADENCE',     sp:'arc', home:'int', d:[0,3], shape:'chain',
@@ -9070,6 +9097,9 @@ const META_NOTABLES = [
   { id:'n_staff', name:'THE ADEPT',     sp:'arc', home:'int', d:[1,2], shape:'wheel',
     minors:[['Warding','allRes',0.03],['Quick Words','incCast',0.04],['Kindling','incElem',0.04]],
     notable:{ name:'Adept', mods:[['incSpell',0.08],['boltR',0.08]] } },
+  { id:'n_crypt', name:'THE CRYPT',     sp:'arc', home:'int', d:[1,3], shape:'ring',
+    minors:[['Crypt Dust','minionLife',0.08],['Grave Might','minionDmg',0.06],['Dark Pact','incSpell',0.04]],
+    notable:{ name:'Crypt Keeper', mods:[['minionLife',0.15],['minionSpd',0.06]] } },
   { id:'n_chant', name:'THE CHANT',     sp:'arc', home:'int', d:[2,4], shape:'ring',
     minors:[['Harmonic','incSpell',0.05],['Cadence','incCast',0.05],['Attunement','allRes',0.03]],
     notable:{ name:'Archivist', mods:[['spellCap',1],['incCast',0.04]] } },
@@ -11225,7 +11255,7 @@ const FAVOURITES = [
   /* the bow's own opening hand -- the archer's Sword & Steel */
   /* the scepter's own opening hand */
   { id:'necro',   name:'Necromancer',  icon:'skull', summon:true,
-    ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages','castspd'] },
+    ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages','bonegolem','boneoverseer','castspd'] },
   { id:'arrow',   name:'Deadeye',      icon:'bow', bow:true,
     ids:['arrowmulti','arrowpierce','arrowflat','aspd','crit','critpow','acc','bladem','moredmg'] },
   { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
@@ -11366,8 +11396,9 @@ function weaponTip(w){
     L.push('IT DOES NOT SWING. Holding attack RAISES THE DEAD');
     L.push('where you point: skeletons that walk to whatever');
     L.push('is near you and cut it down, and hold the crowd');
-    L.push('off you while they do. At a full legion a cast is');
-    L.push('a RALLY: all of them turn on the body you point at.');
+    L.push('off you while they do: spearmen, swordsmen and');
+    L.push('archers. At a full legion the oldest crumbles and');
+    L.push('the new one takes its place.');
     L.push('Minion damage is its own pool. The legendary makes');
     L.push('every one of them a SKELETON MAGE.');
   } else if(w.shoot){
@@ -11905,7 +11936,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
-  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -12601,7 +12632,7 @@ const STAT_PROBES = [
   { g:'MINIONS', k:'Minion hit', basic:'OFFENCE', get:()=> isSummoner() ? minionDamage(player.minions.mages) : 0, fmt:v=>fmtHp(v), zero:true,
     why:'one skeleton hit: (scepter base + minion flat) x (1 + the level pool + the minion pool) x the minion more. A mage throws 80% of it' },
   { g:'MINIONS', k:'Legion', basic:'OFFENCE', get:()=> isSummoner() ? minionMax() : 0, fmt:v=>Math.round(v)+' skeletons', zero:true,
-    why:'how many may stand at once. At a full legion a cast is a RALLY instead' },
+    why:'how many may stand at once. At a full legion a raising replaces the oldest' },
   { g:'MINIONS', k:'Minion life', get:()=> isSummoner() ? minionMaxHp() : 0, fmt:v=>Math.round(v)+'', zero:true,
     why:'what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool' },
   { g:'MINIONS', k:'Minion attacks a second', get:()=> isSummoner() ? 1/minionRate(player.minions.mages) : 0, fmt:v=>v.toFixed(2)+'/s', zero:true },
@@ -13365,14 +13396,16 @@ function renderCharSheet(){
         `Burning is damage over time, so it reads your increased damage over\n`+
         `time (${Math.round(p.inc.dot*100)}%) exactly like poison and bleed.`)
     ] : isSummoner() ? [
-      sRow('Legion', minions.length+' / '+minionMax()+' standing',
+      sRow('Legion', legion().length+' / '+minionMax()+' standing',
         `${Math.round(minionMaxHp())} life · ${fmtHp(minionDamage(p.minions.mages))} a hit · `+
         `${(1/minionRate(p.minions.mages)).toFixed(2)}/s`+(p.minions.mages ? ' · SKELETON MAGES' : ''),
         `The scepter does not swing. Holding attack raises skeletons where you point, `+
         `${p.minions.perCast} a cast, up to ${minionMax()}. They fight whatever is near you and hold `+
         `the crowd off you: a monster touching one is slowed and fights it.\n\n`+
-        `At a full legion a cast is a RALLY: every skeleton turns on the body nearest your pointer `+
-        `for ${RALLY_T}s.\n\nMinion damage is its OWN pool: `+Math.round(minionInc()*100)+`% increased now`+
+        `They rise as spearmen, swordsmen or archers; at a full legion the oldest crumbles and the `+
+        `new one takes its place.`+(p.minions.golems ? ` ${p.minions.golems} of the melee ones are BONE GOLEMS.` : '')+
+        (p.minions.overseer ? ' A BONE OVERSEER at your shoulder drives on every one near it.' : '')+
+        `\n\nMinion damage is its OWN pool: `+Math.round(minionInc()*100)+`% increased now`+
         (p.minions.mirror ? ', three quarters of yours mirrored into it.' : '.')+
         (p.minions.instab ? `\n\nMINION INSTABILITY: a skeleton that falls bursts for ${Math.round(INSTAB_SHARE*100)}% of its life as fire.` : ''))
     ] : isArcher() ? [
@@ -14768,9 +14801,9 @@ function arrowRicochet(pr){
    it down, and they stand between you and the crowd while they do -- a monster
    touching a skeleton is held there, half-speed, and fights it instead of
    walking through it. They die, and you raise more.
-   - RAISING: one a cast (two with Twin Raising) up to the legion's size. At the
-     cap a cast is a RALLY instead: every skeleton turns on the body nearest
-     your pointer for a few seconds -- the one order a summoner gives.
+   - RAISING: one a cast (two with Twin Raising) up to the legion's size -- a
+     spearman, a swordsman or an archer. At the cap the OLDEST crumbles and the
+     new one takes its place. Dead, you raise nothing.
    - THEIR NUMBERS ARE THEIR OWN. Minion damage reads the level pool you gain
      by levelling (so a legion keeps up with the run) plus the minion pool the
      scepter's bricks and nodes fill -- and nothing you buy for your own hits.
@@ -14785,72 +14818,119 @@ const MINION_MAX_BASE = 3, MINION_MAX_CAP = 10;
 const MINION_HP_BASE = 10, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
 const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
 const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
-const MINION_CONTACT = 0.9;          /* a monster's touch lands on a skeleton this often */
+const MINION_GUARD = 260;            /* anything this close to you comes first */
+const MINION_WIND = 0.2;             /* a skeleton's raised-weapon beat */
+const MINION_CONTACT = 0.9;          /* a boss's body lands on a skeleton this often */
 const MAGE_RANGE = 380, MAGE_KEEP = 220, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 560;
 const MAGE_ELEMS = ['fire', 'frost', 'shock'];
 const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
 const MIRROR_SHARE = 0.75;
 const INSTAB_SHARE = 0.30, INSTAB_R = 110;
-const RALLY_T = 3, RALLY_R = 260;
+/* WHAT RISES. A plain raising stands up one of three skeletons, for variety and
+   for shape: a SPEARMAN (reach), a SWORDSMAN (quicker, harder, shorter), or an
+   ARCHER that stands off and looses bone arrows. The legendary makes every one
+   a MAGE; the first epic makes some of the melee ones GOLEMS; the second puts an
+   OVERSEER at your shoulder. `dmg` and `rate` scale the legion's own numbers;
+   `hp` its life. */
+const MINION_KINDS = {
+  spear:    { name:'Skeleton Spearman', dmg:1.00, rate:0.85, reach:34, range:0,   hp:1.0, spd:1.00, r:11 },
+  sword:    { name:'Skeleton Swordsman',dmg:1.10, rate:0.72, reach:26, range:0,   hp:1.1, spd:1.05, r:11 },
+  bow:      { name:'Skeleton Archer',   dmg:0.70, rate:1.00, reach:0,  range:330, keep:190, hp:0.8, spd:1.0, r:11 },
+  mage:     { name:'Skeleton Mage',     dmg:MAGE_SHARE, rate:MAGE_RATE, reach:0, range:MAGE_RANGE, keep:MAGE_KEEP, hp:0.8, spd:1.0, r:11 },
+  golem:    { name:'Bone Golem',        dmg:2.20, rate:1.25, reach:42, range:0,   hp:3.5, spd:0.80, r:17, aoe:62 },
+  overseer: { name:'Bone Overseer',     dmg:0,    rate:1,    reach:0,  range:0,   hp:4.0, spd:1.05, r:13 },
+};
+const MINION_MIX = [['spear', 0.36], ['sword', 0.36], ['bow', 0.28]];
+const BONE_GOLEM_MAX = 2;                 /* the golem epic, twice */
+const OVERSEER_R = 320, OVERSEER_MORE = 1.30, OVERSEER_SPD = 1.25, OVERSEER_BACK = 15;
 const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst']);
 const MINION_COLORS = { head:'#ede8ff', torso:'#5b4a8f', legs:'#3a2f5e', hands:'#ede8ff', hair:'#7d6ab8' };
+const OVERSEER_COLORS = { head:'#ede8ff', torso:'#3a2f5e', legs:'#2a2140', hands:'#ffd76e', hair:'#b7a6ff' };
 function minionMax(){ return Math.min(MINION_MAX_CAP, (player && player.minions.max) || MINION_MAX_BASE); }
-function minionMaxHp(){
+function kindOf(k){ return MINION_KINDS[k] || MINION_KINDS.spear; }
+function minionMaxHp(kind){
   const p = player, M = p.minions;
-  return MINION_HP_BASE * (1 + MINION_HP_LVL*(p.level - 1)) * (1 + (M.life || 0));
+  return MINION_HP_BASE * (1 + MINION_HP_LVL*(p.level - 1)) * (1 + (M.life || 0)) * kindOf(kind || 'spear').hp;
 }
 /* WHAT A MINION HIT IS WORTH: (the scepter's base + the minion flat) x (1 + the
-   level pool + the minion pool [+ 3/4 of yours, mirrored]) x the minion MORE */
+   level pool + the minion pool [+ 3/4 of yours, mirrored]) x the minion MORE x
+   what kind of skeleton it is [x the overseer's MORE, standing in its aura] */
 function minionInc(){
   const p = player, M = p.minions;
   let inc = p.incAll + (M.inc || 0);
   if(M.mirror) inc += MIRROR_SHARE * (incMeleeAll() + incSpellAll() + (p.inc.elem || 0));
   return Math.min(INC_DMG_CAP, inc);
 }
-function minionDamage(mage){
-  const M = player.minions;
-  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * (mage ? MAGE_SHARE : 1);
+/* `k` is a kind name, or -- as the cards and the sheet ask it -- true for a mage
+   and false for a plain skeleton */
+function minionKindArg(k){ return typeof k === 'string' ? k : (k ? 'mage' : 'spear'); }
+function minionDamage(k, m){
+  const M = player.minions, K = kindOf(minionKindArg(k));
+  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
 }
-function minionRate(mage){
-  return (mage ? MAGE_RATE : MINION_RATE) / (1 + (player.minions.spd || 0));
+function minionRate(k, m){
+  return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
+}
+/* the legion a full raising would stand up: its golems, then mages or the mix */
+function legionPlan(){
+  const M = player.minions, n = minionMax(), g = Math.min(M.golems || 0, n);
+  const out = []; for(let i=0;i<g;i++) out.push('golem');
+  for(let i=g;i<n;i++) out.push(M.mages ? 'mage' : null);
+  return out;
 }
 function minionDps(){
   if(!isSummoner()) return 0;
-  const M = player.minions, mage = !!M.mages;
   const crit = 1 + critChance()*(critMult() - 1);
-  return minionMax() * minionDamage(mage) / minionRate(mage) * crit;
+  let dps = 0;
+  for(const k of legionPlan()){
+    if(k) dps += minionDamage(k) / minionRate(k);
+    else for(const [mk, w] of MINION_MIX) dps += w * minionDamage(mk) / minionRate(mk);
+  }
+  return dps * crit;
 }
+function legion(){ return minions.filter(m=>!m.gone && m.kind !== 'overseer'); }
+function nextKind(){
+  const M = player.minions;
+  if(legion().filter(m=>m.kind === 'golem').length < Math.min(M.golems || 0, minionMax())) return 'golem';
+  if(M.mages) return 'mage';
+  let r = Math.random();
+  for(const [k, w] of MINION_MIX){ if((r -= w) < 0) return k; }
+  return 'spear';
+}
+/* RAISING. At a full legion the FIRST one you raised crumbles and the new one
+   takes its place -- the legion is always the newest of your dead. */
 function raiseMinion(aim){
   const p = player, M = p.minions;
+  if(!p || p.dead) return;
   p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   p.castT = 0.2; retPulse = 1;
-  /* AT THE CAP A CAST IS AN ORDER: turn on the body nearest the pointer */
-  if(minions.length >= minionMax()){
-    let best = null, bd = RALLY_R;
-    for(const e of enemies){
-      if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
-      const d = Math.hypot(e.x - mouse.wx, e.y - mouse.wy);
-      if(d < bd){ bd = d; best = e; }
-    }
-    if(best){ p.rallyT = RALLY_T; p.rallyTgt = best; addRing(best.x, best.y, 6, 260, 40, '#b7a6ff', 4, 0.35); }
-    return;
-  }
   const d = Math.min(150, Math.hypot(mouse.wx - p.x, mouse.wy - p.y));
-  for(let i=0; i<(M.perCast || 1) && minions.length < minionMax(); i++){
+  for(let i=0; i<(M.perCast || 1); i++){
+    const L = legion();
+    if(L.length >= minionMax()){
+      const old = L.reduce((a, z)=>(z.born < a.born ? z : a), L[0]);
+      old.gone = true;
+      spawnBricks(old.x, old.y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 5, 130);
+      addDust(old.x, old.y, 4);
+    }
     const a = aim + (i ? rnd(-0.8, 0.8) : 0), rr = Math.max(40, d - i*26);
     const x = clamp(p.x + Math.cos(a)*rr, W.wall+40, W.w-W.wall-40);
     const y = clamp(p.y + Math.sin(a)*rr, W.wall+40, W.h-W.wall-40);
     raiseAt(x, y);
   }
+  minions = minions.filter(m=>!m.gone);
   SFX.build();
 }
-function raiseAt(x, y){
-  const M = player.minions, hp = minionMaxHp();
-  const m = { x, y, r:11, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
-              moving:false, flash:0, phase:rnd(TAU), mage:!!M.mages, el:null, slot:minionSlot(), castT:0 };
-  if(m.mage) m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length];
+let minionBorn = 0;
+function raiseAt(x, y, kind){
+  const k = kind || nextKind(), K = kindOf(k), hp = minionMaxHp(k);
+  const m = { x, y, r:K.r, kind:k, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
+              moving:false, flash:0, phase:rnd(TAU), slot:minionSlot(), castT:0, strikeT:0, drawT:0,
+              born:++minionBorn, scale:k === 'golem' ? 0.62 : 0.82 };
+  m.mage = k === 'mage';
+  m.el = m.mage ? MAGE_ELEMS[m.slot % MAGE_ELEMS.length] : null;
   minions.push(m);
-  addRing(x, y, 6, 220, 46, '#b7a6ff', 4, 0.4);
+  addRing(x, y, 6, 220, k === 'golem' ? 70 : 46, '#b7a6ff', 4, 0.4);
   spawnBricks(x, y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 5, 120);
   return m;
 }
@@ -14860,23 +14940,67 @@ function minionSlot(){
   let i = 0; while(used.has(i)) i++;
   return i;
 }
-/* SKELETON MAGES: every one standing turns, and every one raised after is one */
+/* SKELETON MAGES: every skeleton standing turns -- a golem is not a skeleton,
+   and the overseer is not one of the rank and file */
 function minionsToMages(){
-  for(const m of minions){ m.mage = true; m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length]; }
+  for(const m of minions){
+    if(m.kind === 'golem' || m.kind === 'overseer') continue;
+    m.kind = 'mage'; m.mage = true; m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length];
+  }
+}
+/* BONE GOLEMS: the melee ones become golems, oldest first, as many as allowed */
+function minionsToGolems(){
+  const M = player.minions;
+  let have = legion().filter(m=>m.kind === 'golem').length;
+  for(const m of legion().sort((a, z)=>a.born - z.born)){
+    if(have >= Math.min(M.golems || 0, minionMax())) break;
+    if(m.kind !== 'spear' && m.kind !== 'sword') continue;
+    const k = kindOf('golem');
+    m.kind = 'golem'; m.r = k.r; m.scale = 0.62;
+    m.maxHp = minionMaxHp('golem'); m.hp = m.maxHp;
+    addRing(m.x, m.y, 8, 260, 80, '#b7a6ff', 6, 0.5);
+    have++;
+  }
 }
 const _minBuf = [];
+/* WHAT A SKELETON GOES FOR. Whatever is closest to YOU first, if anything is
+   close enough to matter; otherwise the nearest thing to itself, never far
+   from you. With nothing to fight, the nearest chest or crate -- a summoner has
+   no other way to open one. */
 function minionTarget(m){
-  const p = player;
-  if(p.rallyT > 0 && p.rallyTgt && !p.rallyTgt.dead && p.rallyTgt.state === 'active' &&
-     Math.hypot(p.rallyTgt.x - p.x, p.rallyTgt.y - p.y) < MINION_LEASH * 1.2) return p.rallyTgt;
-  let best = null, bd = MINION_SEEK;
+  const h = heroObj || player;
+  let best = null, bd = MINION_GUARD;
+  for(const e of enemiesNear(h.x, h.y, MINION_GUARD, _minBuf)){
+    if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+    const d = Math.hypot(e.x - h.x, e.y - h.y);
+    if(d < bd){ bd = d; best = e; }
+  }
+  if(best) return best;
+  bd = MINION_SEEK;
   for(const e of enemiesNear(m.x, m.y, MINION_SEEK, _minBuf)){
     if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
-    if(Math.hypot(e.x - p.x, e.y - p.y) > MINION_LEASH) continue;   /* never far from you */
+    if(Math.hypot(e.x - h.x, e.y - h.y) > MINION_LEASH) continue;   /* never far from you */
     const d = Math.hypot(e.x - m.x, e.y - m.y);
     if(d < bd){ bd = d; best = e; }
   }
   return best;
+}
+function minionProp(m){
+  const h = heroObj || player;
+  let best = null, bd = MINION_SEEK;
+  for(const pr of props){
+    if(pr.dead || pr.indestructible || (pr.type !== 'chest' && pr.type !== 'crate')) continue;
+    if(Math.hypot(pr.x - h.x, pr.y - h.y) > MINION_LEASH) continue;
+    const d = Math.hypot(pr.x - m.x, pr.y - m.y);
+    if(d < bd){ bd = d; best = pr; }
+  }
+  return best;
+}
+function knockProp(pr){
+  if(pr.dead || pr.indestructible) return;
+  pr.hp--; pr.flash = 1;
+  addSparks(pr.x, pr.y-10, 3); SFX.hit();
+  if(pr.hp <= 0) breakProp(pr);
 }
 function minionStep(m, tx, ty, dt, spd){
   const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
@@ -14886,62 +15010,124 @@ function minionStep(m, tx, ty, dt, spd){
   m.y = clamp(m.y + dy*k, W.wall+30, W.h-W.wall-30);
   m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
 }
+/* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
+function minionBlow(m){
+  const K = kindOf(m.kind), t = m.strikeTgt;
+  const cx = m.x + Math.cos(m.strikeA)*(K.reach*0.8), cy = m.y + Math.sin(m.strikeA)*(K.reach*0.8);
+  slashFx(m.x, m.y - 14*(m.kind === 'golem' ? 1.4 : 1), m.strikeA, (K.reach + 6), '#c9b8ff');
+  if(m.kind === 'golem'){
+    addRing(cx, cy, 6, 300, K.aoe, '#b7a6ff', 5, 0.35); addShake(0.08);
+    for(const e of enemiesNear(cx, cy, K.aoe + 30, _minBuf).slice()){
+      if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+      if(Math.hypot(e.x - cx, e.y - cy) > K.aoe + (e.r || 12)) continue;
+      hitEnemy(e, minionDamage('golem', m), Math.atan2(e.y - m.y, e.x - m.x), 160, 'minion', {});
+    }
+    if(t && t.type && !t.dead && t.hp !== undefined && props.includes(t)) knockProp(t);
+    return;
+  }
+  if(!t || t.dead) return;
+  if(props.includes(t)){ if(Math.hypot(t.x - m.x, t.y - m.y) < K.reach + (t.r || 14) + 12) knockProp(t); return; }
+  if(t.state === 'active' && Math.hypot(t.x - m.x, t.y - m.y) < K.reach + (t.r || 12) + 12)
+    hitEnemy(t, minionDamage(m.kind, m), m.strikeA, 90, 'minion', {});
+}
+function minionShoot(m, tx, ty){
+  const sx = m.x + (m.face.x||0)*10, sy = m.y - 18;
+  const ta = Math.atan2(ty - 14 - sy, tx - sx);
+  if(m.kind === 'mage'){
+    projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
+      vx:Math.cos(ta)*MAGE_BOLT_SPD, vy:Math.sin(ta)*MAGE_BOLT_SPD, life:1.1,
+      dmg:minionDamage('mage', m), el:m.el, src:'m'+m.el });
+  } else {
+    projectiles.push({ kind:'mbolt', arrow:true, owner:'player', x:sx, y:sy, px:sx, py:sy,
+      vx:Math.cos(ta)*640, vy:Math.sin(ta)*640, life:0.9,
+      dmg:minionDamage('bow', m), el:null, src:'minion' });
+    SFX.whoosh();
+  }
+}
 function updateMinions(dt){
-  const p = player;
+  const p = player, M = p && p.minions;
   if(!p) return;
-  p.rallyT = Math.max(0, (p.rallyT || 0) - dt);
+  const h = heroObj || p;
+  /* THE OVERSEER: while it is owed and not standing, it comes back on a clock */
+  if(M.overseer && !minions.some(m=>m.kind === 'overseer' && !m.gone)){
+    M.overseerCd = Math.max(0, (M.overseerCd || 0) - dt);
+    if(M.overseerCd <= 0 && !h.dead){ raiseAt(h.x - 50, h.y + 20, 'overseer'); }
+  }
+  const ov = minions.find(m=>m.kind === 'overseer' && !m.gone && m.rise >= 1);
   for(const m of minions){
+    m.lx = m.x; m.ly = m.y; m.ldt = dt;
     m.flash = Math.max(0, m.flash - dt*4);
     m.castT = Math.max(0, m.castT - dt);
+    m.buffed = !!(ov && m !== ov && Math.hypot(m.x - ov.x, m.y - ov.y) < OVERSEER_R);
     if(m.rise < 1){ m.rise += dt / MINION_RISE; continue; }
     /* lost: too far from you, and it simply rises again at your side */
-    if(Math.hypot(m.x - p.x, m.y - p.y) > MINION_LEASH * 1.6){
-      const a = rnd(TAU); m.x = p.x + Math.cos(a)*60; m.y = p.y + Math.sin(a)*60; m.rise = 0.4;
+    if(Math.hypot(m.x - h.x, m.y - h.y) > MINION_LEASH * 1.6){
+      const a = rnd(TAU); m.x = h.x + Math.cos(a)*60; m.y = h.y + Math.sin(a)*60; m.rise = 0.4;
+    }
+    const K = kindOf(m.kind), spd = MINION_SPD * K.spd;
+    if(m.kind === 'overseer'){
+      /* it keeps to your shoulder and keeps the legion's blood up */
+      const fx = h.x - 55, fy = h.y + 25;
+      if(Math.hypot(fx - m.x, fy - m.y) > 20) minionStep(m, fx, fy, dt, spd*1.2); else m.moving = false;
+      m.pulseT = (m.pulseT || 0) - dt;
+      if(m.pulseT <= 0){ m.pulseT = 3; addRing(m.x, m.y, 10, 260, OVERSEER_R, '#ffd76e', 3, 0.6); m.castT = 0.4; }
+      continue;
     }
     m.atkCd -= dt;
-    const e = minionTarget(m);
-    if(e){
-      const d = Math.hypot(e.x - m.x, e.y - m.y), a = Math.atan2(e.y - m.y, e.x - m.x);
-      if(m.mage){
+    /* A BLOW IN THE AIR finishes before anything else */
+    if(m.strikeT > 0){
+      m.strikeT -= dt; m.moving = false;
+      if(m.strikeT <= 0){ m.strikeT = 0; minionBlow(m); m.atkCd = minionRate(m.kind, m); }
+      continue;
+    }
+    if(m.drawT > 0){
+      m.drawT -= dt; m.moving = false;
+      if(m.drawT <= 0){ m.drawT = 0; if(m.shotAt) minionShoot(m, m.shotAt.x, m.shotAt.y); m.atkCd = minionRate(m.kind, m); }
+      continue;
+    }
+    let e = minionTarget(m);
+    const prop = e ? null : minionProp(m);
+    const t = e || prop;
+    if(t){
+      const d = Math.hypot(t.x - m.x, t.y - m.y), a = Math.atan2(t.y - m.y, t.x - m.x);
+      if(K.range){
         /* it stands off: closes to its range, backs off inside its comfort */
-        if(d > MAGE_RANGE*0.9) minionStep(m, e.x, e.y, dt, MINION_SPD);
-        else if(d < MAGE_KEEP*0.6) minionStep(m, m.x - Math.cos(a)*40, m.y - Math.sin(a)*40, dt, MINION_SPD*0.7);
+        const want = prop ? 150 : K.range*0.9;
+        if(d > want) minionStep(m, t.x, t.y, dt, spd);
+        else if(!prop && d < K.keep*0.6) minionStep(m, m.x - Math.cos(a)*40, m.y - Math.sin(a)*40, dt, spd*0.7);
         else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
-        if(d <= MAGE_RANGE && m.atkCd <= 0){
-          m.atkCd = minionRate(true); m.castT = 0.18;
-          const sx = m.x + Math.cos(a)*10, sy = m.y - 18;
-          const ta = Math.atan2(e.y - 14 - sy, e.x - sx);
-          projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
-            vx:Math.cos(ta)*MAGE_BOLT_SPD, vy:Math.sin(ta)*MAGE_BOLT_SPD, life:1.1,
-            dmg:minionDamage(true), el:m.el, src:'m'+m.el });
+        if(d <= Math.max(want, K.range) && m.atkCd <= 0){
+          if(m.kind === 'mage'){ m.castT = 0.18; minionShoot(m, t.x, t.y); m.atkCd = minionRate('mage', m); }
+          else { m.drawT = 0.3; m.shotAt = { x:t.x, y:t.y }; }
         }
       } else {
-        const reach = MINION_REACH + (e.r || 12);
+        const reach = K.reach + (t.r || 12);
         /* each comes at it from its own side, so a legion SURROUNDS a body
            instead of queueing behind one another on the same line */
         const fa = a + ((m.slot % 5) - 2) * 0.55;
-        if(d > reach) minionStep(m, e.x - Math.cos(fa)*(reach-6), e.y - Math.sin(fa)*(reach-6), dt, MINION_SPD);
+        if(d > reach) minionStep(m, t.x - Math.cos(fa)*(reach-6), t.y - Math.sin(fa)*(reach-6), dt, spd);
         else { m.moving = false; m.face = { x:Math.cos(a), y:Math.sin(a) }; }
-        if(d <= reach + 4 && m.atkCd <= 0){
-          m.atkCd = minionRate(false); m.castT = 0.15;
-          hitEnemy(e, minionDamage(false), a, 90, 'minion', {});
+        if(d <= reach + 6 && m.atkCd <= 0){
+          m.strikeT = MINION_WIND * (m.kind === 'golem' ? 1.8 : 1); m.strikeA = a; m.strikeTgt = t;
         }
       }
     } else {
       /* nothing to fight: a place in a loose ring round you */
       const n = Math.max(1, minions.length), ang = m.slot / n * TAU + vtime*0.15;
-      const fx = p.x + Math.cos(ang)*(m.mage ? 90 : 62), fy = p.y + Math.sin(ang)*(m.mage ? 70 : 46);
-      if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, MINION_SPD*1.1);
+      const r = K.range ? 90 : 62;
+      const fx = h.x + Math.cos(ang)*r, fy = h.y + Math.sin(ang)*r*0.75;
+      if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, spd*1.1);
       else m.moving = false;
     }
-    /* THE WALL. Whatever is touching it is held, and fights it: its touch lands
-       on the skeleton at the monster's own contact damage */
-    for(const en of enemiesNear(m.x, m.y, 40, _minBuf)){
-      if(en.dead || en.state !== 'active' || en.type === 'boss' && en.super) continue;
-      if(Math.hypot(en.x - m.x, en.y - m.y) > (en.r || 12) + m.r) continue;
-      en.slowT = Math.max(en.slowT || 0, 0.12);
-      m.hp -= (en.dmg || 1) * dt / MINION_CONTACT;
-      m.flash = Math.max(m.flash, 0.3);
+  }
+  /* A BOSS'S BODY. A boss does not stop to swing at bones; walking through a
+     skeleton simply grinds it down */
+  for(const m of minions){
+    if(m.rise < 1 || m.gone) continue;
+    for(const en of enemiesNear(m.x, m.y, 80, _minBuf)){
+      if(en.dead || en.state !== 'active' || en.type !== 'boss') continue;
+      if(Math.hypot(en.x - m.x, en.y - m.y) > (en.r || 30) + m.r) continue;
+      m.hp -= (en.dmg || 1) * dt / MINION_CONTACT; m.flash = Math.max(m.flash, 0.3);
     }
   }
   /* and they keep a little room between them */
@@ -14957,6 +15143,7 @@ function updateMinions(dt){
 function minionDies(m){
   m.gone = true;
   spawnBricks(m.x, m.y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 6, 150);
+  if(m.kind === 'overseer'){ player.minions.overseerCd = OVERSEER_BACK; return; }
   if(player.minions.instab){
     const dmg = m.maxHp * INSTAB_SHARE * (1 + minionInc());
     addRing(m.x, m.y, 8, 360, INSTAB_R, '#ff8a3c', 6, 0.4);
@@ -14983,17 +15170,30 @@ function drawMinion(c, m){
   }
   /* an ALLY: a violet ring at its feet, so it is never read as one of theirs */
   c.strokeStyle = 'rgba(183,166,255,0.75)'; c.lineWidth = 2;
-  c.beginPath(); c.ellipse(m.x, m.y + 2, 15, 6, 0, 0, TAU); c.stroke();
-  const o = { x:m.x, y:m.y, s:0.82, face:m.face, walk:m.walk, moving:m.moving, flash:m.flash,
-    colors:MINION_COLORS, style:'skel', phase:m.phase, angry:false };
-  if(m.mage){ o.weapon = 'staff'; o.orbCol = MAGE_COL[m.el] || '#c9b8ff'; o.hoodCol = '#3a2f5e';
-    if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
-  else o.weapon = 'spear';
-  drawFigure(c, o);
+  c.beginPath(); c.ellipse(m.x, m.y + 2, m.r*1.35, m.r*0.55, 0, 0, TAU); c.stroke();
+  if(m.buffed){ c.strokeStyle = 'rgba(255,215,110,0.55)'; c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(m.x, m.y + 2, m.r*1.6, m.r*0.68, 0, 0, TAU); c.stroke(); }
+  if(m.kind === 'golem'){
+    const g = m.gfx || (m.gfx = { golem:'bone', type:'minion' });
+    Object.assign(g, { x:m.x, y:m.y, scale:m.scale, moving:m.moving, walk:m.walk, phase:m.phase,
+      face:m.face, flash:m.flash, mode:m.strikeT > 0 ? 'stompWind' : 'chase', hp:m.hp, maxHp:m.maxHp, r:m.r });
+    drawGolem(c, g);
+  } else {
+    const o = { x:m.x, y:m.y, s:m.kind === 'overseer' ? 0.95 : 0.82, face:m.face, walk:m.walk, moving:m.moving, flash:m.flash,
+      colors:m.kind === 'overseer' ? OVERSEER_COLORS : MINION_COLORS, style:'skel', phase:m.phase, angry:false };
+    if(m.kind === 'mage'){ o.weapon = 'staff'; o.orbCol = MAGE_COL[m.el] || '#c9b8ff'; o.hoodCol = '#3a2f5e';
+      if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
+    else if(m.kind === 'overseer'){ o.weapon = 'staff'; o.orbCol = '#ffd76e'; o.hoodCol = '#2a2140'; o.lord = true;
+      if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
+    else if(m.kind === 'bow'){ o.bowPull = m.drawT > 0 ? clamp(1 - m.drawT/0.3, 0, 1) : 0; }
+    else if(m.kind === 'sword'){ o.weapon = 'greatsword'; o.wScale = 0.7; if(m.strikeT > 0) o.armsUp = true; }
+    else { o.weapon = 'spear'; if(m.strikeT > 0) o.armsUp = true; }
+    drawFigure(c, o);
+  }
   if(m.hp < m.maxHp){
-    const w5 = 20;
-    c.fillStyle = 'rgba(15,20,25,0.6)'; c.fillRect(m.x - w5/2, m.y - 42, w5, 3.5);
-    c.fillStyle = '#b7a6ff'; c.fillRect(m.x - w5/2, m.y - 42, w5*clamp(m.hp/m.maxHp, 0, 1), 3.5);
+    const w5 = 20, top = m.kind === 'golem' ? 56 : 42;
+    c.fillStyle = 'rgba(15,20,25,0.6)'; c.fillRect(m.x - w5/2, m.y - top, w5, 3.5);
+    c.fillStyle = '#b7a6ff'; c.fillRect(m.x - w5/2, m.y - top, w5*clamp(m.hp/m.maxHp, 0, 1), 3.5);
   }
 }
 function drawScepterArt(c, s, bright){
@@ -15548,7 +15748,116 @@ function enemyCasterMove(e, dt, toP, dP, far, near){
   if(dP < near){ return {x:-Math.cos(toP)*e.speed*0.45, y:-Math.sin(toP)*e.speed*0.45}; }
   return {x:Math.cos(toP+Math.PI/2)*e.speed*e.strafe*0.7, y:Math.sin(toP+Math.PI/2)*e.speed*e.strafe*0.7};
 }
+/* WHO A MONSTER IS AFTER. A skeleton that is nearer to it than you are is the
+   thing it fights -- so a legion really does stand between you and the crowd --
+   and you are, when you are the nearer. A little stickiness, so a body between
+   the two does not flick its head back and forth every frame. Bosses are after
+   you, always; their attacks still land on whatever is standing in them. */
+const TARGET_STICK = 30, TARGET_MAX = 700;
+const STRIKE_REACH = 12;      /* px past touching that a monster swings from */
+const STRIKE_WIND  = 0.32;    /* the raised-weapon beat before the swing lands */
+function slashFx(x, y, a, r, col){
+  particles.push({ kind:'slash', x, y, a, r, vx:0, vy:0, life:0.16, max:0.16, color:col });
+}
+function enemyTarget(e){
+  if(!minions.length || e.type === 'boss' || e.docile || !heroObj) return null;
+  const dP = heroObj.dead ? 1e9 : Math.hypot(e.x - heroObj.x, e.y - heroObj.y);
+  let best = null, bd = TARGET_MAX;
+  for(const m of minions){
+    if(m.rise < 1 || m.gone) continue;
+    const d = Math.hypot(e.x - m.x, e.y - m.y) - (e.tgtM === m ? TARGET_STICK : 0);
+    if(d < bd){ bd = d; best = m; }
+  }
+  if(best && bd < dP - (e.tgtM ? 0 : TARGET_STICK*0.5)){ e.tgtM = best; return best; }
+  e.tgtM = null;
+  return null;
+}
+/* THE STAND-IN. A monster's whole mind was written against `player`: where it
+   is, how fast it is moving, whether it is rolling. For the length of its own
+   update, a monster after a skeleton sees a stand-in that is the skeleton --
+   same place, same movement, never rolling, never invulnerable -- and every
+   point of damage it deals through playerDamage lands on the skeleton. Reads it
+   does not override fall through to the hero; writes stay on the stand-in. */
+function minionProxy(m){
+  let P = m.proxy;
+  if(!P || Object.getPrototypeOf(P) !== heroObj){
+    P = m.proxy = Object.create(heroObj);
+    P.isProxy = true; P.minion = m;
+    P.dash = { t:0, cd:1, cdMax:1, dir:{x:0, y:0} };
+  }
+  P.x = m.x; P.y = m.y; P.r = m.r; P.dead = false; P.invuln = 0; P.stunT = 0;
+  P.hp = m.hp; P.maxHp = m.maxHp; P.kx = 0; P.ky = 0; P.slowT = 0;
+  P.leadX = m.lx ?? m.x; P.leadY = m.ly ?? m.y; P.leadDt = m.ldt || 0.016;
+  P.face = m.face;
+  return P;
+}
 function updateEnemy(e, dt){
+  const tgt = enemyTarget(e);
+  if(!tgt){ updateEnemyCore(e, dt); }
+  else {
+    const hero = player;
+    player = minionProxy(tgt);
+    try { updateEnemyCore(e, dt); } finally { player = hero; }
+  }
+  bodySpace(e);
+}
+/* NOTHING STANDS INSIDE ANYTHING. A monster that has reached you stops at your
+   edge instead of walking into your middle; one that has reached a skeleton
+   shares the shove with it. */
+function bodySpace(e){
+  if(e.dead || e.state !== 'active' || e.docile) return;
+  const h = heroObj;
+  if(h && !h.dead && player === h){
+    const dx = e.x - h.x, dy = e.y - h.y, d = Math.hypot(dx, dy), min = (e.r||12) + (h.r||12);
+    if(d > 0.01 && d < min){ const k = (min - d)/d; e.x += dx*k; e.y += dy*k; }
+  }
+  for(const m of minions){
+    if(m.rise < 1 || m.gone) continue;
+    const dx = e.x - m.x, dy = e.y - m.y, d = Math.hypot(dx, dy), min = (e.r||12) + m.r;
+    if(d > 0.01 && d < min){
+      const k = (min - d)/d, share = e.type === 'boss' ? 1 : 0.5;
+      m.x -= dx*k*share; m.y -= dy*k*share;
+      if(e.type !== 'boss'){ e.x += dx*k*0.5; e.y += dy*k*0.5; }
+    }
+  }
+}
+/* A SKELETON TAKES A HIT. No armour and no resistances -- it is bones -- so it
+   takes what the hit says. */
+function minionHurt(m, n, elem){
+  if(!m || m.gone || m.rise < 1 || !(n > 0)) return;
+  m.hp -= n; m.flash = 1;
+  addDmg(m.x, m.y - 34, fmtHp(n), elem === 'fire' ? '#ff9a5a' : elem === 'frost' ? '#9fdcff'
+         : elem === 'shock' ? '#fff07a' : '#c9b8ff', 12);
+}
+/* every raised skeleton inside a circle, once each */
+function minionsIn(x, y, r, fn){
+  for(const m of minions){
+    if(m.rise < 1 || m.gone) continue;
+    if(Math.hypot(m.x - x, m.y - y) < r + m.r) fn(m);
+  }
+}
+/* every raised skeleton on a ring's band, once per ring */
+function minionsOnRing(ring, cx, cy, band, dmg, elem){
+  if(!minions.length) return;
+  ring.mHit = ring.mHit || new Set();
+  for(const m of minions){
+    if(m.rise < 1 || m.gone || ring.mHit.has(m)) continue;
+    if(Math.abs(Math.hypot(m.x - cx, m.y - cy) - ring.r) < band + m.r){ ring.mHit.add(m); minionHurt(m, dmg, elem); }
+  }
+}
+/* a lingering thing -- a pool, a coil -- bites a skeleton standing in it on its own clock */
+function minionsInHazard(h, r, dmg, elem, every){
+  for(const m of minions){
+    if(m.rise < 1 || m.gone) continue;
+    if(Math.hypot(m.x - h.x, m.y - h.y) >= r + m.r) continue;
+    m.hazCd = m.hazCd || {};
+    const k = h.kind || 'h';
+    if((m.hazCd[k] || 0) > vtime) continue;
+    m.hazCd[k] = vtime + (every || 0.5);
+    minionHurt(m, dmg, elem);
+  }
+}
+function updateEnemyCore(e, dt){
   if(e.stacks) stackTick(dt, e);
   if(e.state==='build'){
     e.buildT += dt/0.55;
@@ -16118,6 +16427,7 @@ function updateEnemy(e, dt){
            armour, at any wave, for a monster that has to reach you to work. */
         if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead)
           playerDamage(Math.max(2, e.dmg*2.6), e);
+        minionsIn(e.x, e.y, 85, m=>{ if(!(player.isProxy && player.minion === m)) minionHurt(m, Math.max(2, e.dmg*2.6)); });
         return;
       }
     } else {
@@ -16271,17 +16581,54 @@ function updateEnemy(e, dt){
   e.moving = (vx!==0||vy!==0);
   if(e.moving){ e.walk += dt*10; if(e.type!=='knight') e.face={x:vx, y:vy}; }
   else if(!e.docile && e.type!=='knight') e.face = {x:Math.cos(toP), y:Math.sin(toP)};
+  /* A STRIKE IS A THING YOU SEE. It stops, raises its weapon, and swings;
+     what is still within reach when the swing comes down takes the hit. And it
+     does not walk INTO what it is fighting -- it stops at the edge of it. */
+  if(e.strikeT > 0){ vx *= 0.12; vy *= 0.12; e.face = {x:Math.cos(e.strikeA), y:Math.sin(e.strikeA)}; }
+  else if(dP < e.r + player.r + 4 && e.mode !== 'lunge'){
+    const ux = Math.cos(toP), uy = Math.sin(toP), fwd = vx*ux + vy*uy;
+    if(fwd > 0){ vx -= ux*fwd; vy -= uy*fwd; }
+  }
   e.x += vx*dt; e.y += vy*dt;
   collideWorld(e);
-  if(!e.docile && e.hitCd<=0 && dP < e.r + player.r + 2 && !player.dead){
-    playerDamage(e.mode==='lunge' ? e.dmg+1 : e.dmg, e, e.touchElem || undefined, false);
-    e.hitCd = e.touchCd || 0.9;
+  if(e.mode === 'lunge'){
+    /* a lunge IS the attack: the spear arriving is the hit */
+    if(!e.docile && e.hitCd<=0 && dP < e.r + player.r + 4 && !player.dead){
+      playerDamage(e.dmg+1, e, e.touchElem || undefined, false);
+      e.hitCd = e.touchCd || 0.9;
+    }
+  } else if(e.strikeT > 0){
+    e.strikeT -= dt;
+    if(e.strikeT <= 0){
+      e.strikeT = 0;
+      const reach = e.r + player.r + STRIKE_REACH + 8;
+      slashFx(e.x, e.y - 16*(e.scale||1), e.strikeA, 26*(e.scale||1), '#ffffff');
+      if(!player.dead && dist(e, player) < reach && Math.abs(angDiff(angTo(e, player), e.strikeA)) < 1.4)
+        playerDamage(e.dmg, e, e.touchElem || undefined, false);
+      e.hitCd = e.touchCd || 0.9;
+      SFX.hit();
+    }
+  } else if(!e.docile && e.hitCd<=0 && !player.dead && dP < e.r + player.r + STRIKE_REACH &&
+            (e.mode === 'chase' || e.mode === undefined)){
+    e.strikeT = STRIKE_WIND * (e.atkS || 1); e.strikeA = toP;
   }
   if(e.ring){
     const rmax = e.ring.max || REV_MAX;
     e.ring.r += (e.ring.speed||300)*dt;
-    if(!e.ring.hit && !player.dead){
-      /* a true circle, drawn and measured — see bossRingHit */
+    /* the shockwave does not know whom it was aimed at: every skeleton on it */
+    minionsOnRing(e.ring, e.x, e.y, e.ring.golem ? 28 : 22, e.ring.dmg ?? (e.type==='jugg'?1:2),
+      e.ring.golem==='ice' ? 'frost' : e.ring.golem==='fire' ? 'fire' : null);
+    if(player.isProxy && !e.ring.heroHit && heroObj && !heroObj.dead &&
+       Math.abs(dist(heroObj, e) - e.ring.r) < (e.ring.golem?28:22)){
+      /* ...and the hero standing in it, even while it was swinging at a skeleton */
+      e.ring.heroHit = e.ring.hit = true;
+      const keep = player; player = heroObj;
+      if(heroObj.dash.t <= 0 && heroObj.invuln <= 0) playerDamage(e.ring.dmg ?? (e.type==='jugg'?1:2), e);
+      player = keep;
+    }
+    if(!e.ring.hit && !player.dead && !player.isProxy){
+      /* a true circle, drawn and measured — see bossRingHit (a skeleton it
+         was after is on minionsOnRing already -- once, not twice) */
       const d = dist(player, e);
       if(Math.abs(d - e.ring.r) < (e.ring.golem?28:22)){
         if(player.dash.t>0){ e.ring.hit = true; perfectDodge(player.x, player.y); }
@@ -16510,6 +16857,8 @@ function bossChase(b, toP, spd, dt, mul){
   b.face = {x:cx, y:cy};
 }
 function bossRingHit(b){
+  /* the shockwave takes every skeleton it crosses, whoever it was thrown at */
+  minionsOnRing(b.ring, b.x, b.y, 30, 2 + Math.round((b.dmg||2)*0.5), null);
   if(!b.ring.hit && !player.dead){
     /* A TRUE CIRCLE, drawn and measured. The squashed version reached a third
        further north and south than the picture showed, which on the attack that
@@ -16594,6 +16943,18 @@ function maceSpin(b, dt, tier, enr, toP){
       }
     }
   }
+  /* THE SWING TAKES WHATEVER IT CROSSES, skeletons included -- each on its own
+     short clock so one pass of the head is one hit */
+  for(const m of minions){
+    if(m.rise < 1 || m.gone || (m.maceCd || 0) > vtime) continue;
+    const dm = Math.hypot(m.x - b.x, m.y - b.y);
+    if(dm >= reach + m.r) continue;
+    const half = Math.atan2(m.r + MACE_BLADE_HALF, Math.max(8, dm)), pa = Math.atan2(m.y - b.y, m.x - b.x);
+    const from = angDiff(pa, prevA), to = angDiff(pa, b.whirlA);
+    if((from <= half && from >= -half) || (to <= half && to >= -half) || (from > 0 && to < 0 && (from - to) < Math.PI)){
+      m.maceCd = vtime + MACE_TICK; minionHurt(m, b.dmg+1);
+    }
+  }
   if(Math.random()<0.7){
     const hx = b.x + Math.cos(b.whirlA)*reach, hy = b.y + Math.sin(b.whirlA)*reach;
     particles.push({kind:'spark', x:hx, y:hy, vx:rnd(-40,40), vy:rnd(-40,10),
@@ -16642,6 +17003,9 @@ function updateBoss(b, dt, toP, dP){
      dP < b.r + player.r + 30){
     playerDamage(Math.max(1, Math.round(b.dmg*0.25)), b);
     addSparks(player.x, player.y-18, 3, '#ffb066');
+  }
+  if(b.thorns){
+    minionsIn(b.x, b.y, b.r + 30, m=>{ if((m.thornCd||0) <= vtime){ m.thornCd = vtime + 0.6; minionHurt(m, Math.max(1, Math.round(b.dmg*0.25))); } });
   }
   if(b.super){ updateSuperBoss(b, dt, toP, dP); return; }
   const enr = b.hp < b.maxHp*0.5;
@@ -17195,6 +17559,10 @@ function updateSpikes(dt){
       if(player.dash.t>0){ sp.hit = true; perfectDodge(sp.x, sp.y); }
       else if(player.invuln<=0){ playerDamage(sp.dmg, sp); sp.hit = true; }
     }
+    if(sp.t >= SPIKE_RISE*0.45 && sp.t < SPIKE_RISE+SPIKE_HOLD && minions.length){
+      sp.mHit = sp.mHit || new Set();
+      minionsIn(sp.x, sp.y, 20, m=>{ if(!sp.mHit.has(m)){ sp.mHit.add(m); minionHurt(m, sp.dmg); } });
+    }
     if(sp.t >= sp.life) sp.dead = true;
   }
   spikes = spikes.filter(sp=>!sp.dead);
@@ -17553,6 +17921,21 @@ function updateProjectiles(dt){
          it, and breaks. Swept like the hero's own check, for the same reason --
          a fast boulder would otherwise step clean over a brick between frames. */
       if(pr.owner==='enemy' && !pr.dead && !player.dead && aegisBlock(pr)) continue;
+      /* A SKELETON IN THE WAY IS HIT. Whatever a monster throws lands on the
+         first of your dead it crosses -- the legion is you, as far as a missile
+         can tell. A curse has nothing to hold on to in bones and simply breaks;
+         a thrown boulder shoulders on through. */
+      if(pr.owner==='enemy' && !pr.dead && minions.length){
+        for(const m of minions){
+          if(m.rise < 1 || m.gone) continue;
+          if(!sweepsBody(m, pr.px, pr.py, pr.x, pr.y, pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0))) continue;
+          if(pr.kind === 'frostrock'){ if(!(pr.mHit && pr.mHit.has(m))){ (pr.mHit = pr.mHit || new Set()).add(m); minionHurt(m, pr.dmg||1, 'frost'); } continue; }
+          if(pr.kind !== 'hexbolt') minionHurt(m, pr.dmg||1, pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null);
+          addSparks(pr.x, pr.y, 3, '#c9b8ff');
+          pr.dead = true; break;
+        }
+        if(pr.dead) continue;
+      }
       /* swept, not sampled: a 660px/s boulder covers 11px a frame and used to be
          able to step straight over the hero between two frames */
       if(pr.owner==='enemy' && !player.dead &&
@@ -17631,6 +18014,8 @@ function updateProjectiles(dt){
         if(!player.dead && player.dash.t<=0 && player.invuln<=0 &&
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
           playerDamage(pr.dmg || 1, pr, 'shock');
+        for(const m of minions) if(m.rise >= 1 && !m.gone && segDist(pr.x, pr.y, ex, ey, m.x, m.y - 14) < 9 + m.r)
+          minionHurt(m, pr.dmg || 1, 'shock');
       }
       if(!pr.dead && !player.dead &&
          sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
@@ -17661,6 +18046,7 @@ function updateProjectiles(dt){
         addRing(pr.x,pr.y,20,340,pr.r,FX.foe.frost,8,0.45);
         addSparks(pr.x,pr.y,14,FX.foe.frostDeep);
         SFX.freeze(); addShake(0.25);
+        minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, pr.dmg || 1, 'frost'));
         if(!player.dead){
           const d = dist(pr, player);
           if(d < pr.r){
@@ -17786,9 +18172,17 @@ function updateProjectiles(dt){
       /* a skeleton mage's bolt: its element, the first body it meets */
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
       if(pr.life<=0) pr.dead = true;
+      /* a chest or a crate in the way takes the knock -- how a summoner opens one */
+      if(!pr.dead) for(const prop of props){
+        if(prop.dead || prop.type === 'torch' || prop.type === 'crystal') continue;
+        if(Math.abs(prop.x - pr.x) > 100 || Math.abs(prop.y - pr.y) > 100) continue;
+        if(segDist(pr.px, pr.py, pr.x, pr.y, prop.x, prop.y) > prop.r + 3) continue;
+        pr.dead = true; if(!prop.indestructible) knockProp(prop);
+        break;
+      }
       if(!pr.dead) for(const so of solids) if(dist(pr, so) < so.r){ pr.dead = true; break; }
       if(!pr.dead) for(const e of enemiesNear(pr.x, pr.y, 80)){
-        if(e.dead || e.state!=='active') continue;
+        if(e.dead || e.state!=='active' || !breachSees(e)) continue;
         if(!sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 7)) continue;
         hitEnemy(e, pr.dmg, Math.atan2(pr.vy, pr.vx), 50, pr.src, {});
         addSparks(pr.x, pr.y, 4, MAGE_COL[pr.el] || '#fff');
@@ -17968,6 +18362,7 @@ function updateProjectiles(dt){
           addRing(pr.x, pr.y, 20, 520, pr.r, '#ff9a3c', 11, 0.5);
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
           SFX.bomb();
+          minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, (pr.dmg || 1)*1.5, 'fire'));
           if(dist(pr,player) < pr.r && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else playerDamage((pr.dmg || 1)*1.5, pr, 'fire');
@@ -18004,6 +18399,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
+          minionsIn(pr.x, pr.y, fr*0.87, m=>minionHurt(m, pr.dmg || 1, 'fire'));
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -18018,6 +18414,7 @@ function updateProjectiles(dt){
           hazards.push({kind:'venom', x:pr.x, y:pr.y, r:fr, life:VENOM_LIFE, max:VENOM_LIFE,
                         dmg: pr.dmg, tick:0, seed:rnd(TAU)});
           SFX.boomSmall();
+          minionsIn(pr.x, pr.y, fr*0.7, m=>minionHurt(m, pr.dmg || 1));
           if(dist(pr,player)<fr*0.7 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg, pr, null);
@@ -18029,6 +18426,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
+          minionsIn(pr.x, pr.y, fr*0.85, m=>minionHurt(m, pr.dmg || 1, 'fire'));
           if(dist(pr,player)<fr*0.85 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -18039,6 +18437,7 @@ function updateProjectiles(dt){
           : pr.kind==='jrock' ? {rr:80, cols:['#8b8f8a','#6d6e68','#b6532b'], shk:0.3}
           : {rr:46, cols:['#3d7a2b','#8ac24a','#2f5e23'], shk:0.18};
         explode(pr.x, pr.y, conf.rr, 0, {hostile:true, brickCols:conf.cols, shake:conf.shk});
+        minionsIn(pr.x, pr.y, conf.rr, m=>minionHurt(m, pr.dmg || shotPow(pr.src, pr.kind)));
         if(dist(pr,player)<conf.rr && !player.dead){
           if(player.dash.t>0){ if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x,pr.y); } }
           else if(player.invuln<=0){
@@ -18105,6 +18504,7 @@ function updateFx(dt){
           addZap(h.x, h.y-26, player.x, player.y-16, 0, true);
           playerDamage(h.dmg, h, 'shock');
         }
+        minionsInHazard(h, h.r, h.dmg, 'shock', COIL_TICK);
       }
       continue;
     }
@@ -18134,11 +18534,14 @@ function updateFx(dt){
            you have stepped off it, and armour never touches it */
         if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.9)
           poisonPlayer(Math.max(0.12, (h.dmg||1)*VENOM_SHARE*0.5), PSN_DUR);
+        /* bones do not carry poison: the pool simply eats at them */
+        minionsInHazard(h, h.r*0.9, Math.max(0.3, (h.dmg||1)*VENOM_SHARE), 'chaos', 0.5);
       }
       continue;
     }
     if(!player.dead && player.dash.t<=0 && dist(h, player) < h.r*0.88)
       playerDamage(h.dmg || 1, h, 'fire');
+    if(h.kind === 'fire') minionsInHazard(h, h.r*0.88, h.dmg || 1, 'fire', 0.5);
   }
   hazards = hazards.filter(h=>h.life>0);
   updateSpikes(dt);
@@ -18471,6 +18874,10 @@ const GOLEM_SKIN = {
   fire: { rock:['#4a2015','#33150d','#61301b','#20100a','#7a3a1d'], dark:'#180b06',
           edge:'rgba(16,8,4,0.85)', eye:'#ffc247', eyeGlow:'255,150,40',
           vein:'rgba(255,110,25,0.95)', grit:'rgba(255,140,40,0.35)' },
+  /* the scepter's own: bone and violet, so it is never read as one of theirs */
+  bone: { rock:['#e4def5','#cfc6ea','#b7aad8','#f2eefb','#9a8cc4'], dark:'#5b4a8f',
+          edge:'rgba(40,30,70,0.85)', eye:'#b7a6ff', eyeGlow:'183,166,255',
+          vein:'rgba(183,166,255,0.8)', grit:'rgba(90,70,140,0.35)' },
   storm:{ rock:['#4a4636','#38352a','#5e5940','#2a2820','#6e6848'], dark:'#221f18',
           edge:'rgba(20,18,10,0.85)', eye:'#fff3a0', eyeGlow:'255,233,90',
           vein:'rgba(255,233,90,0.95)', grit:'rgba(255,243,160,0.4)' }
@@ -18932,7 +19339,9 @@ function drawFigure(c, o){
   }
   if(o.weapon==='scepter' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(heldAng !== null ? heldAng : aR+0.3);
+    /* HELD STRAIGHT. Its art runs up the y axis where a blade's runs along x, so
+       the blade's shouldering angle laid it flat; a quarter turn stands it up */
+    c.rotate((heldAng !== null ? heldAng : aR+0.3) + Math.PI/2);
     drawScepterArt(c, s*0.95, false);
     c.restore();
   }
@@ -18951,29 +19360,40 @@ function drawFigure(c, o){
     drawStaffArt(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
     c.restore();
   }
-  if(o.weapon==='mace' && o.bladeAng===undefined && (!o.armsUp || o.whirlA !== undefined || o.slam !== undefined)){
+  /* HOW A MONSTER (OR A SKELETON) CARRIES ITS WEAPON. It used to take the
+     arm's own swing angle, which left a spear pointing at the floor and a blade
+     dangling off the wrist; and the moment the arms went up for an attack the
+     weapon was simply not drawn. Carried now the way the hero carries his --
+     upright, leaning a little forward -- and cocked back overhead while the
+     arms are up, so the wind-up shows what is about to come down. Art that runs
+     along x (blades, maces) and art that runs along y (spears, staves) each get
+     their own quarter turn of the same angle. */
+  const carryX = o.armsUp ? -Math.PI/2 - 0.45 : -Math.PI/2 + 0.32;
+  const carryY = carryX + Math.PI/2;
+  if(o.weapon==='mace' && o.bladeAng===undefined){
     c.save(); c.translate(handR2.x,handR2.y);
     /* overhead at -2.0, through the arc, into the floor at +1.1 */
     c.rotate(o.slam !== undefined ? (-2.0 + clamp(o.slam,0,1)*3.1)
-      : heldAng !== null ? heldAng : aR+0.5);
+      : heldAng !== null ? heldAng : carryX);
     drawMace(c, s*((o.whirlA !== undefined || o.slam !== undefined) ? 1.15 : 1));
     c.restore();
   }
-  if(o.weapon==='greatsword' && (!o.armsUp || o.whirlA !== undefined)){
+  if(o.weapon==='greatsword'){
     c.save(); c.translate(handR2.x,handR2.y);
-    c.rotate(o.whirlA !== undefined ? o.whirlA : aR+0.55);
-    drawGreatsword(c, s*(o.whirlA !== undefined ? 1.1 : 0.95));
+    c.rotate(o.whirlA !== undefined ? o.whirlA : carryX);
+    drawGreatsword(c, s*(o.whirlA !== undefined ? 1.1 : 0.95)*(o.wScale || 1));
     c.restore();
   }
-  if(o.weapon==='spear' && !o.armsUp){
-    c.save(); c.translate(handR2.x,handR2.y); c.rotate(aR+1.25);
+  if(o.weapon==='spear'){
+    c.save(); c.translate(handR2.x,handR2.y); c.rotate(carryY);
     drawSpear(c, s);
     c.restore();
   }
-  if(o.weapon==='staff' && !o.armsUp){
+  if(o.weapon==='staff'){
     c.save(); c.translate(handR2.x,handR2.y);
-    /* a bossstaff is planted upright, not carried at an angle */
-    c.rotate(o.staffUpright ? 0 : aR+1.1);
+    /* a bossstaff is planted upright; any other staff is carried upright too,
+       and raised a little higher while it casts */
+    c.rotate(o.staffUpright ? 0 : carryY*0.6);
     c.strokeStyle = T('#4a3524'); c.lineWidth=(o.staffUpright?3.4:2.4)*s;
     c.beginPath(); c.moveTo(0,(o.staffUpright?16:10)*s); c.lineTo(0,-(o.staffUpright?36:28)*s); c.stroke();
     if(o.staffUpright){
@@ -20927,6 +21347,15 @@ function render(){
       ctx.beginPath(); ctx.arc(-R*0.18,-R*0.18,R*0.26,0,TAU); ctx.fill();
       ctx.restore();
     }
+    else if(pr.kind==='mbolt' && pr.arrow){
+      /* a bone arrow */
+      const a = Math.atan2(pr.vy, pr.vx);
+      ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(a);
+      ctx.strokeStyle = '#ede8ff'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(4, 0); ctx.stroke();
+      ctx.fillStyle = '#b7a6ff'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(2, -3); ctx.lineTo(2, 3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
     else if(pr.kind==='mbolt'){
       const col = MAGE_COL[pr.el] || '#c9b8ff';
       ctx.fillStyle = col; ctx.globalAlpha = 0.35;
@@ -20996,7 +21425,11 @@ function render(){
       if(!onScreen(p, 40+half)) continue;
     } else if(!onScreen(p, 40)) continue;
     const k = clamp(p.life/(p.maxLife||p.max),0,1);
-    if(p.kind==='ring'){
+    if(p.kind==='slash'){
+      /* a swing: a bright arc across where the weapon passed */
+      ctx.strokeStyle = p.color; ctx.globalAlpha = 0.85*k; ctx.lineWidth = 4*k + 1.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, p.a - 0.95, p.a + 0.95); ctx.stroke(); ctx.globalAlpha = 1;
+    } else if(p.kind==='ring'){
       ctx.strokeStyle = p.color; ctx.globalAlpha = k; ctx.lineWidth = Math.max(0.5,p.lw*k+1);
       ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(0.5,p.r),0,TAU); ctx.stroke(); ctx.globalAlpha = 1;
     } else if(p.kind==='dust'){
@@ -21616,6 +22049,8 @@ function drawEnemy(c, e){
   if(e.type==='revenant') o.horns = true;
   if(e.type==='superimp') o.bigImp = true;
   if(e.type==='necrolord') o.horns = true;
+  /* a bowman carries its bow all the time -- slack while it walks, drawn while it aims */
+  if(e.type==='archer' || e.type==='marksman') o.bowPull = 0;
   if(e.type==='archer' && e.mode==='aim'){ o.bowPull = clamp(e.aimT/0.5,0,1); o.face = e.face; }
   if(e.type==='marksman' && e.mode==='aim'){ o.bowPull = clamp(e.aimT/0.5,0,1); o.face = e.face; }
   if(e.type==='spitter' && e.mode==='aim') o.armsUp = true;
@@ -21635,7 +22070,13 @@ function drawEnemy(c, e){
   if(e.type==='necrolord'){ o.weapon='staff'; o.orbCol='#dccdf5'; o.hoodCol='#31204d'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='greenwarden'){ o.weapon='staff'; o.orbCol='#8ede4a'; o.hoodCol='#1d4523'; o.lord=true;
     o.armsUp = true; o.castGlow = (e.wardLit||0) > 0; }
+  /* THEY CARRY WHAT THEY FIGHT WITH: the crypt's rank and file a rusted blade,
+     a knight a sword behind its shield */
+  if(e.type==='skeleton' || e.type==='revenant'){ o.weapon = 'greatsword'; o.wScale = e.type==='revenant' ? 0.85 : 0.62; }
+  if(e.type==='boneling'){ o.weapon = 'greatsword'; o.wScale = 0.45; }
+  if(e.type==='knight' || e.type==='bastion'){ o.weapon = 'greatsword'; o.wScale = 0.7; }
   if(e.type==='brute' && e.mode==='windup') o.armsUp = true;
+  if(e.strikeT > 0) o.armsUp = true;
   if(e.type==='jugg' && e.mode==='wind') o.armsUp = true;
   if(e.type==='lancer'){ o.weapon='spear'; o.armsUp = (e.mode==='windup'||e.mode==='lunge'); }
   if(e.type==='lobber' && e.mode==='wind') o.armsUp = true;
@@ -22974,7 +23415,7 @@ function resetRun(demo){
   clogReset();
   buildGround(); buildProps();
   navBuild();
-  player = newPlayer();
+  player = newPlayer(); heroObj = player;
   syncStats();
   if(!demo){
     applyMetaTree(player); applyFavPerks();

@@ -2518,16 +2518,45 @@ land — a bomb goes over it, and a spin comes round it. Nothing without a shiel
 used to be a certainty: a knight facing you stopped every arrow ever loosed, which made it a wall
 for a bow. The bestiary lists the block chance.
 
+### Monsters strike
+
+A monster no longer hurts whatever it happens to be standing on. Every melee monster walks up to
+the edge of its target, **raises its weapon for about a third of a second** (longer on the slow
+ones), and **swings**: a white arc shows where the blow went, and it lands only if you are still
+in front of it and within reach when it comes down. Step out during the wind-up and it misses.
+Lancers still lunge, and the lunge is the hit; ranged monsters still shoot and cast. Nothing
+walks into your middle any more — a body pushed into you steps back out to your edge, and one
+pushed into a skeleton shares the step with it. Monsters carry what they fight with: the
+crypt's skeletons and revenants a blade, knights a sword behind the shield, archers and
+marksmen their bow even while they walk, casters their staff.
+
 ### The scepter
 
 The last door on the tree, intelligence's second weapon, and a summoner in the PoE mould. **The
 hero hits nothing.** Holding attack **raises skeletons** out of the floor where you point — one a
 raising, three at a time to begin with — and they walk to whatever is near you and cut it down.
-They are the wall, too: a monster touching a skeleton is held at half speed and fights it, and
-its touch lands on the skeleton instead of on you. They die; you raise more.
+They die; you raise more.
 
-- **At a full legion a raising is a RALLY:** every skeleton turns on the body nearest your
-  pointer for 3s. It is the one order a summoner gives.
+- **A mixed legion.** Each raising rolls what rises: a **spearman** (36%), a **swordsman** (36%)
+  — shorter reach, a harder and quicker blow — or a **bone archer** (28%) that keeps its distance
+  and looses arrows from 330px.
+- **At a full legion the oldest crumbles.** Raising with every place taken breaks the FIRST
+  skeleton you raised and stands the new one where you point: the legion is always the newest of
+  your dead. A dead hero raises nothing.
+- **You first.** A skeleton goes for whatever is nearest *you* within 260px; only with nothing
+  near you does it take the nearest to itself — never more than 560px from you. With nothing to
+  fight it breaks the nearest **chest or crate**, since a summoner has no other way to open one.
+- **They are you, to a monster.** A monster goes for whichever is nearer, you or a skeleton, and
+  fights it exactly as it would fight you: the swordsman swings at it, the archer shoots it, the
+  lancer lunges at it. And **every enemy ability lands on skeletons** as it lands on you: rings
+  and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
+  lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
+  crosses takes it.
+- **Two epics, and only epics.** **Bone Golem** (twice): one more of your melee skeletons becomes
+  a golem — 3.5× the life, 2.2× the hit, and every blow a slam that lands on everything in front
+  of it; archers and mages stay what they are. **Bone Overseer** (once): a staff-bearing lord
+  rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
+  damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's 1.60 + minion flat) ×
   (1 + your level pool + the minion pool). Nothing you buy for your own hits reaches it, and your
   conversions do not either. Its life is 10, plus 12% for every hero level, times the minion life
@@ -2543,9 +2572,13 @@ its touch lands on the skeleton instead of on you. They die; you raise more.
 
 ![A legion of three, and the scepter](docs/scepter-legion.png)
 ![Skeleton Mages: fire, cold and lightning](docs/scepter-mages.png)
+![A golem slamming, the overseer at your shoulder, and the crypt fighting back](docs/legion-fight.png)
 
 **On the tree:** the scepter's door opens into minion damage, minion life, minion speed and
-energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. And two keystones:
+energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. Intelligence's
+spell country carries minion nodes too — **BONEWORK** and **GRAVECALL** (minion damage, life and
+speed) and the notable cluster **THE CRYPT** (*Crypt Keeper*: +15% minion life, +6% minion speed) —
+so a summoner can wander into the spell half without leaving the legion behind. And two keystones:
 
 > **Mirrored Legion** — *your legion fights the way you do.* Your minions gain **three quarters
 > of your own increased damage** — physical, elemental and spell — and **your conversions**, on
