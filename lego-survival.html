@@ -1349,6 +1349,12 @@ function regenScale(){
    seconds of it, which is what makes a thirty-second rest after a boss a rest. */
 const REGEN_BREAK_MUL = 2;
 const HEART_CHANCE_MAX = 2.0;
+/* LOW LIFE is a SHARE of your maximum, not a count of hearts: it was "four
+   hearts or fewer", so a 1-heart energy-shield build sat at full life with the
+   whole screen pulsing red forever. Energy shield does not count -- this is the
+   warning that the next hit through it is the one that kills you. */
+const LOW_LIFE_FRAC = 0.10;
+function lowLife(){ const p = player; return !!(p && p.maxHp > 0 && p.hp <= p.maxHp * LOW_LIFE_FRAC); }
 /* HEARTS GET COMMONER AS THE MONSTERS GET TOUGHER. There is no brick for it any
    more (Generous Smith is gone): every level a monster has adds this much to
    the chance it drops a heart, so a long run keeps you fed without spending a
@@ -22689,7 +22695,7 @@ function render(){
     ctx.fillRect(0,0,cw,ch);
     redFlash = Math.max(0, redFlash-0.03);
   }
-  if(player && !player.dead && player.hp<=4 && state==='play'){
+  if(player && !player.dead && lowLife() && state==='play'){
     const pl = (Math.sin(vtime*5)*0.5+0.5)*0.12;
     ctx.fillStyle = `rgba(200,30,30,${pl})`; ctx.fillRect(0,0,cw,ch);
   }
@@ -24066,7 +24072,7 @@ function renderHUD(){
       const row = Math.floor(i/HEARTS_PER_ROW);
       const col = i%HEARTS_PER_ROW;
       const frac = clamp(p.hp - i, 0, 1);
-      const lowPulse = (p.hp<=4 && frac>0 && row===0) ? 1+Math.sin(vtime*6)*0.1 : 1;
+      const lowPulse = (lowLife() && frac>0 && row===0) ? 1+Math.sin(vtime*6)*0.1 : 1;
       drawHeartAt(34 + col*28, 36 + row*25, frac, HEART_ROW_COLS[row%HEART_ROW_COLS.length], lowPulse);
     }
     xpY = 36 + rows*25 + 8;

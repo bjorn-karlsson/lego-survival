@@ -3262,3 +3262,17 @@ skeleton and a zombie, a sword and a golem, a zombie and a golem, a mage and a z
 they were; the hoard at 30/120/300 kills, with and without the lord, is common/rare/rare/rare, and
 a whole ring's stone and lord pay uncommon and rare. `breach2` restated for the ceiling. Breaks
 `notribe`, `onetribe`, `bigchest`, `lordleg`, `ringepic`: 5 caught.
+
+## Forty-sixth pass — low life is a share of your life
+
+> *"whenever you have 1 hp and like 5000 ES the screen blinks like you are going to die, i want
+> the screen to blink when im at 10% health"*
+
+The red pulse over the screen and the throbbing first row of hearts both fired at **four hearts or
+fewer** — a count, so a 1-heart energy-shield build sat at full life with the screen pulsing
+forever. Both now ask `lowLife()`: life at or below `LOW_LIFE_FRAC` = **10%** of maximum. Energy
+shield does not count; the warning is about the life underneath it.
+
+**Proof.** New `lowlife`: a 1-heart hero at full life has no wash and at 0.1 has it; a 20-heart
+hero has it at 2 and not at 4 — checked on the rule and on the full-screen red fill a rendered
+frame actually paints. Breaks `oldwash`, `oldrule`, `fracbig`: 3 caught.

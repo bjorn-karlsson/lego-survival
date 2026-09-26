@@ -969,6 +969,10 @@ Maximum hearts come from three rungs: `Sturdy Plates` adds them flat, **`Reinfor
 is an epic **+40% increased** (+60% at legendary), and `Titanium Chassis` is a legendary
 **100% MORE**, twice over.
 
+**Low life is 10% of your maximum.** The screen pulses red and your first row of hearts throbs
+when your life is at or below a tenth of what it can be — energy shield does not count, so a
+1-heart shield build only sees it when the one heart is nearly gone.
+
 ### 🔥 Ailments on you
 
 Elemental stacks have **no ceiling**, and every **fifth** one is spent *breaking* something.
