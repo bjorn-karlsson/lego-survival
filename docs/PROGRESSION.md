@@ -2937,3 +2937,78 @@ archers) untouched by five takes; a raising at a full legion leaves all five gol
 back after its clock. `legion2`: Bone Legion takes the cap to fifteen; the golem badge on screen
 apart from the legion's. Breaks `samepool`, `nogolemback`, `lazygolem`, `cap10`, `nogolembadge`:
 all caught. 68 tests green.
+
+## Fortieth pass — rarities that mean something, the mage, the deep breach, and the run as a link
+
+> *"Fix these common->epic bugs, for instance I get +1 pierce for arrow for both common and
+> uncommon, and epic only gives +2 ... make sure the skeleton mages stand still, if they move they
+> teleport ... fix breach again, endgame breach is easy ... when Breach is destroyed and the circle
+> goes in, don't make all monsters disappear, the ring has to pass over them ... the more further
+> out you are in the ring the more monsters spawn ... can you make it so that the current state of
+> the game is stored ... copy the url and then start on that wave, with all the upgrades."*
+
+**Rarities.** A sweep of every card's `calc` over the rarities it can roll found nine whose value did
+not climb: four fixed at +1 (Split Arrow, Bone Legion, Twin Raising, Bone Volley) and five whose
+`byRar` tables repeated (Piercing Shot `[1,1,2,2,3]`, the three charge generators `[1,1,1,1,2]`,
+Reservoir `[1,1,2,2,3]`). All now climb strictly from their lowest rarity: pierce `[1,2,3,4,5]`
+(cap 8 → 12), Split Arrow / Bone Legion / Bone Volley / the charges `[1,1,2,3,4]` (arrows cap 5 → 9,
+volley cap 6 → 8 projectiles), Twin Raising `[1,1,1,2,3]` stacking to **five a raising**
+(`MINION_PERCAST_MAX`). Legendary is its own pool, so an ordinary card tops out at epic. Reservoir
+now clamps to `CHARGE_CAP_MAX` in `apply`, as its `req` always assumed.
+
+**The mage.** `minionBlink` replaces walking: a hop of at most 130px onto floor, a puff at both ends,
+0.8s between. In range it stands; out of range it blinks closer; crowded it blinks away; idle it
+blinks back to its place only when more than 150px off it. Range 520 → 820 (and the leash for a
+ranged minion is its range, so it fights that far from you), bolts 560 → 960px/s flying 1.3× the
+range, and its own fan: `min(2.8, 0.24·(n−1))` rad against an archer's 1.5.
+
+**The breach closes like PoE's.** `breachClose` no longer kills the swarm: the ring falls in over
+`r / 1100` seconds (1.2 to 4.5), and each frame a body the edge has passed is pulled back through —
+`dead`, `pulled`, no spoils; a body still inside keeps fighting until the edge reaches it.
+
+**More, further out.** The layer is 600 + 40 a wave, to 2,000. Three in ten packs keep the old
+`u^0.8` core round the hand; the rest are laid at `rEnd·u^0.36`, so bodies per area grow with the
+distance and the rim meets more every second as it widens — averaged over five layers, and
+corrected for how much of each band is on the floor at all, the 2,000–2,500px band holds 2–3× the
+500–1,000px band. The standing cap widens from 90 to 180 with the radius (`breachAliveMax`).
+
+**The deep breach.** Rings go to V: stones cost 60/60/60/100/150 (`breachStoneCost`), and past V a
+stone is a Blessed Hoard chest. Every breach leaves a **hoard** at the hand once the ring has fallen
+in, its rarity by kills (+60 for the Hand) against 25/60/110/180/260. With the lord's ring at III+,
+a breach fought past the Hand to 110 kills calls the **Breachlord**: a revenant at 14× its kind's
+health that holds the breach open (35s), pays 40 splinters and a rank, and makes the hoard
+legendary. `player.breachDepth` counts breaches opened this run; each makes the next one's bodies
+12% tougher (to 3×) and 1.5% likelier magic (to 30%).
+
+**The run as a link.** `runLinkState` gathers weapon, difficulty, favourite, map seed, the roster's
+shuffle, the tree's nodes, the build log as `[id, rarity index]`, level, xp, studs, kills, golden
+hearts (now counted), rings, splinters, breach depth; `runLinkEncode` is base64url of the JSON
+(~1.4 KB for a mid-run scepter). `runLinkBoot` reads `#run=` on load, sets weapon/difficulty/
+favourite without touching saved preferences, and `startGame` → `resetRun` uses the link's seed,
+roster and tree (`applyMetaTree` applies the link's nodes when one is loaded); `runLinkApply` then
+sets the level and replays every brick the tree did not already grant, applies the rings, and
+starts the saved wave. A linked run has no `metaRun`, skips `metaBank` and mastery points; TITLE
+drops the link and the hash. COPY RUN LINK sits in the pause menu and on the death screen, with a
+textarea fallback where the clipboard API is missing (a page opened from a file).
+
+**Proof.** `rarity2`: every card's numbers strictly climb or never change; the nine count cards
+give distinct counts; five a raising and it raises five; a mage's bolts ≥900px/s, fly ≥1,000px,
+fan ≥2.5 rad; it picks a body 750px off you; it moves only by blinking. `breach2`: stone costs;
+rank IV at 100, V at 150, a hoard past V, five rows of ring; hoard rarity by depth, the
+Breachlord's legendary hoard, left only once the ring has closed; depth making the second breach
+harder; the Breachlord coming at III (not at II), 14× its kind, holding the breach, paying 40 and a
+rank; the HUD's `42/100 ◆III`. `breach`: the ring falling in without clearing the swarm at once,
+never pulling a body it has not passed, taking every one by the end, paying nothing; the widening
+cap; the far rim's rate. `runlink`: a scepter build with a tree, eight bricks at five rarities,
+level 19, two rings and splinters at wave 17 copied, opened in a fresh page with an EMPTY tree of
+its own, and rebuilt identical across every stat probe, same map and roster, same log order; a
+link copied from it is the same build; its death banks nothing; the buttons; the title letting go.
+Old fixtures restated: `block` (layer 600 → 2,000), `legion2` (volley to +8, fan to 15); in
+`breach`, the pixel check reads its baseline at the body's own spot with the flowers cleared (a
+yellow flower there was an old intermittent failure), the four-a-second hero may no longer bank
+unused kills into a burst, a slower hero's width is measured against its own far corner, and the
+old "second 500px holds more than the first" check gave way to the band rate, since the core is
+packed round the hand on purpose. 29 breaks, 29 caught — `lordfree`, `flatlayer` and `banks`
+survived the first drafts (the ring's value was counted as splinters; one lucky hand position
+passed the rate; the linked run had cleared no wave to bank) and the tests were tightened. 71
+tests green.

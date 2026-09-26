@@ -2468,14 +2468,14 @@ with a marker on the screen's edge while it is out of sight.
 
 **Walk into it and it opens** — and a breach is not a spawner, it is **another layer of the same
 ground**. The moment it opens, the whole map is filled with one **Breach Lord**'s monsters —
-**300 of them on the first breach wave, twenty more every wave after, 800 at most** — standing in
-packs of three to six where they stand, thicker near the hand than out at the edges, and none of them exists for you until the
-circle reaches them. The circle grows at 110px a second and keeps growing, **all the way to the
+**600 of them on the first breach wave, forty more every wave after, 2,000 at most** — standing in
+packs of three to six where they stand, and none of them exists for you until the circle reaches
+them. The circle grows at 110px a second and keeps growing, **all the way to the
 far corners of the map** if you can keep it open. Inside it they are there; outside it they are
 not — not drawn, not hittable — and a breach body cannot walk out of its own circle. They are
 bodies you already know, re-cast in the lord's colours, 30% softer, hitting with its element.
 
-| lord | | swarm hits with | the ring (per rank, up to III) |
+| lord | | swarm hits with | the ring (per rank, up to V) |
 |---|---|---|---|
 | **Xoph**, Dark Embers | 🟧 | fire | gain 5% of physical as extra fire · 12% increased fire · +6% fire res |
 | **Tul**, Creeping Avalanche | 🟦 | cold | the same, in cold |
@@ -2487,16 +2487,17 @@ bodies you already know, re-cast in the lord's colours, 30% softer, hitting with
 the circle is.** Eight seconds with nothing killed, never more than twelve on the clock. A kill
 is worth **0.7s** while the circle is small, then shrinks as it grows: 0.29s at 500px, 0.12s at
 1000, 0.05s at 2000. The same kills that held a small breach open barely hold a big one, so
-keeping a wide breach open means killing a great many more. When the clock runs out, the circle
-collapses and whatever of the breach is still standing is pulled back through and pays nothing.
-The wave cannot end while a breach is open.
+keeping a wide breach open means killing a great many more. **When the clock runs out, the ring
+falls back in** as in PoE — over a second to four and a half, by how wide it had grown — and a
+breach body is gone only when the edge passes over it, pulled back through, paying nothing; until
+then it is still in the fight. The wave cannot end while a breach is open.
 
-The layer is packed **towards the hand**, not evenly: about 110 of a full layer's 800 stand
-inside the first 500px, where an even spread would put 16, so the breach is busy from its first
-seconds — and the pace still climbs as the circle grows. Measured at wave 12 (420 bodies): **2
-kills a second** holds one for about 15s, **4 a second** about 30s and most of the map, and a hero
-who kills everything the moment it appears opens it across the whole map and runs the layer dry
-in about 33s. The layer is finite, so there is no build that holds a breach open forever.
+**The further out, the more of them.** Three in ten of the layer are packed round the hand, so a
+small circle has something to fight at once; the rest are laid thicker the further they are from
+it, so the wider the ring, the more of them its rim meets every second — between 2,000 and 2,500px
+it meets two to three times as many as between 500 and 1,000. How many can stand revealed at once
+widens with it too: 90 in a small circle, up to 180 across the map. The layer is finite, so there
+is no build that holds a breach open forever.
 
 ![A breach opened wide](docs/breach-open.png)
 
@@ -2504,11 +2505,40 @@ in about 33s. The layer is finite, so there is no build that holds a breach open
 splinters fuse into a breachstone**, and a breachstone is that lord's ring — or one rank deeper
 into the ring you already wear. Kill **34** in one breach and **the Hand of the Lord** steps
 through beside you: an elite at about a quarter of a boss's health, which holds the breach open while it
-stands (up to 20s) and drops the ring outright, plus fifteen splinters. A ring already at rank
-III pays studs instead.
+stands (up to 20s) and drops the ring outright, plus fifteen splinters.
 
-Splinter counts sit top-right under your studs, only for the lords you have met; the character
-sheet grows a **BREACH** block with each ring's rank and what it is giving you.
+**Past rank III — the deep breach.**
+
+- **Blessed ranks.** Rings go on to **IV and V**, the blessings: a breachstone for IV costs **100**
+  splinters, for V **150**. A ring at V turns every further stone into a **Blessed Hoard** (an
+  epic chest).
+- **The Breach Hoard.** When the ring has fallen all the way in, it leaves a chest at the hand,
+  painted by how deep the breach was fought — kills inside, plus 60 if the Hand fell: 25 for
+  common, 60 uncommon, 110 rare, 180 epic, 260 legendary.
+- **The Breachlord.** With a lord's ring at rank III or better, a breach of that lord fought past
+  the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
+  with fourteen times the health of its kind, which holds the breach open while it stands (up to
+  35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is legendary**.
+- **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
+  12% tougher per breach before it (to three times), and more of its packs magic.
+
+![Xoph comes through](docs/breach-lord.png)
+
+Splinter counts sit top-right under your studs, against what the next rank costs, only for the
+lords you have met; the character sheet grows a **BREACH** block with each ring's rank and what it
+is giving you. The breach bar shows its depth and what it is counting towards — the Hand, then
+the Breachlord.
+
+### A run, as a link
+
+**COPY RUN LINK** sits in the pause menu and on the death screen. It copies an address that holds
+the whole run: weapon, difficulty, favourite, the map's seed and the roster's shuffle, the tree as
+it stood, every brick in the order you took it at the rarity it rolled, your level, rings,
+splinters and golden hearts. Open the link and that run starts again **at the start of the wave
+you copied it on**, the hero rebuilt brick by brick — number for number the same hero, on the same
+map. It is for looking at a death, a build that melts a wave too fast, or a bug; share it and
+someone else sees exactly what you had. A linked run is a replay: it banks nothing to your tree.
+**TRY AGAIN** replays the link from its wave; **TITLE** lets go of it.
 
 ### Block
 
@@ -2543,15 +2573,21 @@ water and rocks the way you do.
 
 - **A mixed legion.** Each raising rolls what rises: a **spearman** (36%, ×1.25 the scepter's
   hit), a **swordsman** (36%, ×1.35 — shorter reach, a quicker blow) or a **bone archer** (28%,
-  ×0.9) that shoots from **480px**. Mages reach **520px**.
-- **The back line moves.** Archers and mages do not plant their feet: in range, each keeps a spot
-  in a loose arc on your side of the fight and picks a fresh one every second or so, shooting as
-  it goes; anything that gets inside its comfort, it steps back from.
+  ×0.9) that shoots from **480px**.
+- **The back line moves.** Archers do not plant their feet: in range, each keeps a spot in a
+  loose arc on your side of the fight and picks a fresh one every second or so, shooting as it
+  goes; anything that gets inside its comfort, it steps back from.
+- **Mages stand and cast.** A skeleton mage never walks. It stands where it is and throws; when it
+  has to be somewhere else — closer to a target, out of reach of one, back to your side — it
+  **blinks**, a 130px hop with a puff of its element, at most once every 0.8s. It reaches **820px**
+  (and fights that far from you), and its bolts fly at 960px/s for about 1,070px, fanned much
+  wider than an archer's — up to 160° with a full volley.
 - **Greater Multiple Projectiles.** An archer's arrow and a mage's bolt become a **fan**:
-  **Bone Volley** (uncommon and up, six takes) adds one each; **Greater Multiple Projectiles**
-  (legendary, once) adds four for **25% LESS** projectile damage; the tree's *Bone Rain* adds two.
-  All of it together is **13 a shot**. The fan widens with the count (to about 85°), so a body far
-  off takes one or two and a body close enough to stand in the middle of it takes many.
+  **Bone Volley** adds one to three by rarity (uncommon +1, rare +2, epic +3), eight in all;
+  **Greater Multiple Projectiles** (legendary, once) adds four for **25% LESS** projectile damage;
+  the tree's *Bone Rain* adds two. All of it together is **15 a shot**. The fan widens with the
+  count (an archer's to about 85°, a mage's to 160°), so a body far off takes one or two and a
+  body close enough to stand in the middle of it takes many.
 - **At a full legion the oldest crumbles.** Raising with every place taken breaks the FIRST
   skeleton you raised and stands the new one where you point: the legion is always the newest of
   your dead. A dead hero raises nothing.
@@ -2575,9 +2611,9 @@ water and rocks the way you do.
   conversions do not either. Its life is 10, plus 12% for every hero level, times the minion life
   pool. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
   that is lost rises again at your side.
-- **Bricks:** Bone Legion (+1 skeleton, to 15), Grim Feast (minion damage), Bone Armour (minion
-  life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (two a raising),
-  Bone Volley (+1 projectile).
+- **Bricks:** Bone Legion (+1 to +3 skeletons by rarity, to 15), Grim Feast (minion damage), Bone
+  Armour (minion life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (+1
+  a raising at rare, +2 at epic, up to **five a raising**), Bone Volley (+1 to +3 projectiles).
 - **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
   (**LEGION 5/7**), its ring filling as the legion does, with a second badge for the golems
   (**GOLEMS 2/3**); the buff list spells it out: how many spears, swords, archers, golems, and
@@ -2620,8 +2656,9 @@ flies until something stops it. It carries **+120 evasion** and ×1.25 accuracy 
 melee kit: no reach, no spin, no lifesteal, no armour, and the swing-only bricks (reach,
 Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own bricks:
 
-- **Split Arrow** — +1 arrow a shot, fanned, up to 5.
-- **Piercing Shot** — +1 pierce, up to 8; each body an arrow has gone through costs it 15%.
+- **Split Arrow** — +1 arrow a shot at uncommon, +2 at rare, +3 at epic; fanned, up to 9.
+- **Piercing Shot** — +1 pierce at common, +2 uncommon, +3 rare, +4 epic, up to 12; each body an
+  arrow has gone through costs it 15%.
 - **Barbed Arrows** — flat physical to arrows only.
 
 **An arrow shoots things down.** Cross a monster's shot — an arrow, a skull, a bolt, a frost

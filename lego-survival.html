@@ -680,6 +680,7 @@
       <button id="pauseTreeBtn" class="btn gray">SKILL TREE</button>
       <button id="pauseOptBtn" class="btn gray">OPTIONS</button>
       <button id="pauseTitleBtn" class="btn gray">MAIN MENU</button>
+      <button id="pauseLinkBtn" class="btn gray">COPY RUN LINK</button>
     </div>
     <div class="smallhint">Esc resumes · T opens the skill tree mid-run · if keys don't respond, click the game once</div>
   </div>
@@ -738,6 +739,7 @@
     <div class="btnrow">
       <button id="retryBtn" class="btn">TRY AGAIN</button>
       <button id="titleBtn" class="btn gray">TITLE</button>
+      <button id="overLinkBtn" class="btn gray">COPY RUN LINK</button>
     </div>
   </div>
 </div>
@@ -868,10 +870,10 @@ const FREEZE_MAX_R = 290;
    worn at all. ONE of three legendaries per run turns the arrow into something
    else, and each carries its own conversion -- applied FIRST, the way a PoE
    gem's is, so the hero's own conversion shares what is left. */
-const ARROW_MAX_N      = 5;      /* arrows a shot */
+const ARROW_MAX_N      = 9;      /* arrows a shot */
 const ARROW_SPREAD     = 0.14;   /* radians between the arrows of one shot */
 const ARROW_LIFE       = 0.95;
-const ARROW_MAX_PIERCE = 8;
+const ARROW_MAX_PIERCE = 12;
 const ARROW_PIERCE_ALL = 99;     /* Chaos Arrow: everything in the line */
 const ARROW_FORK_N     = 4;      /* Lightning Arrow: bodies one landing forks to */
 const ARROW_FORK_R     = 190;
@@ -3441,7 +3443,7 @@ function applyPick(u, rar){
   buildLog.push({ id:u.id, rar });
   /* A SPELL CAN BE FINISHED MID-RUN, and the point for finishing it should
      exist the moment it is, not the moment you die. */
-  if(!sandbox && state !== 'title') for(const k of metaMastery(player)){
+  if(!sandbox && !runLink && state !== 'title') for(const k of metaMastery(player)){
     const M = META_MASTERY[k];
     logEvent('ACHIEVEMENT \u2014 '+M.name+' \u00b7 +1 skill point', '#ffd76e');
     showBanner(M.name, '+1 skill point', '#ffd76e', 2.2, 34);
@@ -3473,6 +3475,103 @@ function rebuildWithout(id){
   p.hp = Math.max(1, Math.min(p.maxHp, Math.round(p.maxHp*hpFrac)));
 }
 
+/* =============================== THE RUN, AS A LINK ===============================
+   Everything that makes this run THIS run, in the address: the weapon, the
+   difficulty, the favourite, the map's seed and the roster's shuffle, the tree
+   exactly as it stood, every brick in the order it was taken at the rarity it
+   rolled, the level, the rings and splinters, the golden hearts. Open the link
+   and the run starts again at the start of the wave it was copied on, rebuilt
+   brick by brick the same way `rebuildWithout` rebuilds a hero -- a death, a
+   build that melts a wave too fast, a bug, all of it can be handed over and
+   looked at. A linked run banks NOTHING to the tree: it is a replay, not a run. */
+const RUNLINK_V = 1;
+let runLink = null;
+function runLinkState(){
+  const p = player;
+  let tree = [], on = false;
+  try { if(META && META.on){ const m = metaCur(); on = true;
+    tree = m.nodes.filter(id=>META_BY_ID[id] && !metaLocked(META_BY_ID[id], m)); } } catch(e){}
+  if(runLink && runLink.t){ tree = runLink.t.slice(); on = runLink.on; }
+  return { v:RUNLINK_V, w:weapon.id, d:(difficulty && difficulty.id) || 'hard', f:favourite.id,
+    n:Math.max(1, wave.n|0), s:seed, on, t:tree,
+    ro:ROSTER.map(r=>[r.k, r.at]),
+    b:buildLog.map(e=>[e.id, Math.max(0, RAR_ORDER.indexOf(e.rar))]),
+    lv:p.level, xp:Math.round(p.xp), xn:p.xpNext, st:p.studs, k:p.kills, gh:p.gHearts || 0,
+    hp:+(p.maxHp > 0 ? p.hp/p.maxHp : 1).toFixed(3),
+    r:Object.assign({}, p.rings), sp:Object.assign({}, p.splinters), bd:p.breachDepth || 0,
+    rt:Math.round(runTime) };
+}
+function runLinkEncode(o){
+  const b = btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+  return b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function runLinkDecode(str){
+  let b = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while(b.length % 4) b += '=';
+  const o = JSON.parse(decodeURIComponent(escape(atob(b))));
+  if(!o || o.v !== RUNLINK_V || !WEAPONS[o.w]) throw new Error('not a run link');
+  return o;
+}
+function runLinkURL(){
+  return location.href.split('#')[0] + '#run=' + runLinkEncode(runLinkState());
+}
+/* hand it to the clipboard; a page opened from a file has no clipboard API, so
+   fall back to a selected textarea */
+function runLinkCopy(btn){
+  const url = runLinkURL();
+  const done = ok=>{ if(!btn) return; const was = btn.dataset.label || btn.textContent;
+    btn.dataset.label = was; btn.textContent = ok ? 'LINK COPIED \u2713' : 'COPY FAILED';
+    setTimeout(()=>{ btn.textContent = was; }, 1600); };
+  const fallback = ()=>{ try { const ta = document.createElement('textarea'); ta.value = url;
+      ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); done(ok); } catch(e){ done(false); } };
+  try { if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(()=>done(true), fallback);
+        else fallback(); } catch(e){ fallback(); }
+  logEvent('run link copied — wave '+Math.max(1, wave.n|0), '#9fd4ff');
+  return url;
+}
+/* after resetRun has stood the hero up with the link's tree, favourite, seed and
+   roster: every brick the tree did not already grant, the level, the rest */
+function runLinkApply(){
+  const o = runLink, p = player;
+  p.level = Math.max(1, o.lv|0); p.incAll += 0.05*(p.level - 1);
+  p.xp = o.xp || 0; p.xpNext = o.xn || p.xpNext;
+  const pre = buildLog.length;
+  for(const [id, ri] of (o.b || []).slice(pre)){
+    const u = UPGRADES.find(x=>x.id===id);
+    if(u) try { applyPick(u, RAR_ORDER[ri] || 'common'); } catch(e){ console.warn('run link brick', id, e); }
+  }
+  for(const k in (o.r || {})){ const n = o.r[k]|0; if(n > 0 && BREACH_LORDS[k]){ p.rings[k] = n; ringApply(p, k, n); } }
+  Object.assign(p.splinters, o.sp || {}); p.breachDepth = o.bd || 0;
+  if(o.gh){ p.gHearts = o.gh; p.hpFlat += 3*o.gh; }
+  p.studs = o.st || 0; p.kills = o.k || 0;
+  syncStats();
+  p.hp = Math.max(1, Math.round(p.maxHp * (o.hp > 0 ? Math.min(1, o.hp) : 1)));
+  runTime = o.rt || 0;
+  const n = clamp(o.n|0, 1, 999);
+  logEvent('RUN LINK — wave '+n+', level '+p.level+', '+(o.b || []).length+' bricks', '#9fd4ff');
+  showBanner('RUN LINK', 'wave '+n+' · level '+p.level+' · '+(o.b || []).length+' bricks', '#9fd4ff', 2.4, 44);
+  return n;
+}
+/* the page was opened on a run link: start it */
+function runLinkBoot(){
+  const m = /[#&]run=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+  if(!m) return false;
+  try {
+    const o = runLinkDecode(m[1]);
+    runLink = o;
+    weapon = WEAPONS[o.w] || WEAPONS.sword;
+    difficulty = DIFFS[o.d] || DIFFS.hard;
+    favourite = FAVOURITES.find(f=>f.id === o.f) || FAVOURITES[0];
+    favSet = new Set(favourite.ids);
+    startGame();
+    return true;
+  } catch(e){
+    runLink = null;
+    console.warn('run link:', e);
+    return false;
+  }
+}
 /* where storm brick #i of `total` hovers — used by both the zap and the renderer */
 function chainBrickPos(p, i, total){
   const a = vtime*1.6 + 2.2 + i*TAU/Math.max(1,total);
@@ -3613,7 +3712,7 @@ function newPlayer(){
               mages:false, mirror:false, instab:false, golems:0, golemCd:0, overseer:false, overseerCd:0,
               proj:0, projMore:1, volleys:0, gmp:false },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
-    splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
+    splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{}, breachDepth:0,
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
             queued:0, qT:0, qIdx:0, qOffset:0 },
     vortex:{ n:0, dmg:3, rate:VORTEX_RATE_BASE, cd:3, r:80, dur:1.4, hitMul:1, t:0, totem:0, totemCd:0 },
@@ -6855,14 +6954,22 @@ const BREACH_TIME = 8;               /* seconds open, with nothing killed inside
 const BREACH_KILL_T0 = 0.7, BREACH_KILL_REF = 250, BREACH_KILL_EXP = 1.25;
 const BREACH_T_MAX = 12;             /* and never more than this on the clock */
 /* THE OTHER LAYER: packs of three to six, one kind to a pack. How many bodies
-   it holds grows with the wave -- 300 at the first breach wave, twenty more a
-   wave, 800 at most. And they are NOT spread evenly: a pack's distance from the
-   hand is rEnd * u^0.8 (evenly over the floor would be u^0.5), so the circle
-   meets far more of them while it is still small -- about 60 inside the first
-   500px on a full layer instead of 16 -- and the pace still climbs as it grows. */
-const BREACH_LAYER_MIN = 300, BREACH_LAYER_STEP = 20, BREACH_LAYER_MAX = 800;
+   it holds grows with the wave -- 600 at the first breach wave, forty more a
+   wave, 2000 at most. Two parts: a CORE (30%) packed round the hand, distance
+   rEnd * u^0.8, so a small circle has something to fight at once; and the REST
+   laid thicker the further out it is, distance rEnd * u^0.36 -- bodies per area
+   grow with the distance -- so the wider the circle, the more of them the rim
+   meets every second. */
+const BREACH_LAYER_MIN = 600, BREACH_LAYER_STEP = 40, BREACH_LAYER_MAX = 2000;
 const BREACH_LAYER_EXP = 0.8, BREACH_PACK = [3, 6];
-const BREACH_ALIVE_MAX = 90;         /* revealed and standing at once; the rest wait their turn */
+const BREACH_CORE = 0.3, BREACH_OUTER_EXP = 0.36;
+/* revealed and standing at once -- 90 in a small circle, up to 180 in a wide one;
+   the rest wait their turn */
+const BREACH_ALIVE_MAX = 90, BREACH_ALIVE_TOP = 180, BREACH_ALIVE_PER = 50;
+function breachAliveMax(r){ return Math.min(BREACH_ALIVE_TOP, BREACH_ALIVE_MAX + Math.floor((r || 0) / BREACH_ALIVE_PER)); }
+/* THE DEEPER YOU GO. Every breach opened this run makes the next one harder --
+   tougher bodies, more magic packs -- and pays better in its hoard */
+const BREACH_DEPTH_HP = 0.12, BREACH_DEPTH_HP_MAX = 3, BREACH_DEPTH_MAGIC = 0.015, BREACH_MAGIC_MAX = 0.3;
 function breachLayerSize(n){
   return clamp(BREACH_LAYER_MIN + (n - BREACH_FROM)*BREACH_LAYER_STEP, BREACH_LAYER_MIN, BREACH_LAYER_MAX);
 }
@@ -6871,10 +6978,27 @@ const BREACH_MAGIC = 0.08;
 const BREACH_LORD_AT = 34;           /* deaths inside before a Hand of the Lord comes through */
 const BREACH_LORD_HP = 4;            /* ...its health, against an elite of its kind: a quarter of a boss or so */
 const BREACH_LORD_HOLD = 20;         /* ...and while it stands the breach cannot close, for up to this long */
-const BREACH_CLOSE_T = 1.2;
-const BREACH_STONE = 60;             /* splinters that fuse into one breachstone */
+/* IT CLOSES LIKE PoE's: the ring falls back in at BREACH_CLOSE_SPD, never in less
+   than BREACH_CLOSE_T nor more than BREACH_CLOSE_MAX seconds, and a body is gone
+   only when the edge passes over it -- until then it is still fighting you */
+const BREACH_CLOSE_T = 1.2, BREACH_CLOSE_SPD = 1100, BREACH_CLOSE_MAX = 4.5;
+const BREACH_STONE = 60;             /* splinters that fuse into one breachstone, ranks I-III */
+/* RANKS IV AND V ARE BLESSINGS, and cost more: a breachstone for rank IV is 100
+   splinters, for V 150; past V, every 150 is a BLESSED HOARD instead */
+const BREACH_STONE_COST = [60, 60, 60, 100, 150];
+function breachStoneCost(rank){ return BREACH_STONE_COST[Math.min(rank || 0, BREACH_STONE_COST.length - 1)]; }
 const SPLINTER_MAGIC = 3, SPLINTER_LORD = 15;
-const LORD_RING_MAX = 3;
+const LORD_RING_MAX = 5, LORD_RING_PLAIN = 3;
+/* THE BREACHLORD. A breach of a lord whose ring you already hold at rank III or
+   better, that is fought deep enough (BREACH_LORD2_AT kills, the Hand already
+   down), calls the lord itself through: a giant in its colours with
+   BREACH_LORD2_HP times the health of its kind. It holds the breach open while
+   it stands (up to BREACH_LORD2_HOLD), and falling it pays SPLINTER_LORD2
+   splinters and makes the hoard legendary. */
+const BREACH_LORD2_AT = 110, BREACH_LORD2_HP = 14, BREACH_LORD2_HOLD = 35, SPLINTER_LORD2 = 40;
+/* THE HOARD: what the breach leaves at the hand when it has closed, by how deep it
+   was fought -- kills, plus 60 for the Hand; the Breachlord makes it legendary */
+const BREACH_HOARD = [[25, 'common'], [60, 'uncommon'], [110, 'rare'], [180, 'epic'], [260, 'legendary']];
 const BREACH_LORDS = {
   xoph:    { name:'XOPH',      title:'Dark Embers',        el:'fire',  col:'#ff6a2a', dim:'#6e1c0a', ring:"Xoph's Ring" },
   tul:     { name:'TUL',       title:'Creeping Avalanche', el:'frost', col:'#8fd8ff', dim:'#1d4a66', ring:"Tul's Ring" },
@@ -6888,7 +7012,7 @@ const BREACH_LORD_KEYS = Object.keys(BREACH_LORDS);
    and more resistance to it. Uul-Netol is the flesh -- physical and armour.
    Chayula is the dream -- chaos, and a shield. */
 const RING_RANK = { gain:0.05, inc:0.12, res:0.06, physInc:0.15, armour:40, chaosRes:0.08, es:3 };
-const RING_ROMAN = ['', 'I', 'II', 'III'];
+const RING_ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 function ringText(k, n){
   const L = BREACH_LORDS[k], R = RING_RANK, pc = v=>Math.round(v*n*100)+'%';
   if(L.el === 'phys') return `${pc(R.physInc)} increased physical damage · +${R.armour*n} armour`;
@@ -6940,6 +7064,7 @@ function breachSpot(){
 function breachOpen(){
   const B = breach, L = BREACH_LORDS[B.lord];
   B.state = 'open'; B.age = 0; B.t = BREACH_TIME; B.r = BREACH_R0; B.kills = 0;
+  B.depth = player.breachDepth || 0; player.breachDepth = B.depth + 1;
   breachLayer(B);
   showBanner('BREACH', L.name+' — '+L.title.toUpperCase(), L.col, 1.8, 50);
   logEvent('   THE BREACH OPENS — '+L.name+', '+L.title, L.col);
@@ -6969,7 +7094,8 @@ function breachNear(B){
 function breachify(e, lord){
   const L = BREACH_LORDS[lord];
   e.breach = lord;
-  e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP));
+  const deep = Math.min(BREACH_DEPTH_HP_MAX, 1 + BREACH_DEPTH_HP * ((breach && breach.depth) || 0));
+  e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP * deep));
   e.xp *= BREACH_XP; e.studs = { a:0, b:0 };
   e.col = { head:L.col, torso:L.dim, legs:'#17121f', hands:L.col, hair:L.dim };
   if(L.el === 'phys') e.dmg = Math.ceil(e.dmg * 1.15);   /* the flesh hits harder instead */
@@ -6993,12 +7119,14 @@ function breachLayer(B){
                     Math.hypot(W.wall - B.x, W.h-W.wall - B.y), Math.hypot(W.w-W.wall - B.x, W.h-W.wall - B.y));
   const L = [];
   for(let tries=0; L.length < want && tries < want*4; tries++){
-    const a0 = rnd(TAU), d0 = B.rEnd * Math.pow(Math.random(), BREACH_LAYER_EXP);
+    const core = Math.random() < BREACH_CORE;
+    const a0 = rnd(TAU), d0 = B.rEnd * Math.pow(Math.random(), core ? BREACH_LAYER_EXP : BREACH_OUTER_EXP);
     const cx = B.x + Math.cos(a0)*d0, cy = B.y + Math.sin(a0)*d0;
     if(cx < lo || cx > hiX || cy < lo || cy > hiY) continue;  /* that part of the circle is off the floor */
     if(d0 < 150) continue;                                    /* not on top of the hand */
     const n = Math.min(irnd(BREACH_PACK[0], BREACH_PACK[1]), want - L.length);
-    const type = types[(Math.random()*types.length)|0], magic = Math.random() < BREACH_MAGIC;
+    const type = types[(Math.random()*types.length)|0];
+    const magic = Math.random() < Math.min(BREACH_MAGIC_MAX, BREACH_MAGIC + BREACH_DEPTH_MAGIC*(B.depth || 0));
     for(let k=0;k<n;k++){
       const a = rnd(TAU), rr = rnd(0, 26 + n*9);
       const x = clamp(cx + Math.cos(a)*rr, lo, hiX), y = clamp(cy + Math.sin(a)*rr, lo, hiY);
@@ -7043,17 +7171,44 @@ function breachLord(B){
   addRing(at.x, at.y, 14, 420, 160, L.col, 7, 0.5);
   SFX.roar(); addShake(0.35);
 }
+function breachLord2(B){
+  const L = BREACH_LORDS[B.lord];
+  B.lord2Out = true;
+  const at = breachNear(B), n0 = enemies.length;
+  spawnEnemy('revenant', at.x, at.y, true, false);
+  if(enemies.length === n0) return;
+  const e = enemies[enemies.length-1];
+  breachify(e, B.lord);
+  e.breachLord = true; e.breachLord2 = true;
+  e.hp = e.maxHp = Math.ceil(e.maxHp * BREACH_LORD2_HP);
+  e.scale *= 1.45; e.r *= 1.3; e.xp *= 20; e.dmg = Math.ceil(e.dmg * 1.5);
+  B.lord2 = e; B.hold = Math.max(B.hold || 0, BREACH_LORD2_HOLD);
+  showBanner(L.name+' COMES THROUGH', L.title.toUpperCase()+' — THE BREACHLORD', L.col, 2.6, 52);
+  logEvent('   '+L.name+', '+L.title+', steps through the breach itself', L.col);
+  addRing(at.x, at.y, 20, 520, 260, L.col, 9, 0.7);
+  SFX.roar(); addShake(0.6);
+}
 function breachClose(B){
   const L = BREACH_LORDS[B.lord];
-  B.state = 'closing'; B.closeT = BREACH_CLOSE_T; B.rClose = B.r;
-  let pulled = 0;
-  for(const e of enemies) if(e.breach && !e.dead){
-    e.dead = true; pulled++;
-    addSparks(e.x, e.y-14, 5, L.col);
-  }
-  logEvent('   the breach closes — '+B.kills+' killed inside, '+B.spl+' splinters'+
-           (pulled ? ', '+pulled+' pulled back through' : ''), L.col);
-  addRing(B.x, B.y, 12, -420, B.r, L.col, 6, 0.5);
+  B.state = 'closing'; B.rClose = B.r;
+  B.closeT = B.closeMax = clamp(B.r / BREACH_CLOSE_SPD, BREACH_CLOSE_T, BREACH_CLOSE_MAX);
+  B.pulled = 0;
+  logEvent('   the breach closes — '+B.kills+' killed inside, '+B.spl+' splinters', L.col);
+}
+/* THE HOARD. Left at the hand once the ring has fallen all the way in. */
+function breachHoard(B){
+  const score = (B.kills || 0) + (B.hand && B.hand.dead ? 60 : 0);
+  let rar = null;
+  for(const [need, r] of BREACH_HOARD) if(score >= need) rar = r;
+  if(B.lord2 && B.lord2.dead) rar = 'legendary';
+  if(!rar) return null;
+  const L = BREACH_LORDS[B.lord];
+  const ch = shoveToFloor({ type:'chest', x:B.x, y:B.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar, hoard:B.lord }, 20);
+  props.push(ch);
+  showBanner('BREACH HOARD', (RARITY[rar] || RARITY.common).name+' — '+L.name, L.col, 1.8, 40);
+  logEvent('   '+L.name+'\'s hoard is left at the hand: '+rar, L.col);
+  addRing(ch.x, ch.y, 10, 380, 120, L.col, 7, 0.5);
+  return ch;
 }
 function updateBreach(dt){
   const B = breach;
@@ -7084,21 +7239,37 @@ function updateBreach(dt){
     B.t -= dt;
     /* the circle reaches them, and they are there */
     let alive = 0; for(const e of enemies) if(e.breach && !e.dead) alive++;
-    while(B.layer && B.li < B.layer.length && B.layer[B.li].d <= B.r && alive < BREACH_ALIVE_MAX){
+    const cap = breachAliveMax(B.r);
+    while(B.layer && B.li < B.layer.length && B.layer[B.li].d <= B.r && alive < cap){
       breachReveal(B, B.layer[B.li++]); alive++;
     }
     breachHold(B);
     if(!B.lordOut && B.kills >= BREACH_LORD_AT) breachLord(B);
+    if(!B.lord2Out && B.lordOut && B.hand && B.hand.dead && B.kills >= BREACH_LORD2_AT &&
+       (player.rings[B.lord] || 0) >= LORD_RING_PLAIN) breachLord2(B);
     /* THE HAND HOLDS IT OPEN. Pulling it back through halfway down its health
        bar would take the ring out of your hands for fighting it too slowly */
-    if(B.hand && !B.hand.dead && B.hold > 0){ B.hold -= dt; B.t = Math.max(B.t, 1); }
+    const holder = (B.lord2 && !B.lord2.dead) ? B.lord2 : (B.hand && !B.hand.dead) ? B.hand : null;
+    if(holder && B.hold > 0){ B.hold -= dt; B.t = Math.max(B.t, 1); }
     if(B.t <= 0) breachClose(B);
     return;
   }
   if(B.state === 'closing'){
     B.closeT -= dt;
-    B.r = B.rClose * clamp(B.closeT / BREACH_CLOSE_T, 0, 1);
-    if(B.closeT <= 0) breach = null;
+    B.r = B.rClose * clamp(B.closeT / (B.closeMax || BREACH_CLOSE_T), 0, 1);
+    /* the edge passes over them, and they go back through -- paying nothing */
+    const L = BREACH_LORDS[B.lord];
+    for(const e of enemies){
+      if(!e.breach || e.dead) continue;
+      if(Math.hypot(e.x - B.x, e.y - B.y) <= B.r + (e.r || 12)*0.5) continue;
+      e.dead = true; e.pulled = true; B.pulled = (B.pulled || 0) + 1;
+      addSparks(e.x, e.y-14, 5, L.col);
+    }
+    if(B.closeT <= 0){
+      if(B.pulled) logEvent('   '+B.pulled+' pulled back through as the ring passed', L.col);
+      breachHoard(B);
+      breach = null;
+    }
   }
 }
 /* A BREACH BODY CANNOT LEAVE ITS CIRCLE: one that walks to the edge is held on
@@ -7120,17 +7291,21 @@ function breachOnKill(e){
 function breachSpoils(e){
   const p = player, k = e.breach, L = BREACH_LORDS[k];
   if(!L) return;
-  const n = e.breachLord ? SPLINTER_LORD : e.magic ? SPLINTER_MAGIC : 1;
+  const n = e.breachLord2 ? SPLINTER_LORD2 : e.breachLord ? SPLINTER_LORD : e.magic ? SPLINTER_MAGIC : 1;
   p.splinters[k] = (p.splinters[k] || 0) + n;
   if(breach && breach.lord === k) breach.spl += n;
   addSparks(e.x, e.y-18, 2 + n, L.col);
-  if(e.breachLord){
+  if(e.breachLord2){
+    addDmg(e.x, e.y-90, L.name+' FALLS', L.col, 22);
+    showBanner(L.name+' FALLS', 'the hoard will be legendary', L.col, 2.2, 48);
+    ringGain(k, 'lord');
+  } else if(e.breachLord){
     addDmg(e.x, e.y-70, L.ring.toUpperCase()+'!', L.col, 20);
     ringGain(k, 'hand');
   }
-  while(p.splinters[k] >= BREACH_STONE){
-    p.splinters[k] -= BREACH_STONE;
-    logEvent('   '+BREACH_STONE+' '+L.name+' splinters fuse into a BREACHSTONE', L.col);
+  for(let cost = breachStoneCost(p.rings[k]); p.splinters[k] >= cost; cost = breachStoneCost(p.rings[k])){
+    p.splinters[k] -= cost;
+    logEvent('   '+cost+' '+L.name+' splinters fuse into a BREACHSTONE', L.col);
     ringGain(k, 'stone');
   }
 }
@@ -7138,18 +7313,19 @@ function ringGain(k, why){
   const p = player, L = BREACH_LORDS[k];
   const have = p.rings[k] || 0;
   if(have >= LORD_RING_MAX){
-    const bonus = 40 + wave.n*4;
-    spawnStuds(p.x, p.y-20, bonus);
-    showBanner(L.ring.toUpperCase()+' IS WHOLE', '+'+bonus+' studs instead', L.col, 1.6, 40);
-    logEvent('   '+L.ring+' is already whole — +'+bonus+' studs', L.col);
+    /* a ring that is fully blessed turns every further stone into a hoard */
+    props.push(shoveToFloor({ type:'chest', x:p.x + rnd(-50, 50), y:p.y + rnd(30, 60), flash:0, seed:rnd(1000),
+      dead:false, hp:3, r:16, rar: why === 'lord' ? 'legendary' : 'epic', hoard:k }, 20));
+    showBanner(L.ring.toUpperCase()+' IS WHOLE', 'a BLESSED HOARD instead', L.col, 1.6, 40);
+    logEvent('   '+L.ring+' is fully blessed — a hoard instead', L.col);
     return;
   }
   p.rings[k] = have + 1;
   ringApply(p, k, 1);
   syncStats();
-  showBanner(L.ring.toUpperCase()+(have ? ' — RANK '+RING_ROMAN[have+1] : ''),
+  showBanner(L.ring.toUpperCase()+(have ? (have + 1 > LORD_RING_PLAIN ? ' — BLESSED ' : ' — RANK ')+RING_ROMAN[have+1] : ''),
     ringText(k, 1)+(have ? ' more' : ''), L.col, 2.4, 44);
-  logEvent('   '+L.ring+' '+RING_ROMAN[have+1]+(why === 'hand' ? ' — from the Hand' : ' — from a breachstone')+
+  logEvent('   '+L.ring+' '+RING_ROMAN[have+1]+(why === 'hand' ? ' — from the Hand' : why === 'lord' ? ' — from '+L.name+' itself' : ' — from a breachstone')+
            ': '+ringText(k, have+1), L.col);
   SFX.levelup();
 }
@@ -7235,7 +7411,12 @@ function drawBreachHud(){
     ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
     const held = B.hand && !B.hand.dead && B.hold > 0;
-    const head = 'BREACH · '+L.name+' · '+(held ? 'THE HAND HOLDS IT OPEN' : B.lordOut ? 'THE HAND IS DOWN'
+    const lordUp = B.lord2 && !B.lord2.dead;
+    const lord2Due = (p.rings[B.lord] || 0) >= LORD_RING_PLAIN && !B.lord2Out;
+    const head = 'BREACH · '+L.name+(B.depth ? ' · DEPTH '+(B.depth+1) : '')+' · '+
+      (lordUp ? L.name+' HOLDS IT OPEN' : held ? 'THE HAND HOLDS IT OPEN'
+      : B.lordOut && lord2Due ? B.kills+' / '+BREACH_LORD2_AT+' for '+L.name
+      : B.lordOut ? 'THE HAND IS DOWN'
       : B.kills+' / '+BREACH_LORD_AT+' for the Hand')+' · +'+breachKillT(B.r).toFixed(2)+'s a kill';
     ctx.strokeText(head, cw/2, by); ctx.fillStyle = L.col; ctx.fillText(head, cw/2, by);
     ctx.fillStyle = 'rgba(15,20,25,0.55)'; roundRect(ctx, bx, by+10, bw, 8, 4); ctx.fill();
@@ -7248,7 +7429,7 @@ function drawBreachHud(){
     const sp = (p.splinters && p.splinters[k]) || 0, rk = (p.rings && p.rings[k]) || 0;
     if(!sp && !rk) continue;
     const L = BREACH_LORDS[k];
-    const txt = L.name+'  '+sp+'/'+BREACH_STONE+(rk ? '  ◆'+RING_ROMAN[rk] : '');
+    const txt = L.name+'  '+sp+'/'+breachStoneCost(rk)+(rk ? '  ◆'+RING_ROMAN[rk] : '');
     ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
     ctx.strokeText(txt, cw-24, y); ctx.fillStyle = L.col; ctx.fillText(txt, cw-24, y);
     y += 17;
@@ -8114,10 +8295,11 @@ const UPGRADES = [
   /* ---- THE LEGION. The scepter's bricks: how many, how hard, how long ---- */
   { id:'minionmax', name:'Bone Legion', icon:'skull', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isSummoner() && player.minions.max < MINION_MAX_CAP,
-    calc:m=>({n:1}),
-    desc:c=>`+1 SKELETON in your legion (${player.minions.max} → ${Math.min(MINION_MAX_CAP, player.minions.max+1)}, `+
-      `cap ${MINION_MAX_CAP}). Raise it with the scepter like the rest`,
-    apply:c=>{ player.minions.max = Math.min(MINION_MAX_CAP, player.minions.max + 1); } },
+    calc:m=>({n: byRar(m, [1, 1, 2, 3, 4])}),
+    desc:c=>{ const to = Math.min(MINION_MAX_CAP, player.minions.max + c.n);
+      return `+${to - player.minions.max} SKELETON${to - player.minions.max > 1 ? 'S' : ''} in your legion `+
+        `(${player.minions.max} → ${to}, cap ${MINION_MAX_CAP})`; },
+    apply:c=>{ player.minions.max = Math.min(MINION_MAX_CAP, player.minions.max + c.n); } },
   { id:'miniondmg', name:'Grim Feast', icon:'skull', cls:'OFFENSE',
     req:()=>isSummoner(),
     calc:m=>({v: byRar(m, [0.12, 0.18, 0.26, 0.36, 0.50])}),
@@ -8141,10 +8323,11 @@ const UPGRADES = [
     desc:c=>`+${c.v} FLAT damage to every minion hit, before any increase multiplies it`,
     apply:c=>{ player.minions.flat = Math.round((player.minions.flat + c.v)*100)/100; } },
   { id:'miniontwin', name:'Twin Raising', icon:'split', cls:'OFFENSE', minRar:'rare',
-    req:()=>isSummoner() && player.minions.perCast < 2,
-    calc:m=>({n:1}),
-    desc:c=>`Every raising stands up TWO skeletons instead of one`,
-    apply:c=>{ player.minions.perCast = 2; } },
+    req:()=>isSummoner() && player.minions.perCast < MINION_PERCAST_MAX,
+    calc:m=>({n: byRar(m, [1, 1, 1, 2, 3])}),
+    desc:c=>{ const to = Math.min(MINION_PERCAST_MAX, player.minions.perCast + c.n);
+      return `Each raising stands up ${to} skeletons (${player.minions.perCast} → ${to}, cap ${MINION_PERCAST_MAX})`; },
+    apply:c=>{ player.minions.perCast = Math.min(MINION_PERCAST_MAX, player.minions.perCast + c.n); } },
   /* TWO EPICS, and only ever epic: the bone golem (twice) and the overseer */
   { id:'bonegolem', name:'Bone Golem', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && (player.minions.golems || 0) < BONE_GOLEM_MAX,
@@ -8167,11 +8350,13 @@ const UPGRADES = [
      legendary support that makes a fan of it */
   { id:'bonevolley', name:'Bone Volley', icon:'split', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isSummoner() && (player.minions.volleys || 0) < MINION_VOLLEY_MAX,
-    calc:m=>({n:1}),
-    desc:c=>`Your skeleton ARCHERS and MAGES loose +1 PROJECTILE a shot (${minionProj()} → `+
-      `${Math.min(1 + MINION_PROJ_CAP, minionProj() + 1)}), fanned out beside the first. `+
-      `Takes ${(player.minions.volleys || 0) + 1} of ${MINION_VOLLEY_MAX}`,
-    apply:c=>{ const M = player.minions; M.volleys = (M.volleys || 0) + 1; M.proj = (M.proj || 0) + 1; } },
+    calc:m=>({n: byRar(m, [1, 1, 2, 3, 4])}),
+    desc:c=>{ const add = Math.min(c.n, MINION_VOLLEY_MAX - (player.minions.volleys || 0));
+      return `Your skeleton ARCHERS and MAGES loose +${add} PROJECTILE${add > 1 ? 'S' : ''} a shot (${minionProj()} → `+
+        `${Math.min(1 + MINION_PROJ_CAP, minionProj() + add)}), fanned out beside the first. `+
+        `Bone Volley adds ${MINION_VOLLEY_MAX} at most (${player.minions.volleys || 0} so far)`; },
+    apply:c=>{ const M = player.minions, add = Math.min(c.n, MINION_VOLLEY_MAX - (M.volleys || 0));
+      M.volleys = (M.volleys || 0) + add; M.proj = (M.proj || 0) + add; } },
   { id:'bonegmp', name:'Greater Multiple Projectiles', icon:'split', cls:'OFFENSE', minRar:'legendary',
     req:()=>isSummoner() && !player.minions.gmp,
     calc:m=>({n:1}),
@@ -8190,13 +8375,14 @@ const UPGRADES = [
     apply:c=>{ player.minions.mages = true; minionsToMages(); } },
   { id:'arrowmulti', name:'Split Arrow', icon:'bow', cls:'OFFENSE', minRar:'uncommon',
     req:()=>isArcher() && player.bow.n < ARROW_MAX_N,
-    calc:m=>({n:1}),
-    desc:c=>`+1 ARROW every shot (${player.bow.n} \u2192 ${Math.min(ARROW_MAX_N, player.bow.n+1)}, cap ${ARROW_MAX_N}), `+
-      `fanned out beside the first. Every arrow is the whole arrow, not a share of one`,
-    apply:c=>{ player.bow.n = Math.min(ARROW_MAX_N, player.bow.n + 1); } },
+    calc:m=>({n: byRar(m, [1, 1, 2, 3, 4])}),
+    desc:c=>{ const to = Math.min(ARROW_MAX_N, player.bow.n + c.n);
+      return `+${to - player.bow.n} ARROW${to - player.bow.n > 1 ? 'S' : ''} every shot (${player.bow.n} \u2192 ${to}, cap ${ARROW_MAX_N}), `+
+        `fanned out beside the first. Every arrow is the whole arrow, not a share of one`; },
+    apply:c=>{ player.bow.n = Math.min(ARROW_MAX_N, player.bow.n + c.n); } },
   { id:'arrowpierce', name:'Piercing Shot', icon:'bow', cls:'OFFENSE',
     req:()=>isArcher() && player.bow.kind !== 'chaos' && player.bow.pierce < ARROW_MAX_PIERCE,
-    calc:m=>({p: byRar(m, [1, 1, 2, 2, 3])}),
+    calc:m=>({p: byRar(m, [1, 2, 3, 4, 5])}),
     desc:c=>{
       const now = player.bow.pierce, next = Math.min(ARROW_MAX_PIERCE, now + c.p);
       return `+${next-now} pierce (cap ${ARROW_MAX_PIERCE}) \u2014 an arrow goes on through ${next} `+
@@ -8335,7 +8521,7 @@ const UPGRADES = [
      a charge into a build and the tree is what deepens it. ---- */
   { id:'chgkill', name:'Blood Rush', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
     req:()=>chargeGenRoom('frenzy', player.chargeKill),
-    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`Killing a monster grants ${c.v} FRENZY charge${c.v>1?'s':''} (now `+
       `${(player.chargeKill||0)+c.v} a kill, ${stackCap('frenzy')} at once). Each is `+
       `+${Math.round(HERO_STACKS.frenzy.mods.atk*100)}% attack AND cast speed and `+
@@ -8344,7 +8530,7 @@ const UPGRADES = [
     apply:c=>{ player.chargeKill += c.v; } },
   { id:'chgcrit', name:'Sharpened Focus', icon:'target', cls:'OFFENSE', minRar:'uncommon',
     req:()=>chargeGenRoom('power', player.chargeCrit),
-    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`A CRITICAL grants ${c.v} POWER charge${c.v>1?'s':''} (now `+
       `${(player.chargeCrit||0)+c.v} a crit, ${stackCap('power')} at once). Each is `+
       `+${Math.round(HERO_STACKS.power.mods.crit*100)}% INCREASED critical chance, so a `+
@@ -8352,7 +8538,7 @@ const UPGRADES = [
     apply:c=>{ player.chargeCrit += c.v; } },
   { id:'chghurt', name:'Set Jaw', icon:'shield', cls:'DEFENSE', minRar:'uncommon',
     req:()=>chargeGenRoom('endurance', player.chargeHurt),
-    calc:m=>({v: byRar(m, [1,1,1,1,2])}),
+    calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`Being hit grants ${c.v} ENDURANCE charge${c.v>1?'s':''} (now `+
       `${(player.chargeHurt||0)+c.v} a hit taken, ${stackCap('endurance')} at once). Each is `+
       `${Math.round(HERO_STACKS.endurance.mods.less*100)}% LESS damage taken and `+
@@ -8361,11 +8547,11 @@ const UPGRADES = [
   { id:'chgmax', name:'Reservoir', icon:'force', cls:'OFFENSE', minRar:'rare',
     req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0)
             && CHARGE_IDS.some(k=>stackCap(k) < CHARGE_CAP_MAX),
-    calc:m=>({v: byRar(m, [1,1,2,2,3])}),
+    calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`+${c.v} maximum of EVERY charge — FRENZY to ${stackCap('frenzy')+c.v}, `+
       `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
       `A deeper well for whichever of them you are actually filling`,
-    apply:c=>{ for(const k of CHARGE_IDS) player.stackMax[k] += c.v; } },
+    apply:c=>{ for(const k of CHARGE_IDS) player.stackMax[k] += Math.max(0, Math.min(c.v, CHARGE_CAP_MAX - stackCap(k))); } },
   /* ---- ACCURACY AND EVASION. Two sides of one contest, and two very
      different cards: accuracy is a thing a melee hero eventually NEEDS, so it
      is common and cheap; evasion is a thing nobody has any of, so the first one
@@ -10650,6 +10836,13 @@ function metaTrim(){
 /* ---- what it does to a hero ---- */
 function applyMetaTree(p){
   if(!META) metaLoad();
+  /* a linked run carries the tree it was copied with, whatever this browser's is */
+  if(runLink && runLink.t){
+    if(!runLink.on) return;
+    for(const id of runLink.t){ const n = META_BY_ID[id]; if(n) metaApplyNode(n, p); }
+    metaClampFlags(p);
+    return;
+  }
   if(!META.on) return;
   const m = metaCur();
   for(const id of m.nodes){
@@ -13783,10 +13976,12 @@ function renderCharSheet(){
     .filter(k=>(p.splinters && p.splinters[k]) || (p.rings && p.rings[k]))
     .map(k=>{ const L = BREACH_LORDS[k], rk = p.rings[k] || 0;
       return sRow(L.ring, rk ? 'rank '+RING_ROMAN[rk] : '\u2014',
-        (p.splinters[k]||0)+' / '+BREACH_STONE+' splinters',
+        (p.splinters[k]||0)+' / '+breachStoneCost(rk)+' splinters',
         `${L.name}, ${L.title}. Splinters drop from ${L.name}'s breach monsters; ${BREACH_STONE} of them `+
-        `fuse into a breachstone, and a breachstone is the ring \u2014 or one rank deeper, to ${LORD_RING_MAX}. `+
-        `The Hand of ${L.name} drops the ring outright.\n\n`+
+        `fuse into a breachstone, and a breachstone is the ring \u2014 or one rank deeper, to ${LORD_RING_PLAIN}. `+
+        `Ranks IV and V are BLESSINGS: ${breachStoneCost(3)} and ${breachStoneCost(4)} splinters. `+
+        `The Hand of ${L.name} drops the ring outright, and with rank III in hand a deep breach calls `+
+        `${L.name} itself through, for a legendary hoard.\n\n`+
         (rk ? 'Yours now: '+ringText(k, rk)+'.' : 'Each rank: '+ringText(k, 1)+'.')); });
   const breachBlock = breachRows.length ? sBlock('BREACH', breachRows) : '';
   const loot = sBlock('LOOT & XP', [
@@ -14788,6 +14983,7 @@ function updatePlayer(dt){
         logEvent('heart ×'+p.heartStacks+' — regeneration ×'+hm+' for '+HEART_REGEN_T+'s', '#ff8a8a');
         SFX.heart();
       } else if(pk.kind==='gheart'){
+        p.gHearts = (p.gHearts || 0) + 1;
         addMaxHp(3);                         /* the new hearts arrive full, no refill */
         addDmg(p.x, p.y-56, '+3 MAX HEARTS!', '#ffd166', 19);
         logEvent('golden heart — '+p.maxHp+' hearts', '#ffd166');
@@ -14998,13 +15194,17 @@ function arrowRicochet(pr){
    - MINION INSTABILITY, the other keystone: a skeleton that falls bursts, and
      everything close takes a share of its life as fire. */
 const MINION_MAX_BASE = 3, MINION_MAX_CAP = 15;
+const MINION_PERCAST_MAX = 5;          /* skeletons a single raising stands up, at most */
 const MINION_HP_BASE = 10, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
 const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
 const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
 const MINION_GUARD = 260;            /* anything this close to you comes first */
 const MINION_WIND = 0.2;             /* a skeleton's raised-weapon beat */
 const MINION_CONTACT = 0.9;          /* a boss's body lands on a skeleton this often */
-const MAGE_RANGE = 520, MAGE_KEEP = 260, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 560;
+const MAGE_RANGE = 820, MAGE_KEEP = 300, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 960;
+/* A MAGE DOES NOT WALK. It stands and casts; when it has to be somewhere else it
+   BLINKS there, a short hop at a time, and its bolts fly far, fast and wide. */
+const MAGE_BLINK = 130, MAGE_BLINK_CD = 0.8, MAGE_BOLT_FLY = 1.3, MAGE_FAN = 0.24, MAGE_FAN_MAX = 2.8;
 const MAGE_ELEMS = ['fire', 'frost', 'shock'];
 const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
 const MIRROR_SHARE = 0.75;
@@ -15035,7 +15235,7 @@ const GOLEM_BACK = 10;
    legendary, +2 from the tree's Bone Rain -- thirteen at the far end, fourteen
    extra the hard cap. The fan widens with the count; a body close enough to
    stand in the middle of it takes several. */
-const MINION_PROJ_CAP = 14, MINION_VOLLEY_MAX = 6, MINION_GMP_N = 4, MINION_GMP_LESS = 0.25;
+const MINION_PROJ_CAP = 14, MINION_VOLLEY_MAX = 8, MINION_GMP_N = 4, MINION_GMP_LESS = 0.25;
 const MINION_PROJ_HIT = 0.4;              /* the share of a fan the sheet counts as landing on one body */
 const OVERSEER_R = 320, OVERSEER_MORE = 1.30, OVERSEER_SPD = 1.25, OVERSEER_BACK = 15;
 const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst']);
@@ -15180,10 +15380,12 @@ function minionTarget(m){
   if(best) return best;
   /* an archer or a mage looks as far as it can shoot */
   const seek = Math.max(MINION_SEEK, kindOf(m.kind).range || 0);
+  /* ...and a caster that throws 800px may fight that far from you */
+  const leash = Math.max(MINION_LEASH, kindOf(m.kind).range || 0);
   bd = seek;
   for(const e of enemiesNear(m.x, m.y, seek, _minBuf)){
     if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
-    if(Math.hypot(e.x - h.x, e.y - h.y) > MINION_LEASH) continue;   /* never far from you */
+    if(Math.hypot(e.x - h.x, e.y - h.y) > leash) continue;   /* never far from you */
     const d = Math.hypot(e.x - m.x, e.y - m.y);
     if(d < bd){ bd = d; best = e; }
   }
@@ -15220,6 +15422,23 @@ function minionStep(m, tx, ty, dt, spd){
   collideWorld(m);
   m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
 }
+/* A MAGE'S STEP: a blink of at most MAGE_BLINK toward (tx,ty), onto floor, with a
+   puff where it left and where it lands -- and then it stands again */
+function minionBlink(m, tx, ty){
+  m.moving = false;
+  if((m.blinkCd || 0) > 0) return false;
+  const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+  if(d < 12) return false;
+  const k = Math.min(MAGE_BLINK, d) / d;
+  const at = floorAt(m.x + dx*k, m.y + dy*k, m.r + 2);
+  const col = MAGE_COL[m.el] || '#b7a6ff';
+  addSparks(m.x, m.y - 14, 6, col); addRing(m.x, m.y, 4, 200, 26, col, 3, 0.25);
+  m.x = at.x; m.y = at.y;
+  addSparks(m.x, m.y - 14, 6, col); addRing(m.x, m.y, 4, 200, 26, col, 3, 0.25);
+  m.blinkCd = MAGE_BLINK_CD; m.blinkT = 0.18;
+  m.face = { x:dx/d, y:dy/d };
+  return true;
+}
 /* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
 function minionBlow(m){
   const K = kindOf(m.kind), t = m.strikeTgt;
@@ -15243,13 +15462,14 @@ function minionBlow(m){
 function minionShoot(m, tx, ty){
   const sx = m.x + (m.face.x||0)*10, sy = m.y - 18;
   const ta = Math.atan2(ty - 14 - sy, tx - sx);
-  const n = minionProj(), arc = n > 1 ? Math.min(1.5, 0.11*(n - 1)) : 0;
+  const n = minionProj(), mage = m.kind === 'mage';
+  const arc = n > 1 ? (mage ? Math.min(MAGE_FAN_MAX, MAGE_FAN*(n - 1)) : Math.min(1.5, 0.11*(n - 1))) : 0;
   const more = player.minions.projMore || 1;
   for(let i=0;i<n;i++){
     const a = ta + (n > 1 ? (i/(n - 1) - 0.5)*arc : 0);
     if(m.kind === 'mage'){
       projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy, px:sx, py:sy,
-        vx:Math.cos(a)*MAGE_BOLT_SPD, vy:Math.sin(a)*MAGE_BOLT_SPD, life:MAGE_RANGE*1.15/MAGE_BOLT_SPD,
+        vx:Math.cos(a)*MAGE_BOLT_SPD, vy:Math.sin(a)*MAGE_BOLT_SPD, life:MAGE_RANGE*MAGE_BOLT_FLY/MAGE_BOLT_SPD,
         dmg:minionDamage('mage', m)*more, el:m.el, src:'m'+m.el });
     } else {
       projectiles.push({ kind:'mbolt', arrow:true, owner:'player', x:sx, y:sy, px:sx, py:sy,
@@ -15276,6 +15496,7 @@ function updateMinions(dt){
   const ov = minions.find(m=>m.kind === 'overseer' && !m.gone && m.rise >= 1);
   for(const m of minions){
     m.lx = m.x; m.ly = m.y; m.ldt = dt;
+    m.blinkCd = Math.max(0, (m.blinkCd || 0) - dt); m.blinkT = Math.max(0, (m.blinkT || 0) - dt);
     m.flash = Math.max(0, m.flash - dt*4);
     m.castT = Math.max(0, m.castT - dt);
     m.buffed = !!(ov && m !== ov && Math.hypot(m.x - ov.x, m.y - ov.y) < OVERSEER_R);
@@ -15311,7 +15532,19 @@ function updateMinions(dt){
     const t = e || prop;
     if(t){
       const d = Math.hypot(t.x - m.x, t.y - m.y), a = Math.atan2(t.y - m.y, t.x - m.x);
-      if(K.range){
+      if(m.kind === 'mage'){
+        /* THE MAGE STANDS AND CASTS. Out of range it blinks closer, a hop at a
+           time; anything inside its comfort, it blinks away from; otherwise it
+           does not move at all. */
+        const want = prop ? 150 : K.range*0.9;
+        if(d > want) minionBlink(m, t.x, t.y);
+        else if(!prop && d < K.keep*0.6) minionBlink(m, m.x - Math.cos(a)*MAGE_BLINK, m.y - Math.sin(a)*MAGE_BLINK);
+        else m.moving = false;
+        m.face = { x:Math.cos(a), y:Math.sin(a) };
+        if(d <= Math.max(want, K.range) && m.atkCd <= 0){
+          m.castT = 0.18; minionShoot(m, t.x, t.y); m.atkCd = minionRate('mage', m);
+        }
+      } else if(K.range){
         /* THE BACK LINE. It does not plant its feet: in range it keeps a spot
            in a loose arc on your side of the fight, and picks a new one every
            second or two, shooting as it goes; anything that gets inside its
@@ -15362,7 +15595,8 @@ function updateMinions(dt){
       const n = Math.max(1, minions.length), ang = m.slot / n * TAU + vtime*0.15;
       const r = K.range ? 90 : 62;
       const fx = h.x + Math.cos(ang)*r, fy = h.y + Math.sin(ang)*r*0.75;
-      if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, spd*1.1);
+      if(m.kind === 'mage'){ if(Math.hypot(fx - m.x, fy - m.y) > 150) minionBlink(m, fx, fy); else m.moving = false; }
+      else if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, spd*1.1);
       else m.moving = false;
     }
   }
@@ -23906,7 +24140,7 @@ let titleClock = 0;
 
 /* =============================== GAME FLOW =============================== */
 function resetRun(demo){
-  seed = (Math.random()*1e9)|0;
+  seed = (!demo && runLink && runLink.s) ? runLink.s : (Math.random()*1e9)|0;
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
   minions=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
@@ -23927,12 +24161,14 @@ function resetRun(demo){
   /* the records as this run found them -- see metaLiveBank */
   if(!META) metaLoad();
   { const m0 = metaCur();
-    metaRun = (!demo && META.on) ? { wave:m0.best.wave||0, level:m0.best.level||0,
+    metaRun = (!demo && META.on && !runLink) ? { wave:m0.best.wave||0, level:m0.best.level||0,
                                      earned:metaPointsEarned(m0) } : null; }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachMiss = 0;
   rollRoster();
+  /* a linked run meets the same roster it was copied from */
+  if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
   if(demo){
     for(let i=0;i<4;i++){ const sp = randomSpawnPos();
       spawnEnemy('imp', sp.x, sp.y); enemies[enemies.length-1].docile = true; }
@@ -23956,6 +24192,7 @@ function startGame(){
   document.getElementById('charScreen').classList.add('hidden');
   document.getElementById('titleScreen').classList.add('hidden');
   resetRun(false);
+  const firstWave = runLink ? runLinkApply() : 1;
   cam.x = player.x; cam.y = player.y; cam.shake = 0;
   reclampCam();
   state = 'play'; cv.style.cursor='none';
@@ -23965,7 +24202,7 @@ function startGame(){
   if(OPT.autoLog && !clogOn) clogToggle();
   try{ window.focus(); }catch(err){}
   try{ cv.focus(); }catch(err){}
-  startWave(1);
+  startWave(firstWave);
 }
 function showGameOver(){
   state = 'over'; cv.style.cursor='default';
@@ -23979,7 +24216,7 @@ function showGameOver(){
      and not a promise. Read `prevBest` first — metaBank moves it. */
   const cur = metaCur();
   const prevBest = metaRun ? metaRun.wave : (cur.best.wave || 0);
-  const res = (META && META.on) ? metaBank() : null;
+  const res = (META && META.on && !runLink) ? metaBank() : null;
   renderRunEnd(res, prevBest);
   document.getElementById('overScreen').classList.remove('hidden');
   try{
@@ -24134,6 +24371,8 @@ function closeOptions(){
 function toggleOptions(from){ if(optOn) closeOptions(); else openOptions(from); }
 
 function backToTitle(){
+  /* leaving a linked run: the next run is your own again */
+  if(runLink){ runLink = null; try { history.replaceState(null, '', location.href.split('#')[0]); } catch(e){} }
   closeBook();
   closeOptions();
   document.getElementById('cheatScreen').classList.add('hidden');
@@ -24203,6 +24442,8 @@ document.getElementById('resumeBtn').addEventListener('click', ()=>{ SFX.click()
 document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('pauseScreen').classList.add('hidden'); startGame(); });
 document.getElementById('pauseTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
+document.getElementById('pauseLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
+document.getElementById('overLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
 
 /* =============================== MAIN LOOP =============================== */
 let last = performance.now(), sizeCheck = 0;
@@ -24283,6 +24524,8 @@ refreshTreeBtn();
 showBest();
 fitTitle();
 requestAnimationFrame(frame);
+/* opened on a run link: that run, at that wave, with that build */
+runLinkBoot();
 })();
 </script>
 </body>
