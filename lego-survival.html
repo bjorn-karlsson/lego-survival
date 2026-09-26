@@ -3610,7 +3610,7 @@ function newPlayer(){
        OWN pools -- a minion's damage is not yours, and nothing you buy for your
        own hits reaches it unless something says so (Mirrored Legion does). */
     minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
-              mages:false, mirror:false, instab:false, golems:0, overseer:false, overseerCd:0,
+              mages:false, mirror:false, instab:false, golems:0, golemCd:0, overseer:false, overseerCd:0,
               proj:0, projMore:1, volleys:0, gmp:false },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{},
@@ -8149,11 +8149,12 @@ const UPGRADES = [
   { id:'bonegolem', name:'Bone Golem', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && (player.minions.golems || 0) < BONE_GOLEM_MAX,
     calc:m=>({n:1}),
-    desc:c=>`One more of your MELEE skeletons is a BONE GOLEM (${player.minions.golems || 0} \u2192 `+
-      `${(player.minions.golems || 0) + 1}, up to ${BONE_GOLEM_MAX}): ${kindOf('golem').hp}\u00d7 the life, `+
-      `${kindOf('golem').dmg}\u00d7 the hit, and every blow a slam that lands on everything in front of it. `+
-      `Archers and mages stay what they are`,
-    apply:c=>{ player.minions.golems = Math.min(BONE_GOLEM_MAX, (player.minions.golems || 0) + 1); minionsToGolems(); } },
+    desc:c=>`One more BONE GOLEM rises at your side (${golemMax()} \u2192 `+
+      `${Math.min(BONE_GOLEM_MAX, golemMax() + 1)}, up to ${BONE_GOLEM_MAX}): ${kindOf('golem').hp}\u00d7 a skeleton's life, `+
+      `${kindOf('golem').dmg}\u00d7 the scepter's hit, and every blow a slam that lands on everything in front of it. `+
+      `Golems are their own pool -- they take no place in your legion -- and one that falls rises again ${GOLEM_BACK}s later`,
+    apply:c=>{ player.minions.golems = Math.min(BONE_GOLEM_MAX, (player.minions.golems || 0) + 1);
+      if(golems().length < golemMax()) raiseGolem(); } },
   { id:'boneoverseer', name:'Bone Overseer', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && !player.minions.overseer,
     calc:m=>({n:1}),
@@ -12810,7 +12811,9 @@ const STAT_PROBES = [
   { g:'MINIONS', k:'Minion hit', basic:'OFFENCE', get:()=> isSummoner() ? minionDamage(player.minions.mages) : 0, fmt:v=>fmtHp(v), zero:true,
     why:'one skeleton hit: (scepter base + minion flat) x (1 + the level pool + the minion pool) x the minion more. A mage throws 80% of it' },
   { g:'MINIONS', k:'Legion', basic:'OFFENCE', get:()=> isSummoner() ? minionMax() : 0, fmt:v=>Math.round(v)+' skeletons', zero:true,
-    why:'how many may stand at once. At a full legion a raising replaces the oldest' },
+    why:'how many skeletons may stand at once (cap 15). At a full legion a raising replaces the oldest' },
+  { g:'MINIONS', k:'Bone golems', get:()=> isSummoner() ? golemMax() : 0, fmt:v=>Math.round(v)+' golems', zero:true,
+    why:'their own pool, on top of the legion: one for every Bone Golem taken, up to five. One that falls rises again after 10s' },
   { g:'MINIONS', k:'Minion life', get:()=> isSummoner() ? minionMaxHp() : 0, fmt:v=>Math.round(v)+'', zero:true,
     why:'what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool' },
   { g:'MINIONS', k:'Minion projectiles', get:()=> isSummoner() ? minionProj() : 0, fmt:v=>Math.round(v)+' a shot', zero:true,
@@ -13583,7 +13586,7 @@ function renderCharSheet(){
         `${p.minions.perCast} a cast, up to ${minionMax()}. They fight whatever is near you and hold `+
         `the crowd off you: a monster touching one is slowed and fights it.\n\n`+
         `They rise as spearmen, swordsmen or archers; at a full legion the oldest crumbles and the `+
-        `new one takes its place.`+(p.minions.golems ? ` ${p.minions.golems} of the melee ones are BONE GOLEMS.` : '')+
+        `new one takes its place.`+(golemMax() ? ` ${golemMax()} BONE GOLEMS stand beside them, their own pool.` : '')+
         (p.minions.overseer ? ' A BONE OVERSEER at your shoulder drives on every one near it.' : '')+
         `\n\nMinion damage is its OWN pool: `+Math.round(minionInc()*100)+`% increased now`+
         (p.minions.mirror ? ', three quarters of yours mirrored into it.' : '.')+
@@ -14994,7 +14997,7 @@ function arrowRicochet(pr){
      the legion each -- for 80% of a blade's hit.
    - MINION INSTABILITY, the other keystone: a skeleton that falls bursts, and
      everything close takes a share of its life as fire. */
-const MINION_MAX_BASE = 3, MINION_MAX_CAP = 10;
+const MINION_MAX_BASE = 3, MINION_MAX_CAP = 15;
 const MINION_HP_BASE = 10, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
 const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
 const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
@@ -15021,7 +15024,12 @@ const MINION_KINDS = {
   overseer: { name:'Bone Overseer',     dmg:0,    rate:1,    reach:0,  range:0,   hp:4.0, spd:1.05, r:13 },
 };
 const MINION_MIX = [['spear', 0.36], ['sword', 0.36], ['bow', 0.28]];
+/* BONE GOLEMS ARE THEIR OWN POOL. They are not skeletons and take no place in
+   the legion: five golems AND fifteen skeletons. Each Bone Golem is one more
+   golem; they rise at your side on their own, and one that falls is back
+   GOLEM_BACK seconds later. */
 const BONE_GOLEM_MAX = 5;                 /* the golem epic, up to five times */
+const GOLEM_BACK = 10;
 /* GREATER MULTIPLE PROJECTILES, for the legion. An archer's arrow and a mage's
    bolt become a fan of them: +1 a Bone Volley (six at most), +4 from the
    legendary, +2 from the tree's Bone Rain -- thirteen at the far end, fourteen
@@ -15058,13 +15066,16 @@ function minionDamage(k, m){
 function minionRate(k, m){
   return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
 }
-/* the legion a full raising would stand up: its golems, then mages or the mix */
+/* everything a full raising stands up: the golems (their own pool), then the
+   skeletons -- mages, or the mix */
 function legionPlan(){
-  const M = player.minions, n = minionMax(), g = Math.min(M.golems || 0, n);
+  const M = player.minions, n = minionMax(), g = golemMax();
   const out = []; for(let i=0;i<g;i++) out.push('golem');
-  for(let i=g;i<n;i++) out.push(M.mages ? 'mage' : null);
+  for(let i=0;i<n;i++) out.push(M.mages ? 'mage' : null);
   return out;
 }
+function golemMax(){ return clamp((player && player.minions.golems) || 0, 0, BONE_GOLEM_MAX); }
+function golems(){ return minions.filter(m=>!m.gone && m.kind === 'golem'); }
 /* how many an archer or a mage looses at once */
 function minionProj(){ return 1 + clamp(Math.round((player && player.minions.proj) || 0), 0, MINION_PROJ_CAP); }
 /* what one volley is worth on one body, relative to a single shot */
@@ -15083,10 +15094,10 @@ function minionDps(){
   }
   return dps * crit;
 }
-function legion(){ return minions.filter(m=>!m.gone && m.kind !== 'overseer'); }
+/* the skeletons: what the scepter raises and the legion cap counts */
+function legion(){ return minions.filter(m=>!m.gone && m.kind !== 'overseer' && m.kind !== 'golem'); }
 function nextKind(){
   const M = player.minions;
-  if(legion().filter(m=>m.kind === 'golem').length < Math.min(M.golems || 0, minionMax())) return 'golem';
   if(M.mages) return 'mage';
   let r = Math.random();
   for(const [k, w] of MINION_MIX){ if((r -= w) < 0) return k; }
@@ -15145,19 +15156,13 @@ function minionsToMages(){
     m.kind = 'mage'; m.mage = true; m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length];
   }
 }
-/* BONE GOLEMS: the melee ones become golems, oldest first, as many as allowed */
-function minionsToGolems(){
-  const M = player.minions;
-  let have = legion().filter(m=>m.kind === 'golem').length;
-  for(const m of legion().sort((a, z)=>a.born - z.born)){
-    if(have >= Math.min(M.golems || 0, minionMax())) break;
-    if(m.kind !== 'spear' && m.kind !== 'sword') continue;
-    const k = kindOf('golem');
-    m.kind = 'golem'; m.r = k.r; m.scale = 0.62;
-    m.maxHp = minionMaxHp('golem'); m.hp = m.maxHp;
-    addRing(m.x, m.y, 8, 260, 80, '#b7a6ff', 6, 0.5);
-    have++;
-  }
+/* BONE GOLEMS: one rises at your side for every golem owed and not standing */
+function raiseGolem(){
+  const h = heroObj || player;
+  if(!h || h.dead) return null;
+  const a = rnd(TAU), g = raiseAt(h.x + Math.cos(a)*70, h.y + Math.sin(a)*70, 'golem');
+  addRing(g.x, g.y, 8, 260, 80, '#b7a6ff', 6, 0.5);
+  return g;
 }
 const _minBuf = [];
 /* WHAT A SKELETON GOES FOR. Whatever is closest to YOU first, if anything is
@@ -15262,6 +15267,11 @@ function updateMinions(dt){
   if(M.overseer && !minions.some(m=>m.kind === 'overseer' && !m.gone)){
     M.overseerCd = Math.max(0, (M.overseerCd || 0) - dt);
     if(M.overseerCd <= 0 && !h.dead){ raiseAt(h.x - 50, h.y + 20, 'overseer'); }
+  }
+  /* THE GOLEMS: one short, and the next is back on its clock */
+  if(golems().length < golemMax()){
+    M.golemCd = Math.max(0, (M.golemCd || 0) - dt);
+    if(M.golemCd <= 0 && !h.dead){ raiseGolem(); if(golems().length < golemMax()) M.golemCd = 0.6; }
   }
   const ov = minions.find(m=>m.kind === 'overseer' && !m.gone && m.rise >= 1);
   for(const m of minions){
@@ -15380,6 +15390,7 @@ function minionDies(m){
   m.gone = true;
   spawnBricks(m.x, m.y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 6, 150);
   if(m.kind === 'overseer'){ player.minions.overseerCd = OVERSEER_BACK; return; }
+  if(m.kind === 'golem') player.minions.golemCd = Math.max(player.minions.golemCd || 0, GOLEM_BACK);
   if(player.minions.instab){
     const dmg = m.maxHp * INSTAB_SHARE * (1 + minionInc());
     addRing(m.x, m.y, 8, 360, INSTAB_R, '#ff8a3c', 6, 0.4);
@@ -15390,6 +15401,18 @@ function minionDies(m){
       hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, 'mburst', {});
     }
   }
+}
+/* the golems' badge: a square bone head, and the count */
+function drawGolemBadge(x, y, n){
+  ctx.save(); ctx.translate(x, y - 2);
+  ctx.fillStyle = '#d9d2f5'; ctx.strokeStyle = 'rgba(20,20,40,0.6)'; ctx.lineWidth = 1.4;
+  roundRect(ctx, -10, -11, 20, 18, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#3a2f5e';
+  ctx.fillRect(-6, -6, 4, 3); ctx.fillRect(2, -6, 4, 3); ctx.fillRect(-5, 1, 10, 2);
+  ctx.fillStyle = '#b7a6ff'; ctx.font = '800 11px Fredoka'; ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(15,20,25,0.9)'; ctx.lineWidth = 3;
+  ctx.strokeText(String(n), 11, 12); ctx.fillText(String(n), 11, 12);
+  ctx.restore();
 }
 /* the ability-row badge: a little skull, and the count across its brow */
 function drawLegionIcon(x, y, n){
@@ -23594,6 +23617,7 @@ function renderHUD(){
     const L = legion(), kinds = {};
     for(const m of L) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
     const worth = Object.entries(kinds).map(([k, n])=>n+' '+(k === 'bow' ? 'archer' : k === 'spear' ? 'spear' : k)+(n > 1 ? 's' : ''));
+    if(golemMax()) worth.push(golems().length+'/'+golemMax()+' golems');
     if(minions.some(m=>m.kind === 'overseer' && !m.gone)) worth.push('overseer');
     buffs.push({ c:'#b7a6ff', t:'LEGION '+L.length+'/'+minionMax(), more:worth });
   }
@@ -23673,6 +23697,11 @@ function renderHUD(){
   if(isSummoner()){
     const L = legion(), up = L.filter(m=>m.rise >= 1).length, mx = minionMax();
     autos.push({ f: mx ? clamp(up/mx, 0, 1) : 1, label:'LEGION '+up+'/'+mx, icon:(x,y)=>drawLegionIcon(x, y, up) });
+    const gm = golemMax();
+    if(gm){
+      const gu = golems().filter(m=>m.rise >= 1).length;
+      autos.push({ f: clamp(gu/gm, 0, 1), label:'GOLEMS '+gu+'/'+gm, icon:(x,y)=>drawGolemBadge(x, y, gu) });
+    }
   }
   if(p.orbit.n>0) autos.push({f:1, label:'ORBIT ×'+p.orbit.n, icon:(x,y)=>{
     ctx.save(); ctx.translate(x,y); ctx.rotate(vtime*2);

@@ -2564,9 +2564,10 @@ water and rocks the way you do.
   and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
-- **Two epics, and only epics.** **Bone Golem** (up to **five** times): one more of your melee
-  skeletons becomes a golem — 3.5× the life, 2.75× the scepter's hit, and every blow a slam that
-  lands on everything in front of it; archers and mages stay what they are. **Bone Overseer** (once): a staff-bearing lord
+- **Two epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
+  your side — 3.5× a skeleton's life, 2.75× the scepter's hit, and every blow a slam that lands on
+  everything in front of it. **Golems are their own pool**: they take no place in the legion, so a
+  full summoner stands **5 golems and 15 skeletons**. A golem that falls rises again 10s later. **Bone Overseer** (once): a staff-bearing lord
   rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
   damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's 1.60 + minion flat) ×
@@ -2574,12 +2575,13 @@ water and rocks the way you do.
   conversions do not either. Its life is 10, plus 12% for every hero level, times the minion life
   pool. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
   that is lost rises again at your side.
-- **Bricks:** Bone Legion (+1 skeleton, to 10), Grim Feast (minion damage), Bone Armour (minion
+- **Bricks:** Bone Legion (+1 skeleton, to 15), Grim Feast (minion damage), Bone Armour (minion
   life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (two a raising),
   Bone Volley (+1 projectile).
 - **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
-  (**LEGION 5/7**), its ring filling as the legion does, and the buff list spells it out: how many
-  spears, swords, archers, golems, and whether the overseer is up.
+  (**LEGION 5/7**), its ring filling as the legion does, with a second badge for the golems
+  (**GOLEMS 2/3**); the buff list spells it out: how many spears, swords, archers, golems, and
+  whether the overseer is up.
 - **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
   reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%
   of a blade's hit. Every bolt is its element and leaves its element's ailment.

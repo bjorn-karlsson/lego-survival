@@ -2918,3 +2918,22 @@ Two old fixtures were tightened after an intermittent failure each: `rage` now c
 pools left over from earlier sections before counting a swing's rage, and `ember` holds its bodies
 still, since with the new routing two neighbours can take different ways round a lake. The Necromancer favourite's brick panel overflowed with the two new cards on it; they live on
 THE LEGION bench only. 68 tests green.
+
+## Thirty-ninth pass — golems are their own pool
+
+> *"Skeleton cap has its own cap, golem cap is separate, they are not in the same pool, so 5/5
+> golems + 15/15 skeletons."*
+
+Bone Golem used to turn one of your melee skeletons into a golem, so golems ate legion places.
+Now `legion()` is skeletons only and `golems()` is the other pool: each Bone Golem take (five at
+most) raises one more golem at your side, `updateMinions` keeps the pool full on a clock
+(`GOLEM_BACK`, 10s after one falls), and raising at a full legion replaces the oldest *skeleton*,
+never a golem. The skeleton cap is 15 (was 10). The sheet has a *Bone golems* row, the ability row
+a second badge, **GOLEMS n/m**, beside **LEGION n/m**, and the legion's DPS counts both pools.
+`minionsToGolems` is gone.
+
+**Proof.** `combat`: one golem a take up to five, standing; the six skeletons (three of them
+archers) untouched by five takes; a raising at a full legion leaves all five golems; a fallen golem
+back after its clock. `legion2`: Bone Legion takes the cap to fifteen; the golem badge on screen
+apart from the legion's. Breaks `samepool`, `nogolemback`, `lazygolem`, `cap10`, `nogolembadge`:
+all caught. 68 tests green.
