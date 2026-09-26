@@ -2556,14 +2556,15 @@ stands (up to 20s) and drops the ring outright, plus fifteen splinters.
 
 - **Blessed ranks.** Rings go on to **IV and V**, the blessings: a breachstone for IV costs **100**
   splinters, for V **150**. A ring at V turns every further stone into a **Blessed Hoard** (an
-  epic chest).
+  uncommon chest).
 - **The Breach Hoard.** When the ring has fallen all the way in, it leaves a chest at the hand,
   painted by how deep the breach was fought — kills inside, plus 60 if the Hand fell: 25 for
-  common, 60 uncommon, 110 rare, 180 epic, 260 legendary.
+  common, 60 uncommon, 110 rare. **A breach chest never comes above rare**: a breach pays in
+  rings and splinters, not in bricks.
 - **The Breachlord.** With a lord's ring at rank III or better, a breach of that lord fought past
   the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
   with fourteen times the health of its kind, which holds the breach open while it stands (up to
-  35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is legendary**.
+  35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is rare** — the best a breach gives.
 - **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
   12% tougher per breach before it (to three times), and more of its packs magic.
 
@@ -2629,6 +2630,9 @@ water and rocks the way you do.
 - **The back line moves.** Archers do not plant their feet: in range, each keeps a spot in a
   loose arc on your side of the fight and picks a fresh one every second or so, shooting as it
   goes; anything that gets inside its comfort, it steps back from.
+- **Only their own kind is in the way.** Skeletons keep room from skeletons, golems from golems
+  and zombies from zombies — but a skeleton walks straight through a zombie or a golem, and a
+  golem through a skeleton, so the three pools never jam each other up.
 - **Mages never move.** A skeleton mage rises on a spot of its own and stays there: it does not
   walk, it does not blink, a skeleton or a monster leaning on it cannot shove it, and it is not
   pulled back when you walk away. It throws at whatever is in reach from where it stands —

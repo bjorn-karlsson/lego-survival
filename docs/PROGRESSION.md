@@ -3238,3 +3238,27 @@ real click on the field calls all four; on a 1044×640 window no compare panel o
 describes and the title is on screen. Break-builds `scepphys`, `elemopen`, `moreopen`, `convw`,
 `chaosw`, `nohome`, `noaway`, `dbldef`, `heartflat`, `heartroll`, `norage`, `noward`, `wardchaos`,
 `clicklatch`, `cmpold`, `noscroll`: 16 breaks, 16 caught.
+
+## Forty-fifth pass — breach pays in rings, and minions pass through each other
+
+> *"i don't think that Breach should reward you too much with chests, i feel like it drops
+> legendary chest all the time, it can give chest but only up to rare quality. Also, minions of
+> different types should be able to walk through each other ... but not their own type."*
+
+**Breach chests stop at rare.** `BREACH_CHEST_MAX = 'rare'` and `breachChestRar()` clamp every
+chest a breach leaves: the hoard's depth table is now 25 common / 60 uncommon / 110 rare, the
+Breachlord's fall makes its hoard rare (it was legendary), and a ring already at V turns further
+stones into an uncommon Blessed Hoard (was epic) and the lord's rank into a rare one (was
+legendary).
+
+**Tribes.** `minionTribe(m)`: every skeleton — spear, sword, bow, mage — is one tribe; golems,
+zombies and the overseer are each their own. The spacing pass between minions only runs inside a
+tribe, and `mageSpot` only looks for room among skeletons, since nothing else can stand in a
+mage's way now.
+
+**Proof.** New `tribe` test: pairs stood on one spot and frozen mid-blow for half a second — a
+spear and a sword, a spear and a bow, two zombies, two golems all end at least a body apart; a
+skeleton and a zombie, a sword and a golem, a zombie and a golem, a mage and a zombie stay where
+they were; the hoard at 30/120/300 kills, with and without the lord, is common/rare/rare/rare, and
+a whole ring's stone and lord pay uncommon and rare. `breach2` restated for the ceiling. Breaks
+`notribe`, `onetribe`, `bigchest`, `lordleg`, `ringepic`: 5 caught.

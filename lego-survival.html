@@ -7180,7 +7180,13 @@ const LORD_RING_MAX = 5, LORD_RING_PLAIN = 3;
 const BREACH_LORD2_AT = 110, BREACH_LORD2_HP = 14, BREACH_LORD2_HOLD = 35, SPLINTER_LORD2 = 40;
 /* THE HOARD: what the breach leaves at the hand when it has closed, by how deep it
    was fought -- kills, plus 60 for the Hand; the Breachlord makes it legendary */
-const BREACH_HOARD = [[25, 'common'], [60, 'uncommon'], [110, 'rare'], [180, 'epic'], [260, 'legendary']];
+/* A BREACH PAYS IN RINGS AND SPLINTERS, NOT IN BRICKS. Its chests stop at RARE:
+   a deep breach used to hand out epic and legendary hoards so often that the
+   bricks outgrew the waves. The kills still decide how good the hoard is, up to
+   that ceiling. */
+const BREACH_CHEST_MAX = 'rare';
+const BREACH_HOARD = [[25, 'common'], [60, 'uncommon'], [110, 'rare']];
+function breachChestRar(r){ return RAR_ORDER.indexOf(r) > RAR_ORDER.indexOf(BREACH_CHEST_MAX) ? BREACH_CHEST_MAX : r; }
 const BREACH_LORDS = {
   xoph:    { name:'XOPH',      title:'Dark Embers',        el:'fire',  col:'#ff6a2a', dim:'#6e1c0a', ring:"Xoph's Ring" },
   tul:     { name:'TUL',       title:'Creeping Avalanche', el:'frost', col:'#8fd8ff', dim:'#1d4a66', ring:"Tul's Ring" },
@@ -7382,8 +7388,9 @@ function breachHoard(B){
   const score = (B.kills || 0) + (B.hand && B.hand.dead ? 60 : 0);
   let rar = null;
   for(const [need, r] of BREACH_HOARD) if(score >= need) rar = r;
-  if(B.lord2 && B.lord2.dead) rar = 'legendary';
+  if(B.lord2 && B.lord2.dead) rar = BREACH_CHEST_MAX;     /* the lord's own hoard: the best a breach gives */
   if(!rar) return null;
+  rar = breachChestRar(rar);
   const L = BREACH_LORDS[B.lord];
   const ch = shoveToFloor({ type:'chest', x:B.x, y:B.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar, hoard:B.lord }, 20);
   props.push(ch);
@@ -7479,7 +7486,7 @@ function breachSpoils(e){
   addSparks(e.x, e.y-18, 2 + n, L.col);
   if(e.breachLord2){
     addDmg(e.x, e.y-90, L.name+' FALLS', L.col, 22);
-    showBanner(L.name+' FALLS', 'the hoard will be legendary', L.col, 2.2, 48);
+    showBanner(L.name+' FALLS', 'the hoard will be '+RARITY[BREACH_CHEST_MAX].name.toLowerCase(), L.col, 2.2, 48);
     ringGain(k, 'lord');
   } else if(e.breachLord){
     addDmg(e.x, e.y-70, L.ring.toUpperCase()+'!', L.col, 20);
@@ -7497,7 +7504,7 @@ function ringGain(k, why){
   if(have >= LORD_RING_MAX){
     /* a ring that is fully blessed turns every further stone into a hoard */
     props.push(shoveToFloor({ type:'chest', x:p.x + rnd(-50, 50), y:p.y + rnd(30, 60), flash:0, seed:rnd(1000),
-      dead:false, hp:3, r:16, rar: why === 'lord' ? 'legendary' : 'epic', hoard:k }, 20));
+      dead:false, hp:3, r:16, rar: breachChestRar(why === 'lord' ? 'legendary' : 'uncommon'), hoard:k }, 20));
     showBanner(L.ring.toUpperCase()+' IS WHOLE', 'a BLESSED HOARD instead', L.col, 1.6, 40);
     logEvent('   '+L.ring+' is fully blessed — a hoard instead', L.col);
     return;
@@ -15694,7 +15701,7 @@ function raiseAt(x, y, kind){
    standing on */
 function mageSpot(x, y, r, self){
   const free = (px, py)=> floorClear(px, py, r + 4) &&
-    minions.every(o=>o === self || o.gone || Math.hypot(o.x - px, o.y - py) >= o.r + r);
+    minions.every(o=>o === self || o.gone || minionTribe(o) !== 'skel' || Math.hypot(o.x - px, o.y - py) >= o.r + r);
   if(free(x, y)) return { x, y };
   for(let ring=1; ring<=10; ring++)
     for(let k=0;k<ring*6;k++){
@@ -15958,6 +15965,9 @@ function updateMinions(dt){
   /* and they keep a little room between them */
   for(let i=0;i<minions.length;i++) for(let j=i+1;j<minions.length;j++){
     const A = minions[i], B = minions[j];
+    /* only a minion's OWN kind is in its way: skeletons walk through zombies and
+       golems, golems through skeletons, and so on */
+    if(minionTribe(A) !== minionTribe(B)) continue;
     const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy), want = A.r + B.r;
     /* a mage is a post: the other one steps round it, and two mages never shove */
     const fa = A.kind === 'mage' ? 0 : B.kind === 'mage' ? 1 : 0.5, fb = B.kind === 'mage' ? 0 : A.kind === 'mage' ? 1 : 0.5;
@@ -15967,6 +15977,9 @@ function updateMinions(dt){
   for(const m of minions) if(m.hp <= 0 && !m.gone) minionDies(m);
   minions = minions.filter(m=>!m.gone);
 }
+/* which minions keep room from each other: every skeleton (spear, sword, bow,
+   mage) is one tribe; golems, zombies and the overseer are each their own */
+function minionTribe(m){ return (m.kind === 'golem' || m.kind === 'zombie' || m.kind === 'overseer') ? m.kind : 'skel'; }
 function minionDies(m){
   m.gone = true;
   spawnBricks(m.x, m.y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 6, 150);
