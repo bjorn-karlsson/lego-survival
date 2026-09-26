@@ -3414,3 +3414,32 @@ leaves a rare chest and studs; the tiers climb. Breaks `slowabyss`, `showpath`, 
 `breachkill`, `breachsees`, `noextratick`, `crowded` (caught once the spacing was checked over
 twenty rolls), `sboxnever`, `sboxboss`, `sboxself`, `sboxnomods`, `sboxnohold`, `sboxearly`,
 `sboxbig`, `sboxclear`: 22 caught.
+
+## Fiftieth pass — the reward stash
+
+> *"add a new option in the option menu, called auto-loot ... I want the standard mode to be to
+> press R in order to open the reward(s) ... you can now stack rewards ... FIFO order ... if i hold
+> R i basically auto-open until my reward stash is empty ... I want this option to be default."*
+
+Every reward already went through one queue, `pendingPicks`, and the update loop opened its head
+the first frame it could. Now it only does that under the new option **AUTO-LOOT**
+(`OPT.autoLoot`, off by default, saved with the other settings). Otherwise the queue is a stash:
+
+- `lootNow()` shifts the oldest reward and opens its card screen (FIFO).
+- **R** on the field (not a repeat, stash not empty) sets `lootHeld` and calls it.
+- While `lootHeld` and R is down, the update loop opens the next one `LOOT_HOLD_GAP` = 0.25s after
+  you pick from the last, until the stash is empty. Key-up (or losing focus) clears `lootHeld`.
+- The card screen's reroll, also R, now ignores repeats and ignores any press while `lootHeld` —
+  a held R that opened the screen never rerolls it; a fresh press on the screen still does.
+- `drawLootStash()` draws the pill at the bottom centre: "3 REWARDS", a pip per reward in order,
+  and an R key cap.
+
+**Proof.** New `loot`, with real key presses: auto-loot is off on a fresh profile; three rewards
+(a rare chest, a level, a boss) wait and "3 REWARDS" is drawn; R opens the chest alone; picking a
+card does not open the next; holding R — with synthetic auto-repeat keydowns landing on the card
+screen, as a real held key sends — opens the level, then the boss, then leaves the stash empty,
+and rerolls nothing; a fresh R on a card screen rerolls once; auto-loot on opens a reward by itself
+and is saved. `t2` and `char`, which check card screens as they open, switch auto-loot on in
+their fixture; `leagues` waits for a breach's circle to reach a body instead of assuming one
+second is enough. Breaks `defon`, `lifo`, `nohold`, `holdroll` (caught once the repeats were
+simulated), `noroll`, `chain`, `noauto`, `nopill`: 8 caught.

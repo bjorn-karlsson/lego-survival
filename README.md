@@ -711,6 +711,22 @@ take it — grey for now, green for better, red for worse:
 
 ---
 
+## Your rewards wait for you
+
+A wave cleared, a level gained, a boss put down, a chest broken: each is a reward, and **by
+default none of them throws a card screen at you in the middle of a fight**. They go on a
+**stash** instead — a pill at the bottom of the screen says how many, with one coloured pip per
+reward in the order they will open (a chest in its rarity's colour, a level-up gold, a boss
+orange, a wave green).
+
+- **R** opens the **oldest** reward — first in, first out.
+- **Hold R** and the next one opens the moment you have picked from the last, a quarter-second
+  apart, until the stash is empty.
+- **R on a card screen still rerolls** — but only a fresh press made there. A held R that
+  started on the field never rerolls anything.
+
+Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you earn it.
+
 ## Rarity
 
 Five tiers. Measured across 400,000 rolls per cell on the default difficulty:
