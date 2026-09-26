@@ -579,6 +579,12 @@
   .gslot > .gitem{left:0;top:0;width:100%;height:100%}
   .gslot.drop-ok{border-color:#7fdc7e;background:rgba(127,220,126,.16)}
   .gslot.drop-bad{border-color:#ff6a5a;background:rgba(255,106,90,.12)}
+  .gearinv.stash{height:calc(var(--gc)*12)}
+  .gearstashwrap{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .gstashhead{display:flex;align-items:center;gap:10px;font-family:'Titan One',cursive;font-size:13px;letter-spacing:2px;color:#ffd76e}
+  .gstashhead #gearStashCount{flex:1;font-family:'Fredoka',sans-serif;font-size:11.5px;letter-spacing:0;color:#8e9aa4}
+  .gtmod i.top{color:#ffd76e}
+  .gtlvl b{color:#fff}
   .gearinv{position:relative;width:calc(var(--gc)*12);height:calc(var(--gc)*5);border:2px solid rgba(255,255,255,.14);
     box-sizing:content-box;border-radius:4px;background-color:rgba(0,0,0,.38);
     background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
@@ -600,7 +606,7 @@
   .gearbin{font-family:'Titan One';font-size:12px;letter-spacing:1px;color:#ffb3a0;border:2px dashed rgba(255,106,90,.5);
     border-radius:8px;padding:7px 12px;background:rgba(255,60,40,.08)}
   #gearNote{flex:1;font-size:12px;font-weight:600;text-align:center}
-  .gearsum{width:230px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;
+  .gearsum{width:220px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;
     margin-top:6px;max-height:calc(var(--gc)*13.5);overflow:auto}
   .gshead{font-family:'Titan One';font-size:12px;letter-spacing:1.5px;color:#ffd76e;margin-bottom:6px}
   .gsrow{font-size:12px;color:#aab4ff;line-height:1.5}
@@ -747,11 +753,16 @@
     <h2>EQUIPMENT</h2>
     <div class="sheetsub" id="gearSub"></div>
     <div class="gearmain">
+      <div class="gearstashwrap">
+        <div class="gstashhead"><span>STASH</span><span id="gearStashCount"></span><button id="gearStashSortBtn" class="tbtn gray">TIDY</button></div>
+        <div id="gearStash" class="gearinv stash"></div>
+      </div>
       <div class="gearleft">
         <div id="gearDoll" class="geardoll"></div>
         <div id="gearInv" class="gearinv"></div>
         <div class="gearbar">
           <div id="gearBin" class="gearbin">&#x1F5D1; DESTROY</div>
+          <button id="gearStashAllBtn" class="tbtn">&#x2190; STASH ALL</button>
           <button id="gearSortBtn" class="tbtn gray">TIDY</button>
           <span id="gearNote"></span>
           <button id="gearCloseBtn" class="tbtn gray">CLOSE</button>
@@ -759,7 +770,7 @@
       </div>
       <div id="gearSum" class="gearsum"></div>
     </div>
-    <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; drag to move &middot; drop in the bin, or Ctrl-click twice, to destroy</div>
+    <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; Ctrl-click to send between bag and stash &middot; drag anywhere it fits &middot; drop in the bin to destroy</div>
   </div>
 </div>
 <div id="gearTip" class="geartip hidden"></div>
@@ -6113,8 +6124,6 @@ function mobSpoils(e){
   if(Math.random() < DROP.wild * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
-  /* ...and gear, which a breach body is as stingy with as it is with chests */
-  gearSpoils(e, e.elite ? 1 : 0, cm);
 }
 function bossSpoils(e){
   pickups.push(makePickup('heart',  e.x-22, e.y));
@@ -6136,7 +6145,7 @@ function bossSpoils(e){
   if(Math.random() < 0.17 && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-70,70), y:e.y+rnd(30,70),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
-  /* ...and always two pieces of gear, the second one rare */
+  /* ...and the only gear in the game: one piece, two off a super boss */
   gearBossSpoils(e);
 }
 /* =============================== GEAR ===============================
@@ -6164,6 +6173,9 @@ function bossSpoils(e){
    No uniques, no crafting, no currency: bases, affixes, tiers. */
 const GEAR_KEY = 'bb_gear';
 const GEAR_COLS = 12, GEAR_ROWS = 5;
+/* THE STASH: PoE's stash tab, beside the equipment screen -- a big grid that
+   nothing ever drops out of, for whatever you are keeping but not wearing */
+const GEAR_STASH_COLS = 12, GEAR_STASH_ROWS = 12;
 const GEAR_SLOTS = ['weapon','helmet','offhand','body','amulet','ring1','ring2','gloves','belt','boots'];
 const GEAR_SLOT_NAME = { weapon:'WEAPON', offhand:'OFF HAND', helmet:'HELMET', body:'BODY ARMOUR',
   gloves:'GLOVES', boots:'BOOTS', belt:'BELT', amulet:'AMULET', ring1:'RING', ring2:'RING' };
@@ -6194,8 +6206,12 @@ const GEAR_ONE_HAND = ['sword','axe','mace','scepter'];
    holding it -- physical for the four that hit, elemental for the staff,
    the legion's for the sceptre. */
 const GEAR_BASES = [];
+const GEAR_BASE_LVL_K = 0.6;
 (function(){
-  const B = (id, cls, name, lvl, stat, imp, col)=>GEAR_BASES.push({ id, cls, name, lvl,
+  /* the levels below were written on a wave scale; the item level is the
+     MONSTER level (MOB LV on the HUD), which climbs slower -- so they are
+     scaled onto it here, once */
+  const B = (id, cls, name, lvl, stat, imp, col)=>GEAR_BASES.push({ id, cls, name, lvl:Math.max(1, Math.round(lvl*GEAR_BASE_LVL_K)),
     def: stat && stat.dmg === undefined ? stat : null, dmg: stat && stat.dmg !== undefined ? stat.dmg : 0,
     imp: imp || null, col: col || null });
   /* armour pieces come in the three PoE flavours: armour, evasion, energy shield */
@@ -6301,83 +6317,81 @@ const GEAR_JEW = ['ring','amulet'];
 const GEAR_NONWEAP = GEAR_ARM.concat(GEAR_JEW, ['belt','quiver']);
 const GEAR_WEAP = ['sword','axe','mace','scepter','staff','bow'];
 const GEAR_ATKW = ['sword','axe','mace','bow'];
+/* TEN TIERS, PoE's way: T1 is the best a line can roll and T10 the worst, and
+   a tier can only roll on an item at least as deep as its level. The ladder is
+   on the MONSTER level (MOB LV on the HUD): the bottom tiers from the start, T5
+   around wave 50, T1 a very long run indeed. A line with fewer tiers uses the
+   TOP of the ladder -- chaos resistance starts at T6, and it starts late. */
+const GEAR_TIER_LVL = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55];   /* T10 ... T1 */
+/* and among the tiers an item may roll, each better one is this much less
+   likely than the one below it -- so a T1 is an event even when it is allowed */
+const GEAR_TIER_DECAY = 0.8;
 const GEAR_AFFIXES = [];
 (function(){
-  const A = (id, kind, stat, cls, tiers, w, need)=>GEAR_AFFIXES.push({ id, kind, stat, cls, w: w || 100, need: need || null,
-    tiers: tiers.map(t=>({ lvl:t[0], min:t[1], max:t[2], name:t[3] })) });
+  /* [id, pre|suf, stat, classes, lowest T10 value, highest T1 value, names, weight, needs a defence, tiers] */
+  const A = (id, kind, stat, cls, lo, hi, names, w, need, n)=>{
+    n = n || 10;
+    const L = GEAR_TIER_LVL.slice(GEAR_TIER_LVL.length - n);
+    const tiers = L.map((lvl, k)=>({ lvl, min:lo + (hi - lo)*k/n, max:lo + (hi - lo)*(k + 1)/n,
+      name:names[Math.min(names.length - 1, Math.floor(k*names.length/n))] }));
+    GEAR_AFFIXES.push({ id, kind, stat, cls, w: w || 100, need: need || null, tiers });
+  };
   /* ---------------- PREFIXES ---------------- */
-  A('hearts', 'pre', 'hearts', GEAR_ARM.concat(['belt','amulet','ring']),
-    [[1,1,1,'Hale'],[12,1,2,'Healthy'],[24,2,3,'Sanguine'],[38,3,4,'Stalwart'],[52,4,5,'Stout']], 140);
-  A('esflat', 'pre', 'es', ['ring','amulet','belt'],
-    [[1,1,2,'Shining'],[14,2,4,'Glimmering'],[28,4,6,'Glittering'],[44,6,9,'Glowing']]);
-  A('locarm', 'pre', 'locArmour', GEAR_ARM,
-    [[1,4,8,'Lacquered'],[12,9,16,'Studded'],[24,17,26,'Ribbed'],[38,27,38,'Fortified'],[52,39,52,'Plated']], 100, 'armour');
-  A('loceva', 'pre', 'locEva', GEAR_ARM,
-    [[1,20,40,'Agile'],[12,41,80,'Dancer’s'],[24,81,130,'Acrobat’s'],[38,131,190,'Fleet'],[52,191,260,'Blurred']], 100, 'eva');
-  A('loces', 'pre', 'locEs', GEAR_ARM,
-    [[1,1,2,'Protective'],[12,2,3,'Strong-Willed'],[24,3,5,'Resolute'],[38,5,7,'Fearless'],[52,7,10,'Dauntless']], 100, 'es');
-  const INC = [[1,0.15,0.26],[12,0.27,0.42],[24,0.43,0.60],[38,0.61,0.80],[52,0.81,1.00]];
-  const named = (names)=>INC.map((t, i)=>[t[0], t[1], t[2], names[i]]);
-  A('locarminc', 'pre', 'locArmourInc', GEAR_ARM, named(['Reinforced','Layered','Lobstered','Buttressed','Thickened']), 100, 'armour');
-  A('locevainc', 'pre', 'locEvaInc',    GEAR_ARM, named(['Shade’s','Ghost’s','Spectre’s','Wraith’s','Phantasm’s']), 100, 'eva');
-  A('locesinc',  'pre', 'locEsInc',     GEAR_ARM, named(['Shimmering','Seething','Blazing','Scintillating','Incandescent']), 100, 'es');
-  const FLAT = [[1,0.2,0.3],[12,0.3,0.6],[24,0.6,1.0],[38,1.0,1.5],[52,1.5,2.2]];
-  A('flatphys', 'pre', 'flatPhys', ['ring','amulet','gloves','quiver'],
-    FLAT.map((t, i)=>[t[0], t[1], t[2], ['Glinting','Burnished','Polished','Honed','Gleaming'][i]]));
-  A('flatelem', 'pre', 'flatElem', ['ring','amulet','gloves'],
-    FLAT.map((t, i)=>[t[0], t[1], t[2], ['Humming','Buzzing','Snapping','Crackling','Sparking'][i]]));
-  A('locdmg', 'pre', 'locDmg', GEAR_WEAP,
-    [[1,0.2,0.4,'Glinting'],[12,0.4,0.8,'Burnished'],[24,0.8,1.3,'Polished'],[38,1.3,1.9,'Honed'],[52,1.9,2.6,'Gleaming']], 120);
-  A('locdmginc', 'pre', 'locDmgInc', GEAR_WEAP,
-    [[1,0.20,0.34,'Heavy'],[12,0.35,0.54,'Serrated'],[24,0.55,0.74,'Wicked'],[38,0.75,0.99,'Vicious'],[52,1.00,1.29,'Bloodthirsty']], 120);
-  A('incspell', 'pre', 'incSpell', ['staff','amulet','shield'],
-    [[1,0.08,0.14,'Apprentice’s'],[14,0.15,0.24,'Adept’s'],[28,0.25,0.36,'Scholar’s'],[44,0.37,0.50,'Professor’s']]);
-  A('incelem', 'pre', 'incElem', ['amulet','ring','staff'],
-    [[1,0.06,0.10,'Catalysing'],[14,0.11,0.18,'Infusing'],[28,0.19,0.26,'Empowering'],[44,0.27,0.36,'Unleashed']]);
-  A('miniondmg', 'pre', 'minionDmg', ['scepter','helmet','amulet'],
-    [[1,0.08,0.14,'Baron’s'],[14,0.15,0.24,'Viscount’s'],[28,0.25,0.36,'Marquess’s'],[44,0.37,0.50,'Duke’s']]);
-  A('movespd', 'pre', 'speed', ['boots'],
-    [[1,0.08,0.10,'Runner’s'],[12,0.11,0.15,'Sprinter’s'],[24,0.16,0.20,'Stallion’s'],[38,0.21,0.25,'Gazelle’s'],[52,0.26,0.30,'Cheetah’s']], 160);
+  A('hearts', 'pre', 'hearts', GEAR_ARM.concat(['belt','amulet','ring']), 1, 6, ['Hale','Healthy','Sanguine','Stalwart','Stout'], 140);
+  A('esflat', 'pre', 'es', ['ring','amulet','belt'], 1, 12, ['Shining','Glimmering','Glittering','Glowing','Radiating']);
+  A('locarm', 'pre', 'locArmour', GEAR_ARM, 4, 60, ['Lacquered','Studded','Ribbed','Fortified','Plated'], 100, 'armour');
+  A('loceva', 'pre', 'locEva', GEAR_ARM, 20, 300, ['Agile','Dancer’s','Acrobat’s','Fleet','Blurred'], 100, 'eva');
+  A('loces',  'pre', 'locEs', GEAR_ARM, 1, 12, ['Protective','Strong-Willed','Resolute','Fearless','Dauntless'], 100, 'es');
+  A('locarminc', 'pre', 'locArmourInc', GEAR_ARM, 0.15, 1.10, ['Reinforced','Layered','Lobstered','Buttressed','Thickened'], 100, 'armour');
+  A('locevainc', 'pre', 'locEvaInc', GEAR_ARM, 0.15, 1.10, ['Shade’s','Ghost’s','Spectre’s','Wraith’s','Phantasm’s'], 100, 'eva');
+  A('locesinc',  'pre', 'locEsInc', GEAR_ARM, 0.15, 1.10, ['Shimmering','Seething','Blazing','Scintillating','Incandescent'], 100, 'es');
+  A('flatphys', 'pre', 'flatPhys', ['ring','amulet','gloves','quiver'], 0.2, 2.6, ['Glinting','Burnished','Polished','Honed','Gleaming']);
+  A('flatelem', 'pre', 'flatElem', ['ring','amulet','gloves'], 0.2, 2.6, ['Humming','Buzzing','Snapping','Crackling','Sparking']);
+  A('locdmg', 'pre', 'locDmg', GEAR_WEAP, 0.2, 3.0, ['Glinting','Burnished','Polished','Honed','Gleaming'], 120);
+  A('locdmginc', 'pre', 'locDmgInc', GEAR_WEAP, 0.20, 1.40, ['Heavy','Serrated','Wicked','Vicious','Bloodthirsty'], 120);
+  A('incspell', 'pre', 'incSpell', ['staff','amulet','shield'], 0.08, 0.60, ['Apprentice’s','Adept’s','Scholar’s','Professor’s','Occultist’s']);
+  A('incelem', 'pre', 'incElem', ['amulet','ring','staff'], 0.06, 0.42, ['Catalysing','Infusing','Empowering','Unleashed','Overpowering']);
+  A('miniondmg', 'pre', 'minionDmg', ['scepter','helmet','amulet'], 0.08, 0.60, ['Baron’s','Viscount’s','Marquess’s','Duke’s','Prince’s']);
+  A('movespd', 'pre', 'speed', ['boots'], 0.08, 0.32, ['Runner’s','Sprinter’s','Stallion’s','Gazelle’s','Cheetah’s'], 160);
   /* ---------------- SUFFIXES ---------------- */
-  const RES = [[1,0.06,0.11],[12,0.12,0.17],[24,0.18,0.23],[38,0.24,0.29],[52,0.30,0.35]];
-  const res = names=>RES.map((t, i)=>[t[0], t[1], t[2], names[i]]);
-  A('fireres',  'suf', 'fireRes',  GEAR_NONWEAP, res(['of the Whelpling','of the Salamander','of the Drake','of the Kiln','of the Furnace']), 120);
-  A('frostres', 'suf', 'frostRes', GEAR_NONWEAP, res(['of the Inuit','of the Seal','of the Penguin','of the Yeti','of the Walrus']), 120);
-  A('shockres', 'suf', 'shockRes', GEAR_NONWEAP, res(['of the Cloud','of the Squall','of the Storm','of the Thunderhead','of the Tempest']), 120);
-  A('chaosres', 'suf', 'chaosRes', GEAR_NONWEAP,
-    [[16,0.05,0.09,'of the Lost'],[30,0.10,0.14,'of Banishment'],[46,0.15,0.20,'of Eviction']], 40);
-  A('allres', 'suf', 'allRes', ['ring','amulet','shield'],
-    [[10,0.03,0.05,'of the Crystal'],[24,0.06,0.08,'of the Prism'],[40,0.09,0.12,'of the Kaleidoscope']], 60);
-  const ATTR = [[1,6,10],[12,11,16],[24,17,22],[38,23,28],[52,29,34]];
-  const attr = names=>ATTR.map((t, i)=>[t[0], t[1], t[2], names[i]]);
+  A('fireres',  'suf', 'fireRes',  GEAR_NONWEAP, 0.06, 0.40, ['of the Whelpling','of the Salamander','of the Drake','of the Kiln','of the Furnace'], 120);
+  A('frostres', 'suf', 'frostRes', GEAR_NONWEAP, 0.06, 0.40, ['of the Inuit','of the Seal','of the Penguin','of the Yeti','of the Walrus'], 120);
+  A('shockres', 'suf', 'shockRes', GEAR_NONWEAP, 0.06, 0.40, ['of the Cloud','of the Squall','of the Storm','of the Thunderhead','of the Tempest'], 120);
+  A('chaosres', 'suf', 'chaosRes', GEAR_NONWEAP, 0.05, 0.24, ['of the Lost','of Banishment','of Eviction','of Expulsion'], 40, null, 6);
+  A('allres', 'suf', 'allRes', ['ring','amulet','shield'], 0.03, 0.14, ['of the Crystal','of the Prism','of the Kaleidoscope','of Variegation'], 60, null, 7);
   const ALL = GEAR_NONWEAP.concat(GEAR_WEAP);
-  A('str', 'suf', 'str', ALL, attr(['of the Brute','of the Wrestler','of the Bear','of the Lion','of the Gorilla']));
-  A('dex', 'suf', 'dex', ALL, attr(['of the Mongoose','of the Lynx','of the Fox','of the Falcon','of the Panther']));
-  A('int', 'suf', 'int', ALL, attr(['of the Pupil','of the Student','of the Prodigy','of the Augur','of the Philosopher']));
-  A('allattr', 'suf', 'allAttr', ['amulet'], [[10,3,5,'of the Clouds'],[24,6,8,'of the Sky'],[40,9,12,'of the Meteor']], 60);
-  A('atkspd', 'suf', 'incAtk', ['gloves','quiver','ring'].concat(GEAR_ATKW),
-    [[1,0.05,0.07,'of Skill'],[12,0.08,0.10,'of Ease'],[24,0.11,0.13,'of Mastery'],[38,0.14,0.16,'of Renown'],[52,0.17,0.20,'of Grandmastery']]);
-  A('castspd', 'suf', 'incCast', ['amulet','ring','staff','scepter','shield'],
-    [[1,0.05,0.08,'of Talent'],[14,0.09,0.12,'of Nimbleness'],[28,0.13,0.16,'of Expertise'],[44,0.17,0.21,'of Legerdemain']]);
-  A('crit', 'suf', 'incCrit', GEAR_WEAP.concat(['amulet','quiver','ring']),
-    [[1,0.10,0.14,'of Needling'],[12,0.15,0.19,'of Stinging'],[24,0.20,0.24,'of Piercing'],[38,0.25,0.29,'of Puncturing'],[52,0.30,0.38,'of Penetrating']]);
-  A('critmult', 'suf', 'critMult', GEAR_WEAP.concat(['amulet','quiver']),
-    [[8,0.06,0.09,'of Ire'],[20,0.10,0.14,'of Anger'],[34,0.15,0.19,'of Rage'],[50,0.20,0.25,'of Fury']]);
-  A('regen', 'suf', 'regen', ['helmet','body','amulet','ring','belt','shield'],
-    [[1,0.02,0.03,'of the Newt'],[14,0.03,0.05,'of the Lizard'],[28,0.05,0.07,'of the Flatworm'],[44,0.07,0.10,'of the Starfish']]);
-  A('acc', 'suf', 'acc', ['helmet','gloves','quiver','ring','amulet'].concat(GEAR_ATKW),
-    [[1,20,40,'of Calm'],[12,41,80,'of Steadiness'],[24,81,130,'of Accuracy'],[38,131,190,'of Precision'],[52,191,260,'of the Ranger']]);
-  A('studs', 'suf', 'studs', ['helmet','gloves','boots','ring','amulet'],
-    [[1,0.06,0.10,'of Plunder'],[14,0.11,0.16,'of Raiding'],[28,0.17,0.22,'of Archaeology'],[44,0.23,0.28,'of Excavation']]);
-  A('suppress', 'suf', 'suppress', ['body','boots','gloves','helmet','shield'],
-    [[10,0.03,0.05,'of Rebuttal'],[24,0.06,0.08,'of Snuffing'],[40,0.09,0.12,'of Revoking']], 70);
-  A('leech', 'suf', 'leech', ['sword','axe','mace','gloves','ring'],
-    [[8,0.01,0.02,'of the Remora'],[24,0.02,0.03,'of the Lamprey'],[40,0.03,0.04,'of the Vampire']], 60);
-  A('minionlife', 'suf', 'minionLife', ['scepter','helmet','amulet','body'],
-    [[1,0.08,0.12,'of Loyalty'],[16,0.13,0.20,'of Devotion'],[32,0.21,0.30,'of Fealty']]);
-  A('magnet', 'suf', 'magnet', ['boots','belt'],
-    [[1,0.10,0.16,'of the Magpie'],[18,0.17,0.26,'of the Jackdaw'],[36,0.27,0.38,'of the Raven']], 70);
+  A('str', 'suf', 'str', ALL, 6, 40, ['of the Brute','of the Wrestler','of the Bear','of the Lion','of the Gorilla']);
+  A('dex', 'suf', 'dex', ALL, 6, 40, ['of the Mongoose','of the Lynx','of the Fox','of the Falcon','of the Panther']);
+  A('int', 'suf', 'int', ALL, 6, 40, ['of the Pupil','of the Student','of the Prodigy','of the Augur','of the Philosopher']);
+  A('allattr', 'suf', 'allAttr', ['amulet'], 3, 14, ['of the Clouds','of the Sky','of the Meteor','of the Comet'], 60, null, 7);
+  A('atkspd', 'suf', 'incAtk', ['gloves','quiver','ring'].concat(GEAR_ATKW), 0.05, 0.22, ['of Skill','of Ease','of Mastery','of Renown','of Grandmastery']);
+  A('castspd', 'suf', 'incCast', ['amulet','ring','staff','scepter','shield'], 0.05, 0.24, ['of Talent','of Nimbleness','of Expertise','of Legerdemain','of Prestidigitation']);
+  A('crit', 'suf', 'incCrit', GEAR_WEAP.concat(['amulet','quiver','ring']), 0.10, 0.42, ['of Needling','of Stinging','of Piercing','of Puncturing','of Penetrating']);
+  A('critmult', 'suf', 'critMult', GEAR_WEAP.concat(['amulet','quiver']), 0.06, 0.30, ['of Ire','of Anger','of Rage','of Fury'], 100, null, 8);
+  A('regen', 'suf', 'regen', ['helmet','body','amulet','ring','belt','shield'], 0.02, 0.12, ['of the Newt','of the Lizard','of the Flatworm','of the Starfish','of the Hydra']);
+  A('acc', 'suf', 'acc', ['helmet','gloves','quiver','ring','amulet'].concat(GEAR_ATKW), 20, 300, ['of Calm','of Steadiness','of Accuracy','of Precision','of the Ranger']);
+  A('studs', 'suf', 'studs', ['helmet','gloves','boots','ring','amulet'], 0.06, 0.32, ['of Plunder','of Raiding','of Archaeology','of Excavation','of Windfall']);
+  A('suppress', 'suf', 'suppress', ['body','boots','gloves','helmet','shield'], 0.03, 0.14, ['of Rebuttal','of Snuffing','of Revoking','of Abjuration'], 70, null, 7);
+  A('leech', 'suf', 'leech', ['sword','axe','mace','gloves','ring'], 0.01, 0.05, ['of the Remora','of the Lamprey','of the Vampire'], 60, null, 6);
+  A('minionlife', 'suf', 'minionLife', ['scepter','helmet','amulet','body'], 0.08, 0.36, ['of Loyalty','of Devotion','of Fealty','of Allegiance']);
+  A('magnet', 'suf', 'magnet', ['boots','belt'], 0.10, 0.44, ['of the Magpie','of the Jackdaw','of the Raven','of the Crow'], 70, null, 8);
 })();
+/* keep the tier a line was rolled at while its value still fits it */
+function gearTierFix(a, ti, v){
+  const t = a.tiers[ti];
+  if(t && v >= gearRound(a.stat, t.min) - 0.011 && v <= gearRound(a.stat, t.max) + 0.011) return ti;
+  return gearTierOf(a, v);
+}
+/* what a tier is CALLED: T1 is the best of them */
+function gearTierNo(a, ti){ return a.tiers.length - ti; }
+/* the tier a stored value belongs in -- the best one whose floor it reaches.
+   A save written against another ladder is read through this, so an old item
+   keeps its number and gets an honest tier. */
+function gearTierOf(a, v){
+  let best = 0;
+  a.tiers.forEach((t, i)=>{ if(v >= Math.min(t.min, gearRound(a.stat, t.min)) - 1e-9) best = i; });
+  return best;
+}
 const GEAR_AFFIX_BY_ID = {};
 for(const a of GEAR_AFFIXES) GEAR_AFFIX_BY_ID[a.id] = a;
 /* WHOLE NUMBERS where the number is one: armour, evasion, shield, hearts,
@@ -6398,25 +6412,39 @@ const GEAR_RAR = {
   rare:  { name:'RARE',   col:'#ffff77', bg:'rgba(255,230,80,.16)',  min:3, max:6 }
 };
 const GEAR_MAX_PRE = { normal:0, magic:1, rare:3 }, GEAR_MAX_SUF = GEAR_MAX_PRE;
-/* HOW OFTEN, AND HOW GOOD. An ordinary body drops something about once in
-   eighty; an elite rolls it eight times over (DROP_ELITE) and leans it rare.
-   A boss always leaves two, the second one rare. */
-const GEAR_DROP = 0.0125;
-const GEAR_RARE_W = [0.10, 0.28, 0.55];    /* chance of a rare: ordinary, elite, boss */
-const GEAR_MAGIC_W = [0.34, 0.50, 0.45];   /* ...and of a magic one */
+/* ONLY BOSSES DROP GEAR. Every boss leaves one piece; a SUPER boss leaves two,
+   the second at least magic. And gear is scarce by rarity too: most of it is
+   normal or magic, and a rare is one drop in five. */
+const GEAR_BOSS_EXTRA = 0;           /* chance an ordinary boss leaves a second piece */
+const GEAR_RARE_W  = [0.20, 0.35];   /* chance of a rare: a boss, a super boss's second */
+const GEAR_MAGIC_W = [0.50, 0.65];   /* ...and of a magic one; the rest is normal */
 function gearRollRarity(tier){
-  const t = clamp(tier|0, 0, 2), r = Math.random();
+  const t = clamp(tier|0, 0, 1), r = Math.random();
   if(r < GEAR_RARE_W[t]) return 'rare';
   if(r < GEAR_RARE_W[t] + GEAR_MAGIC_W[t]) return 'magic';
-  return t >= 2 ? 'magic' : 'normal';
+  return 'normal';
+}
+/* THE ITEM LEVEL IS THE MONSTER LEVEL -- the MOB LV beside the wave number --
+   and never below one, so the opening waves drop level-one gear. */
+function gearItemLevel(){ return Math.max(1, mobRank()); }
+/* WHAT CAN DROP FOR THIS HERO. A weapon only of the kind you carry -- a
+   sceptre hero finds sceptres, never bows -- and an off hand only if the hand is
+   free for it: a shield beside a one-handed weapon, a quiver beside a bow, and
+   nothing at all for a staff. */
+function gearCanDrop(cls){
+  const C = GEAR_CLS[cls], wid = (weapon && weapon.id) || 'sword';
+  if(C.weap) return C.weap === wid;
+  if(cls === 'quiver') return wid === 'bow';
+  if(cls === 'shield') return GEAR_ONE_HAND.indexOf(wid) >= 0;
+  return true;
 }
 /* A NEWER BASE IS LIKELIER, not certain: every base the item level allows can
-   drop, weighted toward the deeper ones so a wave-40 helmet is usually a
-   wave-40 helmet. */
+   drop, weighted toward the deeper ones so a deep helmet is usually a deep
+   helmet. */
 function gearRollBase(ilvl, cls){
-  const ok = GEAR_BASES.filter(b=>b.lvl <= ilvl && (!cls || b.cls === cls));
+  const ok = GEAR_BASES.filter(b=>b.lvl <= ilvl && (cls ? b.cls === cls : gearCanDrop(b.cls)));
   if(!ok.length) return null;
-  let tot = 0; const ws = ok.map(b=>{ const w = 1 + b.lvl/12; tot += w; return w; });
+  let tot = 0; const ws = ok.map(b=>{ const w = 1 + b.lvl/7; tot += w; return w; });
   let r = Math.random()*tot;
   for(let i=0;i<ok.length;i++){ r -= ws[i]; if(r <= 0) return ok[i]; }
   return ok[ok.length-1];
@@ -6434,10 +6462,12 @@ function gearRollAffix(it, kind){
   let tot = 0; for(const a of pool) tot += a.w;
   let r = Math.random()*tot, a = pool[pool.length-1];
   for(const q of pool){ r -= q.w; if(r <= 0){ a = q; break; } }
-  /* every tier the item is deep enough for is equally likely -- so the top one
-     is always the rarest roll it can make */
+  /* every tier the item is deep enough for can roll, each better one a fifth
+     less likely than the last -- T1 is an event even where it is allowed */
   const tiers = []; a.tiers.forEach((t, i)=>{ if(t.lvl <= it.il) tiers.push(i); });
-  const ti = tiers[Math.min(tiers.length-1, Math.floor(Math.random()*tiers.length))];
+  let tw = 0; const ws = tiers.map((ti, k)=>{ const w = Math.pow(GEAR_TIER_DECAY, k); tw += w; return w; });
+  let rr = Math.random()*tw, ti = tiers[tiers.length-1];
+  for(let k=0;k<tiers.length;k++){ rr -= ws[k]; if(rr <= 0){ ti = tiers[k]; break; } }
   const T = a.tiers[ti];
   it.m.push([a.id, ti, gearRollIn(a.stat, T.min, T.max)]);
   return true;
@@ -6546,14 +6576,14 @@ function gearWrite(p, stat, v){ const S = gearWriter(stat); if(S && S.w) try { S
    moves -- a pickup, an equip, a drop in the bin -- so there is no "save on
    exit" to miss, and dying is just another moment. */
 let GEAR = null;
-function gearBlank(){ const eq = {}; for(const s of GEAR_SLOTS) eq[s] = null; return { v:1, eq, inv:[], uid:1 }; }
+function gearBlank(){ const eq = {}; for(const s of GEAR_SLOTS) eq[s] = null; return { v:2, eq, inv:[], stash:[], uid:1 }; }
 function gearValid(it){
   if(!it || typeof it !== 'object' || !GEAR_BASE_BY_ID[it.b]) return null;
   const B = GEAR_BASE_BY_ID[it.b];
   const o = { u:it.u|0 || gearUid++, b:it.b, r:GEAR_RAR[it.r] ? it.r : 'normal', il:Math.max(1, it.il|0),
     imp:Array.isArray(it.imp) ? it.imp.filter(m=>Array.isArray(m) && gearWriter(m[0]) && isFinite(m[1])).map(m=>[m[0], +m[1]]) : [],
-    m:Array.isArray(it.m) ? it.m.filter(m=>Array.isArray(m) && GEAR_AFFIX_BY_ID[m[0]] && GEAR_AFFIX_BY_ID[m[0]].tiers[m[1]] && isFinite(m[2]))
-      .map(m=>[m[0], m[1]|0, +m[2]]) : [] };
+    m:Array.isArray(it.m) ? it.m.filter(m=>Array.isArray(m) && GEAR_AFFIX_BY_ID[m[0]] && isFinite(m[2]))
+      .map(m=>[m[0], gearTierFix(GEAR_AFFIX_BY_ID[m[0]], m[1]|0, +m[2]), +m[2]]) : [] };
   if(o.r === 'rare') o.n = typeof it.n === 'string' ? it.n.slice(0, 40) : gearRareName(B.cls);
   return o;
 }
@@ -6565,11 +6595,12 @@ function gearLoad(){
     if(o && typeof o === 'object'){
       let maxU = 0;
       for(const s of GEAR_SLOTS){ const it = gearValid(o.eq && o.eq[s]); if(it && gearFitsSlot(it, s)){ G.eq[s] = it; maxU = Math.max(maxU, it.u); } }
-      for(const e of Array.isArray(o.inv) ? o.inv : []){
+      for(const k of ['inv','stash']) for(const e of Array.isArray(o[k]) ? o[k] : []){
         const it = gearValid(e && e.it); if(!it) continue;
+        const list = G[k], dim = k === 'stash' ? GEAR_DIM.stash : GEAR_DIM.inv;
         const x = e.x|0, y = e.y|0;
-        if(gearRoomAt(G.inv, it, x, y)){ G.inv.push({ it, x, y }); maxU = Math.max(maxU, it.u); }
-        else { const at = gearFreeSpot(G.inv, it); if(at){ G.inv.push({ it, x:at.x, y:at.y }); maxU = Math.max(maxU, it.u); } }
+        const at = gearRoomAt(list, it, x, y, null, dim) ? { x, y } : gearFreeSpot(list, it, null, dim);
+        if(at){ list.push({ it, x:at.x, y:at.y }); maxU = Math.max(maxU, it.u); }
       }
       gearUid = Math.max(gearUid, maxU + 1, o.uid|0);
     }
@@ -6584,9 +6615,12 @@ function gearSave(){
 }
 /* ---- THE BAG ---- */
 function gearSize(it){ const B = GEAR_BASE_BY_ID[it.b], C = B && GEAR_CLS[B.cls]; return C ? { w:C.w, h:C.h } : { w:1, h:1 }; }
-function gearRoomAt(inv, it, x, y, skip){
-  const s = gearSize(it);
-  if(x < 0 || y < 0 || x + s.w > GEAR_COLS || y + s.h > GEAR_ROWS) return false;
+const GEAR_DIM = { inv:{ cols:GEAR_COLS, rows:GEAR_ROWS }, stash:{ cols:GEAR_STASH_COLS, rows:GEAR_STASH_ROWS } };
+/* which grid a list is: the stash's, or the bag's */
+function gearDimOf(list){ return (GEAR && list === GEAR.stash) ? GEAR_DIM.stash : GEAR_DIM.inv; }
+function gearRoomAt(inv, it, x, y, skip, dim){
+  const s = gearSize(it), D = dim || gearDimOf(inv);
+  if(x < 0 || y < 0 || x + s.w > D.cols || y + s.h > D.rows) return false;
   for(const e of inv){
     if(e === skip || e.it === it) continue;
     const t = gearSize(e.it);
@@ -6595,8 +6629,9 @@ function gearRoomAt(inv, it, x, y, skip){
   return true;
 }
 /* PoE fills a bag column by column, top to bottom, left to right */
-function gearFreeSpot(inv, it, skip){
-  for(let x=0;x<GEAR_COLS;x++) for(let y=0;y<GEAR_ROWS;y++) if(gearRoomAt(inv, it, x, y, skip)) return { x, y };
+function gearFreeSpot(inv, it, skip, dim){
+  const D = dim || gearDimOf(inv);
+  for(let x=0;x<D.cols;x++) for(let y=0;y<D.rows;y++) if(gearRoomAt(inv, it, x, y, skip, D)) return { x, y };
   return null;
 }
 function gearInvAdd(it){
@@ -6723,17 +6758,18 @@ function updateGearDrops(dt){
   }
   gearDrops = gearDrops.filter(d=>!d.got);
 }
-/* what a body leaves. `tier` 0 is anybody, 1 an elite, 2 a boss */
-function gearSpoils(e, tier, chanceMul){
-  if(Math.random() >= GEAR_DROP * (chanceMul || 1)) return null;
-  const it = gearRoll(mobLevel(), tier);
-  return it ? gearDropAt(it, e.x, e.y) : null;
-}
+/* what a boss leaves: one piece, and a super boss a second, at least magic */
 function gearBossSpoils(e){
-  const lv = mobLevel();
-  gearDropAt(gearRoll(lv, 2), e.x - 30, e.y + 20);
-  const B = gearRollBase(lv);
-  if(B) gearDropAt(gearMake(B.id, 'rare', lv), e.x + 30, e.y + 20);
+  const lv = gearItemLevel(), out = [];
+  const drop = (tier, dx, floor)=>{
+    const B = gearRollBase(lv); if(!B) return;
+    let r = gearRollRarity(tier); if(floor && r === 'normal') r = 'magic';
+    out.push(gearDropAt(gearMake(B.id, r, lv), e.x + dx, e.y + 20));
+  };
+  drop(0, -30);
+  if(e.super) drop(1, 30, true);
+  else if(Math.random() < GEAR_BOSS_EXTRA) drop(0, 30);
+  return out;
 }
 /* Levelling used to outrun the roster: by wave 20 the hero was several levels
    past what the wave was built for, because a kill paid its base value times a
@@ -16151,14 +16187,14 @@ function gearTipHtml(it, head, slot){
   h += `<div class="gth" style="color:${R.col}">${nm}${it.r === 'rare' ? '<br>'+B.name : ''}</div><div class="gtb">`;
   h += `<div class="gtcls">${C.name}${C.weap ? ' · '+(C.weap === 'staff' || C.weap === 'bow' ? 'two hands' : 'one hand') : ''}</div>`;
   for(const [k, v, mod] of gearDefLines(it)) h += `<div class="gtdef">${k}: <b class="${mod ? 'gmod' : ''}">${v}</b></div>`;
-  h += `<div class="gtlvl">Item Level: ${it.il}</div>`;
+  h += `<div class="gtlvl">Item Level: <b>${it.il}</b></div>`;
   if(it.imp.length){ h += '<hr>'; for(const [k, v] of it.imp) h += `<div class="gtimp">${gearModText(k, v, B.cls)}</div>`; }
   if(it.m.length){
     h += '<hr>';
     const ord = it.m.slice().sort((a, b)=>(GEAR_AFFIX_BY_ID[a[0]].kind === 'pre' ? 0 : 1) - (GEAR_AFFIX_BY_ID[b[0]].kind === 'pre' ? 0 : 1));
     for(const [id, ti, v] of ord){
-      const a = GEAR_AFFIX_BY_ID[id];
-      h += `<div class="gtmod">${gearModText(a.stat, v, B.cls)}<i>${a.kind === 'pre' ? 'P' : 'S'}${a.tiers.length - ti}</i></div>`;
+      const a = GEAR_AFFIX_BY_ID[id], T = gearTierNo(a, ti);
+      h += `<div class="gtmod">${gearModText(a.stat, v, B.cls)}<i class="${T <= 2 ? 'top' : ''}">${a.kind === 'pre' ? 'P' : 'S'} · T${T}</i></div>`;
     }
   }
   const why = gearActiveWhy(it, slot || gearSlotOf(it));
@@ -16180,6 +16216,15 @@ function gearDeltaHtml(it, old, slot){
   return `<div class="gtip gdelta"><div class="gtcap">IF YOU EQUIP IT</div><div class="gtb">${rows.join('')}</div></div>`;
 }
 /* ---- OPEN AND CLOSE ---- */
+/* ONE CELL SIZE for the whole screen, chosen to fit it: the stash, the paper
+   doll and bag, and the summary side by side, and the tallest of them. */
+function gearFit(){
+  const el = document.getElementById('gearScreen');
+  if(!el) return;
+  const vw = window.innerWidth || 1300, vh = window.innerHeight || 850;
+  const gc = Math.floor(clamp(Math.min((vw - 400) / 24.5, (vh - 190) / 13.6), 22, 40));
+  el.style.setProperty('--gc', gc + 'px');
+}
 function toggleGear(){
   const el = document.getElementById('gearScreen');
   if(!el) return;
@@ -16198,6 +16243,7 @@ function toggleGear(){
   gearFrom = state; gearOn = true; state = 'gear';
   el.classList.remove('hidden');
   cv.style.cursor = 'default';
+  gearFit();
   gearNote('');
   renderGear();
   try { SFX.click(); } catch(e){}
@@ -16234,39 +16280,77 @@ function gearPickSlot(it){
   return !GEAR.eq.ring1 ? 'ring1' : !GEAR.eq.ring2 ? 'ring2' : 'ring1';
 }
 function gearLockNote(){ gearNote('A RUN LINK WEARS THE GEAR IT WAS COPIED WITH', true); }
+/* the list an entry lives in: the bag or the stash */
+function gearListOf(entry){ return GEAR.stash.indexOf(entry) >= 0 ? GEAR.stash : GEAR.inv; }
+function gearList(k){ return k === 'stash' ? GEAR.stash : GEAR.inv; }
+/* PUT IT ON, from the bag or the stash. What it replaces goes where it was if it
+   fits there, else anywhere in the bag, else anywhere in the stash. */
 function gearEquip(entry, slot){
   if(gearLinked()){ gearLockNote(); return false; }
-  const it = entry.it;
+  const it = entry.it, list = gearListOf(entry);
   slot = slot || gearPickSlot(it);
   if(!gearFitsSlot(it, slot)){ gearNote('THAT DOES NOT GO THERE', true); return false; }
-  const old = GEAR.eq[slot], idx = GEAR.inv.indexOf(entry);
+  const old = GEAR.eq[slot], idx = list.indexOf(entry);
   if(idx < 0) return false;
-  GEAR.inv.splice(idx, 1);
+  list.splice(idx, 1);
   if(old){
-    const at = gearRoomAt(GEAR.inv, old, entry.x, entry.y) ? { x:entry.x, y:entry.y } : gearFreeSpot(GEAR.inv, old);
-    if(!at){ GEAR.inv.splice(idx, 0, entry); gearNote('NO ROOM IN THE BAG FOR WHAT YOU ARE WEARING', true); return false; }
-    GEAR.inv.push({ it:old, x:at.x, y:at.y });
+    let to = list, at = gearRoomAt(list, old, entry.x, entry.y) ? { x:entry.x, y:entry.y } : null;
+    if(!at){ to = GEAR.inv; at = gearFreeSpot(GEAR.inv, old); }
+    if(!at){ to = GEAR.stash; at = gearFreeSpot(GEAR.stash, old); }
+    if(!at){ list.splice(idx, 0, entry); gearNote('NO ROOM FOR WHAT YOU ARE WEARING', true); return false; }
+    to.push({ it:old, x:at.x, y:at.y });
   }
   GEAR.eq[slot] = it;
   gearChanged(it);
   return true;
 }
-function gearUnequip(slot, x, y){
+/* TAKE IT OFF into the bag (or the stash), at a spot or the first that fits */
+function gearUnequip(slot, x, y, to){
   if(gearLinked()){ gearLockNote(); return false; }
   const it = GEAR.eq[slot];
   if(!it) return false;
-  const at = (x !== undefined && gearRoomAt(GEAR.inv, it, x, y)) ? { x, y } : (x === undefined ? gearFreeSpot(GEAR.inv, it) : null);
-  if(!at){ gearNote(x === undefined ? 'THE BAG IS FULL' : 'IT DOES NOT FIT THERE', true); return false; }
+  const list = gearList(to);
+  const at = x !== undefined ? (gearRoomAt(list, it, x, y) ? { x, y } : null) : gearFreeSpot(list, it);
+  if(!at){ gearNote(x === undefined ? (to === 'stash' ? 'THE STASH IS FULL' : 'THE BAG IS FULL') : 'IT DOES NOT FIT THERE', true); return false; }
   GEAR.eq[slot] = null;
-  GEAR.inv.push({ it, x:at.x, y:at.y });
+  list.push({ it, x:at.x, y:at.y });
   gearChanged(null);
   return true;
 }
-function gearMove(entry, x, y){
-  if(!gearRoomAt(GEAR.inv, entry.it, x, y, entry)){ gearNote('IT DOES NOT FIT THERE', true); return false; }
+/* MOVE an entry to a spot, in its own grid or the other one */
+function gearMove(entry, x, y, to){
+  const from = gearListOf(entry), dest = to ? gearList(to) : from;
+  if(!gearRoomAt(dest, entry.it, x, y, entry)){ gearNote('IT DOES NOT FIT THERE', true); return false; }
+  if(dest !== from){ from.splice(from.indexOf(entry), 1); dest.push(entry); }
   entry.x = x; entry.y = y;
   gearSave(); renderGear();
   return true;
+}
+/* CTRL-CLICK: across to the other grid, wherever it first fits */
+function gearTransfer(entry){
+  const from = gearListOf(entry), dest = from === GEAR.stash ? GEAR.inv : GEAR.stash;
+  const at = gearFreeSpot(dest, entry.it);
+  if(!at){ gearNote(dest === GEAR.stash ? 'THE STASH IS FULL' : 'THE BAG IS FULL', true); return false; }
+  from.splice(from.indexOf(entry), 1);
+  entry.x = at.x; entry.y = at.y; dest.push(entry);
+  gearSave(); renderGear();
+  return true;
+}
+/* THE BUTTON: everything in the bag into the stash, biggest first so the big
+   pieces find room before the rings fill the gaps. Returns how many moved. */
+function gearStashAll(){
+  const list = GEAR.inv.slice().sort((a, b)=>{ const A = gearSize(a.it), B = gearSize(b.it); return B.w*B.h - A.w*A.h; });
+  let n = 0;
+  for(const e of list){
+    const at = gearFreeSpot(GEAR.stash, e.it);
+    if(!at) continue;
+    GEAR.inv.splice(GEAR.inv.indexOf(e), 1);
+    e.x = at.x; e.y = at.y; GEAR.stash.push(e); n++;
+  }
+  gearSave(); renderGear();
+  gearNote(!n ? (GEAR.inv.length ? 'THE STASH IS FULL' : 'THE BAG IS EMPTY')
+    : GEAR.inv.length ? n+' STASHED — THE STASH IS FULL' : n+' STASHED', !n || GEAR.inv.length > 0);
+  return n;
 }
 function gearDestroy(src){
   if(src.slot){
@@ -16275,8 +16359,8 @@ function gearDestroy(src){
     GEAR.eq[src.slot] = null;
     gearNote('DESTROYED — '+gearName(it));
   } else {
-    const i = GEAR.inv.indexOf(src.entry); if(i < 0) return false;
-    GEAR.inv.splice(i, 1);
+    const list = gearListOf(src.entry), i = list.indexOf(src.entry); if(i < 0) return false;
+    list.splice(i, 1);
     gearNote('DESTROYED — '+gearName(src.entry.it));
   }
   gearChanged(null);
@@ -16287,16 +16371,24 @@ function gearItemEl(it, off){
   const R = GEAR_RAR[it.r];
   return `<div class="gitem ${it.r}${off ? ' off' : ''}" style="background:${R.bg}">${gearIconSvg(it)}</div>`;
 }
-let gearKill = null;      /* the item a first Ctrl-click marked for the bin */
+function gearGridHtml(list, key){
+  let h = '';
+  list.forEach((e, i)=>{
+    const s = gearSize(e.it);
+    h += gearItemEl(e.it, false).replace('class="gitem', `data-${key}="${i}" class="gitem`)
+      .replace('style="', `style="left:calc(var(--gc)*${e.x});top:calc(var(--gc)*${e.y});width:calc(var(--gc)*${s.w});height:calc(var(--gc)*${s.h});`);
+  });
+  return h + `<div class="gshadow hidden" data-shadow="${key}"></div>`;
+}
 function renderGear(){
   if(!GEAR) gearLoad();
-  const doll = document.getElementById('gearDoll'), inv = document.getElementById('gearInv');
+  const doll = document.getElementById('gearDoll'), inv = document.getElementById('gearInv'), st = document.getElementById('gearStash');
   if(!doll || !inv) return;
   const eq = gearEqNow();
   const linked = gearLinked();
   const sub = document.getElementById('gearSub');
-  if(sub) sub.textContent = linked ? 'A RUN LINK WEARS THE GEAR IT WAS COPIED WITH — your own bag is below'
-    : 'Everything here is saved as it changes — dying keeps it all. Gear drops from monsters; walk over it to pick it up.';
+  if(sub) sub.textContent = linked ? 'A RUN LINK WEARS THE GEAR IT WAS COPIED WITH — your own bag and stash are below'
+    : 'Everything here is saved as it changes — dying keeps it all. Bosses drop gear; walk over it to pick it up.';
   let h = '';
   for(const s of GEAR_SLOTS){
     const D = GEAR_DOLL[s], it = eq[s];
@@ -16306,13 +16398,10 @@ function renderGear(){
           : `<div class="glbl">${GEAR_SLOT_NAME[s]}</div>`)+'</div>';
   }
   doll.innerHTML = h;
-  h = '';
-  GEAR.inv.forEach((e, i)=>{
-    const s = gearSize(e.it);
-    h += gearItemEl(e.it, false).replace('class="gitem', `data-inv="${i}" class="gitem${gearKill === e ? ' kill' : ''}`)
-      .replace('style="', `style="left:calc(var(--gc)*${e.x});top:calc(var(--gc)*${e.y});width:calc(var(--gc)*${s.w});height:calc(var(--gc)*${s.h});`);
-  });
-  inv.innerHTML = h + '<div id="gearShadow" class="gshadow hidden"></div>';
+  inv.innerHTML = gearGridHtml(GEAR.inv, 'inv');
+  if(st) st.innerHTML = gearGridHtml(GEAR.stash, 'stash');
+  const sc = document.getElementById('gearStashCount');
+  if(sc) sc.textContent = GEAR.stash.length + ' item' + (GEAR.stash.length === 1 ? '' : 's');
   /* what it all adds up to */
   const sum = document.getElementById('gearSum');
   if(sum){
@@ -16321,8 +16410,8 @@ function renderGear(){
     const ks = Object.keys(tot).sort((a, b)=>gearStatRank(a) - gearStatRank(b));
     sum.innerHTML = '<div class="gshead">YOUR GEAR GIVES</div>' + (ks.length
       ? ks.map(k=>`<div class="gsrow">${gearModText(k, gearRound(k, tot[k]))}</div>`).join('')
-      : '<div class="gsnone">Nothing yet. Monsters drop gear — elites more often, bosses always.</div>')
-      + `<div class="gsfoot">${GEAR.inv.length} item${GEAR.inv.length === 1 ? '' : 's'} in the bag</div>`;
+      : '<div class="gsnone">Nothing yet. Every boss drops a piece of gear — a super boss two.</div>')
+      + `<div class="gsfoot">${GEAR.inv.length} in the bag · ${GEAR.stash.length} in the stash</div>`;
   }
 }
 /* the summary reads like a character sheet: what keeps you alive, then what
@@ -16341,7 +16430,7 @@ function gearTipShow(src, cx, cy){
   if(src.slot){ h = gearTipHtml(eq[src.slot], 'EQUIPPED', src.slot); }
   else {
     const it = src.entry.it, slot = gearPickSlot(it), old = eq[slot];
-    h = gearTipHtml(it, null, slot);
+    h = gearTipHtml(it, src.list === 'stash' ? 'IN THE STASH' : null, slot);
     if(!gearLinked()){
       h += gearDeltaHtml(it, old, slot);
       if(old) h += gearTipHtml(old, 'CURRENTLY EQUIPPED', slot);
@@ -16357,21 +16446,30 @@ function gearTipShow(src, cx, cy){
 }
 /* ---- THE HAND ----
    One pointer handler for the whole screen. A press on an item that moves more
-   than a few pixels is a DRAG; one that does not is a CLICK. */
+   than a few pixels is a DRAG; one that does not is a CLICK:
+     bag item    click wears it           ctrl-click sends it to the stash
+     stash item  click brings it to the bag, and so does ctrl-click
+     worn item   click takes it off       ctrl-click takes it off into the stash
+   and a drag goes anywhere it fits -- either grid, a slot, or the bin. */
 const gearDrag = { src:null, x0:0, y0:0, on:false, gx:0, gy:0 };
 function gearSrcOf(el){
   const it = el && el.closest && el.closest('.gitem');
   if(!it) return null;
   if(it.dataset.slot){ const eq = gearEqNow(); return eq[it.dataset.slot] ? { slot:it.dataset.slot, it:eq[it.dataset.slot], el:it } : null; }
-  if(it.dataset.inv !== undefined){ const e = GEAR.inv[+it.dataset.inv]; return e ? { entry:e, it:e.it, el:it } : null; }
+  if(it.dataset.inv !== undefined){ const e = GEAR.inv[+it.dataset.inv]; return e ? { entry:e, it:e.it, el:it, list:'inv' } : null; }
+  if(it.dataset.stash !== undefined){ const e = GEAR.stash[+it.dataset.stash]; return e ? { entry:e, it:e.it, el:it, list:'stash' } : null; }
   return null;
 }
 function gearCellAt(cx, cy){
-  const inv = document.getElementById('gearInv');
-  const r = inv.getBoundingClientRect();
-  if(cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return null;
-  const c = r.width / GEAR_COLS;
-  return { x:Math.floor((cx - r.left)/c), y:Math.floor((cy - r.top)/c), c };
+  for(const [id, key] of [['gearInv','inv'], ['gearStash','stash']]){
+    const g = document.getElementById(id);
+    if(!g) continue;
+    const r = g.getBoundingClientRect();
+    if(cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) continue;
+    const c = r.width / GEAR_DIM[key].cols;
+    return { x:Math.floor((cx - r.left)/c), y:Math.floor((cy - r.top)/c), c, list:key };
+  }
+  return null;
 }
 function gearDropTarget(cx, cy){
   const ghost = document.getElementById('gearGhost');
@@ -16383,23 +16481,24 @@ function gearDropTarget(cx, cy){
   const sl = el.closest('.gslot');
   if(sl) return { slot:sl.dataset.slot };
   const cell = gearCellAt(cx, cy);
-  if(cell) return { cell:{ x:cell.x - gearDrag.gx, y:cell.y - gearDrag.gy } };
+  if(cell) return { cell:{ x:cell.x - gearDrag.gx, y:cell.y - gearDrag.gy }, list:cell.list };
   return null;
 }
 function gearDragPaint(cx, cy){
   const g = document.getElementById('gearGhost');
   if(g){ g.style.left = (cx - gearDrag.ox) + 'px'; g.style.top = (cy - gearDrag.oy) + 'px'; }
   document.querySelectorAll('.gslot.drop-ok,.gslot.drop-bad').forEach(e=>e.classList.remove('drop-ok','drop-bad'));
-  const shadow = document.getElementById('gearShadow');
-  if(shadow) shadow.classList.add('hidden');
+  document.querySelectorAll('.gshadow').forEach(e=>e.classList.add('hidden'));
   const T = gearDropTarget(cx, cy), src = gearDrag.src;
   if(!T) return;
   if(T.slot){
     const el = document.querySelector(`.gslot[data-slot="${T.slot}"]`);
     if(el) el.classList.add(gearFitsSlot(src.it, T.slot) ? 'drop-ok' : 'drop-bad');
-  } else if(T.cell && shadow){
+  } else if(T.cell){
+    const shadow = document.querySelector(`.gshadow[data-shadow="${T.list}"]`);
+    if(!shadow) return;
     const s = gearSize(src.it);
-    const ok = gearRoomAt(GEAR.inv, src.it, T.cell.x, T.cell.y, src.entry);
+    const ok = gearRoomAt(gearList(T.list), src.it, T.cell.x, T.cell.y, src.entry);
     shadow.className = 'gshadow ' + (ok ? 'ok' : 'bad');
     shadow.style.left = `calc(var(--gc)*${T.cell.x})`; shadow.style.top = `calc(var(--gc)*${T.cell.y})`;
     shadow.style.width = `calc(var(--gc)*${s.w})`; shadow.style.height = `calc(var(--gc)*${s.h})`;
@@ -16442,15 +16541,10 @@ function gearUp(e){
   const g = document.getElementById('gearGhost');
   if(g){ g.classList.add('hidden'); g.innerHTML = ''; }
   if(!was){
-    /* a CLICK: Ctrl twice destroys, anything else wears or takes off */
-    if(gearDrag.ctrl){
-      if(gearKill === (src.entry || src.slot)){ gearKill = null; gearDestroy(src); }
-      else { gearKill = src.entry || src.slot; gearNote('CTRL-CLICK AGAIN TO DESTROY '+gearName(src.it).toUpperCase(), true); renderGear(); }
-      return;
-    }
-    gearKill = null;
-    if(src.slot) gearUnequip(src.slot); else gearEquip(src.entry);
     gearTipHide();
+    if(src.slot) gearUnequip(src.slot, undefined, undefined, gearDrag.ctrl ? 'stash' : 'inv');
+    else if(src.list === 'stash' || gearDrag.ctrl) gearTransfer(src.entry);
+    else gearEquip(src.entry);
     return;
   }
   const T = gearDropTarget(e.clientX, e.clientY);
@@ -16465,8 +16559,8 @@ function gearUp(e){
       gearChanged(null);
     } else gearEquip(src.entry, T.slot) || renderGear();
   } else if(T.cell){
-    if(src.slot) gearUnequip(src.slot, T.cell.x, T.cell.y) || renderGear();
-    else gearMove(src.entry, T.cell.x, T.cell.y) || renderGear();
+    if(src.slot) gearUnequip(src.slot, T.cell.x, T.cell.y, T.list) || renderGear();
+    else gearMove(src.entry, T.cell.x, T.cell.y, T.list) || renderGear();
   }
 }
 function gearWire(){
@@ -16475,18 +16569,21 @@ function gearWire(){
   scr.addEventListener('pointerdown', gearDown);
   window.addEventListener('pointermove', gearMoveEv);
   window.addEventListener('pointerup', gearUp);
+  window.addEventListener('resize', ()=>{ if(gearOn) gearFit(); });
   scr.addEventListener('pointerleave', ()=>{ if(!gearDrag.src) gearTipHide(); });
-  const close = document.getElementById('gearCloseBtn');
-  if(close) close.addEventListener('click', ()=>toggleGear());
-  const sort = document.getElementById('gearSortBtn');
-  if(sort) sort.addEventListener('click', ()=>{ gearSort(); renderGear(); });
+  const on = (id, f)=>{ const b = document.getElementById(id); if(b) b.addEventListener('click', f); };
+  on('gearCloseBtn', ()=>toggleGear());
+  on('gearSortBtn', ()=>{ gearSort('inv'); renderGear(); });
+  on('gearStashSortBtn', ()=>{ gearSort('stash'); renderGear(); });
+  on('gearStashAllBtn', ()=>{ gearStashAll(); });
 }
 /* TIDY: biggest first, packed column by column */
-function gearSort(){
-  const list = GEAR.inv.slice().sort((a, b)=>{ const A = gearSize(a.it), B = gearSize(b.it); return (B.w*B.h - A.w*A.h) || (a.it.b < b.it.b ? -1 : 1); });
+function gearSort(key){
+  const src = gearList(key), dim = GEAR_DIM[key === 'stash' ? 'stash' : 'inv'];
+  const list = src.slice().sort((a, b)=>{ const A = gearSize(a.it), B = gearSize(b.it); return (B.w*B.h - A.w*A.h) || (a.it.b < b.it.b ? -1 : 1); });
   const out = [];
-  for(const e of list){ const at = gearFreeSpot(out, e.it); if(at) out.push({ it:e.it, x:at.x, y:at.y }); else out.push(e); }
-  GEAR.inv = out;
+  for(const e of list){ const at = gearFreeSpot(out, e.it, null, dim); if(at) out.push({ it:e.it, x:at.x, y:at.y }); else out.push(e); }
+  if(key === 'stash') GEAR.stash = out; else GEAR.inv = out;
   gearSave();
 }
 /* ---- ON THE FLOOR, DRAWN ----

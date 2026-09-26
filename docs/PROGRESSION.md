@@ -3586,3 +3586,49 @@ a click wears a ring (resistance up) and a click takes it off, a drag moves the 
 corner and another drag wears it, a drag into the bin destroys a ring (saved), Esc closes back
 into the run.
 
+## Fifty-fourth pass — bosses only, ten tiers on the monster level, your own weapon, and a stash
+
+> *"make it so that bosses only drop gear, and make gear a little more rare:er ... i want a
+> stashtab to the left also that cointains many slots ... a button for that in the equipment tab so
+> you can simply transfer all items from inventory to stashtab ... T1 bieng the highest, and lowest
+> is T10. The item level is based on which mob level you are on. Also when you play scepter, you
+> shouldnt be rewarded with bows, maces, only the weapon type you carry"*
+
+- **Bosses only.** `gearSpoils` is gone from `mobSpoils`; `gearBossSpoils` drops one piece, and a
+  second (floored at magic) off a super boss (`e.super`). Rarity: 20% rare, 50% magic, 30% normal
+  (`GEAR_RARE_W` / `GEAR_MAGIC_W`; the super boss's second is 35% rare).
+- **Item level is the monster level.** `gearItemLevel()` = `max(1, mobRank())` — the MOB LV on the
+  HUD — rather than wave + difficulty. The bases were written on the wave scale and are scaled onto
+  it by `GEAR_BASE_LVL_K` = 0.6 (a level-48 Astral Plate is now item level 29).
+- **Ten tiers.** An affix is defined by its T10 floor and T1 ceiling and cut into `n` (default 10)
+  equal bands, which take the top `n` rungs of `GEAR_TIER_LVL` = 1, 3, 6, 10, 15, 21, 28, 36, 45,
+  55. Tier names come from each affix's five-to-six PoE names, spread across the bands. The roll
+  among allowed tiers is weighted by `GEAR_TIER_DECAY`^k (0.8), so better tiers are progressively
+  rarer. `gearTierNo` names a tier (T1 best). A saved line keeps its tier while its value still
+  fits it; otherwise `gearTierFix` re-reads the tier from the value, so every item saved under the
+  five-tier ladder loads with an honest tier and its number unchanged.
+- **Your own weapon.** `gearCanDrop(cls)` gates `gearRollBase`: weapons only of `weapon.id`, a
+  shield only beside a one-handed weapon, a quiver only beside a bow, no off hand for a staff.
+- **The stash.** `GEAR.stash`, 12 × 12, saved with the rest (save version 2; a version-1 save
+  simply has no stash yet). The grid functions take the grid's size (`GEAR_DIM`, `gearDimOf`).
+  `gearTransfer` (Ctrl-click, or any click on a stash item), `gearStashAll` (the STASH ALL
+  button, biggest first), `gearEquip` from either grid (what it replaces goes to its spot, the
+  bag, or the stash), `gearUnequip` into either, `gearMove` across grids, TIDY for each. The
+  Ctrl-click-twice destroy is gone — Ctrl-click is PoE's transfer; the bin still destroys. The cell
+  size is fitted to the window (`gearFit`) so all three panels sit side by side.
+
+**Proof.** `gear` restated: an imp and an elite killed on a zero roll drop nothing; a wave-15 boss
+drops one piece at item level `mobRank()` = 3; a wave-20 super boss drops two, the second not
+normal; 2,000 boss rarity rolls are 12–28% rare; wave 2 is item level 1; for each of the six
+weapons 1,500 base rolls at item level 60 find only that weapon, rings always, shields only for the
+four one-handers, quivers only for the bow, and nothing in the off hand for a staff. New: hearts
+has ten tiers and chaos resistance six starting at the T6 rung; 3,000 deep rares see every tier
+T1–T10 with T10 more than three times as common as T1; nothing above item level 4 rolls on an
+item-level-4 item; the tooltip shows T1 and the item level; an old five-tier line (hearts 5 at
+index 4) loads as T2. Through the real screen: Ctrl-click moves a bag item to the stash and a click
+brings it back, Ctrl-click on the worn helmet puts it in the stash, STASH ALL empties the bag
+(saved), a drag from the stash onto the helmet slot wears it, and the stash survives a reload item
+for item. Breaks `mobdrop`, `anyweapon`, `anyoff`, `nosuper`, `flattier`, `nogate`, `ilvlwave`,
+`fivetiers`, `nomigr`, `noctrl`, `nostashall`, `stashlost`, plus the sixteen from the last pass
+still standing: 28 caught.
+

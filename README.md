@@ -733,9 +733,9 @@ Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you 
 
 ## Equipment
 
-**The one thing a death leaves you.** Monsters drop gear; walk over a piece and it goes in your
-bag; the bag and whatever you are wearing are saved the moment anything changes, so the next run
-starts wearing it. <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
+**The one thing a death leaves you.** Bosses drop gear; walk over a piece and it goes in your
+bag; the bag, the stash and whatever you are wearing are saved the moment anything changes, so the
+next run starts wearing it. <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
 **EQUIPMENT** button on the title screen and in the pause menu opens it between runs.
 
 It is Path of Exile's item model, kept small — no uniques, no crafting, no currency:
@@ -753,9 +753,19 @@ It is Path of Exile's item model, kept small — no uniques, no crafting, no cur
 - **Rarity** sets how many **affixes** roll on top: none on a normal item, one or two
   on a **magic** one (a prefix, a suffix, or one of each — *Healthy Iron Hat of the Drake*), three
   to six on a **rare** (at most three of each, and a two-word name — *Doom Crown*).
-- **Tiers.** Every affix has up to five, and a tier can only roll on an item at least as deep as
-  its level. The **item level** is the level of the monster that dropped it, so a wave-40 helmet
-  is better than a wave-4 one. The tooltip shows each line's tier (P1 is the best prefix).
+- **Tiers, T1 to T10.** Most affixes have ten tiers — **T1 the best, T10 the worst** — and a
+  tier can only roll on an item whose **item level** reaches it. The item level is the **monster
+  level** (the MOB LV beside the wave number), never below 1:
+
+  | Tier | T10 | T9 | T8 | T7 | T6 | T5 | T4 | T3 | T2 | T1 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Item level | 1 | 3 | 6 | 10 | 15 | 21 | 28 | 36 | 45 | 55 |
+
+  MOB LV is about 3 at wave 15, 12 at wave 40, 22 at wave 50 and 32 at wave 60 — so a run past
+  wave 50 starts finding T5 lines. Among the tiers an item may roll, each better one is a fifth less
+  likely than the one below it, so a T1 is rare even where it is allowed. A few affixes have fewer
+  tiers and start higher up the ladder (chaos resistance begins at T6, item level 15). The tooltip
+  shows the item level and every line's tier (`P · T3` is a tier-3 prefix; T1 and T2 are gold).
 - **Local lines grow the item, not you** — "40% increased Armour" on a helmet grows that helmet's
   armour: (base + flat) × (1 + increased), PoE's order, and the same for a weapon's added damage.
 - Every other line is a stat the skill tree already writes — the same pool a card or a node
@@ -764,14 +774,22 @@ It is Path of Exile's item model, kept small — no uniques, no crafting, no cur
   screen (put a different one on *there* and it picks that weapon for you); a staff and a bow take
   both hands, so a shield does nothing for them; a quiver only works with a bow. An item that
   does nothing is greyed and says why — nothing is ever taken off behind your back.
-- **Drops.** An ordinary body leaves something about one kill in eighty; an elite rolls it eight
-  times over and leans rare; a boss always leaves two, the second one rare. A breach body is as
-  stingy with gear as it is with chests. A rare throws a beam of light and gets a marker on the
-  screen edge; a plain normal item only shows its name when you are close. A full bag leaves the
-  item on the floor and says **INVENTORY FULL**.
-- **The screen.** Click an item in the bag to wear it (what it replaces goes where it was),
-  click a worn one to take it off, drag either anywhere it fits, drop one in the bin — or
-  Ctrl-click it twice — to destroy it. **TIDY** repacks the bag. Hovering a bag item shows it,
+- **Only bosses drop gear.** Every boss leaves one piece; a super boss (every tenth wave) leaves
+  two, the second at least magic. About half of it is magic, one piece in five is rare, the rest
+  normal.
+- **Only what you can use.** A weapon drops only of the kind you are carrying — a sceptre hero
+  finds sceptres, never bows or maces — and an off hand only if your hand is free for it: a
+  shield beside a one-handed weapon, a quiver beside a bow, nothing at all beside a staff.
+- A rare throws a beam of light and gets a marker on the screen edge; a plain normal item only
+  shows its name when you are close. A full bag leaves the item on the floor and says
+  **INVENTORY FULL**.
+- **The screen.** The **stash** is on the left — a 12 × 12 grid for everything you are keeping
+  but not wearing — then the paper doll and the 12 × 5 bag. Click an item in the bag to wear it
+  (what it replaces goes where it was), click a worn one to take it off. **Ctrl-click** sends an
+  item between the bag and the stash (a click on a stash item brings it to the bag, and a
+  Ctrl-click on a worn one takes it off straight into the stash); **STASH ALL** empties the whole
+  bag into the stash. Drag anything anywhere it fits — either grid, a slot, or the bin, which
+  destroys it. **TIDY** repacks the bag or the stash. Hovering a bag item shows it,
   **what changes if you equip it** (green up, red down), and what you are wearing now. The panel
   on the right adds up everything your gear gives.
 - **Swapping mid-run keeps your hearts' share**, so taking a hearts ring off and on is never a
