@@ -3276,3 +3276,54 @@ shield does not count; the warning is about the life underneath it.
 **Proof.** New `lowlife`: a 1-heart hero at full life has no wash and at 0.1 has it; a 20-heart
 hero has it at 2 and not at 4 — checked on the rule and on the full-screen red fill a rendered
 frame actually paints. Breaks `oldwash`, `oldrule`, `fracbig`: 3 caught.
+
+## Forty-seventh pass — the Abyss
+
+> *"Ah, yes go for Abyss, i like that."* — from the list: a crack that runs across the arena and
+> spawns monsters as you follow it, ending in a small boss and a chest.
+
+**When.** `abyssRoll(n)` on every wave start beside `breachRoll`: from `ABYSS_FROM` = 3, never on a
+boss wave, `ABYSS_CHANCE` = 35%, and the fourth ordinary wave in a row without one always has one
+(`ABYSS_PITY`). It surfaces 4–10s into the fight (`'wait'` → `'idle'`).
+
+**The crack.** `abyssPath()` starts 320–620px from the hero on floor at least 140px from the walls
+and lays up to eight 180–230px segments that wander (±0.55 rad) towards the middle of the map,
+retrying a turn whenever a segment's end or middle would land in a lake, on a boulder or within
+90px of a wall; under 300px in all and there is no abyss that wave. `abyssBuild()` caches the
+cumulative lengths, a jagged edge (a point every 16px knocked up to 6px sideways) and the two
+pits at 34% and 68%. `abyssAt(A, d)` is the point `d` along it and its normal.
+
+**Following.** `'idle'` does nothing until the hero steps onto the eye (`ABYSS_TOUCH`), then
+`'open'`: the front `A.f` advances at `ABYSS_SPD` = 95px/s while the hero is within
+`ABYSS_FOLLOW` = 380px of it, no pit is holding it, and fewer than `ABYSS_ALIVE_MAX` = 45 of its
+own stand. Otherwise `A.idleT` counts; at `ABYSS_ABANDON` = 18s it seals (`'sealed'`) with no pay.
+Every `ABYSS_SPAWN_EVERY` = 110px behind the front `abyssSpawn` stands a pack of 2–4 of one kind
+(`abyssTypes(n)`) either side of the crack, marked `e.abyss` (0.9× life, black and green, climbing
+out rather than assembling).
+
+**Pits.** When the front reaches a pit it stops exactly on it, spills 6–9 (the first magic), each
+tagged `e.abyssPit`; `abyssOnKill` counts them down and the last one clears the pit: studs
+(6 + wave), a 40% chest of common or uncommon, and the crack runs on.
+
+**The Stygian.** At the end, `abyssLord` stands an elite skeleton / brute / revenant (by wave)
+with `ABYSS_LORD_HP` = 6× life, 1.2× size (`'lord'`); its death calls `abyssReward`: a chest at
+the depth — rare 40%, uncommon otherwise, clamped by `ABYSS_CHEST_MAX` = rare — and 20 + 3×wave
+studs (`'done'`, fading over 4s).
+
+**It holds the wave**: `abyssOpenNow()` joins `breachOpenNow()` in the wave-clear condition. An
+untouched abyss is dropped when the wave clears. `drawAbyss()` paints the hairline, the opened gash
+(a green glow, a black core, a pulsing green edge), the pits and the eye, and a green stain under
+its monsters; `drawAbyssHud()` a line and a progress bar under the wave block (moved down under a
+breach's when both are open); an unopened abyss's eye rides the screen's edge like a chest.
+
+**Proof.** New `abyss`: no rolls before wave 3 or on wave 10, a rate between the bounds at wave 7,
+and a forced miss streak broken on the fourth wave; 25 cracks all on floor, 300px+ and some past
+1000px; an untouched crack does not open and is gone when the wave clears; opened on the eye, it
+runs 190px in 2s of following and not a pixel in 2s alone; with nothing queued and nothing
+standing the wave still does not clear; left 19s it seals with no chest and lets go; the first
+pit sits at 34%, holds the front for 2s of following while its pack of 6+ stands, and when they
+die pays studs and a common/uncommon chest and the front runs on; the Stygian is an elite whose
+death leaves one abyss chest, rare, and the abyss goes; a rendered frame and the HUD draw it
+without throwing. Breaks `early`, `bosswave`, `nopity`, `nofollow`, `noseal`, `selfopen`,
+`nopithold`, `nopitpay` (caught once the pit test zeroed the pack's own studs), `nolord`,
+`bigchest`, `nowave`, `outlive`, `nospawn`: 13 caught.

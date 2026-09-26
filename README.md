@@ -2579,6 +2579,31 @@ lords you have met; the character sheet grows a **BREACH** block with each ring'
 is giving you. The breach bar shows its depth and what it is counting towards — the Hand, then
 the Breachlord.
 
+### Abyss
+
+From **wave 3**, on any wave that is not a boss wave, there is a **35%** chance (and never four
+ordinary waves in a row without one) that an **ABYSS** cracks the floor open a few seconds into
+the fight: a jagged hairline across the arena, 1,500–1,700px long, with a **green eye** at its
+head. The eye is pinned to the screen's edge like a chest until you find it.
+
+- **Walk onto the eye and it opens** — and it keeps opening, down its length at 95px a second,
+  **only while you follow it**: stay within 380px of its front. Walk away and it stops; leave it
+  stopped for **18 seconds** and it **seals**, paying nothing.
+- **Monsters climb out of it** behind the front, a pack of two to four every 110px — imps,
+  zombies and skeletons early, stalkers and bats from wave 7, runners and knights from 12, hulks
+  and revenants from 18 — in black with glowing green hands, and a green stain under them.
+- **Two abyssal pits** tear open along it, a third and two thirds of the way down. Each spills a
+  pack of six to nine (one of them magic), and **the crack goes no further until the pit's pack
+  is dead**. A cleared pit pays a spray of studs and, 40% of the time, a common or uncommon chest.
+- **The Stygian.** At the end of the crack a champion climbs out — an elite skeleton, brute or
+  revenant by the wave, with six times the life. Its fall **clears the abyss**: a chest at the
+  depth (rare 40% of the time, uncommon otherwise — like a breach, an abyss chest is **never
+  above rare**) and a shower of studs.
+- **An open abyss holds the wave**, the way an open breach does. An abyss you never touched simply
+  closes when the wave ends.
+
+![An abyss: the opened crack, a pit spilling its pack](docs/abyss.png)
+
 ### A run, as a link
 
 **COPY RUN LINK** sits in the pause menu and on the death screen. It copies an address that holds
