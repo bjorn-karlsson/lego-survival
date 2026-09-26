@@ -32,7 +32,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 **Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
-**Between runs** — [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
+**Between runs** — [Equipment](#equipment) · [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
 
 ---
 
@@ -730,6 +730,54 @@ orange, a wave green).
   started on the field never rerolls anything.
 
 Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you earn it.
+
+## Equipment
+
+**The one thing a death leaves you.** Monsters drop gear; walk over a piece and it goes in your
+bag; the bag and whatever you are wearing are saved the moment anything changes, so the next run
+starts wearing it. <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
+**EQUIPMENT** button on the title screen and in the pause menu opens it between runs.
+
+It is Path of Exile's item model, kept small — no uniques, no crafting, no currency:
+
+| Slot | What goes there |
+|---|---|
+| **Weapon** | Sword · Axe · Mace · Sceptre · Staff · Bow — five bases each, the damage they add climbing with the level |
+| **Off hand** | Shield (armour, evasion or energy-shield bases) — or a Quiver, for a bow |
+| **Helmet · Body armour · Gloves · Boots** | armour, evasion or energy-shield bases, four tiers each |
+| **Amulet · two Rings · Belt** | each base carries its own implicit — Ruby Ring fire resistance, Gold Amulet studs, Leather Belt a heart |
+
+- **A base** sets the slot, the footprint in the bag (a ring is one cell, a body armour two by
+  three, a staff two by four), the defence it carries or the damage a weapon adds, and its
+  **implicit** — the one line every item of that base has.
+- **Rarity** sets how many **affixes** roll on top: none on a normal item, one or two
+  on a **magic** one (a prefix, a suffix, or one of each — *Healthy Iron Hat of the Drake*), three
+  to six on a **rare** (at most three of each, and a two-word name — *Doom Crown*).
+- **Tiers.** Every affix has up to five, and a tier can only roll on an item at least as deep as
+  its level. The **item level** is the level of the monster that dropped it, so a wave-40 helmet
+  is better than a wave-4 one. The tooltip shows each line's tier (P1 is the best prefix).
+- **Local lines grow the item, not you** — "40% increased Armour" on a helmet grows that helmet's
+  armour: (base + flat) × (1 + increased), PoE's order, and the same for a weapon's added damage.
+- Every other line is a stat the skill tree already writes — the same pool a card or a node
+  feeds, so every cap in the game binds it.
+- **Only in a hand that can use it.** A weapon works for the weapon you picked on the title
+  screen (put a different one on *there* and it picks that weapon for you); a staff and a bow take
+  both hands, so a shield does nothing for them; a quiver only works with a bow. An item that
+  does nothing is greyed and says why — nothing is ever taken off behind your back.
+- **Drops.** An ordinary body leaves something about one kill in eighty; an elite rolls it eight
+  times over and leans rare; a boss always leaves two, the second one rare. A breach body is as
+  stingy with gear as it is with chests. A rare throws a beam of light and gets a marker on the
+  screen edge; a plain normal item only shows its name when you are close. A full bag leaves the
+  item on the floor and says **INVENTORY FULL**.
+- **The screen.** Click an item in the bag to wear it (what it replaces goes where it was),
+  click a worn one to take it off, drag either anywhere it fits, drop one in the bin — or
+  Ctrl-click it twice — to destroy it. **TIDY** repacks the bag. Hovering a bag item shows it,
+  **what changes if you equip it** (green up, red down), and what you are wearing now. The panel
+  on the right adds up everything your gear gives.
+- **Swapping mid-run keeps your hearts' share**, so taking a hearts ring off and on is never a
+  free heal. At the start of a run the hearts gear adds arrive full.
+- **A run link carries the gear it was copied with**, the way it carries the tree — the linked
+  run wears it, and your own bag is left alone.
 
 ## Rarity
 
@@ -3198,6 +3246,7 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
+| <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |

@@ -565,6 +565,69 @@
   .nospell{background:rgba(9,13,17,.44);border:1px dashed rgba(255,255,255,.25);border-radius:15px;
     padding:16px;font-size:13px;color:#ffd9d9;font-weight:600}
   .sheetfoot{flex:none;text-align:center;font-size:12.5px;color:#ffd0d0;padding:9px 0 11px;font-weight:600}
+  /* ---- equipment: PoE's inventory panel ---- */
+  #gearScreen{--gc:40px;z-index:30;overflow:auto;justify-content:flex-start;padding:2vh 0}
+  .gearwrap{background:linear-gradient(#232a31,#181d22);border:3px solid #3a444d;border-radius:16px;
+    padding:12px 18px 4px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;margin:auto 0}
+  .gearwrap h2{font-family:'Titan One',cursive;color:#ffd76e;letter-spacing:3px;font-size:26px;text-align:center}
+  .gearwrap .sheetsub{text-align:center;font-size:12.5px;color:#c9d2ce;max-width:640px;margin:2px 0 6px}
+  .gearmain{display:flex;gap:18px;align-items:flex-start}
+  .geardoll{position:relative;width:calc(var(--gc)*10);height:calc(var(--gc)*7.6);margin:6px auto 10px}
+  .gslot{position:absolute;border:2px solid rgba(255,255,255,.14);background:rgba(0,0,0,.38);border-radius:6px}
+  .gslot .glbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    font-family:'Titan One';font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.22);padding:2px}
+  .gslot > .gitem{left:0;top:0;width:100%;height:100%}
+  .gslot.drop-ok{border-color:#7fdc7e;background:rgba(127,220,126,.16)}
+  .gslot.drop-bad{border-color:#ff6a5a;background:rgba(255,106,90,.12)}
+  .gearinv{position:relative;width:calc(var(--gc)*12);height:calc(var(--gc)*5);border:2px solid rgba(255,255,255,.14);
+    box-sizing:content-box;border-radius:4px;background-color:rgba(0,0,0,.38);
+    background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
+    background-size:var(--gc) var(--gc)}
+  .gitem{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:grab;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .gitem.magic{box-shadow:inset 0 0 0 1px rgba(136,136,255,.45)}
+  .gitem.rare{box-shadow:inset 0 0 0 1px rgba(255,255,119,.45)}
+  .gitem svg{width:86%;height:86%;pointer-events:none}
+  .gitem.off{filter:grayscale(1) brightness(.55)}
+  .gitem.off::after{content:'';position:absolute;inset:0;border-radius:4px;background:rgba(255,40,40,.20)}
+  .gitem.kill{outline:2px solid #ff4a3a;animation:gkill .5s infinite alternate}
+  @keyframes gkill{to{outline-color:transparent}}
+  .gitem:hover{filter:brightness(1.25)}
+  .gshadow{position:absolute;border-radius:4px;pointer-events:none}
+  .gshadow.ok{background:rgba(127,220,126,.28)}
+  .gshadow.bad{background:rgba(255,106,90,.28)}
+  .gearbar{display:flex;align-items:center;gap:10px;margin:10px 0 4px;width:calc(var(--gc)*12)}
+  .gearbin{font-family:'Titan One';font-size:12px;letter-spacing:1px;color:#ffb3a0;border:2px dashed rgba(255,106,90,.5);
+    border-radius:8px;padding:7px 12px;background:rgba(255,60,40,.08)}
+  #gearNote{flex:1;font-size:12px;font-weight:600;text-align:center}
+  .gearsum{width:230px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;
+    margin-top:6px;max-height:calc(var(--gc)*13.5);overflow:auto}
+  .gshead{font-family:'Titan One';font-size:12px;letter-spacing:1.5px;color:#ffd76e;margin-bottom:6px}
+  .gsrow{font-size:12px;color:#aab4ff;line-height:1.5}
+  .gsnone{font-size:12px;color:#9fb0a4;line-height:1.45}
+  .gsfoot{font-size:11px;color:#8e9aa4;margin-top:8px;border-top:1px solid rgba(255,255,255,.1);padding-top:6px}
+  .geartip{position:fixed;z-index:45;pointer-events:none;display:flex;flex-direction:column;gap:6px;max-width:320px}
+  .gtip{background:rgba(6,8,10,.96);border:1px solid #6b5a33;border-radius:4px;min-width:250px;font-family:'Fredoka',sans-serif;
+    box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  .gtip.magic{border-color:#5a5ab8}
+  .gtip.rare{border-color:#b8a640}
+  .gtip.gdelta{border-color:#3a444d}
+  .gtcap{font-family:'Titan One';font-size:10px;letter-spacing:2px;color:#8e9aa4;padding:5px 10px 0}
+  .gth{font-family:'Titan One';text-align:center;font-size:15px;line-height:1.25;padding:6px 10px;
+    background:linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,0));border-bottom:1px solid rgba(255,255,255,.08)}
+  .gtb{padding:6px 12px 8px;text-align:center;font-size:12.5px;line-height:1.5;color:#c8c8c8}
+  .gtb hr{border:0;border-top:1px solid rgba(184,166,64,.35);margin:5px 10px}
+  .gtcls,.gtlvl{color:#8e8e8e;font-size:11.5px}
+  .gtdef b{color:#fff;font-weight:600}
+  .gtdef b.gmod{color:#8888ff}
+  .gtimp{color:#8888ff}
+  .gtmod{color:#8888ff}
+  .gtmod i{font-style:normal;color:#5a6068;font-size:10px;margin-left:6px}
+  .gtwarn{color:#ff6a5a;margin-top:6px;font-size:11.5px}
+  .gup{color:#7fdc7e}
+  .gdown{color:#ff6a5a}
+  .gearghost{position:fixed;z-index:46;pointer-events:none;opacity:.85}
+  .gearghost .gitem{position:absolute;inset:0;width:100%;height:100%}
 </style>
 </head>
 <body>
@@ -589,6 +652,7 @@
     <div class="gap20"></div>
     <button id="startBtn" class="btn">START ADVENTURE</button>
     <button id="treeBtn" class="btn gray">SKILL TREE — <b id="treePts">0</b> TO PLACE</button>
+    <button id="gearBtn" class="btn gray">EQUIPMENT — <b id="gearCount">0</b> IN THE BAG</button>
     <div class="audiorow">
       <button id="musicBtn" class="btn tiny gray">MUSIC: ON</button>
       <button id="sfxBtn" class="btn tiny gray">SOUND: ON</button>
@@ -603,6 +667,7 @@
       <span><kbd>L</kbd> <b>combat log</b></span>
       <span><kbd>P</kbd> <b>spellbook</b></span>
       <span><kbd>T</kbd> <b>skill tree</b></span>
+      <span><kbd>I</kbd> <b>equipment</b></span>
       <span><kbd>ESC</kbd> <b>pause</b></span>
       <span><kbd>M</kbd> <b>mute everything</b></span>
       <span><b>beware the SUPER BOSSES at wave 10, 20, 30…</b></span>
@@ -677,6 +742,29 @@
   </div>
 </div>
 
+<div id="gearScreen" class="overlay hidden">
+  <div class="gearwrap">
+    <h2>EQUIPMENT</h2>
+    <div class="sheetsub" id="gearSub"></div>
+    <div class="gearmain">
+      <div class="gearleft">
+        <div id="gearDoll" class="geardoll"></div>
+        <div id="gearInv" class="gearinv"></div>
+        <div class="gearbar">
+          <div id="gearBin" class="gearbin">&#x1F5D1; DESTROY</div>
+          <button id="gearSortBtn" class="tbtn gray">TIDY</button>
+          <span id="gearNote"></span>
+          <button id="gearCloseBtn" class="tbtn gray">CLOSE</button>
+        </div>
+      </div>
+      <div id="gearSum" class="gearsum"></div>
+    </div>
+    <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; drag to move &middot; drop in the bin, or Ctrl-click twice, to destroy</div>
+  </div>
+</div>
+<div id="gearTip" class="geartip hidden"></div>
+<div id="gearGhost" class="gearghost hidden"></div>
+
 <div id="pauseScreen" class="overlay hidden">
   <div class="plate panelbox">
     <div class="studrow"><span></span><span></span><span></span><span></span></div>
@@ -686,6 +774,7 @@
       <button id="resumeBtn" class="btn">RESUME</button>
       <button id="restartBtn" class="btn gray">RESTART</button>
       <button id="pauseTreeBtn" class="btn gray">SKILL TREE</button>
+      <button id="pauseGearBtn" class="btn gray">EQUIPMENT</button>
       <button id="pauseOptBtn" class="btn gray">OPTIONS</button>
       <button id="pauseTitleBtn" class="btn gray">MAIN MENU</button>
       <button id="pauseLinkBtn" class="btn gray">COPY RUN LINK</button>
@@ -3387,6 +3476,8 @@ window.addEventListener('keydown', e=>{
      game in the same press. */
   if(e.code==='Escape' && optOn){ closeOptions(); }
   else if(e.code==='Escape' && bookOn){ toggleBook(); }
+  else if(e.code==='Escape' && state==='gear'){ toggleGear(); }
+  else if(e.code==='KeyI' && (state==='play' || state==='gear')){ toggleGear(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyN' && state==='char') setSheetNerd(!sheetNerd);
@@ -3516,6 +3607,7 @@ function rebuildWithout(id){
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
   applyMetaTree(p);                     /* the tree is not a brick either... */
   applyFavPerks();                      /* nor is the favourite's starting kit */
+  gearApply(p, true);                   /* nor is what you are wearing */
   taken = {}; buildLog = [];
   for(const e of keep){
     const u = UPGRADES.find(x=>x.id===e.id);
@@ -3548,8 +3640,11 @@ function runLinkState(){
     lv:p.level, xp:Math.round(p.xp), xn:p.xpNext, st:p.studs, k:p.kills, gh:p.gHearts || 0,
     hp:+(p.maxHp > 0 ? p.hp/p.maxHp : 1).toFixed(3),
     r:Object.assign({}, p.rings), sp:Object.assign({}, p.splinters), bd:p.breachDepth || 0,
-    rt:Math.round(runTime) };
+    rt:Math.round(runTime), ...gearLinkPart() };
 }
+/* the gear goes in the link only when there is some, so a bare run's link is
+   exactly the length it always was */
+function gearLinkPart(){ const g = gearPackEq(gearEqNow()); return g ? { g } : {}; }
 /* COMPRESSED, THEN BASE64. The JSON is squeezed first with LZW (the family zip
    comes from: every repeat of a run of bytes already seen becomes one code), and
    only the squeezed bytes are base64'd for the address bar -- a long run's link
@@ -6018,6 +6113,8 @@ function mobSpoils(e){
   if(Math.random() < DROP.wild * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
+  /* ...and gear, which a breach body is as stingy with as it is with chests */
+  gearSpoils(e, e.elite ? 1 : 0, cm);
 }
 function bossSpoils(e){
   pickups.push(makePickup('heart',  e.x-22, e.y));
@@ -6039,6 +6136,604 @@ function bossSpoils(e){
   if(Math.random() < 0.17 && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-70,70), y:e.y+rnd(30,70),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
+  /* ...and always two pieces of gear, the second one rare */
+  gearBossSpoils(e);
+}
+/* =============================== GEAR ===============================
+   THINGS YOU WEAR, and the one part of a run that survives it. Monsters drop
+   items; walking over one puts it in your bag; the bag and whatever you have on
+   are saved the moment they change, so a death takes the run and leaves the
+   gear -- the next run starts wearing it.
+
+   It is Path of Exile's item model, kept small:
+     · a BASE decides the slot, the footprint in the bag, the defence it carries
+       (armour, evasion or energy shield) or the damage a weapon adds, and its
+       IMPLICIT -- the one line every item of that base has;
+     · RARITY decides how many AFFIXES roll on top: none on a normal item, one or
+       two on a magic one, three to six on a rare -- at most three PREFIXES and
+       three SUFFIXES;
+     · every affix has TIERS, and a tier can only roll on an item at least as
+       deep as its level. The item level is the monster's level, so what the
+       deep waves drop is better than what the first ones do.
+   Some prefixes are LOCAL: they grow the item's own number -- "40% increased
+   Armour" on a helmet grows that helmet's armour, not yours -- exactly the way
+   PoE reads them. Everything else is a line the skill tree already knows how to
+   write (META_STATS), so a gear stat is the same pool a node or a card feeds and
+   every ceiling in syncStats binds it for free.
+
+   No uniques, no crafting, no currency: bases, affixes, tiers. */
+const GEAR_KEY = 'bb_gear';
+const GEAR_COLS = 12, GEAR_ROWS = 5;
+const GEAR_SLOTS = ['weapon','helmet','offhand','body','amulet','ring1','ring2','gloves','belt','boots'];
+const GEAR_SLOT_NAME = { weapon:'WEAPON', offhand:'OFF HAND', helmet:'HELMET', body:'BODY ARMOUR',
+  gloves:'GLOVES', boots:'BOOTS', belt:'BELT', amulet:'AMULET', ring1:'RING', ring2:'RING' };
+/* every class of item: the slot that takes it and how much of the bag it fills */
+const GEAR_CLS = {
+  helmet:  { name:'Helmet',      slot:'helmet',  w:2, h:2 },
+  body:    { name:'Body Armour', slot:'body',    w:2, h:3 },
+  gloves:  { name:'Gloves',      slot:'gloves',  w:2, h:2 },
+  boots:   { name:'Boots',       slot:'boots',   w:2, h:2 },
+  shield:  { name:'Shield',      slot:'offhand', w:2, h:3 },
+  quiver:  { name:'Quiver',      slot:'offhand', w:2, h:3 },
+  belt:    { name:'Belt',        slot:'belt',    w:2, h:1 },
+  amulet:  { name:'Amulet',      slot:'amulet',  w:1, h:1 },
+  ring:    { name:'Ring',        slot:'ring',    w:1, h:1 },
+  sword:   { name:'Sword',       slot:'weapon',  w:1, h:3, weap:'sword' },
+  axe:     { name:'Axe',         slot:'weapon',  w:2, h:3, weap:'axe' },
+  mace:    { name:'Mace',        slot:'weapon',  w:2, h:3, weap:'mace' },
+  scepter: { name:'Sceptre',     slot:'weapon',  w:1, h:3, weap:'scepter' },
+  staff:   { name:'Staff',       slot:'weapon',  w:2, h:4, weap:'staff' },
+  bow:     { name:'Bow',         slot:'weapon',  w:2, h:4, weap:'bow' }
+};
+/* WHAT HOLDS WHAT. A staff and a bow take both hands; a quiver only goes with a
+   bow, and a shield with anything held in one hand. */
+const GEAR_ONE_HAND = ['sword','axe','mace','scepter'];
+/* ---- THE BASES ----
+   [id, class, name, level, defence-or-damage, implicit]. A defence is
+   {armour|eva|es: n}; a weapon's is {dmg: n}, the damage it ADDS to the hand
+   holding it -- physical for the four that hit, elemental for the staff,
+   the legion's for the sceptre. */
+const GEAR_BASES = [];
+(function(){
+  const B = (id, cls, name, lvl, stat, imp, col)=>GEAR_BASES.push({ id, cls, name, lvl,
+    def: stat && stat.dmg === undefined ? stat : null, dmg: stat && stat.dmg !== undefined ? stat.dmg : 0,
+    imp: imp || null, col: col || null });
+  /* armour pieces come in the three PoE flavours: armour, evasion, energy shield */
+  const ARMOUR_SETS = {
+    helmet: [[1,'Iron Hat','Leather Cap','Vine Circlet', 8, 40, 2],
+             [14,'Cone Helmet','Tricorne','Iron Circlet', 18, 90, 4],
+             [30,'Barbute Helmet','Lion Pelt','Necromancer Circlet', 30, 150, 6],
+             [48,'Royal Burgonet','Sinner Tricorne','Hubris Circlet', 44, 220, 9]],
+    body:   [[1,'Plate Vest','Shabby Jerkin','Simple Robe', 16, 80, 4],
+             [14,'Copper Plate','Strapped Leather','Silken Vest', 36, 180, 8],
+             [30,'Colosseum Plate','Buckskin Tunic','Scholar’s Robe', 60, 300, 12],
+             [48,'Astral Plate','Assassin’s Garb','Vaal Regalia', 88, 440, 18]],
+    gloves: [[1,'Iron Gauntlets','Rawhide Gloves','Wool Gloves', 6, 30, 2],
+             [14,'Bronze Gauntlets','Goathide Gloves','Velvet Gloves', 14, 70, 3],
+             [30,'Steel Gauntlets','Deerskin Gloves','Silk Gloves', 24, 120, 5],
+             [48,'Titan Gauntlets','Slink Gloves','Sorcerer Gloves', 36, 180, 7]],
+    boots:  [[1,'Iron Greaves','Rawhide Boots','Wool Shoes', 6, 30, 2],
+             [14,'Steel Greaves','Goathide Boots','Velvet Slippers', 14, 70, 3],
+             [30,'Antique Greaves','Deerskin Boots','Silk Slippers', 24, 120, 5],
+             [48,'Titan Greaves','Slink Boots','Sorcerer Boots', 36, 180, 7]],
+    shield: [[1,'Splintered Tower Shield','Goathide Buckler','Twig Spirit Shield', 12, 60, 3],
+             [20,'Corroded Tower Shield','Pine Buckler','Ivory Spirit Shield', 28, 140, 6],
+             [40,'Ezomyte Tower Shield','Crusader Buckler','Titanium Spirit Shield', 50, 250, 10]]
+  };
+  const tag = s=>s.toLowerCase().replace(/[^a-z]+/g, '_');
+  for(const cls in ARMOUR_SETS) ARMOUR_SETS[cls].forEach(([lvl, a, e, s, av, ev, sv], i)=>{
+    /* the late body armours carry PoE's own implicits; a buckler dodges spells
+       and a spirit shield feeds them, the way theirs do */
+    const top = cls === 'body' && i === 3;
+    B(tag(a), cls, a, lvl, { armour:av }, top ? [['allRes', 0.06, 0.10]] : null, '#a9b3bc');
+    B(tag(e), cls, e, lvl, { eva:ev },
+      top ? [['speed', 0.03, 0.05]] : cls === 'shield' ? [['suppress', 0.03 + 0.01*i, 0.05 + 0.01*i]] : null, '#b07a45');
+    B(tag(s), cls, s, lvl, { es:sv }, cls === 'shield' ? [['incSpell', 0.05 + 0.04*i, 0.08 + 0.04*i]] : null, '#9a84e0');
+  });
+  /* quivers: a bow's second hand */
+  B('serrated_quiver',  'quiver', 'Serrated Arrow Quiver',  1, null, [['arrowFlat', 0.2, 0.4]], '#8a6a3a');
+  B('two_point_quiver', 'quiver', 'Two-Point Arrow Quiver', 1, null, [['acc', 40, 60]], '#8a6a3a');
+  B('broadhead_quiver', 'quiver', 'Broadhead Arrow Quiver', 25, null, [['incMelee', 0.10, 0.15]], '#8a6a3a');
+  B('spike_quiver',     'quiver', 'Spike-Point Arrow Quiver', 45, null, [['incCrit', 0.20, 0.30]], '#8a6a3a');
+  /* belts */
+  B('rustic_sash',   'belt', 'Rustic Sash',   1,  null, [['incMelee', 0.08, 0.12]], '#9a7a4e');
+  B('chain_belt',    'belt', 'Chain Belt',    1,  null, [['es', 2, 3]], '#a9b3bc');
+  B('leather_belt',  'belt', 'Leather Belt',  8,  null, [['hearts', 1, 1]], '#7a4a2e');
+  B('heavy_belt',    'belt', 'Heavy Belt',    20, null, [['str', 12, 18]], '#6c6f73');
+  B('vanguard_belt', 'belt', 'Vanguard Belt', 45, null, [['armour', 30, 40]], '#6c6f73');
+  B('crystal_belt',  'belt', 'Crystal Belt',  45, null, [['es', 6, 8]], '#9fd8ff');
+  /* amulets */
+  B('coral_amulet', 'amulet', 'Coral Amulet', 1,  null, [['regen', 0.03, 0.05]], '#ff7a6a');
+  B('amber_amulet', 'amulet', 'Amber Amulet', 3,  null, [['str', 12, 18]], '#ffb347');
+  B('jade_amulet',  'amulet', 'Jade Amulet',  3,  null, [['dex', 12, 18]], '#6ee06e');
+  B('lapis_amulet', 'amulet', 'Lapis Amulet', 3,  null, [['int', 12, 18]], '#5aa8ff');
+  B('gold_amulet',  'amulet', 'Gold Amulet',  10, null, [['studs', 0.12, 0.20]], '#ffd23e');
+  B('onyx_amulet',  'amulet', 'Onyx Amulet',  20, null, [['allAttr', 6, 10]], '#3a3f48');
+  /* rings */
+  B('iron_ring',      'ring', 'Iron Ring',      1,  null, [['flatPhys', 0.2, 0.4]], '#a9b3bc');
+  B('coral_ring',     'ring', 'Coral Ring',     1,  null, [['hearts', 1, 1]], '#ff7a6a');
+  B('ruby_ring',      'ring', 'Ruby Ring',      5,  null, [['fireRes', 0.10, 0.15]], '#ff4a3a');
+  B('sapphire_ring',  'ring', 'Sapphire Ring',  5,  null, [['frostRes', 0.10, 0.15]], '#4a8aff');
+  B('topaz_ring',     'ring', 'Topaz Ring',     5,  null, [['shockRes', 0.10, 0.15]], '#ffe14a');
+  B('gold_ring',      'ring', 'Gold Ring',      10, null, [['studs', 0.08, 0.14]], '#ffd23e');
+  B('moonstone_ring', 'ring', 'Moonstone Ring', 15, null, [['es', 2, 4]], '#cfe6ff');
+  B('amethyst_ring',  'ring', 'Amethyst Ring',  25, null, [['chaosRes', 0.10, 0.14]], '#b05aff');
+  B('diamond_ring',   'ring', 'Diamond Ring',   25, null, [['incCrit', 0.15, 0.25]], '#e8f6ff');
+  B('prismatic_ring', 'ring', 'Prismatic Ring', 35, null, [['allRes', 0.06, 0.09]], '#ff9aff');
+  /* weapons: five of each, the damage they add climbing with the level, and the
+     implicit every one of that kind carries */
+  const WEAP = {
+    sword:   { names:['Rusted Sword','Copper Sword','Cutlass','Broad Sword','Tiger Hook'],
+               mul:1.00, imp:'incAcc',      lo:0.08, hi:0.24, col:'#cfd6dd' },
+    axe:     { names:['Rusted Hatchet','Jade Hatchet','Boarding Axe','Cleaver','Siege Axe'],
+               mul:1.15, imp:'bleedChance', lo:0.04, hi:0.12, col:'#e0a81a' },
+    mace:    { names:['Driftwood Club','Tribal Club','Spiked Club','Rock Breaker','Gavel'],
+               mul:1.40, imp:'incMelee',    lo:0.06, hi:0.18, col:'#b6532b' },
+    scepter: { names:['Driftwood Sceptre','Darkwood Sceptre','Bronze Sceptre','Quartz Sceptre','Crystal Sceptre'],
+               mul:1.00, imp:'minionDmg',   lo:0.06, hi:0.18, col:'#b7a6ff' },
+    staff:   { names:['Gnarled Branch','Primitive Staff','Long Staff','Iron Staff','Coiled Staff'],
+               mul:1.30, imp:'incSpell',    lo:0.08, hi:0.24, col:'#9b45d6' },
+    bow:     { names:['Crude Bow','Short Bow','Long Bow','Composite Bow','Recurve Bow'],
+               mul:1.10, imp:'incCrit',     lo:0.10, hi:0.30, col:'#6ee06e' }
+  };
+  const LV = [1, 12, 24, 36, 50], DMG = [0.3, 0.6, 1.0, 1.5, 2.1];
+  for(const cls in WEAP){ const W = WEAP[cls];
+    W.names.forEach((nm, i)=>{
+      const f = i/4, a = W.lo + (W.hi - W.lo)*f;
+      B(tag(nm), cls, nm, LV[i], { dmg:Math.round(DMG[i]*W.mul*10)/10 },
+        [[W.imp, Math.round(a*0.85*100)/100, Math.round(a*1.15*100)/100]], W.col);
+    }); }
+})();
+const GEAR_BASE_BY_ID = {};
+for(const b of GEAR_BASES) GEAR_BASE_BY_ID[b.id] = b;
+/* the one damage type a weapon adds, by what the hand holding it does */
+function gearDmgKind(cls){ return cls === 'staff' ? 'elem' : cls === 'scepter' ? 'minion' : 'phys'; }
+/* ---- THE AFFIXES ----
+   [id, pre|suf, stat, classes, [[level, min, max, name], ...], weight].
+   `stat` is a META_STATS key, one of the two below, or a LOCAL stat (loc*) that
+   is read by the item it sits on and never reaches a pool directly. */
+const GEAR_XSTATS = {
+  minionFlat:{ n:'flat damage to every minion hit', w:(p,v)=>{ p.minions.flat += v; } },
+  allAttr:   { n:'to all ATTRIBUTES', w:(p,v)=>{ p.attr.str += v; p.attr.dex += v; p.attr.int += v; } }
+};
+const GEAR_ARM = ['helmet','body','gloves','boots','shield'];
+const GEAR_JEW = ['ring','amulet'];
+const GEAR_NONWEAP = GEAR_ARM.concat(GEAR_JEW, ['belt','quiver']);
+const GEAR_WEAP = ['sword','axe','mace','scepter','staff','bow'];
+const GEAR_ATKW = ['sword','axe','mace','bow'];
+const GEAR_AFFIXES = [];
+(function(){
+  const A = (id, kind, stat, cls, tiers, w, need)=>GEAR_AFFIXES.push({ id, kind, stat, cls, w: w || 100, need: need || null,
+    tiers: tiers.map(t=>({ lvl:t[0], min:t[1], max:t[2], name:t[3] })) });
+  /* ---------------- PREFIXES ---------------- */
+  A('hearts', 'pre', 'hearts', GEAR_ARM.concat(['belt','amulet','ring']),
+    [[1,1,1,'Hale'],[12,1,2,'Healthy'],[24,2,3,'Sanguine'],[38,3,4,'Stalwart'],[52,4,5,'Stout']], 140);
+  A('esflat', 'pre', 'es', ['ring','amulet','belt'],
+    [[1,1,2,'Shining'],[14,2,4,'Glimmering'],[28,4,6,'Glittering'],[44,6,9,'Glowing']]);
+  A('locarm', 'pre', 'locArmour', GEAR_ARM,
+    [[1,4,8,'Lacquered'],[12,9,16,'Studded'],[24,17,26,'Ribbed'],[38,27,38,'Fortified'],[52,39,52,'Plated']], 100, 'armour');
+  A('loceva', 'pre', 'locEva', GEAR_ARM,
+    [[1,20,40,'Agile'],[12,41,80,'Dancer’s'],[24,81,130,'Acrobat’s'],[38,131,190,'Fleet'],[52,191,260,'Blurred']], 100, 'eva');
+  A('loces', 'pre', 'locEs', GEAR_ARM,
+    [[1,1,2,'Protective'],[12,2,3,'Strong-Willed'],[24,3,5,'Resolute'],[38,5,7,'Fearless'],[52,7,10,'Dauntless']], 100, 'es');
+  const INC = [[1,0.15,0.26],[12,0.27,0.42],[24,0.43,0.60],[38,0.61,0.80],[52,0.81,1.00]];
+  const named = (names)=>INC.map((t, i)=>[t[0], t[1], t[2], names[i]]);
+  A('locarminc', 'pre', 'locArmourInc', GEAR_ARM, named(['Reinforced','Layered','Lobstered','Buttressed','Thickened']), 100, 'armour');
+  A('locevainc', 'pre', 'locEvaInc',    GEAR_ARM, named(['Shade’s','Ghost’s','Spectre’s','Wraith’s','Phantasm’s']), 100, 'eva');
+  A('locesinc',  'pre', 'locEsInc',     GEAR_ARM, named(['Shimmering','Seething','Blazing','Scintillating','Incandescent']), 100, 'es');
+  const FLAT = [[1,0.2,0.3],[12,0.3,0.6],[24,0.6,1.0],[38,1.0,1.5],[52,1.5,2.2]];
+  A('flatphys', 'pre', 'flatPhys', ['ring','amulet','gloves','quiver'],
+    FLAT.map((t, i)=>[t[0], t[1], t[2], ['Glinting','Burnished','Polished','Honed','Gleaming'][i]]));
+  A('flatelem', 'pre', 'flatElem', ['ring','amulet','gloves'],
+    FLAT.map((t, i)=>[t[0], t[1], t[2], ['Humming','Buzzing','Snapping','Crackling','Sparking'][i]]));
+  A('locdmg', 'pre', 'locDmg', GEAR_WEAP,
+    [[1,0.2,0.4,'Glinting'],[12,0.4,0.8,'Burnished'],[24,0.8,1.3,'Polished'],[38,1.3,1.9,'Honed'],[52,1.9,2.6,'Gleaming']], 120);
+  A('locdmginc', 'pre', 'locDmgInc', GEAR_WEAP,
+    [[1,0.20,0.34,'Heavy'],[12,0.35,0.54,'Serrated'],[24,0.55,0.74,'Wicked'],[38,0.75,0.99,'Vicious'],[52,1.00,1.29,'Bloodthirsty']], 120);
+  A('incspell', 'pre', 'incSpell', ['staff','amulet','shield'],
+    [[1,0.08,0.14,'Apprentice’s'],[14,0.15,0.24,'Adept’s'],[28,0.25,0.36,'Scholar’s'],[44,0.37,0.50,'Professor’s']]);
+  A('incelem', 'pre', 'incElem', ['amulet','ring','staff'],
+    [[1,0.06,0.10,'Catalysing'],[14,0.11,0.18,'Infusing'],[28,0.19,0.26,'Empowering'],[44,0.27,0.36,'Unleashed']]);
+  A('miniondmg', 'pre', 'minionDmg', ['scepter','helmet','amulet'],
+    [[1,0.08,0.14,'Baron’s'],[14,0.15,0.24,'Viscount’s'],[28,0.25,0.36,'Marquess’s'],[44,0.37,0.50,'Duke’s']]);
+  A('movespd', 'pre', 'speed', ['boots'],
+    [[1,0.08,0.10,'Runner’s'],[12,0.11,0.15,'Sprinter’s'],[24,0.16,0.20,'Stallion’s'],[38,0.21,0.25,'Gazelle’s'],[52,0.26,0.30,'Cheetah’s']], 160);
+  /* ---------------- SUFFIXES ---------------- */
+  const RES = [[1,0.06,0.11],[12,0.12,0.17],[24,0.18,0.23],[38,0.24,0.29],[52,0.30,0.35]];
+  const res = names=>RES.map((t, i)=>[t[0], t[1], t[2], names[i]]);
+  A('fireres',  'suf', 'fireRes',  GEAR_NONWEAP, res(['of the Whelpling','of the Salamander','of the Drake','of the Kiln','of the Furnace']), 120);
+  A('frostres', 'suf', 'frostRes', GEAR_NONWEAP, res(['of the Inuit','of the Seal','of the Penguin','of the Yeti','of the Walrus']), 120);
+  A('shockres', 'suf', 'shockRes', GEAR_NONWEAP, res(['of the Cloud','of the Squall','of the Storm','of the Thunderhead','of the Tempest']), 120);
+  A('chaosres', 'suf', 'chaosRes', GEAR_NONWEAP,
+    [[16,0.05,0.09,'of the Lost'],[30,0.10,0.14,'of Banishment'],[46,0.15,0.20,'of Eviction']], 40);
+  A('allres', 'suf', 'allRes', ['ring','amulet','shield'],
+    [[10,0.03,0.05,'of the Crystal'],[24,0.06,0.08,'of the Prism'],[40,0.09,0.12,'of the Kaleidoscope']], 60);
+  const ATTR = [[1,6,10],[12,11,16],[24,17,22],[38,23,28],[52,29,34]];
+  const attr = names=>ATTR.map((t, i)=>[t[0], t[1], t[2], names[i]]);
+  const ALL = GEAR_NONWEAP.concat(GEAR_WEAP);
+  A('str', 'suf', 'str', ALL, attr(['of the Brute','of the Wrestler','of the Bear','of the Lion','of the Gorilla']));
+  A('dex', 'suf', 'dex', ALL, attr(['of the Mongoose','of the Lynx','of the Fox','of the Falcon','of the Panther']));
+  A('int', 'suf', 'int', ALL, attr(['of the Pupil','of the Student','of the Prodigy','of the Augur','of the Philosopher']));
+  A('allattr', 'suf', 'allAttr', ['amulet'], [[10,3,5,'of the Clouds'],[24,6,8,'of the Sky'],[40,9,12,'of the Meteor']], 60);
+  A('atkspd', 'suf', 'incAtk', ['gloves','quiver','ring'].concat(GEAR_ATKW),
+    [[1,0.05,0.07,'of Skill'],[12,0.08,0.10,'of Ease'],[24,0.11,0.13,'of Mastery'],[38,0.14,0.16,'of Renown'],[52,0.17,0.20,'of Grandmastery']]);
+  A('castspd', 'suf', 'incCast', ['amulet','ring','staff','scepter','shield'],
+    [[1,0.05,0.08,'of Talent'],[14,0.09,0.12,'of Nimbleness'],[28,0.13,0.16,'of Expertise'],[44,0.17,0.21,'of Legerdemain']]);
+  A('crit', 'suf', 'incCrit', GEAR_WEAP.concat(['amulet','quiver','ring']),
+    [[1,0.10,0.14,'of Needling'],[12,0.15,0.19,'of Stinging'],[24,0.20,0.24,'of Piercing'],[38,0.25,0.29,'of Puncturing'],[52,0.30,0.38,'of Penetrating']]);
+  A('critmult', 'suf', 'critMult', GEAR_WEAP.concat(['amulet','quiver']),
+    [[8,0.06,0.09,'of Ire'],[20,0.10,0.14,'of Anger'],[34,0.15,0.19,'of Rage'],[50,0.20,0.25,'of Fury']]);
+  A('regen', 'suf', 'regen', ['helmet','body','amulet','ring','belt','shield'],
+    [[1,0.02,0.03,'of the Newt'],[14,0.03,0.05,'of the Lizard'],[28,0.05,0.07,'of the Flatworm'],[44,0.07,0.10,'of the Starfish']]);
+  A('acc', 'suf', 'acc', ['helmet','gloves','quiver','ring','amulet'].concat(GEAR_ATKW),
+    [[1,20,40,'of Calm'],[12,41,80,'of Steadiness'],[24,81,130,'of Accuracy'],[38,131,190,'of Precision'],[52,191,260,'of the Ranger']]);
+  A('studs', 'suf', 'studs', ['helmet','gloves','boots','ring','amulet'],
+    [[1,0.06,0.10,'of Plunder'],[14,0.11,0.16,'of Raiding'],[28,0.17,0.22,'of Archaeology'],[44,0.23,0.28,'of Excavation']]);
+  A('suppress', 'suf', 'suppress', ['body','boots','gloves','helmet','shield'],
+    [[10,0.03,0.05,'of Rebuttal'],[24,0.06,0.08,'of Snuffing'],[40,0.09,0.12,'of Revoking']], 70);
+  A('leech', 'suf', 'leech', ['sword','axe','mace','gloves','ring'],
+    [[8,0.01,0.02,'of the Remora'],[24,0.02,0.03,'of the Lamprey'],[40,0.03,0.04,'of the Vampire']], 60);
+  A('minionlife', 'suf', 'minionLife', ['scepter','helmet','amulet','body'],
+    [[1,0.08,0.12,'of Loyalty'],[16,0.13,0.20,'of Devotion'],[32,0.21,0.30,'of Fealty']]);
+  A('magnet', 'suf', 'magnet', ['boots','belt'],
+    [[1,0.10,0.16,'of the Magpie'],[18,0.17,0.26,'of the Jackdaw'],[36,0.27,0.38,'of the Raven']], 70);
+})();
+const GEAR_AFFIX_BY_ID = {};
+for(const a of GEAR_AFFIXES) GEAR_AFFIX_BY_ID[a.id] = a;
+/* WHOLE NUMBERS where the number is one: armour, evasion, shield, hearts,
+   attributes and accuracy. Everything else keeps two places. */
+const GEAR_WHOLE = new Set(['hearts','es','armour','eva','str','dex','int','allAttr','acc',
+  'locArmour','locEva','locEs']);
+const GEAR_TENTHS = new Set(['flatPhys','flatElem','locDmg','arrowFlat','minionFlat']);
+function gearRound(stat, v){
+  if(GEAR_WHOLE.has(stat)) return Math.round(v);
+  if(GEAR_TENTHS.has(stat)) return Math.round(v*10)/10;
+  return Math.round(v*100)/100;
+}
+function gearRollIn(stat, lo, hi){ return gearRound(stat, lo + Math.random()*(hi - lo)); }
+/* ---- RARITY ---- */
+const GEAR_RAR = {
+  normal:{ name:'NORMAL', col:'#c8c8c8', bg:'rgba(200,200,200,.10)', min:0, max:0 },
+  magic: { name:'MAGIC',  col:'#8888ff', bg:'rgba(90,90,255,.20)',   min:1, max:2 },
+  rare:  { name:'RARE',   col:'#ffff77', bg:'rgba(255,230,80,.16)',  min:3, max:6 }
+};
+const GEAR_MAX_PRE = { normal:0, magic:1, rare:3 }, GEAR_MAX_SUF = GEAR_MAX_PRE;
+/* HOW OFTEN, AND HOW GOOD. An ordinary body drops something about once in
+   eighty; an elite rolls it eight times over (DROP_ELITE) and leans it rare.
+   A boss always leaves two, the second one rare. */
+const GEAR_DROP = 0.0125;
+const GEAR_RARE_W = [0.10, 0.28, 0.55];    /* chance of a rare: ordinary, elite, boss */
+const GEAR_MAGIC_W = [0.34, 0.50, 0.45];   /* ...and of a magic one */
+function gearRollRarity(tier){
+  const t = clamp(tier|0, 0, 2), r = Math.random();
+  if(r < GEAR_RARE_W[t]) return 'rare';
+  if(r < GEAR_RARE_W[t] + GEAR_MAGIC_W[t]) return 'magic';
+  return t >= 2 ? 'magic' : 'normal';
+}
+/* A NEWER BASE IS LIKELIER, not certain: every base the item level allows can
+   drop, weighted toward the deeper ones so a wave-40 helmet is usually a
+   wave-40 helmet. */
+function gearRollBase(ilvl, cls){
+  const ok = GEAR_BASES.filter(b=>b.lvl <= ilvl && (!cls || b.cls === cls));
+  if(!ok.length) return null;
+  let tot = 0; const ws = ok.map(b=>{ const w = 1 + b.lvl/12; tot += w; return w; });
+  let r = Math.random()*tot;
+  for(let i=0;i<ok.length;i++){ r -= ws[i]; if(r <= 0) return ok[i]; }
+  return ok[ok.length-1];
+}
+function gearAffixFits(a, B, ilvl, have){
+  if(a.cls.indexOf(B.cls) < 0) return false;
+  if(a.need && !(B.def && B.def[a.need])) return false;
+  if(have.some(m=>m[0] === a.id)) return false;
+  return a.tiers.some(t=>t.lvl <= ilvl);
+}
+function gearRollAffix(it, kind){
+  const B = GEAR_BASE_BY_ID[it.b];
+  const pool = GEAR_AFFIXES.filter(a=>a.kind === kind && gearAffixFits(a, B, it.il, it.m));
+  if(!pool.length) return false;
+  let tot = 0; for(const a of pool) tot += a.w;
+  let r = Math.random()*tot, a = pool[pool.length-1];
+  for(const q of pool){ r -= q.w; if(r <= 0){ a = q; break; } }
+  /* every tier the item is deep enough for is equally likely -- so the top one
+     is always the rarest roll it can make */
+  const tiers = []; a.tiers.forEach((t, i)=>{ if(t.lvl <= it.il) tiers.push(i); });
+  const ti = tiers[Math.min(tiers.length-1, Math.floor(Math.random()*tiers.length))];
+  const T = a.tiers[ti];
+  it.m.push([a.id, ti, gearRollIn(a.stat, T.min, T.max)]);
+  return true;
+}
+let gearUid = 1;
+function gearMake(baseId, rar, ilvl){
+  const B = GEAR_BASE_BY_ID[baseId];
+  if(!B) return null;
+  const it = { u:gearUid++, b:B.id, r:GEAR_RAR[rar] ? rar : 'normal', il:Math.max(1, ilvl|0), imp:[], m:[] };
+  if(B.imp) for(const [stat, lo, hi] of B.imp) it.imp.push([stat, gearRollIn(stat, lo, hi)]);
+  const R = GEAR_RAR[it.r];
+  let n = 0;
+  if(it.r === 'magic') n = Math.random() < 0.5 ? 1 : 2;
+  else if(it.r === 'rare'){ const q = Math.random(); n = q < 0.35 ? 3 : q < 0.70 ? 4 : q < 0.90 ? 5 : 6; }
+  n = clamp(n, R.min, R.max);
+  let pre = 0, suf = 0, guard = 0;
+  while(pre + suf < n && guard++ < 20){
+    const kinds = [];
+    if(pre < GEAR_MAX_PRE[it.r]) kinds.push('pre');
+    if(suf < GEAR_MAX_SUF[it.r]) kinds.push('suf');
+    if(!kinds.length) break;
+    if(kinds.length === 2 && Math.random() < 0.5) kinds.reverse();
+    let ok = false;
+    for(const k of kinds) if(gearRollAffix(it, k)){ if(k === 'pre') pre++; else suf++; ok = true; break; }
+    if(!ok) break;
+  }
+  if(it.r === 'rare') it.n = gearRareName(B.cls);
+  return it;
+}
+/* a whole item, from the level it dropped at */
+function gearRoll(ilvl, tier, cls){
+  const B = gearRollBase(ilvl, cls);
+  return B ? gearMake(B.id, gearRollRarity(tier), ilvl) : null;
+}
+/* ---- NAMES ----
+   Normal: the base. Magic: its prefix, the base, its suffix -- "Healthy Iron Hat
+   of the Drake". Rare: two words, PoE's way, the second chosen for the kind of
+   thing it is. */
+const GEAR_RARE_A = ['Agony','Apocalypse','Armageddon','Beast','Behemoth','Blight','Blood','Bramble',
+  'Brimstone','Brood','Carrion','Cataclysm','Chimeric','Corpse','Corruption','Damnation','Death','Demon',
+  'Dire','Dragon','Dread','Doom','Dusk','Eagle','Empyrean','Fate','Foe','Gale','Ghoul','Gloom','Glyph',
+  'Golem','Grim','Hate','Havoc','Honour','Horror','Hypnotic','Kraken','Loath','Maelstrom','Mind','Miracle',
+  'Morbid','Oblivion','Onslaught','Pain','Pandemonium','Phoenix','Plague','Rage','Rapture','Rune','Skull',
+  'Sol','Soul','Sorrow','Spirit','Storm','Tempest','Torment','Vengeance','Victory','Viper','Vortex','Woe','Wrath'];
+const GEAR_RARE_B = {
+  helmet:['Brow','Corona','Cowl','Crest','Crown','Halo','Horn','Keep','Peak','Salvation','Shelter','Star','Veil','Visage'],
+  body:['Carapace','Cloak','Coat','Curtain','Guardian','Hide','Jack','Mantle','Pelt','Sanctuary','Shell','Shroud','Skin','Suit','Ward','Wrap'],
+  gloves:['Caress','Claw','Clutches','Fingers','Fist','Grasp','Grip','Hand','Hold','Knuckle','Mitts','Nails','Palm','Paw','Talons','Touch','Vise'],
+  boots:['Dash','Goad','Hoof','League','March','Pace','Road','Slippers','Sole','Span','Spur','Stride','Track','Trail','Tread','Urge'],
+  shield:['Aegis','Badge','Barrier','Bastion','Bulwark','Duty','Emblem','Fend','Guard','Refuge','Rock','Rook','Tower','Watch','Wing'],
+  quiver:['Arrow','Barb','Bite','Bolt','Dart','Flight','Hail','Impaler','Nails','Needle','Quill','Shot','Spear','Spike','Stinger'],
+  belt:['Bind','Bond','Buckle','Clasp','Cord','Girdle','Harness','Lash','Leash','Lock','Shackle','Snare','Strap','Tether','Twine'],
+  amulet:['Beads','Braid','Charm','Choker','Collar','Idol','Gorget','Heart','Locket','Medallion','Noose','Pendant','Rosary','Scarab','Talisman','Torc'],
+  ring:['Band','Circle','Coil','Eye','Finger','Gyre','Hold','Knot','Loop','Nail','Spiral','Turn','Twirl','Whorl'],
+  sword:['Bane','Beak','Edge','Fang','Gutter','Hunger','Impaler','Needle','Razor','Saw','Scratch','Sever','Skewer','Slicer','Song','Spike','Stinger','Thirst'],
+  axe:['Bane','Beak','Bite','Butcher','Edge','Etcher','Gnash','Hunger','Mangler','Rend','Roar','Sever','Slayer','Song','Splitter','Sunder','Thirst'],
+  mace:['Bane','Batter','Blast','Blow','Blunt','Brand','Breaker','Burst','Crack','Crusher','Grinder','Knell','Ram','Roar','Ruin','Shatter','Smasher','Star','Wreck'],
+  scepter:['Bane','Blow','Breaker','Call','Chant','Crack','Crusher','Cry','Gnarl','Knell','Ram','Roar','Song','Spike','Star','Weaver'],
+  staff:['Bane','Beam','Branch','Call','Chant','Cry','Gnarl','Goad','Mast','Pillar','Pole','Post','Roar','Song','Spire','Weaver'],
+  bow:['Arch','Bane','Barrage','Blast','Branch','Breeze','Fletch','Guide','Horn','Mark','Nock','Rain','Reach','Siege','Song','Stinger','Strike','Thunder','Volley','Wind','Wing']
+};
+function gearRareName(cls){ return pick(GEAR_RARE_A) + ' ' + pick(GEAR_RARE_B[cls] || GEAR_RARE_B.ring); }
+function gearName(it){
+  const B = GEAR_BASE_BY_ID[it.b];
+  if(!B) return '?';
+  if(it.r === 'rare' && it.n) return it.n;
+  if(it.r === 'magic'){
+    let pre = '', suf = '';
+    for(const [id, ti] of it.m){ const a = GEAR_AFFIX_BY_ID[id]; if(!a || !a.tiers[ti]) continue;
+      if(a.kind === 'pre') pre = a.tiers[ti].name + ' '; else suf = ' ' + a.tiers[ti].name; }
+    return pre + B.name + suf;
+  }
+  return B.name;
+}
+/* ---- WHAT AN ITEM IS WORTH ----
+   Its LOCAL lines are folded into the item's own number first -- (base + flat)
+   x (1 + increased), PoE's order -- and what comes out goes into the pool the
+   rest of the game reads. Everything else passes straight through. */
+function gearMods(it){
+  const B = GEAR_BASE_BY_ID[it && it.b];
+  if(!B) return [];
+  const loc = {}, out = [];
+  const add = (k, v)=>{ loc[k] = (loc[k] || 0) + v; };
+  const lines = [];
+  for(const [id, ti, v] of it.m || []){ const a = GEAR_AFFIX_BY_ID[id]; if(a) lines.push([a.stat, v]); }
+  for(const [stat, v] of lines) if(/^loc/.test(stat)) add(stat, v);
+  if(B.def){
+    if(B.def.armour) out.push(['armour', Math.round((B.def.armour + (loc.locArmour||0)) * (1 + (loc.locArmourInc||0)))]);
+    if(B.def.eva)    out.push(['eva',    Math.round((B.def.eva    + (loc.locEva||0))    * (1 + (loc.locEvaInc||0)))]);
+    if(B.def.es)     out.push(['es',     Math.round((B.def.es     + (loc.locEs||0))     * (1 + (loc.locEsInc||0)))]);
+  }
+  if(B.dmg){
+    const v = Math.round((B.dmg + (loc.locDmg||0)) * (1 + (loc.locDmgInc||0)) * 10)/10;
+    const k = gearDmgKind(B.cls);
+    out.push([k === 'elem' ? 'flatElem' : k === 'minion' ? 'minionFlat' : 'flatPhys', v]);
+  }
+  for(const m of it.imp || []) out.push([m[0], m[1]]);
+  for(const [stat, v] of lines) if(!/^loc/.test(stat)) out.push([stat, v]);
+  return out;
+}
+/* the stat writer behind a line: the tree's own, or one of the two gear adds */
+function gearWriter(stat){ return GEAR_XSTATS[stat] || META_STATS[stat] || null; }
+function gearWrite(p, stat, v){ const S = gearWriter(stat); if(S && S.w) try { S.w(p, v); } catch(e){} }
+/* ---- THE SAVE ----
+   { eq:{ slot:item }, inv:[{ it, x, y }], uid }. Written the moment anything
+   moves -- a pickup, an equip, a drop in the bin -- so there is no "save on
+   exit" to miss, and dying is just another moment. */
+let GEAR = null;
+function gearBlank(){ const eq = {}; for(const s of GEAR_SLOTS) eq[s] = null; return { v:1, eq, inv:[], uid:1 }; }
+function gearValid(it){
+  if(!it || typeof it !== 'object' || !GEAR_BASE_BY_ID[it.b]) return null;
+  const B = GEAR_BASE_BY_ID[it.b];
+  const o = { u:it.u|0 || gearUid++, b:it.b, r:GEAR_RAR[it.r] ? it.r : 'normal', il:Math.max(1, it.il|0),
+    imp:Array.isArray(it.imp) ? it.imp.filter(m=>Array.isArray(m) && gearWriter(m[0]) && isFinite(m[1])).map(m=>[m[0], +m[1]]) : [],
+    m:Array.isArray(it.m) ? it.m.filter(m=>Array.isArray(m) && GEAR_AFFIX_BY_ID[m[0]] && GEAR_AFFIX_BY_ID[m[0]].tiers[m[1]] && isFinite(m[2]))
+      .map(m=>[m[0], m[1]|0, +m[2]]) : [] };
+  if(o.r === 'rare') o.n = typeof it.n === 'string' ? it.n.slice(0, 40) : gearRareName(B.cls);
+  return o;
+}
+function gearLoad(){
+  let raw = null; try { raw = localStorage.getItem(GEAR_KEY); } catch(e){}
+  const G = gearBlank();
+  try {
+    const o = raw ? JSON.parse(raw) : null;
+    if(o && typeof o === 'object'){
+      let maxU = 0;
+      for(const s of GEAR_SLOTS){ const it = gearValid(o.eq && o.eq[s]); if(it && gearFitsSlot(it, s)){ G.eq[s] = it; maxU = Math.max(maxU, it.u); } }
+      for(const e of Array.isArray(o.inv) ? o.inv : []){
+        const it = gearValid(e && e.it); if(!it) continue;
+        const x = e.x|0, y = e.y|0;
+        if(gearRoomAt(G.inv, it, x, y)){ G.inv.push({ it, x, y }); maxU = Math.max(maxU, it.u); }
+        else { const at = gearFreeSpot(G.inv, it); if(at){ G.inv.push({ it, x:at.x, y:at.y }); maxU = Math.max(maxU, it.u); } }
+      }
+      gearUid = Math.max(gearUid, maxU + 1, o.uid|0);
+    }
+  } catch(e){}
+  GEAR = G;
+  return G;
+}
+function gearSave(){
+  if(!GEAR) return;
+  GEAR.uid = gearUid;
+  try { localStorage.setItem(GEAR_KEY, JSON.stringify(GEAR)); } catch(e){}
+}
+/* ---- THE BAG ---- */
+function gearSize(it){ const B = GEAR_BASE_BY_ID[it.b], C = B && GEAR_CLS[B.cls]; return C ? { w:C.w, h:C.h } : { w:1, h:1 }; }
+function gearRoomAt(inv, it, x, y, skip){
+  const s = gearSize(it);
+  if(x < 0 || y < 0 || x + s.w > GEAR_COLS || y + s.h > GEAR_ROWS) return false;
+  for(const e of inv){
+    if(e === skip || e.it === it) continue;
+    const t = gearSize(e.it);
+    if(x < e.x + t.w && e.x < x + s.w && y < e.y + t.h && e.y < y + s.h) return false;
+  }
+  return true;
+}
+/* PoE fills a bag column by column, top to bottom, left to right */
+function gearFreeSpot(inv, it, skip){
+  for(let x=0;x<GEAR_COLS;x++) for(let y=0;y<GEAR_ROWS;y++) if(gearRoomAt(inv, it, x, y, skip)) return { x, y };
+  return null;
+}
+function gearInvAdd(it){
+  if(!GEAR) gearLoad();
+  const at = gearFreeSpot(GEAR.inv, it);
+  if(!at) return false;
+  GEAR.inv.push({ it, x:at.x, y:at.y });
+  gearSave();
+  return true;
+}
+/* ---- WHAT FITS WHERE ---- */
+function gearSlotOf(it){ const B = GEAR_BASE_BY_ID[it.b]; return B ? GEAR_CLS[B.cls].slot : null; }
+function gearFitsSlot(it, slot){
+  const s = gearSlotOf(it);
+  return !!s && (s === slot || (s === 'ring' && (slot === 'ring1' || slot === 'ring2')));
+}
+/* AN ITEM ONLY WORKS IN A HAND THAT CAN USE IT. A weapon is the weapon you
+   chose on the title screen, or it is dead weight; a staff and a bow leave no
+   hand for a shield, and a quiver is for arrows. It stays on, greyed, and says
+   why -- nothing is ever taken off behind your back. */
+function gearActiveWhy(it, slot){
+  const B = GEAR_BASE_BY_ID[it && it.b];
+  if(!B) return 'unknown item';
+  const C = GEAR_CLS[B.cls], wid = (weapon && weapon.id) || 'sword';
+  if(C.weap && C.weap !== wid) return 'you are wielding a '+((WEAPONS[wid] && WEAPONS[wid].name) || wid).toUpperCase()+' — this only works for a '+C.weap.toUpperCase()+' hero';
+  if(B.cls === 'quiver' && wid !== 'bow') return 'a quiver only works with a BOW';
+  if(B.cls === 'shield' && GEAR_ONE_HAND.indexOf(wid) < 0) return 'a '+(WEAPONS[wid] ? WEAPONS[wid].name : wid).toUpperCase()+' takes both hands — no room for a shield';
+  return '';
+}
+function gearActive(it, slot){ return !gearActiveWhy(it, slot); }
+/* THE GEAR THIS RUN WEARS. A run link carries the gear it was copied with, the
+   way it carries its tree -- otherwise it is yours. */
+let gearLinkCache = null, gearLinkSrc = null;
+function gearLinked(){ return !!(runLink && runLink.g); }
+function gearEqNow(){
+  if(gearLinked()){
+    if(gearLinkSrc !== runLink.g){ gearLinkSrc = runLink.g; gearLinkCache = gearUnpackEq(runLink.g); }
+    return gearLinkCache;
+  }
+  if(!GEAR) gearLoad();
+  return GEAR.eq;
+}
+function gearActiveMods(){
+  const eq = gearEqNow(), out = [];
+  for(const s of GEAR_SLOTS){ const it = eq[s]; if(it && gearActive(it, s)) for(const m of gearMods(it)) out.push(m); }
+  return out;
+}
+/* PUT ON WHAT IS WORN. Gear only ever writes POOLS, so taking the old lines off
+   and putting the new ones on is exact -- the same trick the mid-run tree uses.
+   `fill` is the start of a run: the hearts an item adds arrive full. Anywhere
+   else the bar keeps its SHARE, so swapping a helmet off and on is never a
+   free heal. */
+function gearApply(p, fill){
+  if(!p) return;
+  const want = gearActiveMods(), had = p.gearMods || [];
+  const hp0 = p.maxHp, hpNow = p.hp;
+  for(const [k, v] of had) gearWrite(p, k, -v);
+  for(const [k, v] of want) gearWrite(p, k, v);
+  p.gearMods = want;
+  syncStats();
+  if(fill) p.hp = Math.min(p.maxHp, hpNow + Math.max(0, p.maxHp - hp0));
+  else if(hp0 > 0 && p.maxHp !== hp0 && hpNow > 0) p.hp = Math.min(p.maxHp, hpNow * p.maxHp / hp0);
+}
+/* the gear, squeezed for a run link: base, rarity, level, implicits, affixes */
+function gearPackEq(eq){
+  const o = {};
+  for(const s of GEAR_SLOTS){ const it = eq && eq[s]; if(it) o[s] = [it.b, it.r[0], it.il, it.imp.map(m=>[m[0], m[1]]), it.m.map(m=>m.slice()), it.n || 0]; }
+  return Object.keys(o).length ? o : null;
+}
+function gearUnpackEq(o){
+  const eq = {};
+  for(const s of GEAR_SLOTS){
+    eq[s] = null;
+    const a = o && o[s];
+    if(!Array.isArray(a)) continue;
+    const r = a[1] === 'r' ? 'rare' : a[1] === 'm' ? 'magic' : 'normal';
+    const it = gearValid({ u:0, b:a[0], r, il:a[2], imp:a[3], m:a[4], n:a[5] || undefined });
+    if(it && gearFitsSlot(it, s)) eq[s] = it;
+  }
+  return eq;
+}
+/* ---- ON THE FLOOR ----
+   An item on the ground is its own thing, not a pickup: nothing magnets it,
+   nothing merges it, and a floor cap never throws one away. Walk over it and
+   it goes in the bag -- unless the bag is full, in which case it stays where
+   it is and says so. */
+let gearDrops = [];
+const GEAR_PICK_R = 30;
+/* A LONG RUN IS A LOT OF KILLS, and a floor paved with plain helmets is noise.
+   Past this many, the oldest item of the lowest rarity on the floor goes --
+   a rare is only ever pushed out by another rare. */
+const GEAR_FLOOR_MAX = 60;
+function gearDropAt(it, x, y){
+  if(!it) return null;
+  const d = shoveToFloor({ it, x:x + rnd(-14, 14), y:y + rnd(-14, 14), z:10, vz:rnd(160, 260), t:0, got:false }, 18);
+  gearDrops.push(d);
+  if(gearDrops.length > GEAR_FLOOR_MAX){
+    for(const r of ['normal','magic','rare']){
+      const i = gearDrops.findIndex(q=>q.it.r === r);
+      if(i >= 0){ gearDrops.splice(i, 1); break; }
+    }
+  }
+  return d;
+}
+let gearFullT = 0;
+function updateGearDrops(dt){
+  const p = player;
+  gearFullT = Math.max(0, gearFullT - dt);
+  for(const d of gearDrops){
+    d.t += dt;
+    if(d.z > 0 || d.vz > 0){ d.vz -= 900*dt; d.z = Math.max(0, d.z + d.vz*dt); if(d.z === 0) d.vz = 0; }
+    if(!p || p.dead || d.got || d.t < 0.35) continue;
+    if(dist(d, p) > GEAR_PICK_R + (p.r || 13)) continue;
+    if(gearInvAdd(d.it)){
+      d.got = true;
+      const R = GEAR_RAR[d.it.r];
+      addDmg(p.x, p.y - 52, gearName(d.it), R.col, d.it.r === 'rare' ? 18 : 15);
+      logEvent('LOOT — '+gearName(d.it), R.col);
+      try { SFX.pick(); } catch(e){}
+    } else if(gearFullT <= 0){
+      gearFullT = 2.5;
+      addDmg(p.x, p.y - 52, 'INVENTORY FULL', '#ff8a6a', 16);
+    }
+  }
+  gearDrops = gearDrops.filter(d=>!d.got);
+}
+/* what a body leaves. `tier` 0 is anybody, 1 an elite, 2 a boss */
+function gearSpoils(e, tier, chanceMul){
+  if(Math.random() >= GEAR_DROP * (chanceMul || 1)) return null;
+  const it = gearRoll(mobLevel(), tier);
+  return it ? gearDropAt(it, e.x, e.y) : null;
+}
+function gearBossSpoils(e){
+  const lv = mobLevel();
+  gearDropAt(gearRoll(lv, 2), e.x - 30, e.y + 20);
+  const B = gearRollBase(lv);
+  if(B) gearDropAt(gearMake(B.id, 'rare', lv), e.x + 30, e.y + 20);
 }
 /* Levelling used to outrun the roster: by wave 20 the hero was several levels
    past what the wave was built for, because a kill paid its base value times a
@@ -15346,6 +16041,497 @@ function toggleChar(){
     SFX.click();
   }
 }
+/* =============================== THE EQUIPMENT SCREEN ===============================
+   PoE's inventory panel: the hero's slots above, the bag below. Click an item in
+   the bag to put it on (whatever it replaces goes where it was), click a worn one
+   to take it off, drag either anywhere it fits, drop one in the bin -- or
+   Ctrl-click it twice -- to be rid of it. The run waits while this is open. */
+let gearOn = false, gearFrom = 'play';
+/* where each slot sits on the paper doll, in bag cells */
+const GEAR_DOLL = {
+  weapon: { x:0,   y:1,   w:2, h:4 },
+  helmet: { x:4,   y:0,   w:2, h:2 },
+  offhand:{ x:8,   y:1,   w:2, h:4 },
+  body:   { x:4,   y:2.2, w:2, h:3 },
+  amulet: { x:6.3, y:1.1, w:1, h:1 },
+  ring1:  { x:2.7, y:3.2, w:1, h:1 },
+  ring2:  { x:6.3, y:3.2, w:1, h:1 },
+  gloves: { x:1.4, y:5.5, w:2, h:2 },
+  belt:   { x:4,   y:5.5, w:2, h:1 },
+  boots:  { x:6.6, y:5.5, w:2, h:2 }
+};
+/* ---- THE PICTURES ----
+   One drawing per class, in a box the shape of its footprint (12 units a cell),
+   as SVG paths -- so the SAME drawing is an <svg> in the bag and a Path2D on the
+   floor. Each part names its paint: m the base's colour, d darker, l lighter,
+   s steel, w wood, g gold. */
+const GEAR_ICON = {
+  helmet: [['m','M3 16 C3 7 7 3 12 3 C17 3 21 7 21 16 L22 16 L22 19 L2 19 L2 16 Z'], ['d','M7 11 L17 11 L17 13.5 L7 13.5 Z']],
+  body:   [['m','M7 4 L10 6 L14 6 L17 4 L22 9 L19 13 L19 32 L5 32 L5 13 L2 9 Z'], ['d','M11 8 L13 8 L13 30 L11 30 Z'],
+           ['l','M7 15 L10 15 L10 18 L7 18 Z M14 15 L17 15 L17 18 L14 18 Z']],
+  gloves: [['m','M6 22 L6 12 L5 5 L7.5 5 L8.5 11 L8.5 3 L11 3 L11 11 L12 2.5 L14.5 2.5 L14 11 L15.5 4.5 L18 4.5 L17 13 L19 11 L21 12.5 L17 18 L17 22 Z'],
+           ['d','M6 19 L17 19 L17 22 L6 22 Z']],
+  boots:  [['m','M6 2 L14 2 L14 14 L21 16.5 L22 21 L5 21 Z'], ['d','M5 19 L22 19 L22 21.5 L5 21.5 Z'], ['l','M6 2 L14 2 L14 4.5 L6 4.5 Z']],
+  shield: [['m','M12 2 L22 6 L22 16 C22 24 17 30 12 34 C7 30 2 24 2 16 L2 6 Z'], ['d','M12 5 L19 8 L19 16 C19 22 16 27 12 30 Z'],
+           ['l','M8 14 A4 4 0 1 0 16 14 A4 4 0 1 0 8 14 Z']],
+  quiver: [['w','M7.5 1 L9 1 L9.5 10 L8 10 Z M11.3 0 L12.7 0 L12.7 10 L11.3 10 Z M15 1 L16.5 1 L16 10 L14.5 10 Z'],
+           ['m','M6 10 L18 10 L16 34 L8 34 Z'], ['d','M6.4 15 L17.6 15 L17.4 17.5 L6.6 17.5 Z']],
+  belt:   [['m','M1 4 L23 4 L23 9 L1 9 Z'], ['g','M9 2.5 L15 2.5 L15 10.5 L9 10.5 Z'], ['d','M10.6 4 L13.4 4 L13.4 9 L10.6 9 Z']],
+  amulet: [['g','M2.5 1 C2.5 5 4.5 7 6 7.4 C7.5 7 9.5 5 9.5 1 L8.6 1 C8.6 4.4 7.2 6.2 6 6.5 C4.8 6.2 3.4 4.4 3.4 1 Z'],
+           ['m','M6 6.2 L9.2 9 L6 11.8 L2.8 9 Z']],
+  ring:   [['g','M1.5 7.5 A4.5 4.5 0 1 0 10.5 7.5 A4.5 4.5 0 1 0 1.5 7.5 Z M3.3 7.5 A2.7 2.7 0 1 1 8.7 7.5 A2.7 2.7 0 1 1 3.3 7.5 Z'],
+           ['m','M4.3 1 L7.7 1 L8.8 2.7 L6 4.6 L3.2 2.7 Z']],
+  sword:  [['s','M6 1 L8.5 5 L8.5 24 L3.5 24 L3.5 5 Z'], ['m','M1 24 L11 24 L11 26.5 L1 26.5 Z'],
+           ['w','M4.8 26.5 L7.2 26.5 L7.2 32 L4.8 32 Z'], ['m','M4 33 A2 2 0 1 0 8 33 A2 2 0 1 0 4 33 Z']],
+  axe:    [['w','M11 6 L13.5 6 L13.5 35 L11 35 Z'], ['s','M13 4 C18 2 23 5 23 12 C23 16 20 19 17 19 L13 15 Z'],
+           ['m','M11 7 L6 5 L6 12 L11 11 Z']],
+  mace:   [['w','M10.8 14 L13.2 14 L13.2 35 L10.8 35 Z'], ['m','M12 2 L18 5 L19 12 L12 16 L5 12 L6 5 Z'],
+           ['s','M12 0 L13.2 3 L10.8 3 Z M20.5 7 L22.5 8.8 L19.5 9.8 Z M3.5 7 L1.5 8.8 L4.5 9.8 Z']],
+  scepter:[['g','M5 11 L7 11 L7 35 L5 35 Z'], ['m','M6 1 L10.5 6 L6 12 L1.5 6 Z'], ['l','M6 3 L8 6 L6 8.5 L4 6 Z']],
+  staff:  [['w','M10.8 8 L13.2 8 L13.2 47 L10.8 47 Z M7 3 L10.8 9 L10 10.5 L5.5 4 Z M17 3 L13.2 9 L14 10.5 L18.5 4 Z'],
+           ['m','M7 6 A5 5 0 1 0 17 6 A5 5 0 1 0 7 6 Z'], ['l','M10 5 A2 2 0 1 0 14 5 A2 2 0 1 0 10 5 Z']],
+  bow:    [['w','M5 2 C20 10 20 38 5 46 L7.5 46 C21.5 37 21.5 11 7.5 2 Z'], ['l','M5.6 3 L6.4 3 L6.4 45 L5.6 45 Z'],
+           ['m','M16.2 21 L19.8 21 L19.8 27 L16.2 27 Z']]
+};
+function gearPaint(k, col){
+  return k === 'm' ? col : k === 'd' ? sh(col, -0.35) : k === 'l' ? sh(col, 0.35)
+       : k === 's' ? '#c9d1d8' : k === 'w' ? '#8a5a2e' : '#d9b45a';
+}
+function gearIconSvg(it){
+  const B = GEAR_BASE_BY_ID[it.b], C = GEAR_CLS[B.cls], col = B.col || '#a9b3bc';
+  const parts = GEAR_ICON[B.cls] || GEAR_ICON.ring;
+  return `<svg viewBox="0 0 ${C.w*12} ${C.h*12}" preserveAspectRatio="xMidYMid meet">`+
+    parts.map(([k, d])=>`<path fill-rule="evenodd" fill="${gearPaint(k, col)}" stroke="rgba(10,14,18,.55)" stroke-width=".5" d="${d}"/>`).join('')+
+    '</svg>';
+}
+const gearPathCache = {};
+function gearPaths(cls){
+  if(!gearPathCache[cls]) gearPathCache[cls] = (GEAR_ICON[cls] || GEAR_ICON.ring).map(([k, d])=>({ k, p:new Path2D(d) }));
+  return gearPathCache[cls];
+}
+/* ---- THE WORDS ---- */
+function gearKindWord(cls){ const k = gearDmgKind(cls); return k === 'elem' ? 'elemental' : k === 'minion' ? 'minion' : 'physical'; }
+function gearModText(stat, v, cls){
+  const pct = x=>Math.round(Math.abs(x)*100)+'%', sg = x=>x < 0 ? '−' : '+';
+  switch(stat){
+    case 'locArmour':    return sg(v)+Math.abs(v)+' to Armour';
+    case 'locEva':       return sg(v)+Math.abs(v)+' to Evasion';
+    case 'locEs':        return sg(v)+Math.abs(v)+' to Energy Shield';
+    case 'locArmourInc': return pct(v)+' increased Armour';
+    case 'locEvaInc':    return pct(v)+' increased Evasion';
+    case 'locEsInc':     return pct(v)+' increased Energy Shield';
+    case 'locDmg':       return 'Adds '+fmtHp(v)+' '+gearKindWord(cls)+' damage';
+    case 'locDmgInc':    return pct(v)+' increased '+gearKindWord(cls)+' damage';
+  }
+  const X = GEAR_XSTATS[stat];
+  if(X) return sg(v)+fmtHp(Math.abs(v))+' '+X.n;
+  if(stat === 'armour') return sg(v)+Math.abs(Math.round(v))+' armour';
+  return metaModText([stat, v]);
+}
+function gearDefLines(it){
+  const B = GEAR_BASE_BY_ID[it.b], L = [];
+  const got = {}; for(const [k, v] of gearMods(it)) got[k] = (got[k] || 0) + v;
+  const loc = it.m.some(m=>/^loc/.test((GEAR_AFFIX_BY_ID[m[0]] || {}).stat || ''));
+  if(B.def){
+    if(B.def.armour) L.push(['Armour', got.armour, loc && got.armour !== B.def.armour]);
+    if(B.def.eva)    L.push(['Evasion', got.eva, loc && got.eva !== B.def.eva]);
+    if(B.def.es)     L.push(['Energy Shield', got.es, loc && got.es !== B.def.es]);
+  }
+  if(B.dmg){
+    const k = gearDmgKind(B.cls), key = k === 'elem' ? 'flatElem' : k === 'minion' ? 'minionFlat' : 'flatPhys';
+    L.push([k === 'minion' ? 'Adds to every minion hit' : 'Adds '+gearKindWord(B.cls)+' damage', '+'+fmtHp(got[key] || 0), loc && Math.abs((got[key]||0) - B.dmg) > 1e-9]);
+  }
+  return L;
+}
+function gearTipHtml(it, head, slot){
+  const B = GEAR_BASE_BY_ID[it.b], R = GEAR_RAR[it.r], C = GEAR_CLS[B.cls];
+  const nm = gearName(it);
+  let h = `<div class="gtip ${it.r}">`;
+  if(head) h += `<div class="gtcap">${head}</div>`;
+  h += `<div class="gth" style="color:${R.col}">${nm}${it.r === 'rare' ? '<br>'+B.name : ''}</div><div class="gtb">`;
+  h += `<div class="gtcls">${C.name}${C.weap ? ' · '+(C.weap === 'staff' || C.weap === 'bow' ? 'two hands' : 'one hand') : ''}</div>`;
+  for(const [k, v, mod] of gearDefLines(it)) h += `<div class="gtdef">${k}: <b class="${mod ? 'gmod' : ''}">${v}</b></div>`;
+  h += `<div class="gtlvl">Item Level: ${it.il}</div>`;
+  if(it.imp.length){ h += '<hr>'; for(const [k, v] of it.imp) h += `<div class="gtimp">${gearModText(k, v, B.cls)}</div>`; }
+  if(it.m.length){
+    h += '<hr>';
+    const ord = it.m.slice().sort((a, b)=>(GEAR_AFFIX_BY_ID[a[0]].kind === 'pre' ? 0 : 1) - (GEAR_AFFIX_BY_ID[b[0]].kind === 'pre' ? 0 : 1));
+    for(const [id, ti, v] of ord){
+      const a = GEAR_AFFIX_BY_ID[id];
+      h += `<div class="gtmod">${gearModText(a.stat, v, B.cls)}<i>${a.kind === 'pre' ? 'P' : 'S'}${a.tiers.length - ti}</i></div>`;
+    }
+  }
+  const why = gearActiveWhy(it, slot || gearSlotOf(it));
+  if(why) h += `<div class="gtwarn">INACTIVE — ${why}</div>`;
+  return h + '</div></div>';
+}
+/* WHAT CHANGES if this goes on: every stat the two items touch, the new total
+   against the old, green up and red down */
+function gearSumMods(it, slot){ const o = {}; if(it && gearActive(it, slot)) for(const [k, v] of gearMods(it)) o[k] = (o[k] || 0) + v; return o; }
+function gearDeltaHtml(it, old, slot){
+  const a = gearSumMods(it, slot), b = gearSumMods(old, slot), keys = new Set(Object.keys(a).concat(Object.keys(b)));
+  const rows = [];
+  for(const k of keys){
+    const d = gearRound(k, (a[k] || 0) - (b[k] || 0));
+    if(Math.abs(d) < 1e-9) continue;
+    rows.push(`<div class="${d > 0 ? 'gup' : 'gdown'}">${d > 0 ? '▲' : '▼'} ${gearModText(k, d)}</div>`);
+  }
+  if(!rows.length) return '';
+  return `<div class="gtip gdelta"><div class="gtcap">IF YOU EQUIP IT</div><div class="gtb">${rows.join('')}</div></div>`;
+}
+/* ---- OPEN AND CLOSE ---- */
+function toggleGear(){
+  const el = document.getElementById('gearScreen');
+  if(!el) return;
+  if(gearOn){
+    gearOn = false;
+    el.classList.add('hidden');
+    gearTipHide();
+    state = gearFrom;
+    if(state === 'play'){ cv.style.cursor = 'none'; try{ window.focus(); }catch(err){} }
+    if(state === 'title') refreshGearBtn();
+    try { SFX.click(); } catch(e){}
+    return;
+  }
+  if(!['play','title','pause'].includes(state)) return;
+  if(!GEAR) gearLoad();
+  gearFrom = state; gearOn = true; state = 'gear';
+  el.classList.remove('hidden');
+  cv.style.cursor = 'default';
+  gearNote('');
+  renderGear();
+  try { SFX.click(); } catch(e){}
+}
+let gearNoteT = null;
+function gearNote(t, bad){
+  const n = document.getElementById('gearNote');
+  if(!n) return;
+  n.textContent = t || ''; n.style.color = bad ? '#ff8a6a' : '#9fdc7e';
+  clearTimeout(gearNoteT);
+  if(t) gearNoteT = setTimeout(()=>{ n.textContent = ''; }, 3200);
+}
+function refreshGearBtn(){
+  if(!GEAR) gearLoad();
+  const b = document.getElementById('gearCount');
+  if(b) b.textContent = GEAR.inv.length;
+}
+/* ---- WHAT A CHANGE DOES ----
+   Mid-run, the hero wears it now. On the title screen there is no hero yet --
+   but putting on a weapon there picks that weapon, the way the weapon row does:
+   what you hold is what you play. */
+function gearChanged(it){
+  gearSave();
+  if(gearFrom === 'title' && it){
+    const C = GEAR_CLS[GEAR_BASE_BY_ID[it.b].cls];
+    if(C.weap && C.weap !== weapon.id) setWeapon(C.weap);
+  }
+  if((gearFrom === 'play' || gearFrom === 'pause') && player && !player.dead) gearApply(player, false);
+  renderGear();
+}
+function gearPickSlot(it){
+  const s = gearSlotOf(it);
+  if(s !== 'ring') return s;
+  return !GEAR.eq.ring1 ? 'ring1' : !GEAR.eq.ring2 ? 'ring2' : 'ring1';
+}
+function gearLockNote(){ gearNote('A RUN LINK WEARS THE GEAR IT WAS COPIED WITH', true); }
+function gearEquip(entry, slot){
+  if(gearLinked()){ gearLockNote(); return false; }
+  const it = entry.it;
+  slot = slot || gearPickSlot(it);
+  if(!gearFitsSlot(it, slot)){ gearNote('THAT DOES NOT GO THERE', true); return false; }
+  const old = GEAR.eq[slot], idx = GEAR.inv.indexOf(entry);
+  if(idx < 0) return false;
+  GEAR.inv.splice(idx, 1);
+  if(old){
+    const at = gearRoomAt(GEAR.inv, old, entry.x, entry.y) ? { x:entry.x, y:entry.y } : gearFreeSpot(GEAR.inv, old);
+    if(!at){ GEAR.inv.splice(idx, 0, entry); gearNote('NO ROOM IN THE BAG FOR WHAT YOU ARE WEARING', true); return false; }
+    GEAR.inv.push({ it:old, x:at.x, y:at.y });
+  }
+  GEAR.eq[slot] = it;
+  gearChanged(it);
+  return true;
+}
+function gearUnequip(slot, x, y){
+  if(gearLinked()){ gearLockNote(); return false; }
+  const it = GEAR.eq[slot];
+  if(!it) return false;
+  const at = (x !== undefined && gearRoomAt(GEAR.inv, it, x, y)) ? { x, y } : (x === undefined ? gearFreeSpot(GEAR.inv, it) : null);
+  if(!at){ gearNote(x === undefined ? 'THE BAG IS FULL' : 'IT DOES NOT FIT THERE', true); return false; }
+  GEAR.eq[slot] = null;
+  GEAR.inv.push({ it, x:at.x, y:at.y });
+  gearChanged(null);
+  return true;
+}
+function gearMove(entry, x, y){
+  if(!gearRoomAt(GEAR.inv, entry.it, x, y, entry)){ gearNote('IT DOES NOT FIT THERE', true); return false; }
+  entry.x = x; entry.y = y;
+  gearSave(); renderGear();
+  return true;
+}
+function gearDestroy(src){
+  if(src.slot){
+    if(gearLinked()){ gearLockNote(); return false; }
+    const it = GEAR.eq[src.slot]; if(!it) return false;
+    GEAR.eq[src.slot] = null;
+    gearNote('DESTROYED — '+gearName(it));
+  } else {
+    const i = GEAR.inv.indexOf(src.entry); if(i < 0) return false;
+    GEAR.inv.splice(i, 1);
+    gearNote('DESTROYED — '+gearName(src.entry.it));
+  }
+  gearChanged(null);
+  return true;
+}
+/* ---- DRAWING IT ---- */
+function gearItemEl(it, off){
+  const R = GEAR_RAR[it.r];
+  return `<div class="gitem ${it.r}${off ? ' off' : ''}" style="background:${R.bg}">${gearIconSvg(it)}</div>`;
+}
+let gearKill = null;      /* the item a first Ctrl-click marked for the bin */
+function renderGear(){
+  if(!GEAR) gearLoad();
+  const doll = document.getElementById('gearDoll'), inv = document.getElementById('gearInv');
+  if(!doll || !inv) return;
+  const eq = gearEqNow();
+  const linked = gearLinked();
+  const sub = document.getElementById('gearSub');
+  if(sub) sub.textContent = linked ? 'A RUN LINK WEARS THE GEAR IT WAS COPIED WITH — your own bag is below'
+    : 'Everything here is saved as it changes — dying keeps it all. Gear drops from monsters; walk over it to pick it up.';
+  let h = '';
+  for(const s of GEAR_SLOTS){
+    const D = GEAR_DOLL[s], it = eq[s];
+    h += `<div class="gslot" data-slot="${s}" style="left:calc(var(--gc)*${D.x});top:calc(var(--gc)*${D.y});`+
+      `width:calc(var(--gc)*${D.w});height:calc(var(--gc)*${D.h})">`+
+      (it ? gearItemEl(it, !gearActive(it, s)).replace('class="gitem', `data-slot="${s}" class="gitem`)
+          : `<div class="glbl">${GEAR_SLOT_NAME[s]}</div>`)+'</div>';
+  }
+  doll.innerHTML = h;
+  h = '';
+  GEAR.inv.forEach((e, i)=>{
+    const s = gearSize(e.it);
+    h += gearItemEl(e.it, false).replace('class="gitem', `data-inv="${i}" class="gitem${gearKill === e ? ' kill' : ''}`)
+      .replace('style="', `style="left:calc(var(--gc)*${e.x});top:calc(var(--gc)*${e.y});width:calc(var(--gc)*${s.w});height:calc(var(--gc)*${s.h});`);
+  });
+  inv.innerHTML = h + '<div id="gearShadow" class="gshadow hidden"></div>';
+  /* what it all adds up to */
+  const sum = document.getElementById('gearSum');
+  if(sum){
+    const tot = {};
+    for(const s of GEAR_SLOTS){ const it = eq[s]; if(it && gearActive(it, s)) for(const [k, v] of gearMods(it)) tot[k] = (tot[k] || 0) + v; }
+    const ks = Object.keys(tot).sort((a, b)=>gearStatRank(a) - gearStatRank(b));
+    sum.innerHTML = '<div class="gshead">YOUR GEAR GIVES</div>' + (ks.length
+      ? ks.map(k=>`<div class="gsrow">${gearModText(k, gearRound(k, tot[k]))}</div>`).join('')
+      : '<div class="gsnone">Nothing yet. Monsters drop gear — elites more often, bosses always.</div>')
+      + `<div class="gsfoot">${GEAR.inv.length} item${GEAR.inv.length === 1 ? '' : 's'} in the bag</div>`;
+  }
+}
+/* the summary reads like a character sheet: what keeps you alive, then what
+   you resist, then what you are made of, then what you hit with */
+const GEAR_STAT_ORDER = ['hearts','es','armour','eva','regen','suppress','fireRes','frostRes','shockRes','chaosRes','allRes',
+  'str','dex','int','allAttr','flatPhys','flatElem','arrowFlat','minionFlat','incMelee','incSpell','incElem','minionDmg','minionLife',
+  'incAtk','incCast','incCrit','critMult','acc','incAcc','bleedChance','leech','speed','studs','magnet'];
+function gearStatRank(k){ const i = GEAR_STAT_ORDER.indexOf(k); return i < 0 ? 999 : i; }
+/* ---- THE TOOLTIP ---- */
+function gearTipHide(){ const t = document.getElementById('gearTip'); if(t) t.classList.add('hidden'); }
+function gearTipShow(src, cx, cy){
+  const t = document.getElementById('gearTip');
+  if(!t || !src) return;
+  const eq = gearEqNow();
+  let h = '';
+  if(src.slot){ h = gearTipHtml(eq[src.slot], 'EQUIPPED', src.slot); }
+  else {
+    const it = src.entry.it, slot = gearPickSlot(it), old = eq[slot];
+    h = gearTipHtml(it, null, slot);
+    if(!gearLinked()){
+      h += gearDeltaHtml(it, old, slot);
+      if(old) h += gearTipHtml(old, 'CURRENTLY EQUIPPED', slot);
+    }
+  }
+  t.innerHTML = h;
+  t.classList.remove('hidden');
+  const r = t.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+  let x = cx + 22, y = cy - 20;
+  if(x + r.width > vw - 8) x = cx - r.width - 22;
+  if(y + r.height > vh - 8) y = vh - 8 - r.height;
+  t.style.left = Math.max(8, x) + 'px'; t.style.top = Math.max(8, y) + 'px';
+}
+/* ---- THE HAND ----
+   One pointer handler for the whole screen. A press on an item that moves more
+   than a few pixels is a DRAG; one that does not is a CLICK. */
+const gearDrag = { src:null, x0:0, y0:0, on:false, gx:0, gy:0 };
+function gearSrcOf(el){
+  const it = el && el.closest && el.closest('.gitem');
+  if(!it) return null;
+  if(it.dataset.slot){ const eq = gearEqNow(); return eq[it.dataset.slot] ? { slot:it.dataset.slot, it:eq[it.dataset.slot], el:it } : null; }
+  if(it.dataset.inv !== undefined){ const e = GEAR.inv[+it.dataset.inv]; return e ? { entry:e, it:e.it, el:it } : null; }
+  return null;
+}
+function gearCellAt(cx, cy){
+  const inv = document.getElementById('gearInv');
+  const r = inv.getBoundingClientRect();
+  if(cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return null;
+  const c = r.width / GEAR_COLS;
+  return { x:Math.floor((cx - r.left)/c), y:Math.floor((cy - r.top)/c), c };
+}
+function gearDropTarget(cx, cy){
+  const ghost = document.getElementById('gearGhost');
+  if(ghost) ghost.style.display = 'none';
+  const el = document.elementFromPoint(cx, cy);
+  if(ghost) ghost.style.display = '';
+  if(!el) return null;
+  if(el.closest('#gearBin')) return { bin:true };
+  const sl = el.closest('.gslot');
+  if(sl) return { slot:sl.dataset.slot };
+  const cell = gearCellAt(cx, cy);
+  if(cell) return { cell:{ x:cell.x - gearDrag.gx, y:cell.y - gearDrag.gy } };
+  return null;
+}
+function gearDragPaint(cx, cy){
+  const g = document.getElementById('gearGhost');
+  if(g){ g.style.left = (cx - gearDrag.ox) + 'px'; g.style.top = (cy - gearDrag.oy) + 'px'; }
+  document.querySelectorAll('.gslot.drop-ok,.gslot.drop-bad').forEach(e=>e.classList.remove('drop-ok','drop-bad'));
+  const shadow = document.getElementById('gearShadow');
+  if(shadow) shadow.classList.add('hidden');
+  const T = gearDropTarget(cx, cy), src = gearDrag.src;
+  if(!T) return;
+  if(T.slot){
+    const el = document.querySelector(`.gslot[data-slot="${T.slot}"]`);
+    if(el) el.classList.add(gearFitsSlot(src.it, T.slot) ? 'drop-ok' : 'drop-bad');
+  } else if(T.cell && shadow){
+    const s = gearSize(src.it);
+    const ok = gearRoomAt(GEAR.inv, src.it, T.cell.x, T.cell.y, src.entry);
+    shadow.className = 'gshadow ' + (ok ? 'ok' : 'bad');
+    shadow.style.left = `calc(var(--gc)*${T.cell.x})`; shadow.style.top = `calc(var(--gc)*${T.cell.y})`;
+    shadow.style.width = `calc(var(--gc)*${s.w})`; shadow.style.height = `calc(var(--gc)*${s.h})`;
+  }
+}
+function gearDown(e){
+  if(!gearOn || e.button !== 0) return;
+  const src = gearSrcOf(e.target);
+  if(!src) return;
+  e.preventDefault();
+  const r = src.el.getBoundingClientRect();
+  const s = gearSize(src.it), c = r.width / s.w;
+  Object.assign(gearDrag, { src, x0:e.clientX, y0:e.clientY, on:false,
+    ox:e.clientX - r.left, oy:e.clientY - r.top,
+    gx:clamp(Math.floor((e.clientX - r.left)/c), 0, s.w - 1), gy:clamp(Math.floor((e.clientY - r.top)/c), 0, s.h - 1),
+    ctrl:e.ctrlKey || e.metaKey });
+}
+function gearMoveEv(e){
+  if(!gearOn) return;
+  if(gearDrag.src){
+    if(!gearDrag.on && Math.hypot(e.clientX - gearDrag.x0, e.clientY - gearDrag.y0) > 5){
+      gearDrag.on = true;
+      gearTipHide();
+      const g = document.getElementById('gearGhost');
+      const r = gearDrag.src.el.getBoundingClientRect();
+      g.innerHTML = gearDrag.src.el.outerHTML;
+      g.style.width = r.width + 'px'; g.style.height = r.height + 'px';
+      g.classList.remove('hidden');
+      gearDrag.src.el.style.opacity = '0.25';
+    }
+    if(gearDrag.on){ gearDragPaint(e.clientX, e.clientY); return; }
+  }
+  const src = gearSrcOf(e.target);
+  if(src) gearTipShow(src, e.clientX, e.clientY); else gearTipHide();
+}
+function gearUp(e){
+  if(!gearOn || !gearDrag.src) return;
+  const src = gearDrag.src, was = gearDrag.on;
+  gearDrag.src = null; gearDrag.on = false;
+  const g = document.getElementById('gearGhost');
+  if(g){ g.classList.add('hidden'); g.innerHTML = ''; }
+  if(!was){
+    /* a CLICK: Ctrl twice destroys, anything else wears or takes off */
+    if(gearDrag.ctrl){
+      if(gearKill === (src.entry || src.slot)){ gearKill = null; gearDestroy(src); }
+      else { gearKill = src.entry || src.slot; gearNote('CTRL-CLICK AGAIN TO DESTROY '+gearName(src.it).toUpperCase(), true); renderGear(); }
+      return;
+    }
+    gearKill = null;
+    if(src.slot) gearUnequip(src.slot); else gearEquip(src.entry);
+    gearTipHide();
+    return;
+  }
+  const T = gearDropTarget(e.clientX, e.clientY);
+  if(!T){ renderGear(); return; }
+  if(T.bin) gearDestroy(src);
+  else if(T.slot){
+    if(src.slot){
+      if(T.slot === src.slot || !gearFitsSlot(src.it, T.slot)){ renderGear(); return; }
+      if(gearLinked()){ gearLockNote(); renderGear(); return; }
+      /* ring to ring: they swap */
+      const other = GEAR.eq[T.slot]; GEAR.eq[T.slot] = src.it; GEAR.eq[src.slot] = other;
+      gearChanged(null);
+    } else gearEquip(src.entry, T.slot) || renderGear();
+  } else if(T.cell){
+    if(src.slot) gearUnequip(src.slot, T.cell.x, T.cell.y) || renderGear();
+    else gearMove(src.entry, T.cell.x, T.cell.y) || renderGear();
+  }
+}
+function gearWire(){
+  const scr = document.getElementById('gearScreen');
+  if(!scr) return;
+  scr.addEventListener('pointerdown', gearDown);
+  window.addEventListener('pointermove', gearMoveEv);
+  window.addEventListener('pointerup', gearUp);
+  scr.addEventListener('pointerleave', ()=>{ if(!gearDrag.src) gearTipHide(); });
+  const close = document.getElementById('gearCloseBtn');
+  if(close) close.addEventListener('click', ()=>toggleGear());
+  const sort = document.getElementById('gearSortBtn');
+  if(sort) sort.addEventListener('click', ()=>{ gearSort(); renderGear(); });
+}
+/* TIDY: biggest first, packed column by column */
+function gearSort(){
+  const list = GEAR.inv.slice().sort((a, b)=>{ const A = gearSize(a.it), B = gearSize(b.it); return (B.w*B.h - A.w*A.h) || (a.it.b < b.it.b ? -1 : 1); });
+  const out = [];
+  for(const e of list){ const at = gearFreeSpot(out, e.it); if(at) out.push({ it:e.it, x:at.x, y:at.y }); else out.push(e); }
+  GEAR.inv = out;
+  gearSave();
+}
+/* ---- ON THE FLOOR, DRAWN ----
+   A small picture of the thing on a pool of its rarity's light -- and a RARE
+   throws a beam up, PoE's way, so it can be seen across a crowded screen. */
+function drawGearDrops(){
+  for(const d of gearDrops){
+    if(!onScreen(d, 80)) continue;
+    const it = d.it, B = GEAR_BASE_BY_ID[it.b], C = GEAR_CLS[B.cls], R = GEAR_RAR[it.r];
+    const pulse = 0.6 + 0.4*Math.sin(vtime*4 + d.x*0.01);
+    if(it.r === 'rare'){
+      const g = ctx.createLinearGradient(d.x, d.y - 150, d.x, d.y);
+      g.addColorStop(0, 'rgba(255,255,119,0)'); g.addColorStop(1, `rgba(255,255,119,${0.30*pulse})`);
+      ctx.fillStyle = g; ctx.fillRect(d.x - 7, d.y - 150, 14, 150);
+    }
+    ctx.fillStyle = it.r === 'rare' ? `rgba(255,240,110,${0.30*pulse})` : it.r === 'magic' ? `rgba(120,120,255,${0.28*pulse})` : 'rgba(220,220,220,0.16)';
+    ctx.beginPath(); ctx.ellipse(d.x, d.y + 2, 18, 8, 0, 0, TAU); ctx.fill();
+    const k = 32 / (Math.max(C.w, C.h) * 12);
+    ctx.save();
+    ctx.translate(d.x - C.w*6*k, d.y - d.z - C.h*12*k + 4);
+    ctx.scale(k, k);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(10,14,18,0.8)';
+    for(const q of gearPaths(B.cls)){ ctx.fillStyle = gearPaint(q.k, B.col || '#a9b3bc'); ctx.fill(q.p, 'evenodd'); ctx.stroke(q.p); }
+    ctx.restore();
+    void R;
+  }
+}
+/* THE LABELS, over everything: PoE's name plate, in the rarity's colour. A plain
+   normal item only speaks up when you are close to it. */
+function drawGearLabels(){
+  const p = player;
+  ctx.textAlign = 'center';
+  ctx.font = '700 11px Fredoka';
+  for(const d of gearDrops){
+    if(!onScreen(d, 80)) continue;
+    const it = d.it, R = GEAR_RAR[it.r];
+    if(it.r === 'normal' && p && dist(d, p) > 260) continue;
+    const t = gearName(it), w = ctx.measureText(t).width + 10, y = d.y - d.z - 34;
+    ctx.fillStyle = 'rgba(8,10,12,0.78)';
+    roundRect(ctx, d.x - w/2, y - 10, w, 15, 3); ctx.fill();
+    ctx.strokeStyle = it.r === 'rare' ? 'rgba(255,255,119,0.7)' : it.r === 'magic' ? 'rgba(136,136,255,0.6)' : 'rgba(200,200,200,0.3)';
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = R.col; ctx.fillText(t, d.x, y + 1.5);
+  }
+}
 function openUpgrades(mode='wave', forceRar){
   /* CLOSE THE BOOK FIRST, then guard. The book holds its own state, so doing the
      guard first meant a level-up or a cleared wave that landed while the book
@@ -22923,6 +24109,7 @@ function render(){
     }
   }
   for(const pk of pickups) if(onScreen(pk, 60)) drawPickup(ctx, pk);
+  drawGearDrops();
   if(player && player.magnetT>0 && !player.dead){
     ctx.setLineDash([8,10]);
     ctx.strokeStyle = `rgba(255,214,110,${0.45+0.3*Math.sin(vtime*6)})`;
@@ -23386,6 +24573,7 @@ function render(){
     ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y);
     ctx.globalAlpha = 1;
   }
+  drawGearLabels();
   ctx.restore();
   renderHUD();
   if(state==='play' && player && !player.dead){
@@ -23433,6 +24621,10 @@ function render(){
       edgeMarker(box.x, box.y, col, (x,y)=>{ ctx.fillStyle = '#3d4248'; ctx.strokeStyle = col; ctx.lineWidth = 1.5;
         roundRect(ctx, x - 8, y - 5, 16, 11, 2); ctx.fill(); ctx.stroke(); }, true);
     }
+    /* a rare on the floor is worth the walk */
+    for(const d of gearDrops) if(d.it.r === 'rare')
+      edgeMarker(d.x, d.y, '#ffff77', (x,y)=>{ ctx.fillStyle = '#ffff77'; ctx.strokeStyle = 'rgba(20,20,10,0.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
     for(const A of allAbysses()) if(A.state === 'idle')
       edgeMarker(A.x, A.y, ABYSS_COL, (x,y)=>{ ctx.fillStyle = '#06110a'; ctx.beginPath(); ctx.ellipse(x, y, 11, 6, 0, 0, TAU); ctx.fill();
         ctx.fillStyle = ABYSS_COL; ctx.beginPath(); ctx.ellipse(x, y, 4, 3, 0, 0, TAU); ctx.fill(); }, true);
@@ -25421,7 +26613,7 @@ let titleClock = 0;
 function resetRun(demo){
   seed = (!demo && runLink && runLink.s) ? runLink.s : (Math.random()*1e9)|0;
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
-  minions=[]; corpses=[];
+  minions=[]; corpses=[]; gearDrops=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave'; lootChain = false;
   rerollsUsed = 0; screenRerolls = 0; shunned = {};
@@ -25436,6 +26628,8 @@ function resetRun(demo){
        number, it hands over a BRICK — so it is applied here, once, where a real
        run begins, and never in newPlayer or on the bench's preview heroes. */
     metaGrantBricks(player.metaGrants || []);
+    /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you */
+    gearApply(player, true);
   }
   /* the records as this run found them -- see metaLiveBank */
   if(!META) metaLoad();
@@ -25663,6 +26857,7 @@ function backToTitle(){
   resetRun(true);
   state = 'title'; titleClock = 0; cv.style.cursor='default';
   showBest();
+  refreshGearBtn();
   fitTitle();
 }
 function showBest(){
@@ -25721,6 +26916,8 @@ document.getElementById('resumeBtn').addEventListener('click', ()=>{ SFX.click()
 document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('pauseScreen').classList.add('hidden'); startGame(); });
 document.getElementById('pauseTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
+document.getElementById('gearBtn').addEventListener('click', ()=>{ SFX.click(); toggleGear(); });
+document.getElementById('pauseGearBtn').addEventListener('click', ()=>{ toggleGear(); });
 document.getElementById('pauseLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
 document.getElementById('overLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
 
@@ -25755,6 +26952,7 @@ function update(dt, raw){
     updateBreach(dt);
     updateAbyss(dt);
     updateStrongboxes(dt);
+    updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
       const sw = player.swing;
@@ -25802,11 +27000,14 @@ function frame(now){
   if(state==='title'){ try { renderTitle(); } catch(err){ console.warn('title:', err); } }
 }
 metaLoad();          /* before the first hero, so nothing is stood up half-built */
+gearLoad();          /* ...and the gear, for the same reason */
+gearWire();
 resetRun(true);
 buildFavRow();
 buildDiffRow();
 buildWeaponRow();
 refreshTreeBtn();
+refreshGearBtn();
 showBest();
 fitTitle();
 requestAnimationFrame(frame);

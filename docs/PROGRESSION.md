@@ -3514,3 +3514,75 @@ and boss in turn. `lzwPack`/`lzwUnpack` were also round-tripped on 300 random ar
 200–300KB ones (past the 64k-entry dictionary). Breaks `noshockedicon`, `nobrittleicon`,
 `noexpose`, `noslow`, `breachchest`, `plainlink`, `nolegacy`, `badwidth`, `hstack`, `chipsback`,
 `nochain`: 11 caught.
+
+## Fifty-third pass — equipment (the `Equipment` branch)
+
+> *"A player now can have diffrent gear equiped, like in PoE ... Armour: Helmet, Body armour,
+> Boots, Gloves, Shields · Jewellry: Rings, Amulet, belt · Weapons: Axe, Bow, Mace, Scepter,
+> Staves, Sword · Offhand: Shields and Quivers ... equipment can roll with diffrent stats called
+> affixes, which are implicts, suffixes and prefixes ... Gear can drop from monsters and you pick
+> them up. When you die you get to bring your gear with you to the next run ... We can start
+> basic here, we dont have to create UNIQUEs"*
+
+The first thing in the game that survives a run besides the tree, so it is built the same way the
+tree is: **gear only ever writes pools.**
+
+- **Bases** (`GEAR_BASES`, 113 of them): four tiers of armour, evasion and energy-shield
+  helmets, body armours, gloves and boots; three tiers of shields; four quivers, six belts, six
+  amulets, ten rings; five bases for each of the six weapons. A weapon's `dmg` is flat damage
+  it ADDS — physical for the four that hit, elemental for the staff, the legion's (`minions.flat`)
+  for the sceptre. The late body armours carry PoE's own implicits (Astral Plate's resistances,
+  Assassin's Garb's move speed); bucklers suppress spells, spirit shields feed them.
+- **Affixes** (`GEAR_AFFIXES`, 16 prefixes and 20 suffixes) each name a `META_STATS` key — the
+  tree's own writers — or one of two new ones (`minionFlat`, `allAttr`), or a **local** stat
+  (`locArmour`, `locArmourInc`, `locDmg`, `locDmgInc` and the evasion and shield pairs) that
+  `gearMods` folds into the item's own number, (base + flat) × (1 + increased), before anything
+  reaches a pool. Tiers carry a level; `gearRollAffix` only picks among the tiers the item level
+  allows, all equally likely, so the top one is always the rarest.
+- **Rarity**: normal none, magic one or two (at most one prefix and one suffix), rare three to six
+  (at most three of each). Names: the base; prefix + base + suffix; two words from PoE's lists,
+  the second chosen by item class.
+- **Applying it** (`gearApply`): take the lines applied last time off, put the current ones on,
+  `syncStats`. Every writer is additive, so this is exact (to floating-point dust), the same trick
+  the mid-run tree uses. Called in `resetRun` after the tree and the favourite, in
+  `rebuildWithout`, and after every change made mid-run. `fill` at the start of a run tops the
+  bar up by what the gear added; anywhere else the bar keeps its share, so a swap is not a heal.
+- **Hands** (`gearActiveWhy`): a weapon works only for the matching hero weapon; a shield needs a
+  one-handed weapon; a quiver needs a bow. An inactive item stays worn and says why. On the title
+  screen, putting on a weapon calls `setWeapon` for it.
+- **Drops**: `gearSpoils` at the end of `mobSpoils`, `GEAR_DROP` = 1/80 times the same multiplier
+  the chest roll uses (×8 elite, ×1/12 breach); `gearBossSpoils` always leaves two, the first
+  magic-or-rare, the second rare. Item level = `mobLevel()`. Items on the floor live in
+  `gearDrops`, apart from pickups — nothing magnets, merges or floor-caps them — and are bagged by
+  walking within reach. Rares get a light beam and an edge marker; name plates are drawn over
+  the world, normal ones only within 260px.
+- **The bag** is PoE's: 12 × 5 cells, items by footprint, filled column by column (`gearFreeSpot`).
+  A full bag leaves the item where it lies.
+- **The save** (`bb_gear`): `{ eq, inv:[{it,x,y}], uid }`, written on every pickup, equip, move and
+  destroy. `gearLoad` validates every item (unknown bases, affixes and stats are dropped; an item
+  that no longer fits its spot is re-placed), so a save from a later version cannot break an
+  earlier one.
+- **The run link** gains `g` — the worn items, packed — only when something is worn, so a bare
+  run's link is unchanged. A linked run wears the link's gear (`gearEqNow`), and the screen shows it
+  read-only above your own bag.
+- **The screen** (`#gearScreen`, state `gear`, key <kbd>I</kbd>, title and pause buttons): paper
+  doll, bag, bin, TIDY, a summary of everything worn, and PoE-style tooltips with a
+  what-changes panel and the item currently worn. One pointer handler: a press that moves more
+  than five pixels is a drag, anything else a click.
+
+**Proof.** New `gear`: the tables (113 unique bases, all fifteen classes, every affix stat has a
+writer, tiers ascending); 3,000 rolls obey the count limits, never roll a base or tier deeper than
+the item, never repeat a line, and stay inside their tier's range; magic and rare names; local
+armour and weapon damage fold correctly, the staff adds elemental and the sceptre minion damage;
+worn gear moves armour, resistance, flat damage and hearts and comes off exactly; a sword item on
+an axe hero does nothing and says why; shields and quivers only work in the right hands; a
+hearts swap keeps the bar's share; drops (plain in, breach out, a miss, an elite, ~1/80 over 4,000
+rolls, a boss's two with the second rare, the item level); walking over an item bags and saves it,
+a full bag of body armours leaves one on the floor; the floor draws the name plate; the run link
+carries the gear and a bare one carries none; a helmet survives a death (game-over screen and
+all), the next run, and a page reload, and the title button counts the bag; and through the real
+screen with the mouse: I opens it over a held run, hovering shows the tooltip with the comparison,
+a click wears a ring (resistance up) and a click takes it off, a drag moves the cap to the far
+corner and another drag wears it, a drag into the bin destroys a ring (saved), Esc closes back
+into the run.
+
