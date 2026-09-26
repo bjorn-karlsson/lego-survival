@@ -742,6 +742,27 @@ reroll your build: chests draw from the pool with every spell-granting brick fil
 so what they give you always deepens something you already own. Level-ups and wave rewards
 still offer the spells themselves.
 
+**At most one defence and one utility on a screen.** Two ways to survive side by side is a
+choice between two halves of the same thing, so once a DEFENSE brick is drawn every other
+defence leaves the screen, and the same for UTILITY. Offence (spells included) can come
+twice.
+
+**Defences and attributes follow the weapon in your hand.**
+
+| Weapon | Usual drop | Still turns up, less often |
+|---|---|---|
+| Sword, mace | armour, strength | evasion, energy shield, dexterity, intelligence |
+| Axe, bow | evasion, spell suppression, dexterity | armour, energy shield, strength, intelligence |
+| Staff, scepter | energy shield, intelligence | armour, evasion, strength, dexterity |
+
+A brick of the weapon's own kind is drawn at ×1.5, one of the other two at ×0.35: over a few
+thousand screens a sword sees its own defences about five times as often as either of the
+others.
+
+**Conversions are drawn at half weight**, and the ones that end in **chaos** (The Unmaking,
+Creeping Blight, Rotgale, Sour Ending) at a quarter. Every conversion is uncommon or better,
+and every chaos conversion rare or better.
+
 ---
 
 ## The boss ladder
@@ -805,8 +826,10 @@ stack (×1 → ×2, clock back to 30); from the third on, every ward is time. Th
 **150s** — five pickups' worth — and the ring round the buff's icon drains against however long
 that clock actually is. Hearts are unchanged: they already stack five deep.
 
-**Generous Smith** *increases* the heart chance rather than adding to it — it caps at
-**+200% increased**, which is ×3 the base, or 3.00% a monster.
+**Hearts get commoner as the monsters level up.** Every level a monster has adds **3%** to
+its heart chance (a level-30 monster drops hearts ×1.87 as often as a level-1 one). There is
+no brick for it any more — Generous Smith is gone — though the tree's heart-drop nodes still
+*increase* the chance, up to **+200%**.
 
 ### What you threw back
 
@@ -936,8 +959,8 @@ the clock rather than queueing behind it.
 | | Effect | Stacks to |
 |---|---|---|
 | ❤️ **Heart** | Regeneration ×1.5 / 1.85 / 2.10 / 2.30 / **2.45** | 5 — and never ×7.5 |
-| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase | ×2 |
-| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it | ×2 |
+| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase — and your **minions'** too | ×2 |
+| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it. Your **minions** get it as well: the armour against physical blows, the resistance against fire, cold and lightning | ×2 |
 | 🍀 **Fortune** | ×2 studs and XP, plus up to **+25% rarity find** on reward rolls | ×2 |
 | 🧲 **Magnet** | Hoovers up every **stud** on the field. Studs only — it will not drag a chest to you | — |
 | 💛 **Golden heart** | **+3 maximum hearts, permanently.** The only prize that outlives its timer | — |
@@ -1917,6 +1940,13 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
+
+**A scepter hits nothing**, so it is not a physical source: a summoner with no spell of its
+own is offered no conversion at all — the legion's hits are the minions', and your
+conversions never reach them. The same goes for **Elemental Focus** (it needs a fire, cold
+or lightning source of your own) and **Overcharged Core** (your MORE is yours, not the
+legion's). *Mirrored Legion* opens both again, because under it your minions take a share of
+your increases.
 
 ### Accuracy and evasion
 

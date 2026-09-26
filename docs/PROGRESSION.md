@@ -3174,3 +3174,67 @@ to land. Break-builds: `instant`, `slowconvo`, `mageleash`, `mageshove`, `magewa
 `breathall`, `corpseall`, `drawall`, `norot`, `zcap`, `zpool`, `noreach`, `farthest`, `rarecard`,
 `noflag`, `slowrun`, `notree`, `midlist` (the graveyard back in the notable list), `nolate` (no
 site for it): 29 breaks, 29 caught (four of them only after the test was tightened).
+
+## Forty-fourth pass — a reward screen that fits the build
+
+> *"i have no clue why i get presented with ailment stuff when i dont have anything dealing
+> physical damage on this build, also i get presented with elemental damage when i dont have any
+> elemental spell ... make the buff Rage and Ward affect my minions ... ailment conversion
+> upgrades drop chance should be lowered ... chaos conversion rarer and rare+ ... When playing as
+> sword and mace, Armor and Strength are the normal drop ... remove the Generous Smith ... you
+> should never be presented with 2 defenses at once, or 2 utilities ... whenever i click a reward
+> the game thinks im also casting a spell ... i cannot read the upgrade cards changes"*
+
+**A scepter is not a physical source.** `dealtTypes()` credited every non-caster weapon with
+physical damage, the scepter included — so a bare summoner was offered Hoarfrost, Creeping Blight,
+Rimeblade and the rest. It adds nothing for a summoner now: its sources are its spells and what
+they convert into. `dealsElemental()` gates **Elemental Focus** on a fire, cold or lightning
+source of your own, and `heroHits()` gates **Overcharged Core** (the hero's MORE, which minions
+never read) on the hero dealing anything at all; *Mirrored Legion* opens both, because under it
+minions take a share of those increases. A fresh scepter's offence pool is now attributes, speed,
+crit, the charges, ailment chance, the spells, and the minion bricks.
+
+**Weights.** `cardWeight(u)` multiplies into the draw (after the rarity roll, beside the favourite
+and the reroll shun): every conversion (`u.need`) ×0.5, those ending in chaos ×0.25 (they were
+already rare+; every conversion is uncommon+). Defences and attributes follow the weapon —
+`HOME_ATTR` (sword/mace str, axe/bow dex, staff/scepter int) against `DEF_FAMILY` (armour,
+Plated Rig, Ironbone / evasion, Light on the Feet, Spell Suppression, Quicksilver / energy
+shield, Deep Ward, Runescript): ×1.5 at home, ×0.35 away. Over 1500 screens a sword saw 853
+str bricks against 163 dex and 143 int; a scepter 692 int against 203 and 162.
+
+**One defence, one utility.** When `take()` draws a DEFENSE or UTILITY brick, every other brick of
+that class leaves both the pool and the draw for the rest of the screen. 3600 screens across six
+weapons: none with two of either; offence came twice on 2790 of them.
+
+**Generous Smith is gone.** In its place `heartLvlMul()` = 1 + 3% per monster level above 1, read
+by `mobSpoils` through `heartDropChance()` (and by the three places the sheet prints the rate).
+The tree's heart-drop nodes still increase it. Run links that carry the old brick skip it.
+
+**Rage and ward reach the legion.** `minionDamage` multiplies by `rageMul()`; `minionHurt` puts
+the ward's armour (`armourDR(wardArmour(), n)`) in front of a physical blow and its resistance in
+front of fire, cold and lightning. Chaos goes through, as on the hero.
+
+**A card is not a Convocation.** The scepter's click is latched on mousedown (`mouse.fresh`), and
+the latch was set by every mousedown in the window — picking a reward card was one, and it
+arrived in the first frame of play as Convocation. It is set only in play, and only for a click
+on the canvas.
+
+**The card you are reading stays readable.** With four boss cards on a ~1040px window neither
+side of the row had room for the compare panel, and its last resort pinned it to the window's
+edge — exactly on top of the right-hand card. It now tries outside the row, then beside the
+hovered card itself (over a neighbour), then below or above it. And the reward screen scrolls
+(`justify-content: safe center`) instead of pushing its title off the top once a long run's build
+chips make it taller than the window.
+
+**Proof.** New `cards44`: a bare summoner deals nothing and is offered no conversion, no Elemental
+Focus, no Overcharged Core, and Mirrored Legion opens the last two; a sword still converts and a
+staff still takes Elemental Focus; every conversion uncommon+, chaos rare+, weights 0.5 and 0.25;
+per weapon, 1500 screens where the home family beats each other by 1.6× and neither other is
+zero; 3600 screens with no double defence or utility; Generous Smith absent from the deck, the
+bench and the favourites, and a roll between the wave-1 and wave-30 chances drops a heart at 30
+and not at 1; rage doubles a minion's hit, ward cuts a physical and a fire blow on a minion and
+not a chaos one; a real mouse click on a reward card leaves a scattered legion where it is, and a
+real click on the field calls all four; on a 1044×640 window no compare panel overlaps the card it
+describes and the title is on screen. Break-builds `scepphys`, `elemopen`, `moreopen`, `convw`,
+`chaosw`, `nohome`, `noaway`, `dbldef`, `heartflat`, `heartroll`, `norage`, `noward`, `wardchaos`,
+`clicklatch`, `cmpold`, `noscroll`: 16 breaks, 16 caught.

@@ -152,6 +152,10 @@
   .best{margin-top:8px;font-size:12.5px;color:#ffd0d0}
   #titleScreen .gap20{height:6px}
   .gap20{height:20px}.gap26{height:26px}
+  /* the same overflow trap as the title screen: a long run's build chips make the
+     reward screen taller than a laptop window, and centring pushed its title off
+     the top where nothing can scroll to it */
+  #upgradeScreen{overflow-y:auto;justify-content:safe center;padding:18px 0}
   #upgradeScreen h2{font-family:'Titan One';font-size:38px;color:#ffb900;text-shadow:0 4px 0 rgba(0,0,0,.4);letter-spacing:1px}
   #upgradeScreen .sub{color:#dfe4e2;margin:6px 0 26px;font-size:16px}
   #cards{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
@@ -1344,7 +1348,14 @@ function regenScale(){
 /* And the breather between waves is for healing — it is worth three ordinary
    seconds of it, which is what makes a thirty-second rest after a boss a rest. */
 const REGEN_BREAK_MUL = 2;
-const HEART_CHANCE_MAX = 2.0;    /* +200% of a very small base, not +200 points */
+const HEART_CHANCE_MAX = 2.0;
+/* HEARTS GET COMMONER AS THE MONSTERS GET TOUGHER. There is no brick for it any
+   more (Generous Smith is gone): every level a monster has adds this much to
+   the chance it drops a heart, so a long run keeps you fed without spending a
+   pick on it. */
+const HEART_PER_LVL = 0.03;
+function heartLvlMul(){ return 1 + HEART_PER_LVL * Math.max(0, mobLevel() - 1); }
+function heartDropChance(){ return DROP.heart * (1 + (player ? player.heartChance : 0)) * heartLvlMul(); }    /* +200% of a very small base, not +200 points */
 const STORM_MIN_RATE = 2.00;
 const VORTEX_MIN_RATE = 3.00;
 const BOOMER_MAX = 2;                     /* ranks of Returning Blades */
@@ -2774,7 +2785,9 @@ function dealtTypes(){
   const add = t=>{ if(t) out[t] = true; };
   /* the weapon in your hands */
   if(isCaster()) add(convFrom(weapon.elem || 'fire'));
-  else add('phys');
+  /* a scepter hits NOTHING: the legion's damage is the minions' own, and your
+     conversions never reach it -- so the hand is not a physical source */
+  else if(!isSummoner()) add('phys');
   /* an arrow that has become lightning, fire or chaos deals it */
   if(isArcher() && player.bow && player.bow.kind) add(ARROW_KINDS[player.bow.kind].to);
   /* a mace running SLAM OF THE ELEMENTS cycles through all three, so it has a
@@ -2799,6 +2812,18 @@ function dealtTypes(){
 }
 /* ...and the one-line question every conversion brick asks before it is offered */
 function canDeal(t){ return !!dealtTypes()[t]; }
+/* does the HERO hit anything at all? A summoner with no spell does not: your
+   MORE multiplier is yours, not the legion's (short of Mirrored Legion) */
+function heroHits(){
+  return Object.keys(dealtTypes()).length > 0 || !!(isSummoner() && player.minions && player.minions.mirror);
+}
+/* is there anything for an ELEMENTAL increase to scale? A fire, cold or
+   lightning source of your own -- or a summoner under Mirrored Legion, whose
+   minions take a share of your elemental increase */
+function dealsElemental(){
+  const d = dealtTypes();
+  return !!(d.fire || d.frost || d.shock) || !!(isSummoner() && player.minions && player.minions.mirror);
+}
 
 /* ===================== WHAT AN AILMENT IS OWED =====================
    AN AILMENT BELONGS TO WHAT LANDED, NOT TO WHAT FIRED IT. This was the one
@@ -3378,7 +3403,11 @@ window.addEventListener('mousedown', e=>{
       if(t >= 0){ clogView = t; SFX.pick(); }
       return;
     }
-    mouse.down = true; mouse.fresh = true;
+    mouse.down = true;
+    /* the scepter's click (Convocation) is latched, so it must only latch a click
+       ON THE FIELD: picking a reward card is a mousedown too, and it used to
+       arrive in the next frame of play as a Convocation */
+    if(state === 'play' && e.target === cv) mouse.fresh = true;
   }
 });
 window.addEventListener('mouseup', e=>{ if(e.button===0) mouse.down=false; });
@@ -5842,9 +5871,9 @@ const BOSS_EXTRA_BUFF = 0.12;
 function mobSpoils(e){
   const p = player, m = e.elite ? DROP_ELITE : 1;
   const at = (dx,dy)=>({ x:e.x+rnd(-dx,dx), y:e.y+rnd(-dy,dy) });
-  /* Generous Smith is an INCREASE to the heart chance now, not a flat add on
-     top of it — a flat +35% on a 0.35% base was a hundred times the drop. */
-  if(Math.random() < DROP.heart * m * (1 + p.heartChance) && floorRoom('heart'))
+  /* the tree's heart drops are an INCREASE to the chance, and every monster
+     level adds to it (heartLvlMul) */
+  if(Math.random() < heartDropChance() * m && floorRoom('heart'))
     pickups.push(makePickup('heart', e.x, e.y));
   if(Math.random() < DROP.magnet * m && floorRoom('magnet'))
     pickups.push(makePickup('magnet', at(10,10).x, at(10,10).y));
@@ -7929,7 +7958,7 @@ const UPGRADES = [
      the one brick that scales every last one of them behind CARRYING a staff
      was a rule about the hand rather than about the build. */
   { id:'eleminc', name:'Elemental Focus', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>incRoom('spell', weapon.elem||'fire'),
+    req:()=>incRoom('spell', weapon.elem||'fire') && dealsElemental(),
     calc:m=>({v:0.08+0.05*m}),
     desc:c=>`${Math.round(c.v*100)}% increased ELEMENTAL damage — fire, frost and lightning alike `+
       `${incCapTag('spell', weapon.elem||'fire')}`,
@@ -8024,7 +8053,7 @@ const UPGRADES = [
         `${Math.round(SLAM_ARC_FULL*57.3)}\u00b0, so the stone comes up all around you`,
     apply:c=>{ player.slam.elem = Math.min(SLAM_ELEM_MAX, player.slam.elem + 1); syncStats(); } },
   { id:'moredmg', name:'Overcharged Core', icon:'force', cls:'OFFENSE', minRar:'rare',
-    req:()=>player.moreAll < MORE_DMG_CAP - 1e-9,
+    req:()=>player.moreAll < MORE_DMG_CAP - 1e-9 && heroHits(),
     calc:m=>({v:0.06+0.04*m}),
     desc:c=>`${Math.round(c.v*100)}% MORE damage with everything — its own multiplier, outside `+
       `the increased pool (now ×${moreShown().toFixed(2)}, cap ×${MORE_DMG_CAP.toFixed(2)})`,
@@ -8102,11 +8131,6 @@ const UPGRADES = [
     desc:c=>`Regenerate ${(c.v).toFixed(3)} more hearts per second per ${REGEN_REF_HP} max hearts `+
       `— it scales with your bar (cap ${REGEN_MAX.toFixed(2)})`,
     apply:c=>{ player.regenFlat += c.v; syncStats(); } },
-  { id:'heart', name:'Generous Smith', icon:'gift', cls:'DEFENSE',
-    req:()=>player.heartChance < HEART_CHANCE_MAX,
-    calc:m=>({v:Math.round(14+10*m)}),
-    desc:c=>`${c.v}% INCREASED heart drop chance (cap ${Math.round(HEART_CHANCE_MAX*100)}%)`,
-    apply:c=>{ player.inc.heart += c.v/100; syncStats(); } },
   { id:'spd', name:'Sprint Studs', icon:'boot', cls:'UTILITY',
     req:()=>player.speed < SPEED_MAX,
     calc:m=>({v:0.04+0.03*m}),
@@ -11818,7 +11842,7 @@ const FAVOURITES = [
   { id:'bomb',    name:'Bomb Volley',  icon:'bomb',    ids:['bombplus','bombpow','bombarea','bombcd','orbm'] },
   { id:'bane',    name:'Brickbane',    icon:'bane',    ids:['bane','banearc','baner','banerate','banedot','banedotinc','orbm'] },
   { id:'tough',   name:'Tough Bricks', icon:'shield',
-    ids:['hp','regen','armor','armorinc','suppress','heart','resfire','resfrost','resshock','resall'] }
+    ids:['hp','regen','armor','armorinc','suppress','resfire','resfrost','resshock','resall'] }
 ];
 let favourite = FAVOURITES[0];
 let godMode = false;
@@ -12485,7 +12509,7 @@ const BENCH_SECTIONS = [
      it came from. The fireball's own numbers live with the fireball. */
   { name:'ELEMENTAL',       ids:['eleminc','firinc','froinc','shockinc'] },
   { name:'CRITICALS',       ids:['crit','critpow','bleedchance','bleedpow'] },
-  { name:'SURVIVAL',        ids:['hp','hpinc','regen','heart','armor','armorinc','suppress','morehp'] },
+  { name:'SURVIVAL',        ids:['hp','hpinc','regen','armor','armorinc','suppress','morehp'] },
   { name:'RESISTANCES',     ids:['resfire','resfrost','resshock','resall'] },
   { name:'LIFESTEAL',       ids:['leech','leechrate'] },
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
@@ -12766,6 +12790,31 @@ function buildFavRow(){
   try{ saved = localStorage.getItem('bb_fav') || 'none'; }catch(e){}
   setFavourite(saved);
 }
+/* HOW OFTEN A BRICK TURNS UP among the others its rarity allows.
+   CONVERSIONS are build-defining, not filler: half as often, and the ones that
+   end in CHAOS -- nothing resists it -- rarer still.
+   DEFENCES AND ATTRIBUTES FOLLOW THE HAND. A sword or mace is armour and
+   strength, an axe or bow evasion and dexterity, a staff or scepter energy
+   shield and intelligence: the weapon's own kind is the usual drop, the other
+   two still turn up, only less often. */
+const CONV_WEIGHT = 0.5, CHAOS_CONV_WEIGHT = 0.25;
+const CHAOS_CONV = new Set(['convchaos', 'gainchaos', 'convrot', 'gainrot']);
+const HOME_ATTR = { sword:'str', mace:'str', axe:'dex', bow:'dex', staff:'int', scepter:'int' };
+const DEF_FAMILY = { armor:'str', armorinc:'str', attstr:'str',
+                     eva:'dex', evainc:'dex', suppress:'dex', attdex:'dex',
+                     es:'int', esinc:'int', attint:'int' };
+const HOME_WEIGHT = 1.5, AWAY_WEIGHT = 0.35;
+function cardWeight(u){
+  let w = 1;
+  if(u.need) w *= CHAOS_CONV.has(u.id) ? CHAOS_CONV_WEIGHT : CONV_WEIGHT;
+  const fam = DEF_FAMILY[u.id], home = weapon && HOME_ATTR[weapon.id];
+  if(fam && home) w *= fam === home ? HOME_WEIGHT : AWAY_WEIGHT;
+  return w;
+}
+/* ONE OF EACH, AT MOST, of DEFENSE and UTILITY on a screen: two ways to survive
+   side by side is a choice between two halves of the same thing. Offence may
+   come twice. */
+const ONE_PER_SCREEN = new Set(['DEFENSE', 'UTILITY']);
 function pickChoices(mode){
   /* capped stats remove their rewards from the pool entirely */
   /* every ceiling in the game is a `req` on its own brick, so one filter is the
@@ -12805,7 +12854,7 @@ function pickChoices(mode){
       if(!cands.length) return null;
     }
     /* favourite bricks are drawn heavier on the ONE weighted slot, never guaranteed */
-    const wOf = u => ((weighted && favSet.has(u.id)) ? FAV_WEIGHT : 1) * shunMul(u.id);
+    const wOf = u => ((weighted && favSet.has(u.id)) ? FAV_WEIGHT : 1) * shunMul(u.id) * cardWeight(u);
     let total = 0;
     for(const u of cands) total += wOf(u);
     let r = Math.random()*total, t = cands[cands.length-1];
@@ -12818,6 +12867,10 @@ function pickChoices(mode){
     if(pi >= 0) pool.splice(pi, 1);
     /* the chest draws from a filtered copy, so it has to be told too */
     if(draw !== pool){ const di = draw.indexOf(t); if(di >= 0) draw.splice(di, 1); }
+    /* a defence or a utility on the screen takes the rest of its class off it */
+    if(ONE_PER_SCREEN.has(t.cls))
+      for(const arr of (draw !== pool ? [pool, draw] : [pool]))
+        for(let i = arr.length - 1; i >= 0; i--) if(arr[i].cls === t.cls) arr.splice(i, 1);
     choices.push({ t, rar, c: t.calc(RARITY[rar].mult) });
     return t;
   };
@@ -13394,7 +13447,7 @@ const STAT_PROBES = [
   { g:'DEFENCE', k:'Fire res', basic:'RESISTANCE',      get:()=> (1-elemTake('fire'))*100, fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Frost res', basic:'RESISTANCE',     get:()=> (1-elemTake('frost'))*100,fmt:v=>Math.round(v)+'%' },
   { g:'DEFENCE', k:'Lightning res', basic:'RESISTANCE', get:()=> (1-elemTake('shock'))*100,fmt:v=>Math.round(v)+'%' },
-  { g:'DEFENCE', k:'Heart drops',   get:()=> DROP.heart*(1+player.heartChance)*100, fmt:v=>v.toFixed(2)+'%' },
+  { g:'DEFENCE', k:'Heart drops',   get:()=> heartDropChance()*100, fmt:v=>v.toFixed(2)+'%' },
   { g:'UTILITY', k:'Move speed', basic:'MOVEMENT',    get:()=> player.speed,             fmt:v=>Math.round(v)+' px/s' },
   { g:'UTILITY', k:'Roll cooldown', get:()=> player.dash.cdMax,        fmt:v=>v.toFixed(2)+'s', hi:false },
   { g:'UTILITY', k:'Pickup range',  get:()=> player.magnetR,           fmt:v=>Math.round(v)+' px' },
@@ -13715,16 +13768,28 @@ function cmpShow(u, c, anchor, title, avoid){
      so reading one card never hides the two you are choosing between. */
   const a = anchor.getBoundingClientRect();
   const box = avoid ? avoid.getBoundingClientRect() : a;
-  const w = el.offsetWidth, h = el.offsetHeight;
-  const leftSide = (a.left + a.right)/2 > window.innerWidth/2;
-  let x = leftSide ? box.left - w - 16 : box.right + 16;
-  if(x + w > window.innerWidth - 8) x = box.left - w - 16;
-  if(x < 8) x = box.right + 16;
-  if(x + w > window.innerWidth - 8) x = Math.max(8, window.innerWidth - w - 8);
-  let y = a.top;
-  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
-  el.style.left = Math.round(x)+'px';
-  el.style.top = Math.round(Math.max(8, y))+'px';
+  const w = el.offsetWidth, h = el.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+  const fitsX = x=> x >= 8 && x + w <= W - 8;
+  const clampY = y=> Math.max(8, Math.min(y, H - h - 8));
+  /* NEVER OVER THE CARD YOU ARE READING. Outside the whole row first; when the
+     window is too narrow for that (four boss cards on a laptop), beside the
+     hovered card itself -- over a neighbour, which you are not reading -- and
+     failing that, under it or over it. The old last resort pinned the panel to
+     the window's edge, which on the right-hand card is exactly on top of it. */
+  const leftSide = (a.left + a.right)/2 > W/2;
+  const tries = leftSide
+    ? [[box.left - w - 16, a.top], [box.right + 16, a.top], [a.left - w - 12, a.top], [a.right + 12, a.top]]
+    : [[box.right + 16, a.top], [box.left - w - 16, a.top], [a.right + 12, a.top], [a.left - w - 12, a.top]];
+  let at = tries.find(([x])=>fitsX(x));
+  if(at) at = [at[0], clampY(at[1])];
+  else {
+    const x = Math.max(8, Math.min(W - w - 8, (a.left + a.right)/2 - w/2));
+    at = (a.bottom + 8 + h <= H - 8) ? [x, a.bottom + 8]
+       : (a.top - h - 8 >= 8)        ? [x, a.top - h - 8]
+       : [x, clampY(a.top)];
+  }
+  el.style.left = Math.round(at[0])+'px';
+  el.style.top = Math.round(at[1])+'px';
 }
 function cmpWire(el, u, c, title, avoid){
   el.addEventListener('mouseenter', ()=>{ try { cmpShow(u, c, el, title, avoid); } catch(e){ cmpHide(); } });
@@ -13900,7 +13965,7 @@ function renderCharSheet(){
     sRow('Spell slots', spellsOwned()+' / '+SPELL_MAX,
       spellsOwned() >= SPELL_MAX ? 'full — only bricks that deepen these four are offered now'
         : 'a new spell takes a slot; deepening one never does'),
-    sRow('Heart drop rate', (DROP.heart*(1+p.heartChance)*100).toFixed(2)+'%',
+    sRow('Heart drop rate', (heartDropChance()*100).toFixed(2)+'%',
       `per monster · ×${DROP_ELITE} from an elite · a boss always leaves one`)
   ], sBar(p.hp/Math.max(1,p.maxHp), '#d3242b'));
 
@@ -14548,7 +14613,7 @@ function openUpgrades(mode='wave', forceRar){
     ['Suppress', Math.round(suppressChance()*100)+'%'],
     ['Stud gain', '×'+player.studMul.toFixed(2)],
     ['XP gain', '×'+player.xpMul.toFixed(2)],
-    ['Heart drop', (DROP.heart*(1+player.heartChance)*100).toFixed(2)+'%'],
+    ['Heart drop', (heartDropChance()*100).toFixed(2)+'%'],
     ['Spells', spellsOwned()+' / '+SPELL_MAX]
   ];
   const sp = document.getElementById('statsPanel');
@@ -15467,7 +15532,8 @@ function minionInc(){
 function minionKindArg(k){ return typeof k === 'string' ? k : (k ? 'mage' : 'spear'); }
 function minionDamage(k, m){
   const M = player.minions, K = kindOf(minionKindArg(k));
-  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
+  /* RAGE is yours and theirs: a raging summoner's legion hits harder too */
+  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1) * rageMul();
 }
 function minionRate(k, m){
   return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
@@ -16818,6 +16884,13 @@ function bodySpace(e){
    takes what the hit says. */
 function minionHurt(m, n, elem){
   if(!m || m.gone || m.rise < 1 || !(n > 0)) return;
+  /* ...except under your WARD: its armour stands in front of every physical
+     blow and its resistance in front of fire, cold and lightning, for the
+     legion exactly as for you (chaos goes through, as it does on you) */
+  if(player && player.wardT > 0){
+    if(!elem) n *= 1 - armourDR(wardArmour(), n);
+    else if(elem === 'fire' || elem === 'frost' || elem === 'shock') n *= 1 - Math.min(RES_CAP, wardRes());
+  }
   m.hp -= n; m.flash = 1;
   addDmg(m.x, m.y - 34, fmtHp(n), elem === 'fire' ? '#ff9a5a' : elem === 'frost' ? '#9fdcff'
          : elem === 'shock' ? '#fff07a' : '#c9b8ff', 12);
