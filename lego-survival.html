@@ -1779,9 +1779,11 @@ const WEAPONS = {
      one raising takes. Intelligence's second weapon, and the one that replaces
      the wand the map had been keeping a door for. */
   scepter: { id:'scepter', name:'SCEPTER', col:'#b7a6ff',
-    blurb:'Raises skeletons instead of swinging. They fight; you stand behind them.',
+    blurb:'A summon aura raises skeletons where you point; left click calls them home (Convocation).',
     summon:true,
-    dmg:1.6, rate:0.70, reach:0, spinReach:0, crit:0.05, critMult:150,
+    /* the scepter's hit is the LEGION's base: every skeleton's blow is built
+       on it (x its kind). 2.1, up from 1.6 -- a summoner's opening needs it */
+    dmg:2.1, rate:0.70, reach:0, spinReach:0, crit:0.05, critMult:150,
     bleed:0, spin:1.00, kb:0.80, hold:'scepter', throw:'blade',
     lessTaken:0, suppress:0.15, leech:0, leechChance:0,
     acc:0.80,
@@ -13783,11 +13785,11 @@ function renderCharSheet(){
       sRow('Legion', legion().length+' / '+minionMax()+' standing',
         `${Math.round(minionMaxHp())} life · ${fmtHp(minionDamage(p.minions.mages))} a hit · `+
         `${(1/minionRate(p.minions.mages)).toFixed(2)}/s`+(p.minions.mages ? ' · SKELETON MAGES' : ''),
-        `The scepter does not swing. Holding attack raises skeletons where you point, `+
-        `${p.minions.perCast} a cast, up to ${minionMax()}. They fight whatever is near you and hold `+
-        `the crowd off you: a monster touching one is slowed and fights it.\n\n`+
-        `They rise as spearmen, swordsmen or archers; at a full legion the oldest crumbles and the `+
-        `new one takes its place.`+(golemMax() ? ` ${golemMax()} BONE GOLEMS stand beside them, their own pool.` : '')+
+        `The scepter does not swing. Its SUMMON AURA raises skeletons where you point, `+
+        `${p.minions.perCast} a raising, until there are ${minionMax()}, and refills any that fall. `+
+        `LEFT CLICK is CONVOCATION: every minion you own is called back to your side and mends `+
+        `${Math.round(CONVO_REGEN*100)}% of its life a second for ${CONVO_REGEN_T}s (${CONVO_CD}s cooldown).\n\n`+
+        `They rise as spearmen, swordsmen or archers.`+(golemMax() ? ` ${golemMax()} BONE GOLEMS stand beside them, their own pool.` : '')+
         (p.minions.overseer ? ' A BONE OVERSEER at your shoulder drives on every one near it.' : '')+
         `\n\nMinion damage is its OWN pool: `+Math.round(minionInc()*100)+`% increased now`+
         (p.minions.mirror ? ', three quarters of yours mirrored into it.' : '.')+
@@ -14623,9 +14625,19 @@ function updatePlayer(dt){
   if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
     if(isCaster())      castBolt(aimA);
     else if(isArcher())  fireArrow(aimA);
-    else if(isSummoner()){ raiseMinion(aimA, !!mouse.fresh); mouse.fresh = false; }
+    else if(isSummoner()){ /* the click is latched below */ }
     else if(isSlammer()) startSlam(aimA);
     else                startSwing(aimA);
+  }
+  /* THE SUMMON AURA: the scepter raises on its own, where you point, at its own
+     rate, until the legion is full -- and a fallen place is refilled the same way */
+  if(isSummoner()){
+    p.raiseCd = (p.raiseCd || 0) - dt;
+    p.convoCd = Math.max(0, (p.convoCd || 0) - dt);
+    /* CONVOCATION is a CLICK, latched on mousedown: a quick tap can go down and
+       up between two frames, and asking "is it held?" would miss it */
+    if(mouse.fresh){ mouse.fresh = false; if(p.stunT <= 0) convocation(); }
+    if(!p.dead && p.stunT <= 0 && p.raiseCd <= 0 && legion().length < minionMax()) raiseMinion(aimA, false);
   }
   updateSlam(dt);
   if(p.swing){
@@ -15204,15 +15216,6 @@ function arrowRicochet(pr){
 const MINION_MAX_BASE = 4, MINION_MAX_CAP = 15;
 const MINION_PERCAST_MAX = 5;          /* skeletons a single raising stands up, at most */
 const MINION_HP_BASE = 14, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
-/* THE LEGION IS STRONGEST WHILE ITS MASTER IS WEAK. A summoner has nothing of its
-   own to fall back on, so its skeletons carry an early MORE that fades with the
-   hero's level: +60% at level 1, gone by level 20 -- the opening and the first
-   bosses, not the endgame. */
-const MINION_EARLY = 0.6, MINION_EARLY_TO = 20;
-function minionEarly(){
-  const lv = (player && player.level) || 1;
-  return 1 + MINION_EARLY * clamp((MINION_EARLY_TO - lv) / (MINION_EARLY_TO - 1), 0, 1);
-}
 const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
 const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
 const MINION_GUARD = 260;            /* anything this close to you comes first */
@@ -15278,7 +15281,7 @@ function minionInc(){
 function minionKindArg(k){ return typeof k === 'string' ? k : (k ? 'mage' : 'spear'); }
 function minionDamage(k, m){
   const M = player.minions, K = kindOf(minionKindArg(k));
-  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * minionEarly() * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
+  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
 }
 function minionRate(k, m){
   return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
@@ -15320,21 +15323,17 @@ function nextKind(){
   for(const [k, w] of MINION_MIX){ if((r -= w) < 0) return k; }
   return 'spear';
 }
-/* RAISING. At a full legion the FIRST one you raised crumbles and the new one
-   takes its place -- the legion is always the newest of your dead. */
-/* HOLDING IS NOT RECYCLING. Held down, the scepter raises until the legion is
-   full and then rests; only a fresh click at a full legion breaks the oldest and
-   stands a new one. Holding it used to replace a skeleton every 0.7s -- a
-   legion forever climbing out of the floor and never swinging, a fifth of its
-   damage gone against a boss. `fresh` is true for a click (and for anything
-   that is not the held button: the bench, the tests). */
+/* RAISING. The SUMMON AURA calls this on its own clock (`fresh` false): it only
+   ever fills the legion to its cap. Called any other way -- the bench, a test --
+   a full legion's FIRST skeleton crumbles and the new one takes its place. The
+   clock is the scepter's rate, sped by attack speed like any weapon's. */
 function raiseMinion(aim, fresh){
   const p = player, M = p.minions;
   if(!p || p.dead) return;
   let n = M.perCast || 1;
   if(fresh === false) n = Math.min(n, minionMax() - legion().length);
   if(n <= 0) return;
-  p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+  p.raiseCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   p.castT = 0.2; retPulse = 1;
   const d = Math.min(150, Math.hypot(mouse.wx - p.x, mouse.wy - p.y));
   for(let i=0; i<n; i++){
@@ -15352,6 +15351,32 @@ function raiseMinion(aim, fresh){
   }
   minions = minions.filter(m=>!m.gone);
   SFX.build();
+}
+/* CONVOCATION, the scepter's left click (PoE's gem, built in): every minion you
+   own is pulled back to your side at once and regenerates CONVO_REGEN of its
+   life a second for CONVO_REGEN_T seconds. On a CONVO_CD cooldown. */
+const CONVO_CD = 3, CONVO_REGEN = 0.25, CONVO_REGEN_T = 3, CONVO_R0 = 50, CONVO_R1 = 100;
+function convocation(){
+  const p = player;
+  if(!p || p.dead || (p.convoCd || 0) > 0) return false;
+  const all = minions.filter(m=>!m.gone && m.kind !== 'overseer');
+  p.atkCd = 0.2;
+  if(!all.length) return false;
+  all.forEach((m, i)=>{
+    const col = m.el ? (MAGE_COL[m.el] || '#b7a6ff') : '#b7a6ff';
+    addSparks(m.x, m.y - 14, 5, col);
+    const a = i / all.length * TAU + rnd(-0.2, 0.2), rr = CONVO_R0 + (i % 3) * (CONVO_R1 - CONVO_R0) / 2;
+    const at = floorAt(p.x + Math.cos(a)*rr, p.y + Math.sin(a)*rr, m.r + 2);
+    m.x = at.x; m.y = at.y; m.lx = m.x; m.ly = m.y;
+    m.spot = null; m.strikeT = 0; m.drawT = 0; m.strikeTgt = null;
+    m.regenT = CONVO_REGEN_T;
+    addSparks(m.x, m.y - 14, 5, col); addRing(m.x, m.y, 4, 200, 24, col, 3, 0.25);
+  });
+  addRing(p.x, p.y, 10, 420, CONVO_R1 + 30, '#b7a6ff', 6, 0.5);
+  p.convoCd = CONVO_CD; p.castT = 0.3; retPulse = 1;
+  SFX.build();
+  logEvent('convocation — '+all.length+' called home', '#b7a6ff');
+  return true;
 }
 let minionBorn = 0;
 function raiseAt(x, y, kind){
@@ -15523,6 +15548,8 @@ function updateMinions(dt){
   for(const m of minions){
     m.lx = m.x; m.ly = m.y; m.ldt = dt;
     m.blinkCd = Math.max(0, (m.blinkCd || 0) - dt); m.blinkT = Math.max(0, (m.blinkT || 0) - dt);
+    /* Convocation's mending */
+    if(m.regenT > 0){ m.regenT -= dt; m.hp = Math.min(m.maxHp, m.hp + m.maxHp * CONVO_REGEN * dt); }
     m.flash = Math.max(0, m.flash - dt*4);
     m.castT = Math.max(0, m.castT - dt);
     m.buffed = !!(ov && m !== ov && Math.hypot(m.x - ov.x, m.y - ov.y) < OVERSEER_R);
@@ -15661,6 +15688,22 @@ function minionDies(m){
       hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, 'mburst', {});
     }
   }
+}
+/* Convocation's badge: arrows turning in on a point */
+function drawConvoIcon(x, y){
+  ctx.save(); ctx.translate(x, y - 1);
+  ctx.strokeStyle = '#b7a6ff'; ctx.fillStyle = '#b7a6ff'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  for(let k=0;k<3;k++){
+    const a = k/3*TAU + vtime*0.8;
+    const ox = Math.cos(a)*11, oy = Math.sin(a)*11, ix = Math.cos(a)*4, iy = Math.sin(a)*4;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ix, iy); ctx.stroke();
+    const ha = a + Math.PI;
+    ctx.beginPath(); ctx.moveTo(ix, iy);
+    ctx.lineTo(ix + Math.cos(ha+2.5)*4, iy + Math.sin(ha+2.5)*4); ctx.lineTo(ix + Math.cos(ha-2.5)*4, iy + Math.sin(ha-2.5)*4);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, TAU); ctx.fill();
+  ctx.restore();
 }
 /* the golems' badge: a square bone head, and the count */
 function drawGolemBadge(x, y, n){
@@ -23955,6 +23998,9 @@ function renderHUD(){
      count sits in the ability row: how many stand of how many may, the ring
      filling as the legion does */
   if(isSummoner()){
+    const cc = p.convoCd || 0;
+    autos.push({ f: cc > 0 ? clamp(1 - cc/CONVO_CD, 0, 1) : 1, label:cc > 0 ? cc.toFixed(1)+'s' : 'CALL',
+      icon:(x,y)=>drawConvoIcon(x, y) });
     const L = legion(), up = L.filter(m=>m.rise >= 1).length, mx = minionMax();
     autos.push({ f: mx ? clamp(up/mx, 0, 1) : 1, label:'LEGION '+up+'/'+mx, icon:(x,y)=>drawLegionIcon(x, y, up) });
     const gm = golemMax();

@@ -3031,9 +3031,9 @@ boss lost **~20 a second** and took **~70s** to die, against a hero with six hea
 - **Armour ate 59% of every blow.** `armourDR` weighs armour against the size of the hit, so a
   6.9-damage skeleton against 49 armour landed 2.85. `armourVs(e, source)`: a minion source meets
   half the armour (`MINION_ARMOUR_PEN`).
-- **An early summoner is fragile.** `minionEarly()` is a MORE on every minion hit, +60% at hero
-  level 1 falling linearly to nothing at 20 (+32% at 10); base life 10 → 14; the legion starts at
-  four (was three).
+- **An early summoner is fragile.** Base life 10 → 14; the legion starts at four (was three).
+  (This pass also added a level-fading MORE, `minionEarly()`; the next pass replaced it with a
+  higher base.)
 
 (A first probe also showed skeletons "frozen" mid-strike: that was the probe, not the game — a
 level-up opened the card screen and paused the world under it.)
@@ -3045,3 +3045,41 @@ fall inside 55s; all four changes reverted it takes 71.6s). Two old fixtures har
 formula check includes the early MORE, and `breach`'s "a body inside its circle can be hit" now
 zeroes the body's block (a knight's shield turned that check into a coin flip). 6 breaks, 6
 caught. 72 tests green.
+
+## Forty-second pass — a higher base, the summon aura, and Convocation
+
+> *"I don't like that you introduced scaling like that for each level ... just higher base
+> damage."* — and then: *"make scepter give an aura, basically a summon aura, it makes you
+> automatically summon minions where you point your cursor until it's maxed, and if some minion dies
+> it automatically refills. And the left click now does what Convocation does in PoE, with a little
+> cooldown."*
+
+**No level curve.** `minionEarly()` and its constants are gone. Instead the scepter's base — the
+number every skeleton's blow is built on — is **2.1** (was 1.6), the same at every level. The run
+from the forty-first pass kills its wave-5 boss in ~40s on that alone (the curve had it at ~36s;
+~70s before either).
+
+**The summon aura.** `updatePlayer` ticks `p.raiseCd` for a summoner and, while the legion is short,
+calls `raiseMinion(aimA, false)` at the cursor — which only ever fills to the cap, never breaks a
+standing skeleton. `raiseMinion` sets `raiseCd` (the scepter's rate, with attack speed and chill),
+not `atkCd`, so the aura and the click never share a clock. A fallen place is refilled on the next
+tick of that clock.
+
+**Convocation.** The scepter's left click is `convocation()`: every skeleton and golem (the
+overseer keeps its own place) is lifted to a ring 50–100px round the hero on the floor
+(`floorAt`), its strike or draw cancelled, and given `regenT = 3` — `updateMinions` mends 25% of
+max life a second while it runs; a 3s cooldown (`p.convoCd`). The click is **latched** on
+mousedown (`mouse.fresh`) and consumed in `updatePlayer`: a quick tap can go down and up between
+two frames, and a first draft that only asked "is the button held?" missed real clicks — caught by
+driving the page with an actual mouse click. The ability row gains a **CALL** badge with the
+cooldown filling its ring.
+
+**Proof.** `minion2` restated: the base is 2.1 and a hit does not move with level alone; the aura
+fills an empty legion in four seconds of no input, leaves a full one alone, refills a fallen place,
+and — three a raising with one place left — stands the one without breaking anybody; a tap (button
+already up) calls a scattered legion home, sets the 3s cooldown and mends at least 40% of life in
+2s, and a second tap inside the cooldown does nothing; the linked run's wave-5 boss falls inside
+55s with nobody pressing anything. `summon`'s "a skeleton at no life still stands" asks about that
+skeleton (the aura may raise others meanwhile); `qol` takes every queued card screen before it
+presses T. Breaks `noaura`, `noconvo`, `noregen`, `nocd`, `heldonly`, `nofresh`, `oldscept`,
+`nopen`, `oldlife`, `oldbase`: all caught. 72 tests green.
