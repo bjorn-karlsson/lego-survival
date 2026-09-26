@@ -3578,7 +3578,7 @@ function runLinkApply(){
     const u = UPGRADES.find(x=>x.id===id);
     if(u) try { applyPick(u, RAR_ORDER[ri] || 'common'); } catch(e){ console.warn('run link brick', id, e); }
   }
-  for(const k in (o.r || {})){ const n = o.r[k]|0; if(n > 0 && BREACH_LORDS[k]){ p.rings[k] = n; ringApply(p, k, n); } }
+  for(const k in (o.r || {})){ const n = o.r[k]|0; if(n > 0 && BREACH_LORDS[k]) p.rings[k] = n; }
   Object.assign(p.splinters, o.sp || {}); p.breachDepth = o.bd || 0;
   if(o.gh){ p.gHearts = o.gh; p.hpFlat += 3*o.gh; }
   p.studs = o.st || 0; p.kills = o.k || 0;
@@ -5280,6 +5280,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      whatever did get through hurt more. */
   if(!mix) mix = { [convFrom(source)]: 1 };
   d *= shockMulOn(e);
+  /* a breach lord's ring bites on its breach's bodies, and on nothing else */
+  d *= ringMoreVs(e);
   /* A MONSTER'S OWN RAGE, if something gave it any. Same shape as the hero's:
      hurt it and it gets angrier, leave it alone and the anger pours away. */
   if(e.rageOnHurt > 0 && !opts.drain) stackAdd('rage', e.rageOnHurt, e);
@@ -6506,7 +6508,7 @@ function playerDamage(n, src, elem, spell){
     p.invuln = IFRAME_T*0.5;
     return;
   }
-  let d = n;
+  let d = n * ringLessFrom(src);        /* your rings turn a breach body's blows, and nobody else's */
   /* A RAGING MONSTER HITS HARDER, and it is read off the ATTACKER — so every
      way a monster can reach you, contact or ring or thrown thing, pays it
      without any of those call sites learning that rage exists. */
@@ -7203,35 +7205,31 @@ const BREACH_LORDS = {
   chayula: { name:'CHAYULA',   title:'Who Dreamt',         el:'chaos', col:'#b77cff', dim:'#3a1a5e', ring:"Chayula's Ring" },
 };
 const BREACH_LORD_KEYS = Object.keys(BREACH_LORDS);
-/* ONE RANK OF A RING. An elemental lord's ring makes you a little bit theirs:
-   part of your physical gained as their element on top, more of that element,
-   and more resistance to it. Uul-Netol is the flesh -- physical and armour.
-   Chayula is the dream -- chaos, and a shield. */
-const RING_RANK = { gain:0.05, inc:0.12, res:0.06, physInc:0.15, armour:40, chaosRes:0.08, es:3 };
+/* ONE RANK OF A RING -- AND ONLY INSIDE A BREACH. A ring used to make you a
+   little bit its lord's everywhere (extra element, resistance, armour, shield),
+   which was far too good once the ranks stacked up. Now a ring is a weapon
+   against the breach and nothing else: every rank you wear is RING_VS.more MORE
+   damage dealt to a breach monster and RING_VS.less less damage taken from one
+   -- and the ranks of the breach's own lord count twice against its bodies.
+   Outside a breach they do nothing at all. */
+const RING_VS = { more:0.08, less:0.05, lessCap:0.6 };
 const RING_ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 function ringText(k, n){
-  const L = BREACH_LORDS[k], R = RING_RANK, pc = v=>Math.round(v*n*100)+'%';
-  if(L.el === 'phys') return `${pc(R.physInc)} increased physical damage · +${R.armour*n} armour`;
-  if(L.el === 'chaos') return `gain ${pc(R.gain)} of physical as extra chaos · ${pc(R.inc)} increased chaos `+
-    `· +${pc(R.chaosRes)} chaos res · +${R.es*n} energy shield`;
-  const nm = CONV_NAME[L.el] ? CONV_NAME[L.el].toLowerCase() : L.el;
-  return `gain ${pc(R.gain)} of physical as extra ${nm} · ${pc(R.inc)} increased ${nm} · +${pc(R.res)} ${nm} res`;
+  const L = BREACH_LORDS[k], pc = v=>Math.round(v*n*100)+'%';
+  return `against breach monsters only: ${pc(RING_VS.more)} more damage dealt, ${pc(RING_VS.less)} less taken `+
+    `(twice that against ${L.name}'s own)`;
 }
-function ringApply(p, k, n){
-  const L = BREACH_LORDS[k], R = RING_RANK;
-  for(let i=0;i<n;i++){
-    if(L.el === 'phys'){ p.incMelee += R.physInc; p.armourFlat += R.armour; }
-    else if(L.el === 'chaos'){
-      convGain(p.conv, 'phys', 'chaos', R.gain);
-      p.inc.chaos = (p.inc.chaos || 0) + R.inc;
-      p.resFlat.chaos += R.chaosRes;
-      p.esFlat = (p.esFlat || 0) + R.es;
-    } else {
-      convGain(p.conv, 'phys', L.el, R.gain);
-      p.inc[L.el] = (p.inc[L.el] || 0) + R.inc;
-      p.resFlat[L.el] += R.res;
-    }
-  }
+/* the ranks that count against a body of lord `k`'s breach */
+function ringRanksVs(k){
+  const R = (player && player.rings) || {};
+  let n = 0; for(const q in R) n += R[q] || 0;
+  return n + ((k && R[k]) || 0);
+}
+function ringMoreVs(e){ return (e && e.breach) ? 1 + RING_VS.more * ringRanksVs(e.breach) : 1; }
+function ringLessFrom(src){
+  /* the blow's owner: the body itself, or whoever threw the thing that landed */
+  const who = src && (src.breach ? src : (src.src && src.src.breach ? src.src : null));
+  return who ? 1 - Math.min(RING_VS.lessCap, RING_VS.less * ringRanksVs(who.breach)) : 1;
 }
 function breachOpenNow(){ return !!(breach && (breach.state === 'open' || breach.state === 'closing')); }
 function breachRoll(n){
@@ -7518,8 +7516,6 @@ function ringGain(k, why){
     return;
   }
   p.rings[k] = have + 1;
-  ringApply(p, k, 1);
-  syncStats();
   showBanner(L.ring.toUpperCase()+(have ? (have + 1 > LORD_RING_PLAIN ? ' — BLESSED ' : ' — RANK ')+RING_ROMAN[have+1] : ''),
     ringText(k, 1)+(have ? ' more' : ''), L.col, 2.4, 44);
   logEvent('   '+L.ring+' '+RING_ROMAN[have+1]+(why === 'hand' ? ' — from the Hand' : why === 'lord' ? ' — from '+L.name+' itself' : ' — from a breachstone')+
@@ -14550,7 +14546,7 @@ function renderCharSheet(){
         `fuse into a breachstone, and a breachstone is the ring \u2014 or one rank deeper, to ${LORD_RING_PLAIN}. `+
         `Ranks IV and V are BLESSINGS: ${breachStoneCost(3)} and ${breachStoneCost(4)} splinters. `+
         `The Hand of ${L.name} drops the ring outright, and with rank III in hand a deep breach calls `+
-        `${L.name} itself through, for a legendary hoard.\n\n`+
+        `${L.name} itself through, for a rare hoard.\n\n`+
         (rk ? 'Yours now: '+ringText(k, rk)+'.' : 'Each rank: '+ringText(k, 1)+'.')); });
   const breachBlock = breachRows.length ? sBlock('BREACH', breachRows) : '';
   const loot = sBlock('LOOT & XP', [

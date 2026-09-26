@@ -2524,13 +2524,18 @@ far corners of the map** if you can keep it open. Inside it they are there; outs
 not — not drawn, not hittable — and a breach body cannot walk out of its own circle. They are
 bodies you already know, re-cast in the lord's colours, 30% softer, hitting with its element.
 
-| lord | | swarm hits with | the ring (per rank, up to V) |
-|---|---|---|---|
-| **Xoph**, Dark Embers | 🟧 | fire | gain 5% of physical as extra fire · 12% increased fire · +6% fire res |
-| **Tul**, Creeping Avalanche | 🟦 | cold | the same, in cold |
-| **Esh**, Forked Thought | 🟨 | lightning | the same, in lightning |
-| **Uul-Netol**, Unburdened Flesh | 🟫 | harder physical | 15% increased physical · +40 armour |
-| **Chayula**, Who Dreamt | 🟪 | chaos | gain 5% as extra chaos · 12% increased chaos · +8% chaos res · +3 energy shield |
+| lord | | swarm hits with |
+|---|---|---|
+| **Xoph**, Dark Embers | 🟧 | fire |
+| **Tul**, Creeping Avalanche | 🟦 | cold |
+| **Esh**, Forked Thought | 🟨 | lightning |
+| **Uul-Netol**, Unburdened Flesh | 🟫 | harder physical |
+| **Chayula**, Who Dreamt | 🟪 | chaos |
+
+**A ring works inside a breach, and nowhere else.** Every rank of every ring you wear is **8% more
+damage** dealt to a breach monster and **5% less damage** taken from one (at most 60% less) — and a
+lord's own ranks count **twice** against that lord's breach. Your minions' hits count too. Outside
+a breach a ring does nothing: it never touches your stats, your conversions or your defences.
 
 **It is on a clock, and every breach monster you kill buys some of it back — by less the wider
 the circle is.** Eight seconds with nothing killed, never more than twelve on the clock. A kill

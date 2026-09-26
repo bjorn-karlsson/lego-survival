@@ -3327,3 +3327,29 @@ death leaves one abyss chest, rare, and the abyss goes; a rendered frame and the
 without throwing. Breaks `early`, `bosswave`, `nopity`, `nofollow`, `noseal`, `selfopen`,
 `nopithold`, `nopitpay` (caught once the pit test zeroed the pack's own studs), `nolord`,
 `bigchest`, `nowave`, `outlive`, `nospawn`: 13 caught.
+
+## Forty-eighth pass — a breach ring is for the breach
+
+> *"the breach upgrades from splinters, they should ONLY affect taking damage from breach monsters
+> or dealing damage to them, never should it be applied outside of Breach. Because it's too good
+> otherwise"*
+
+`ringApply` is gone, and with it `RING_RANK`: a ring rank no longer adds a conversion, an
+increase, a resistance, armour or energy shield to the hero. What a ring does now lives at the two
+places a breach body meets you:
+
+- **Dealing:** `hitEnemy` multiplies every hit on a body with `e.breach` by `ringMoreVs(e)` =
+  1 + 8% × ranks, after mitigation and shock — whatever the source, minions included.
+- **Taking:** `playerDamage` starts from `n × ringLessFrom(src)` = 1 − 5% × ranks (at most 60%
+  less), where the source is the breach body itself or the thing it threw (`src.src`).
+
+`ringRanksVs(k)` is every rank you wear, plus the ranks of lord `k`'s own ring a second time. A run
+link still restores the ranks (`p.rings`); there is simply nothing more to apply.
+
+**Proof.** `breach` restated: three ranks of Xoph's Ring leave the hero's conversions, increases,
+resistances, melee, armour and shield exactly as they were; a 10-hit lands 10 on a plain knight,
+14.8 on Xoph's (6 ranks) and 12.4 on Tul's (3); a blow of 4 from a plain body costs 2.4 and from
+Xoph's 1.68 (×0.7), and a thrown thing counts as its thrower; a ring stops at V; ranks survive a
+rebuild. `breach2`: Tul V is 10 ranks against Tul and 5 against Xoph and adds no cold gain. Breaks
+`global`, `nobite`, `bitemany`, `noguard` (caught once the hero actually took the blow),
+`noown`, `nothrown`: 6 caught.
