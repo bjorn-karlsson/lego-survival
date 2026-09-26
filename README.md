@@ -783,8 +783,9 @@ It is Path of Exile's item model, kept small — no uniques, no crafting, no cur
 - A rare throws a beam of light and gets a marker on the screen edge; a plain normal item only
   shows its name when you are close. A full bag leaves the item on the floor and says
   **INVENTORY FULL**.
-- **The screen.** The **stash** is on the left — a 12 × 12 grid for everything you are keeping
-  but not wearing — then the paper doll and the 12 × 5 bag. Click an item in the bag to wear it
+- **The screen.** The **stash** is on the left — 12 wide and **256 deep**, twelve rows at a time
+  in a scrolling window, filling from the top so whatever you just sent is in view (drag an item
+  to the window's top or bottom edge and it scrolls) — then the paper doll and the 12 × 5 bag. Click an item in the bag to wear it
   (what it replaces goes where it was), click a worn one to take it off. **Ctrl-click** sends an
   item between the bag and the stash (a click on a stash item brings it to the bag, and a
   Ctrl-click on a worn one takes it off straight into the stash); **STASH ALL** empties the whole
@@ -2785,8 +2786,10 @@ the legion is full — four to begin with — and whenever one falls, the aura s
 walk to whatever is near you and cut it down.
 
 **Left click is CONVOCATION** — PoE's gem, built in: every minion you own (skeletons, golems and
-zombies) is called back to your side **one by one, nearest first, 0.14s apart** — you watch the
-legion answer — and each **regenerates 25% of its life a second for 3s** as it lands. A 3s
+zombies) is called back to your side **nearest first, in beats 0.14s apart** — you watch the
+legion answer. There are never more than six beats: six minions or fewer come one by one, a
+bigger legion comes in groups that grow with it (twelve two at a time, thirty five at a time), so
+every legion is home in under a second. Each **regenerates 25% of its life a second for 3s** as it lands. A 3s
 cooldown; the ability row shows it as **CALL**, the ring filling as it comes back. A raising always lands on floor: point into a lake or at a boulder
 and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
 water and rocks the way you do.

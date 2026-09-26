@@ -3632,3 +3632,27 @@ for item. Breaks `mobdrop`, `anyweapon`, `anyoff`, `nosuper`, `flattier`, `nogat
 `fivetiers`, `nomigr`, `noctrl`, `nostashall`, `stashlost`, plus the sixteen from the last pass
 still standing: 28 caught.
 
+## Fifty-fifth pass — a legion comes home in groups, and a stash that scrolls
+
+> *"depending on how many minions i have, convocation now brings more minions, instead of just 1
+> by 1 ... make the stash tab like 12x256 or something, make it scrollable"*
+
+- **Convocation in beats.** Arrivals were one every `CONVO_STEP` (0.14s), so thirty skeletons took
+  4.2s to land — longer than the 3s cooldown. Each beat now brings `convoBatch(n)` =
+  ceil(n / `CONVO_BEATS`) (6): a legion of six or fewer still comes one by one, twelve two at a
+  time, thirty five at a time, and nothing takes more than six beats (0.7s).
+- **The stash is 12 × 256**, in a scrolling window twelve rows tall (`#gearStashView`). It fills
+  **row by row** from the top (`GEAR_DIM.stash.rowMajor`) — the bag keeps PoE's column-by-column
+  fill — so whatever you just sent is in view. `gearFreeSpot` builds an occupancy map and scans it
+  once, so a deep stash with hundreds of items is searched in well under a millisecond. Dragging to
+  the window's top or bottom edge scrolls it (`gearAutoScroll`), and a drop only counts in the rows
+  that are actually on screen. The header counts the rows in use.
+
+**Proof.** `zombie` restated: five minions arrive in five single beats, eight in four pairs,
+twenty-four in six groups of four, all home by 0.72s, every beat 0.13–0.15s apart, and
+`convoBatch` for 1, 6, 7, 12, 13 and 30 is 1, 1, 2, 2, 3, 5. `gear` adds: a hundred body armours
+fill the stash's first 51 rows, the next ring lands in the gap at row 48, a search takes under 5ms,
+the window scrolls and shows twelve rows; scrolled to row 60, a ring dragged from the bag into the
+window's top-left lands at row 60; a drag held at the window's bottom edge scrolls it. Breaks
+`onebyone`, `smallstash`, `colmajor`, `noscroll`, `noautoscroll`: 5 caught.
+

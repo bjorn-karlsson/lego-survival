@@ -579,7 +579,9 @@
   .gslot > .gitem{left:0;top:0;width:100%;height:100%}
   .gslot.drop-ok{border-color:#7fdc7e;background:rgba(127,220,126,.16)}
   .gslot.drop-bad{border-color:#ff6a5a;background:rgba(255,106,90,.12)}
-  .gearinv.stash{height:calc(var(--gc)*12)}
+  .gearinv.stash{height:calc(var(--gc)*256);border:0;border-radius:0}
+  .gstashview{height:calc(var(--gc)*12);width:calc(var(--gc)*12 + 12px);overflow-y:scroll;overflow-x:hidden;
+    border:2px solid rgba(255,255,255,.14);border-radius:4px;scrollbar-width:thin;scrollbar-color:#5a6470 rgba(0,0,0,.3)}
   .gearstashwrap{display:flex;flex-direction:column;gap:6px;margin-top:6px}
   .gstashhead{display:flex;align-items:center;gap:10px;font-family:'Titan One',cursive;font-size:13px;letter-spacing:2px;color:#ffd76e}
   .gstashhead #gearStashCount{flex:1;font-family:'Fredoka',sans-serif;font-size:11.5px;letter-spacing:0;color:#8e9aa4}
@@ -755,7 +757,7 @@
     <div class="gearmain">
       <div class="gearstashwrap">
         <div class="gstashhead"><span>STASH</span><span id="gearStashCount"></span><button id="gearStashSortBtn" class="tbtn gray">TIDY</button></div>
-        <div id="gearStash" class="gearinv stash"></div>
+        <div id="gearStashView" class="gstashview"><div id="gearStash" class="gearinv stash"></div></div>
       </div>
       <div class="gearleft">
         <div id="gearDoll" class="geardoll"></div>
@@ -6174,8 +6176,10 @@ function bossSpoils(e){
 const GEAR_KEY = 'bb_gear';
 const GEAR_COLS = 12, GEAR_ROWS = 5;
 /* THE STASH: PoE's stash tab, beside the equipment screen -- a big grid that
-   nothing ever drops out of, for whatever you are keeping but not wearing */
-const GEAR_STASH_COLS = 12, GEAR_STASH_ROWS = 12;
+   nothing ever drops out of, for whatever you are keeping but not wearing. It is
+   twelve wide and 256 deep, and SCROLLS: twelve rows on screen, the rest below.
+   It fills from the top, row by row, so whatever you just sent is in view. */
+const GEAR_STASH_COLS = 12, GEAR_STASH_ROWS = 256, GEAR_STASH_VIEW = 12;
 const GEAR_SLOTS = ['weapon','helmet','offhand','body','amulet','ring1','ring2','gloves','belt','boots'];
 const GEAR_SLOT_NAME = { weapon:'WEAPON', offhand:'OFF HAND', helmet:'HELMET', body:'BODY ARMOUR',
   gloves:'GLOVES', boots:'BOOTS', belt:'BELT', amulet:'AMULET', ring1:'RING', ring2:'RING' };
@@ -6615,7 +6619,7 @@ function gearSave(){
 }
 /* ---- THE BAG ---- */
 function gearSize(it){ const B = GEAR_BASE_BY_ID[it.b], C = B && GEAR_CLS[B.cls]; return C ? { w:C.w, h:C.h } : { w:1, h:1 }; }
-const GEAR_DIM = { inv:{ cols:GEAR_COLS, rows:GEAR_ROWS }, stash:{ cols:GEAR_STASH_COLS, rows:GEAR_STASH_ROWS } };
+const GEAR_DIM = { inv:{ cols:GEAR_COLS, rows:GEAR_ROWS }, stash:{ cols:GEAR_STASH_COLS, rows:GEAR_STASH_ROWS, rowMajor:true } };
 /* which grid a list is: the stash's, or the bag's */
 function gearDimOf(list){ return (GEAR && list === GEAR.stash) ? GEAR_DIM.stash : GEAR_DIM.inv; }
 function gearRoomAt(inv, it, x, y, skip, dim){
@@ -6629,9 +6633,20 @@ function gearRoomAt(inv, it, x, y, skip, dim){
   return true;
 }
 /* PoE fills a bag column by column, top to bottom, left to right */
+/* A MAP OF WHAT IS TAKEN, then one pass over it: a 3,072-cell stash with a few
+   hundred things in it is searched in a blink rather than item by item per cell */
 function gearFreeSpot(inv, it, skip, dim){
-  const D = dim || gearDimOf(inv);
-  for(let x=0;x<D.cols;x++) for(let y=0;y<D.rows;y++) if(gearRoomAt(inv, it, x, y, skip, D)) return { x, y };
+  const D = dim || gearDimOf(inv), s = gearSize(it), C = D.cols, R = D.rows;
+  const occ = new Uint8Array(C * R);
+  for(const e of inv){
+    if(e === skip || e.it === it) continue;
+    const t = gearSize(e.it);
+    for(let yy=Math.max(0, e.y); yy<Math.min(R, e.y + t.h); yy++)
+      for(let xx=Math.max(0, e.x); xx<Math.min(C, e.x + t.w); xx++) occ[yy*C + xx] = 1;
+  }
+  const fits = (x, y)=>{ for(let yy=y; yy<y + s.h; yy++) for(let xx=x; xx<x + s.w; xx++) if(occ[yy*C + xx]) return false; return true; };
+  if(D.rowMajor){ for(let y=0; y + s.h <= R; y++) for(let x=0; x + s.w <= C; x++) if(fits(x, y)) return { x, y }; }
+  else for(let x=0; x + s.w <= C; x++) for(let y=0; y + s.h <= R; y++) if(fits(x, y)) return { x, y };
   return null;
 }
 function gearInvAdd(it){
@@ -16401,7 +16416,10 @@ function renderGear(){
   inv.innerHTML = gearGridHtml(GEAR.inv, 'inv');
   if(st) st.innerHTML = gearGridHtml(GEAR.stash, 'stash');
   const sc = document.getElementById('gearStashCount');
-  if(sc) sc.textContent = GEAR.stash.length + ' item' + (GEAR.stash.length === 1 ? '' : 's');
+  if(sc){
+    let deep = 0; for(const e of GEAR.stash) deep = Math.max(deep, e.y + gearSize(e.it).h);
+    sc.textContent = GEAR.stash.length + ' item' + (GEAR.stash.length === 1 ? '' : 's') + ' \u00b7 ' + deep + ' of ' + GEAR_STASH_ROWS + ' rows';
+  }
   /* what it all adds up to */
   const sum = document.getElementById('gearSum');
   if(sum){
@@ -16466,6 +16484,9 @@ function gearCellAt(cx, cy){
     if(!g) continue;
     const r = g.getBoundingClientRect();
     if(cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) continue;
+    /* the stash is taller than its window: only the rows you can see count */
+    const v = key === 'stash' && document.getElementById('gearStashView');
+    if(v){ const vr = v.getBoundingClientRect(); if(cy < vr.top || cy > vr.bottom || cx > vr.left + r.width) continue; }
     const c = r.width / GEAR_DIM[key].cols;
     return { x:Math.floor((cx - r.left)/c), y:Math.floor((cy - r.top)/c), c, list:key };
   }
@@ -16504,6 +16525,21 @@ function gearDragPaint(cx, cy){
     shadow.style.width = `calc(var(--gc)*${s.w})`; shadow.style.height = `calc(var(--gc)*${s.h})`;
   }
 }
+/* DRAGGING TO THE EDGE of the stash scrolls it, the way a long list does --
+   and keeps scrolling while the pointer is held there */
+let gearScrollT = null;
+function gearAutoScroll(cx, cy){
+  const v = document.getElementById('gearStashView');
+  clearInterval(gearScrollT); gearScrollT = null;
+  if(!v || !gearDrag.on) return;
+  const r = v.getBoundingClientRect(), edge = 36;
+  if(cx < r.left || cx > r.right) return;
+  const dir = cy < r.top + edge && cy > r.top - 20 ? -1 : cy > r.bottom - edge && cy < r.bottom + 20 ? 1 : 0;
+  if(!dir) return;
+  const step = ()=>{ if(!gearDrag.on){ clearInterval(gearScrollT); gearScrollT = null; return; }
+    v.scrollTop += dir * 14; gearDragPaint(cx, cy); };
+  step(); gearScrollT = setInterval(step, 30);
+}
 function gearDown(e){
   if(!gearOn || e.button !== 0) return;
   const src = gearSrcOf(e.target);
@@ -16529,7 +16565,7 @@ function gearMoveEv(e){
       g.classList.remove('hidden');
       gearDrag.src.el.style.opacity = '0.25';
     }
-    if(gearDrag.on){ gearDragPaint(e.clientX, e.clientY); return; }
+    if(gearDrag.on){ gearAutoScroll(e.clientX, e.clientY); gearDragPaint(e.clientX, e.clientY); return; }
   }
   const src = gearSrcOf(e.target);
   if(src) gearTipShow(src, e.clientX, e.clientY); else gearTipHide();
@@ -16538,6 +16574,7 @@ function gearUp(e){
   if(!gearOn || !gearDrag.src) return;
   const src = gearDrag.src, was = gearDrag.on;
   gearDrag.src = null; gearDrag.on = false;
+  clearInterval(gearScrollT); gearScrollT = null;
   const g = document.getElementById('gearGhost');
   if(g){ g.classList.add('hidden'); g.innerHTML = ''; }
   if(!was){
@@ -17672,16 +17709,24 @@ function raiseMinion(aim, fresh){
    own is pulled back to your side at once and regenerates CONVO_REGEN of its
    life a second for CONVO_REGEN_T seconds. On a CONVO_CD cooldown. */
 const CONVO_CD = 3, CONVO_REGEN = 0.25, CONVO_REGEN_T = 3, CONVO_R0 = 50, CONVO_R1 = 100;
-const CONVO_STEP = 0.14;               /* seconds between one minion arriving and the next */
+const CONVO_STEP = 0.14;               /* seconds between one group arriving and the next */
+/* A BIG LEGION COMES HOME IN BIGGER GROUPS. One at a time, thirty skeletons took
+   four seconds -- longer than the cooldown. The call now lands in at most this
+   many beats, each bringing ceil(legion / beats): six or fewer still come one by
+   one, twelve come two at a time, thirty come five at a time -- and every legion
+   is home inside a second. */
+const CONVO_BEATS = 6;
+function convoBatch(n){ return Math.max(1, Math.ceil(n / CONVO_BEATS)); }
 function convocation(){
   const p = player;
   if(!p || p.dead || (p.convoCd || 0) > 0) return false;
   const all = minions.filter(m=>!m.gone && m.kind !== 'overseer');
   p.atkCd = 0.2;
   if(!all.length) return false;
-  /* ONE BY ONE: nearest first, a beat apart, so the legion is seen to answer */
+  /* NEAREST FIRST, a beat apart, so the legion is seen to answer -- in groups
+     that grow with it, so a big one is home as quickly as a small one */
   all.sort((a, z)=>Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(z.x - p.x, z.y - p.y));
-  p.convoQ = all; p.convoN = all.length; p.convoI = 0; p.convoT = 0;
+  p.convoQ = all; p.convoN = all.length; p.convoI = 0; p.convoT = 0; p.convoB = convoBatch(all.length);
   addRing(p.x, p.y, 10, 420, CONVO_R1 + 30, '#b7a6ff', 6, 0.5);
   p.convoCd = CONVO_CD; p.castT = 0.3; retPulse = 1;
   SFX.build();
@@ -17707,7 +17752,7 @@ function convoTick(dt){
   if(!p || !p.convoQ || !p.convoQ.length) return;
   p.convoT -= dt;
   while(p.convoT <= 0 && p.convoQ.length){
-    convoPull(p.convoQ.shift(), p.convoI++, p.convoN);
+    for(let k=0; k<(p.convoB || 1) && p.convoQ.length; k++) convoPull(p.convoQ.shift(), p.convoI++, p.convoN);
     p.convoT += CONVO_STEP;
   }
 }
