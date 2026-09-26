@@ -74,10 +74,10 @@ at you.
 **A run may cast four spells and no more.** Once you have four, the bricks that would hand
 you a fifth stop being offered and everything that deepens the four you have keeps coming.
 
-`Guardian Brick` · `Brick Blaster`
-`Storm Brick` · `Bladestorm`
-`Blade Vortex` · `Block Freeze`
-`Bomb Volley` · **`Brickbane`**
+`Guardian Brick` · `Storm Brick`
+`Bladestorm` · `Blade Vortex`
+`Block Freeze` · `Bomb Volley`
+**`Brickbane`**
 
 Pick a **favourite** at the menu — including `Sword & Steel` or `Tough Bricks`, which spend
 no slot at all — and its bricks turn up more often, plus a starting kit to match. The panels
@@ -91,14 +91,16 @@ with](#the-combination-panel).
 
 ### 🗡️ Pick a weapon
 
-`SWORD` · `AXE` · `MACE` · `STAFF`
+`SWORD` · `AXE` · `MACE` · `STAFF` · **`BOW`** · **`SCEPTER`**
 
 Your weapon is a **table row**, not a special case in the code — base damage, swing time,
 reach, crit, bleed, and what it is worth defensively. The art follows it: you hold what you
 picked, you swing it, and your spells throw it.
 
 The **staff does not swing at all**. It casts fireballs, and it trades the whole melee kit
-for the elemental one.
+for the elemental one. The **bow** does not swing either: it looses arrows, and one legendary a
+run makes them [Lightning, Fire or Chaos Arrow](#the-bow). The **scepter** hits nothing at
+all — it [raises the dead](#the-scepter) and they fight for you.
 
 Full numbers in [**Weapons**](#weapons), and hover one on the title screen for the live
 comparison against the sword.
@@ -179,11 +181,18 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
 | **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
 | **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
+| **BOW** | 1.25 | 0.72s | *arrow* | 7% | ×1.65 | ×0.8 | — |
+| **SCEPTER** | 2.10 | 0.70s | *raise* | 5% | ×1.50 | — | — |
 
-**Two of the four do not swing at all.** The staff casts a fireball; the mace opens a
-**ground slam**. Both trade the whole melee kit — reach, the spin combo, the whirl — for an
+**Four of the six do not swing at all.** The staff casts a fireball; the mace opens a
+**ground slam**; the bow looses an [arrow](#the-bow); the scepter [raises skeletons](#the-scepter)
+(its 2.10 is the base of every skeleton's hit, and 0.70s is one raising). Both trade the whole melee kit — reach, the spin combo, the whirl — for an
 attack of their own, and both are offered the sword's bricks no more than a staff is
 offered the axe's.
+
+**Attack speed has a floor.** A melee weapon swings at most every 0.10s, a staff or scepter
+every 0.34s — and a **bow draws at most every 0.22s**: every loose is a volley, and eight
+volleys a second was a wall of arrows rather than archery.
 
 **What it keeps you alive with**
 
@@ -193,6 +202,8 @@ offered the axe's.
 | **AXE** | 45% | 25% | **20% of swings, for 9.0%** | — |
 | **MACE** | **60%** | **30%** | 10% of swings, for 3.5% | — |
 | **STAFF** | — | — | — | **+8% to all three** |
+| **BOW** | — | 10% | — | — · **+120 evasion** |
+| **SCEPTER** | — | 15% | — | — |
 
 An axe crits twice as often for twice as much, but a clean cut barely bleeds. A mace hits
 hardest and opens the worst wounds — 95% bleed on a critical against the sword's 50% — and
@@ -543,18 +554,13 @@ brick works with every weapon and no build is locked to one.
 
 **A weapon's attack speed is attack speed.** The staff's **+20% increased cast speed** is
 not a property of its fireball — it sums into the cooldown pool of *every* spell you own, the
-way an increase is supposed to. A staff hero's Brick Blaster fires every **2.00s** against a
-sword hero's 2.40s, its Storm Brick every 1.83s against 2.20s, Bomb Volley 5.83s against
+way an increase is supposed to. A staff hero's Storm Brick fires every 1.83s against a
+sword hero's 2.20s, Bomb Volley 5.83s against
 7.00s, Brickbane 3.50s against 4.20s, and the guardian ring turns at **3.12 rad/s** against
 2.60. One pool per spell, the weapon's contribution added to each, so nothing compounds and
 nothing is missed.
 
-That change exposed a floor that had been sitting almost on its own base: the blaster's was
-**2.00s against a 2.40s base**, 17% of headroom — one brick's worth for a sword hero, and
-none at all for a staff, whose cast speed landed it exactly on the floor from the first wave
-and made `Rapid Blaster` a card that could never be offered. The floor is **1.20s** now,
-which gives the line the same 100% of room the storm brick has (2.20 → 1.00) and is still
-nowhere near a machine gun with a volley that size.
+(The Brick Blaster that paragraph used to describe is gone; the bow's arrow took its place.)
 
 **The art follows the weapon too.** You hold what you picked, you swing it, and your spells
 throw it: Bladestorm hurls axes for an axe hero and maces for a mace one, and Blade Vortex
@@ -649,7 +655,7 @@ a rare wearing a different colour:
 
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
-| Sharpened Blade, Heavy Orbit, Blaster Power,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
+| Sharpened Blade, Heavy Orbit,<br>Storm Surge, Storm Edge, Big Kaboom, Whirling Edge | +0.5 | +1 | +3 | +5 | +8 |
 
 Every **spell brick that grants stacks** reads off a second shared ladder, for the same
 reason — rare and epic used to land in the same bucket, so an epic roll of a spell was a
@@ -657,7 +663,7 @@ disappointment every time:
 
 | | common | uncommon | rare | epic | legendary |
 |---|--:|--:|--:|--:|--:|
-| Guardian Brick, Brick Blaster, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
+| Guardian Brick, Storm Brick,<br>Bladestorm, Blade Vortex, Block Freeze, Bomb Volley | +1 | +2 | +3 | +5 | +8 |
 
 **It is checked rather than asserted.** The audit takes twenty-seven bricks three times
 over — forward, reverse and shuffled — and compares all **85** stats the game exposes. Every
@@ -709,6 +715,22 @@ take it — grey for now, green for better, red for worse:
 
 ---
 
+## Your rewards wait for you
+
+A wave cleared, a level gained, a boss put down, a chest broken: each is a reward, and **by
+default none of them throws a card screen at you in the middle of a fight**. They go on a
+**stash** instead — a pill at the bottom of the screen says how many, with one coloured pip per
+reward in the order they will open (a chest in its rarity's colour, a level-up gold, a boss
+orange, a wave green).
+
+- **One press of R opens them all**, oldest first: the next card screen opens a quarter-second
+  after you pick from the last, until the stash is empty. Four rewards are four screens in a row,
+  not four presses. (Holding R does the same.)
+- **R on a card screen still rerolls** — but only a fresh press made there. A held R that
+  started on the field never rerolls anything.
+
+Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you earn it.
+
 ## Rarity
 
 Five tiers. Measured across 400,000 rolls per cell on the default difficulty:
@@ -740,9 +762,37 @@ reroll your build: chests draw from the pool with every spell-granting brick fil
 so what they give you always deepens something you already own. Level-ups and wave rewards
 still offer the spells themselves.
 
+**At most one defence and one utility on a screen.** Two ways to survive side by side is a
+choice between two halves of the same thing, so once a DEFENSE brick is drawn every other
+defence leaves the screen, and the same for UTILITY. Offence (spells included) can come
+twice.
+
+**Defences and attributes follow the weapon in your hand.**
+
+| Weapon | Usual drop | Still turns up, less often |
+|---|---|---|
+| Sword, mace | armour, strength | evasion, energy shield, dexterity, intelligence |
+| Axe, bow | evasion, spell suppression, dexterity | armour, energy shield, strength, intelligence |
+| Staff, scepter | energy shield, intelligence | armour, evasion, strength, dexterity |
+
+A brick of the weapon's own kind is drawn at ×1.5, one of the other two at ×0.35: over a few
+thousand screens a sword sees its own defences about five times as often as either of the
+others.
+
+**Conversions are drawn at half weight**, and the ones that end in **chaos** (The Unmaking,
+Creeping Blight, Rotgale, Sour Ending) at a quarter. Every conversion is uncommon or better,
+and every chaos conversion rare or better.
+
 ---
 
 ## The boss ladder
+
+**The endgame boss.** From wave 20 every boss's health is multiplied by **four for every
+decade**: ×4 for waves 20–29, ×16 for 30–39 and ×64 from 40. It steps up at each ultra, so the
+ordinary boss five waves later shares the ultra's multiplier and never outgrows it. A build that
+clears a late wave in a second still has a fight on its hands when the boss arrives — a
+level-49 bow run that took its wave-25 boss in 11 seconds now takes about half a minute.
+(The table below was measured before this multiplier.)
 
 A boss every fifth wave, an ULTRA every tenth, and the grand raid at fifty. Spawned for
 real and read off the live body — and since a boss rolls its own **traits**, every row is
@@ -796,8 +846,21 @@ An **elite rolls every line eight times over**.
 fortune and for a golden heart (at 0.6× that), and 12% each for rage and ward — the two
 that take you straight to a cap stay scarce even here.
 
-**Generous Smith** *increases* the heart chance rather than adding to it — it caps at
-**+200% increased**, which is ×3 the base, or 3.00% a monster.
+**A second one is never wasted.** Pick up a magnet, fortune, rage or ward while that buff is
+already running at its ceiling and it **adds 30s to the clock** instead of putting it back to
+30: three magnets in a row is 90 seconds of magnet. The ward's second pickup is still its second
+stack (×1 → ×2, clock back to 30); from the third on, every ward is time. The clock holds at most
+**150s** — five pickups' worth — and the ring round the buff's icon drains against however long
+that clock actually is. Hearts are unchanged: they already stack five deep.
+
+**A breach body rolls a twelfth of the chest chance.** A breach is a swarm, and a swarm of
+hundreds rolling the ordinary chest chance paved the floor with chests; a breach pays in
+splinters and its hoard.
+
+**Hearts get commoner as the monsters level up.** Every level a monster has adds **3%** to
+its heart chance (a level-30 monster drops hearts ×1.87 as often as a level-1 one). There is
+no brick for it any more — Generous Smith is gone — though the tree's heart-drop nodes still
+*increase* the chance, up to **+200%**.
 
 ### What you threw back
 
@@ -927,8 +990,8 @@ the clock rather than queueing behind it.
 | | Effect | Stacks to |
 |---|---|---|
 | ❤️ **Heart** | Regeneration ×1.5 / 1.85 / 2.10 / 2.30 / **2.45** | 5 — and never ×7.5 |
-| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase | ×2 |
-| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it | ×2 |
+| 💢 **Rage** | **MORE** damage, its own multiplier outside every increase — and your **minions'** too | ×2 |
+| 🛡️ **Ward** | +40 armour and +12% to every resistance per stack — and a curse cannot strip it. Your **minions** get it as well: the armour against physical blows, the resistance against fire, cold and lightning | ×2 |
 | 🍀 **Fortune** | ×2 studs and XP, plus up to **+25% rarity find** on reward rolls | ×2 |
 | 🧲 **Magnet** | Hoovers up every **stud** on the field. Studs only — it will not drag a chest to you | — |
 | 💛 **Golden heart** | **+3 maximum hearts, permanently.** The only prize that outlives its timer | — |
@@ -936,6 +999,10 @@ the clock rather than queueing behind it.
 Maximum hearts come from three rungs: `Sturdy Plates` adds them flat, **`Reinforced Frame`**
 is an epic **+40% increased** (+60% at legendary), and `Titanium Chassis` is a legendary
 **100% MORE**, twice over.
+
+**Low life is 10% of your maximum.** The screen pulses red and your first row of hearts throbs
+when your life is at or below a tenth of what it can be — energy shield does not count, so a
+1-heart shield build only sees it when the one heart is nearly gone.
 
 ### 🔥 Ailments on you
 
@@ -1024,9 +1091,10 @@ offered at all.
 |---|--:|---|--:|---|--:|
 | Armour reduction | 85% | Guardian bricks | 15 | Rage | ×2 |
 | Elemental resistance | 80% | Ring reach | 190 px | Ward | ×2 |
-| Critical chance | **80%** | Blaster bricks | 40 | Fortune | ×2 |
-| Critical multiplier | **300%** | Blaster pierce | 8 | Heart stacks | 5 |
+| Critical chance | **80%** | Arrows a shot | 5 | Fortune | ×2 |
+| Critical multiplier | **300%** | Arrow pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
+| Bow draw | every 0.22s | Guardian ring spin | 5.2 rad/s (base 1.9) | Boss health, late | ×64 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |
@@ -1078,10 +1146,10 @@ much tempo the hero buys:
 
 | | floor | | floor |
 |---|--:|---|--:|
-| Brick Blaster | 1.20s | Block Freeze | 3.50s |
-| Storm Brick | 1.00s\* | Bomb Volley | 2.00s |
-| Bladestorm | 2.00s | Brickbane | 1.10s |
-| Blade Vortex | 3.00s | Guardian ring | 7.5 rad/s |
+| Storm Brick | 1.00s\* | Block Freeze | 3.50s |
+| Bladestorm | 2.00s | Bomb Volley | 2.00s |
+| Blade Vortex | 3.00s | Brickbane | 1.10s |
+| Guardian ring | 7.5 rad/s | | |
 
 Runic Tempo stops being offered once every ability you actually own sits on its floor.
 
@@ -1127,9 +1195,9 @@ a free win.
 not a second — everything landing on you counts, and a crowd is a crowd.
 
 Hearts stack at **×1.5 / 1.85 / 2.10 / 2.30 / 2.45** — five of them are worth two and a
-half, never five. Blaster pierce costs the brick **15% of its damage per foe** at one
-rank, easing to 10% once all eight are bought; a fully pierced brick deals 6.13× one hit
-down a full line.
+half, never five. Arrow pierce costs the arrow **15% of its damage per body** it has gone
+through at one rank, easing to 10% once all eight are bought. Chaos Arrow pierces everything
+and pays nothing for it — that is the legendary.
 
 **Scattershot** no longer divides the damage it spreads. Each shard keeps a share of the
 whole brick — **50%** at the first rank, **25%** at the second — so three shards are worth
@@ -1152,6 +1220,21 @@ legendary rate of Hard for the privilege.
 ---
 
 ## Monsters
+
+### The dead that walk
+
+The crypt has a new family, and it shambles in from **wave 1**:
+
+| | when | what it does |
+|---|---|---|
+| **Zombie** | wave 1 onward | Walks at you and slams you with both hands. When it dies it has a **40%** chance to get up again as a **crawler** — its upper half, dragging itself after you. |
+| **Crawler** | from a dead zombie or runner | Slow and low; the hands still hurt. It does not get up again. |
+| **Bloater** | waves 5–10 (its era's roll) | Round, slow and **tanky**. It plants its feet and retches **plague breath** — a 150px cone that turns after you for a second, **poisoning** you and rotting any minion in it. When it dies it **bursts**: 8–11 body parts fly every way, each a physical hit on you or your minions. It leaves nothing behind. |
+| **Runner** | mid game | A zombie that sprints — more than twice the pace. Also gets up as a crawler. |
+| **Hulk** | later | The original, bigger, with harder hands and much more life — and it gets up as a **big crawler**. |
+
+Every zombie that stays down leaves a corpse for a [summoner](#raise-zombie--the-graveyard). A
+body raised by a [breach](#breach) is breach stuff: it neither crawls on nor leaves anything.
 
 Six things happen to a monster between wave 1 and wave 50, and they compound: it gains a
 **level**, it hits for what its own row says it hits for, it can carry up to **nine** named
@@ -1360,6 +1443,40 @@ you have already beaten.
 
 ![The skill tree](docs/tree.png)
 
+### Spending it mid-run — <kbd>T</kbd>
+
+**A level is worth a point the moment you reach it.** It used to be worth one only when you
+*died*: the record was written at the end of the run, so a hero who reached level 38 on a
+fresh character spent the whole run with the points they were earning sitting in the future.
+A new best level is written on the level-up now, and a new best wave on the clear, with a
+`+1 SKILL POINT · T` over your head and a pill beside the level bar while any sit unplaced.
+
+**<kbd>T</kbd> opens the tree mid-run** (so does SKILL TREE on the pause menu), and the world
+freezes behind it exactly as it does behind the character sheet. A node you take lands on your
+hero **now** — the tree only ever writes the same pools the bricks do, so applying one node to a
+live hero is exactly what applying it at the start would have done. A node that hands over a
+brick hands it over there and then.
+
+**Mid-run the tree only grows.** Refunds, CLEAR ALL, loading a preset and the on/off switch
+wait for the run to end: taking a point back would mean unpicking a node from a live hero, and
+the switches some nodes throw do not unpick cleanly. The death screen still tells you what the
+run was worth — it measures from where the run began, not from a record the run already moved.
+
+### Three named presets
+
+**Every tree keeps three.** A preset is a name and a saved allocation, on the same record as the
+tree it came from — a sword's build starts at the sword's door and means nothing on a staff's
+tree, so each of the twelve trees has its own three. Type a name, **SAVE** keeps what is placed
+now, **LOAD** takes it all back and places the preset.
+
+![Three named presets](docs/tree-presets.png)
+
+**A preset is bought, not copied.** LOAD places each node through the same rules a click
+obeys — touching what you hold, unlocked, affordable — so it can never put the tree somewhere
+the tree could not have reached by hand. A preset saved on more points than you have now
+places what it can and says how much. A layout change empties presets the way it refunds the
+tree, and keeps their names.
+
 **TWELVE TREES.** Every weapon has its own on every difficulty — three difficulties × four
 weapons — and **they share nothing**. Points earned on a staff are a staff's; switch to the
 axe and you find the axe's own tree exactly as you left it, and switching back finds the
@@ -1516,7 +1633,7 @@ away from the nearest lane until there is room.
 
 **The outer ring is one ABILITY apiece.** THE ORBIT, THE BARREL, THE STORMHEAD, THE
 WHIRLING, THE VORTEX, THE COLD SNAP, THE ORCHARD, THE ORDNANCE — `+1 damage with the
-Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Guardian Brick`, `+1 arrow pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
 Volley rate`. A tree that only ever says *+5% damage* has no opinions; a node that names one
 of your bricks makes you re-read the map every time the deck hands you something new.
 
@@ -1860,6 +1977,13 @@ now deal fire, so FIRE TO CHAOS becomes a real card — and it was not one a mom
 A mace running Slam of the Elements is credited with all three, because it cycles through
 them.
 
+**A scepter hits nothing**, so it is not a physical source: a summoner with no spell of its
+own is offered no conversion at all — the legion's hits are the minions', and your
+conversions never reach them. The same goes for **Elemental Focus** (it needs a fire, cold
+or lightning source of your own) and **Overcharged Core** (your MORE is yours, not the
+legion's). *Mirrored Legion* opens both again, because under it your minions take a share of
+your increases.
+
 ### Accuracy and evasion
 
 **A flat dodge chance is a number you cannot answer.** A shade evaded 32% of your hits and
@@ -1905,6 +2029,112 @@ front of those.
 **Dexterity is the attribute for both**, on top of everything it already did: **+2 accuracy** and
 **+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
 busiest of the three now, which is what it is in the game this borrows from.
+
+### Energy shield — *the bar in front of the bar*
+
+**A third defence that is not more health.** Armour takes a slice off every physical hit and
+evasion makes some of them miss entirely. Energy shield is the other shape PoE has: a second
+pool drawn in front of the first, which **comes back by itself** if you can stop being hit for
+long enough.
+
+```
+· it takes the hit first, and what it cannot eat spills through to the hearts
+· CHAOS walks straight past it — the one damage type it cannot touch
+· go 2.5s without being touched and it refills at 22% of its maximum a second
+· ANY damage restarts that clock, including the chaos that walked past
+```
+
+**And you wear it.** A bar in the corner is not where your eyes are when something is winding up
+at you, and a boss's shield track is 300 pixels away from the boss. So the pool is drawn **on the
+body that owns it**, and how much is left is **how solid it is** — full and it is a bright dome,
+half spent and it is a hint, empty and there is nothing there at all. You read the number without
+reading anything, which is the only way to read something mid-fight.
+
+![The same hero at four fractions](docs/shield-fade.png)
+
+It is deliberately faint. This sits on top of a body you are trying to watch, and a shield you
+cannot see through hides the wind-up it exists to survive — the same reason the mace's teeth are
+translucent. The **rim** is what you read; the fill is barely there.
+
+The bubble is wrapped around the body the game already models — the same vertical segment every
+swing and every projectile is tested against — so it fits a minifig, a golem and a hovering bat
+without any of the three being measured by hand.
+
+![A hero and a bat boss, both shielded](docs/shield-bodies.png)
+
+![The hero's shield, above the XP bar](docs/shield-hud.png)
+
+![A shielded boss, mid-recharge](docs/shield-boss.png)
+
+That last line is what makes it a different defence rather than a bigger one. Armour pays you
+for every hit you take; a shield pays you for the hits you **don't**. A build that can back out
+of a fight for three seconds has a pool that renews all run. A build that stands in the middle of
+everything has a pool it spends once.
+
+**Chaos is the answer to it, and a share is enough.** A hit is a mix, not a type — so a swing
+half converted to chaos puts *half of itself* past the shield and leaves the other half to be
+eaten. You do not need a chaos build to fight a shielded boss; you need some chaos in the build
+you have. The same rule runs the other way: a **poison** is chaos over time, so a dose walks
+through your own shield while a **burn** meets it.
+
+**Intelligence is the attribute for it** — **+0.2% increased maximum energy shield** per point,
+which is PoE's line in this game's units, and the reason the staff's attribute finally buys a
+defence. You start with **none**: `WARD BRICK` is what gives you a pool at all, `DEEP WARD`
+increases it, and two notables in the blue country (`THE WARDING`, `THE RESERVOIR OF WILL`) are
+the tree's way in. A rebuild is never a free heal — picking a card mid-fight raises the ceiling
+and leaves what is standing in the bar where it was.
+
+**Six bosses carry one, and the brutes do not.** LORD LAVABRICK and VON BRICKTHANE hit you with
+a lump of rock and there is nothing arcane about them; the bone, ash and bat bosses are the ones
+the fiction already made strange. The share rides on whatever health the boss ended up with —
+after its traits, after the wave modifiers — so nothing else has to know the shield exists.
+
+| | shield | chaos it deals |
+|---|--:|--:|
+| **VON BRICKTHANE** | — | — |
+| **LORD LAVABRICK** | — | — |
+| **THE BONE BARON** | 35% | — |
+| **THE ASH TYRANT** | 25% | 20% |
+| **THE DREAD ROOST** | 30% | 30% |
+| **OMEGA BRICKTHANE** | 30% | 15% |
+| **MEGA BONE BARON** | 45% | 25% |
+| **ULTRA LAVABRICK** | 20% | 35% |
+
+The chaos column is the other half of the same idea: a late boss that deals some chaos is a boss
+your *own* shield does not fully answer, which is why the ultras have it and the wave-5 boss
+does not.
+
+### One curve, not two
+
+**A wave-45 boss had 8,200 health standing next to a wave-40 ultra's 56,000.** It died before it
+finished building itself. The reason was not a number that needed raising — it was that bosses
+were written on **two** curves: the ultras climbed 2.3× a tier *with the monster level on top*,
+and the bosses between them climbed a flat 420 a tier with **no monster level at all**. Every
+other monster in the game multiplies its health by the monster level. These did not.
+
+Two formulas for one idea drift, and these had been drifting for the whole run.
+
+There is one curve now. The ultras read it at whole steps — 1 at wave 10, 2 at wave 20 — and the
+ordinary bosses read the **same** curve at the half-steps between, at **half** of it. A wave-15
+boss is written as half of what the curve says wave 15 is worth, and it stays half forever
+without anybody keeping two formulas in step.
+
+| wave | | pool | share of the ultra before it |
+|--:|---|--:|--:|
+| 10 | OMEGA BRICKTHANE | 5,700 | |
+| 15 | LORD LAVABRICK | 3,100 | ×0.54 |
+| 20 | MEGA BONE BARON | 16,900 | |
+| 25 | THE DREAD ROOST | 8,200 | ×0.49 |
+| 30 | ULTRA LAVABRICK | 24,500 | |
+| 35 | THE BONE BARON | 14,600 | ×0.60 |
+| 40 | OMEGA BRICKTHANE | 64,700 | |
+
+(Pool is health *plus* shield, averaged over twelve spawns — which of the roster stands up and
+what rank it rolls are both dice.)
+
+The ultras stay spikes, which is the half the first repair got wrong: a curve steep enough to
+fix wave 45 put a wave-35 boss **above** the wave-30 ultra, and an ultra that is not a wall is
+not an ultra. Half is the whole design, in both directions.
 
 ### Buffs on the left, ailments on the right
 
@@ -2045,13 +2275,22 @@ Every one of these is a **trade**, and both halves are real. That is the only th
 keystone worth the walk: a node that is simply good is a big minor node, and the tree already
 has plenty of those.
 
-> **The Long Dying** — *what you kill keeps killing; nothing you touch dies fast.*
-> Burns, poisons and wounds spread from a corpse to everything within 210px, at 60% strength.
-> **−25% increased damage.**
+> **The Long Dying** — *what you kill keeps killing, at half the rate.*
+> Burns, poisons and wounds spread from a corpse to everything within 120px, at 60% strength.
+> **50% LESS damage over time.**
 
 That one is the answer to *"ailment proliferation is too strong to just add"*: it turns three
-single-target damage-over-time builds into wave clear in one sentence, so it costs a walk to the
-edge of the map and a flat quarter off everything you hit directly.
+single-target damage-over-time builds into wave clear in one sentence. It used to cost a quarter
+off everything you **hit** — and the build that walks there barely hits, so the price was paid
+in a currency it did not spend, and with a 210px spread it was the strongest node on the map.
+The spread is a room now, not a screen, and the cost is paid in the thing the build is made of:
+half of every burn, wound and dose. A pack melts; a single boss takes twice as long.
+
+(Damage over time had no LESS slot at all before this — nothing in the game could make lingering
+damage smaller. `dotRate` multiplies one in now, after the increased pool, the way PoE's keystones
+do. And the poison a chaos-converted hit leaves behind goes through `dotRate` like the burn and the
+wound beside it: it used to be handed a raw rate, so increased damage over time and increased
+chaos never touched it.)
 
 > **Blood and Salt** — *your criticals stop hitting harder and start leaving everything.*
 > Every critical inflicts every ailment its damage can. **−55% critical multiplier.**
@@ -2153,11 +2392,16 @@ carry its own 50% bleed, which quietly made the crit tree the bleed tree as well
 swing, its whirl, the vortex, bladestorm's blades and the slam can cut. An orbiting brick that
 has bought physical damage still hits for physical — it just does not cut.
 
-**Three spells print their own 100%,** the way a PoE gem does, and this is written on the
-character sheet rather than hidden in the code: **Fireball** always ignites, **Block Freeze**
-always chills (Absolute Zero upgrades that chill into a stun, so without it the legendary would
-do nothing), and **Slam of the Elements** leaves all three. Nothing else does — not the storm
-brick, and not a converted swing.
+**Three spells carry their own chance on top of the table,** the way a PoE gem does, and it
+is written on the character sheet rather than hidden in the code. **Fireball** ignites **25%**
+of the time on its own — PoE's Fireball number — and that *adds* to whatever Afflict you
+have bought, so ailment bricks are worth something to a staff for the first time; a fire
+critical still always ignites. It used to be 100%, which made "chance to ignite" a card a
+staff never wanted. **Block Freeze** always chills (Absolute Zero upgrades that chill into a
+stun, so without it the legendary would do nothing), and **Slam of the Elements** leaves all
+three. The **embers** Ember Scatter throws keep their certainty too — they only fly off a body
+that is already burning, and "sets the next one alight" is the whole card. Nothing else
+carries a chance of its own — not the storm brick, and not a converted swing.
 
 A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangles at **×1.9**.
 
@@ -2276,6 +2520,441 @@ had never earned any. And it was refreshed when the **difficulty** changed but n
 **weapon** did, so it went on showing the last weapon's count. Twelve trees, one label, and no
 way to tell them apart. It now reads `SKILL TREE — 4 TO PLACE · 15 spent · STAFF · HARD`.
 
+### The short list
+
+**The menu opens on twelve numbers, not a hundred and seventy-five.** It was handing a new
+player every stat in the game — burning rows for a sword, ceilings nobody reaches for an
+hour. It opens on **YOUR STATS** now: how hard, how often, how tough, how fast, under four
+plain headings, and only the ones this hero actually *has* — a sword is not shown its bolt
+damage as a dash, it is simply not shown it.
+
+![The menu's short list](docs/menu-short.png)
+
+**SHOW EVERY STAT & THE CEILINGS** at the bottom is the whole panel, exactly as it was, layer
+chips and all. It is remembered, so a player who wants the lot asks once.
+
+The short list is not a second list. A probe carries a `basic` field naming the heading it
+sits under, and both short views — this one and the character sheet's — filter on it, so the
+short view and the long one can never disagree about a number: they are the same row, and one
+of them shows fewer.
+
+### Breach
+
+The first league mechanic. From **wave 6**, an ordinary (non-boss) wave has a **45%** chance to
+carry a **Breach hand** — and never more than two ordinary waves go by without one. A few
+seconds into the fight a clawed fist of void bricks pushes up through the floor 380–760px away,
+with a marker on the screen's edge while it is out of sight.
+
+![A breach hand surfacing](docs/breach-hand.png)
+
+**Walk into it and it opens** — and a breach is not a spawner, it is **another layer of the same
+ground**. The moment it opens, the whole map is filled with one **Breach Lord**'s monsters —
+**600 of them on the first breach wave, forty more every wave after, 2,000 at most** — standing in
+packs of three to six where they stand, and none of them exists for you until the circle reaches
+them. The circle grows at 110px a second and keeps growing, **all the way to the
+far corners of the map** if you can keep it open. Inside it they are there; outside it they are
+not — not drawn, not hittable — and a breach body cannot walk out of its own circle. They are
+bodies you already know, re-cast in the lord's colours, 30% softer, hitting with its element.
+
+| lord | | swarm hits with |
+|---|---|---|
+| **Xoph**, Dark Embers | 🟧 | fire |
+| **Tul**, Creeping Avalanche | 🟦 | cold |
+| **Esh**, Forked Thought | 🟨 | lightning |
+| **Uul-Netol**, Unburdened Flesh | 🟫 | harder physical |
+| **Chayula**, Who Dreamt | 🟪 | chaos |
+
+**A ring works inside a breach, and nowhere else.** Every rank of every ring you wear is **8% more
+damage** dealt to a breach monster and **5% less damage** taken from one (at most 60% less) — and a
+lord's own ranks count **twice** against that lord's breach. Your minions' hits count too. Outside
+a breach a ring does nothing: it never touches your stats, your conversions or your defences.
+
+**It is on a clock, and every breach monster you kill buys some of it back — by less the wider
+the circle is.** Eight seconds with nothing killed, never more than twelve on the clock. A kill
+is worth **0.7s** while the circle is small, then shrinks as it grows: 0.29s at 500px, 0.12s at
+1000, 0.05s at 2000. The same kills that held a small breach open barely hold a big one, so
+keeping a wide breach open means killing a great many more. **When the clock runs out, the ring
+falls back in** as in PoE — over a second to four and a half, by how wide it had grown — and a
+breach body is gone only when the edge passes over it, pulled back through, paying nothing; until
+then it is still in the fight. The wave cannot end while a breach is open.
+
+**The further out, the more of them.** Three in ten of the layer are packed round the hand, so a
+small circle has something to fight at once; the rest are laid thicker the further they are from
+it, so the wider the ring, the more of them its rim meets every second — between 2,000 and 2,500px
+it meets two to three times as many as between 500 and 1,000. How many can stand revealed at once
+widens with it too: 90 in a small circle, up to 180 across the map. The layer is finite, so there
+is no build that holds a breach open forever.
+
+![A breach opened wide](docs/breach-open.png)
+
+**What it pays is splinters.** One a body, three from a magic one. **Sixty of a lord's
+splinters fuse into a breachstone**, and a breachstone is that lord's ring — or one rank deeper
+into the ring you already wear. Kill **34** in one breach and **the Hand of the Lord** steps
+through beside you: an elite at about a quarter of a boss's health, which holds the breach open while it
+stands (up to 20s) and drops the ring outright, plus fifteen splinters.
+
+**Past rank III — the deep breach.**
+
+- **Blessed ranks.** Rings go on to **IV and V**, the blessings: a breachstone for IV costs **100**
+  splinters, for V **150**. A ring at V turns every further stone into a **Blessed Hoard** (an
+  uncommon chest).
+- **The Breach Hoard.** When the ring has fallen all the way in, it leaves a chest at the hand,
+  painted by how deep the breach was fought — kills inside, plus 60 if the Hand fell: 25 for
+  common, 60 uncommon, 110 rare. **A breach chest never comes above rare**: a breach pays in
+  rings and splinters, not in bricks.
+- **The Breachlord.** With a lord's ring at rank III or better, a breach of that lord fought past
+  the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
+  with fourteen times the health of its kind, which holds the breach open while it stands (up to
+  35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is rare** — the best a breach gives.
+- **More than one, late in a run.** From wave 25 a second breach can open in the same wave, and
+  from wave 40 a third — each of a different lord, each on its own 60% roll, their hands at least
+  600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
+- **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
+  12% tougher per breach before it (to three times), and more of its packs magic.
+
+![Xoph comes through](docs/breach-lord.png)
+
+Splinter counts sit top-right under your studs, against what the next rank costs, only for the
+lords you have met; the character sheet grows a **BREACH** block with each ring's rank and what it
+is giving you. The breach bar shows its depth and what it is counting towards — the Hand, then
+the Breachlord.
+
+### Abyss
+
+From **wave 3**, on any wave that is not a boss wave, there is a **35%** chance (and never four
+ordinary waves in a row without one) that an **ABYSS** opens its **green eye** on the floor a few
+seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
+
+- **Walk onto the eye and the ground cracks** — and keeps cracking at **150px a second**, but
+  **only while you follow it**: stay within 420px of its front. **Where it is going is not
+  shown** — only what has already torn open is on the floor, with a glowing tip where it is
+  tearing now. Walk away and it stops; leave it stopped for **18 seconds** and it **seals**,
+  paying nothing.
+- **Monsters climb out of it** behind the front, a pack of two to four every 150px — imps,
+  zombies and skeletons early, stalkers and bats from wave 7, runners and knights from 12, hulks
+  and revenants from 18 — in black with glowing green hands, and a green stain under them.
+- **Two abyssal pits** tear open along it, a third and two thirds of the way down. Each spills a
+  pack of six to nine (one of them magic), and **that crack goes no further until the pit's pack
+  is dead**. A cleared pit pays a spray of studs and, 40% of the time, a common or uncommon chest.
+- **It forks.** About half the time a second crack splits off partway down (from wave 20, now and
+  then a third), waking as the main front passes the fork. It runs its own way — follow it too —
+  and ends in a pit of its own.
+- **The Stygian.** At the end of the main crack a champion climbs out — an elite skeleton, brute
+  or revenant by the wave, with six times the life. Its fall **clears the abyss**: a chest at the
+  depth (rare 40% of the time, uncommon otherwise — like a breach, an abyss chest is **never above
+  rare**) and a shower of studs.
+- **An open abyss holds the wave**, the way an open breach does. An abyss you never touched simply
+  closes when the wave ends.
+- **Late in a run there are more.** From wave 25 a second abyss can surface in the same wave, and
+  from wave 40 a third, each on its own 60% roll and at least 500px from the others. Each keeps
+  its own monsters, pits and Stygian.
+
+![An abyss: the opened crack, a pit spilling its pack](docs/abyss.png)
+
+### Strongboxes
+
+From **wave 2**, on any wave that is not a boss wave, there is a **30%** chance that a **locked
+iron strongbox** is left somewhere on the floor (another 35% roll from wave 20 and again from wave
+35; never more than three locked boxes lying about at once). It wears one to three **mods**
+written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
+
+| box | mods | bursts of guardians | the chest inside |
+|---|---|---|---|
+| Strongbox (60%) | 1 | 2 | common |
+| Magic strongbox (30%) | 2 | 3 | uncommon |
+| Rare strongbox (10%) | 3 | 4 | rare |
+
+- **It waits for you.** A box nobody touches stays where it is, locked, across waves.
+- **Walk onto it and it springs.** Its **guardians** come out of the ground round it, a burst of
+  three to five every 1.4s, and **every one carries the box's mods** — an IRONCLAD, BRUTAL, VITAL
+  box sends armoured, hard-hitting, deep-healthed bodies. A gold ring under each shows what you
+  have to kill.
+- **Kill every guardian and the lock gives**: the box becomes a chest of its tier, and some studs.
+  A sprung box holds the wave until its guardians are dead.
+
+![A rare strongbox sprung, its guardians coming](docs/strongbox.png)
+
+### A run, as a link
+
+**COPY RUN LINK** sits in the pause menu and on the death screen. It copies an address that holds
+the whole run: weapon, difficulty, favourite, the map's seed and the roster's shuffle, the tree as
+it stood, every brick in the order you took it at the rarity it rolled, your level, rings,
+splinters and golden hearts. Open the link and that run starts again **at the start of the wave
+you copied it on**, the hero rebuilt brick by brick — number for number the same hero, on the same
+map. It is for looking at a death, a build that melts a wave too fast, or a bug; share it and
+someone else sees exactly what you had. A linked run is a replay: it banks nothing to your tree.
+The run is **compressed before it is base64'd** (LZW, zip's family), so a long run's link is well
+under half the length it was — a level-49 bow run went from 6,459 characters to 2,813. New links
+start with `z`; old ones still open.
+**TRY AGAIN** replays the link from its wave; **TITLE** lets go of it.
+
+### Block
+
+A monster **carrying a shield** can block. The knight is the one that does: **50%** of hits on its
+shield side are stopped outright, `BLOCKED`. A shield covers one side — hits from behind always
+land — a bomb goes over it, and a spin comes round it. Nothing without a shield ever blocks. It
+used to be a certainty: a knight facing you stopped every arrow ever loosed, which made it a wall
+for a bow. The bestiary lists the block chance.
+
+### Monsters strike
+
+A monster no longer hurts whatever it happens to be standing on. Every melee monster walks up to
+the edge of its target, **raises its weapon for about a third of a second** (longer on the slow
+ones), and **swings**: a white arc shows where the blow went, and it lands only if you are still
+in front of it and within reach when it comes down. Step out during the wind-up and it misses.
+Lancers still lunge, and the lunge is the hit; ranged monsters still shoot and cast. Nothing
+walks into your middle any more — a body pushed into you steps back out to your edge, and one
+pushed into a skeleton shares the step with it. Monsters carry what they fight with: the
+crypt's skeletons and revenants a blade, knights a sword behind the shield, archers and
+marksmen their bow even while they walk, casters their staff. **Knights** hold off behind the
+shield between blows and step in to strike whenever the sword is ready — before, they held off
+forever and never hit anything.
+
+### The scepter
+
+The last door on the tree, intelligence's second weapon, and a summoner in the PoE mould. **The
+hero hits nothing.** The scepter carries a **SUMMON AURA**: it raises skeletons out of the floor
+where your cursor points, one a raising at the scepter's rate (0.70s, sped by attack speed), until
+the legion is full — four to begin with — and whenever one falls, the aura stands another. They
+walk to whatever is near you and cut it down.
+
+**Left click is CONVOCATION** — PoE's gem, built in: every minion you own (skeletons, golems and
+zombies) is called back to your side **one by one, nearest first, 0.14s apart** — you watch the
+legion answer — and each **regenerates 25% of its life a second for 3s** as it lands. A 3s
+cooldown; the ability row shows it as **CALL**, the ring filling as it comes back. A raising always lands on floor: point into a lake or at a boulder
+and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
+water and rocks the way you do.
+
+- **An even legion.** What rises is whichever of **spearman** (×1.25 the scepter's hit),
+  **swordsman** (×1.35 — shorter reach, a quicker blow) and **bone archer** (×0.9, shoots from
+  **480px**) the legion has fewest of, a tie broken at random: nine skeletons are always three of
+  each. With Skeleton Mages every one is a mage.
+- **The back line moves.** Archers do not plant their feet: in range, each keeps a spot in a
+  loose arc on your side of the fight and picks a fresh one every second or so, shooting as it
+  goes; anything that gets inside its comfort, it steps back from.
+- **Only their own kind is in the way.** Skeletons keep room from skeletons, golems from golems
+  and zombies from zombies — but a skeleton walks straight through a zombie or a golem, and a
+  golem through a skeleton, so the three pools never jam each other up.
+- **Mages never move.** A skeleton mage rises on a spot of its own and stays there: it does not
+  walk, it does not blink, a skeleton or a monster leaning on it cannot shove it, and it is not
+  pulled back when you walk away. It throws at whatever is in reach from where it stands —
+  **Convocation** is how you bring your mages with you. It reaches **820px**
+  (and fights that far from you), and its bolts fly at 960px/s for about 1,070px, fanned much
+  wider than an archer's — up to 160° with a full volley.
+- **Greater Multiple Projectiles.** An archer's arrow and a mage's bolt become a **fan**:
+  **Bone Volley** adds one to three by rarity (uncommon +1, rare +2, epic +3), eight in all;
+  **Greater Multiple Projectiles** (legendary, once) adds four for **25% LESS** projectile damage;
+  the tree's *Bone Rain* adds two. All of it together is **15 a shot**. The fan widens with the
+  count (an archer's to about 85°, a mage's to 160°), so a body far off takes one or two and a
+  body close enough to stand in the middle of it takes many.
+- **The aura never recycles.** A full legion stays standing: the aura only fills empty places,
+  and never breaks a skeleton to make room. A dead hero raises nothing.
+- **You first.** A skeleton goes for whatever is nearest *you* within 260px; only with nothing
+  near you does it take the nearest to itself — never more than 560px from you. With nothing to
+  fight it breaks the nearest **chest or crate**, since a summoner has no other way to open one.
+- **They are you, to a monster.** A monster goes for whichever is nearer, you or a skeleton, and
+  fights it exactly as it would fight you: the swordsman swings at it, the archer shoots it, the
+  lancer lunges at it. And **every enemy ability lands on skeletons** as it lands on you: rings
+  and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
+  lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
+  crosses takes it.
+- **Three epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
+  your side — 3.5× a skeleton's life, 2.75× the scepter's hit, and every blow a slam that lands on
+  everything in front of it. **Golems are their own pool**: they take no place in the legion, so a
+  full summoner stands **5 golems and 15 skeletons**. A golem that falls rises again 10s later. **Bone Overseer** (once): a staff-bearing lord
+  rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
+  damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
+  **Raise Zombie** (once): see [the graveyard](#raise-zombie--the-graveyard) below.
+- **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
+  × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
+  it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
+  minion life pool. They never leave you: nothing more than 560px from you is theirs to chase, and
+  a skeleton that is lost rises again at your side.
+- **Bone finds the gaps.** Armour is weighed against the size of the blow, so it is hardest on
+  many small hits — which is what a legion is. Every minion hit **ignores half the armour** in
+  front of it.
+- **Bricks:** Bone Legion (+1 to +3 skeletons by rarity, to 15), Grim Feast (minion damage), Bone
+  Armour (minion life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (+1
+  a raising at rare, +2 at epic, up to **five a raising**), Bone Volley (+1 to +3 projectiles).
+- **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
+  (**LEGION 5/7**), its ring filling as the legion does, with a second badge for the golems
+  (**GOLEMS 2/3**); the buff list spells it out: how many spears, swords, archers, golems, and
+  whether the overseer is up.
+- **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
+  reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%
+  of a blade's hit. Every bolt is its element and leaves its element's ailment.
+- **Necromancer** is its favourite: +1 skeleton, +15% minion damage, +20% minion life, and twelve
+  intelligence.
+
+![A legion of three, and the scepter](docs/scepter-legion.png)
+![Skeleton Mages: fire, cold and lightning](docs/scepter-mages.png)
+![A golem slamming, the overseer at your shoulder, and the crypt fighting back](docs/legion-fight.png)
+![Archers under Greater Multiple Projectiles, and the LEGION badge](docs/legion-volley.png)
+
+#### Raise Zombie — the graveyard
+
+[Zombies](#the-dead-that-walk) leave a **corpse** when they die — and only a summoner sees it: for
+any other weapon nothing is laid at all. A corpse lies for **30s** (it fades out over the last
+three) with a faint violet ring round it: *this one could stand up for you.*
+
+Take **Raise Zombie** — the notable of **THE GRAVEYARD** on the tree (intelligence's country, with
++8% minion life), or the same thing as an **epic** brick — and the summon aura also raises
+**zombies** from those corpses: the corpse nearest your cursor, within **700px** of you, one a
+raising on the aura's clock, up to **twelve**. Zombies are **their own pool** — they take no place
+in the legion or among the golems, so a full summoner stands 15 skeletons, 5 golems and 12
+zombies. A zombie is a slow, sturdy brawler: 2.2× a skeleton's life, 70% of its speed, and hands
+that hit for 1.15× the scepter's base. They take every minion stat you have, answer Convocation,
+and count on their own badge (**ZOMBIES 7/12**) beside the legion's.
+
+![Zombies, a crawler, the bloater and the hulk; two corpses and three raised zombies](docs/zombies.png)
+
+**On the tree:** the scepter's door opens into minion damage, minion life, minion speed and
+energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. Intelligence's
+spell country carries minion nodes too — **BONEWORK** and **GRAVECALL** (minion damage, life and
+speed), the notable cluster **THE CRYPT** (*Crypt Keeper*: +15% minion life, +6% minion speed) and
+**THE VOLLEY** (*Bone Rain*: +2 minion projectiles, +6% minion damage). And **every small node in
+blue feeds the legion as well**: spell and elemental damage carry 80% of themselves as minion
+damage (60% for a single element), cast speed as minion attack speed, energy shield and
+resistances as minion life. The second line is scepter-only, so to every other weapon the node is
+what it always was — and a summoner can walk the whole of intelligence's country without leaving
+the legion behind. And two keystones:
+
+> **Mirrored Legion** — *your legion fights the way you do.* Your minions gain **three quarters
+> of your own increased damage** — physical, elemental and spell — and **your conversions**, on
+> every hit they make. You deal **40% LESS damage** yourself. Build yourself and your army
+> follows; the price is the hits you still throw with your spells.
+
+> **Minion Instability** — *what falls, burns.* A skeleton that dies **bursts**, dealing 30% of
+> its life as fire to everything within 110px. 15% LESS minion damage.
+
+### The bow
+
+A dexterity weapon, and the fifth door on the tree. It does not swing: the attack button looses
+an **arrow** — physical, it bleeds, it rolls to hit against evasion like any attack, and it
+flies until something stops it. It carries **+120 evasion** and ×1.25 accuracy and none of the
+melee kit: no reach, no spin, no lifesteal, no armour, and the swing-only bricks (reach,
+Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own bricks:
+
+- **Split Arrow** — +1 arrow a shot at uncommon, +2 at rare, +3 at epic; fanned, up to 9.
+- **Piercing Shot** — +1 pierce at common, +2 uncommon, +3 rare, +4 epic, up to 12; each body an
+  arrow has gone through costs it 15%.
+- **Barbed Arrows** — flat physical to arrows only.
+
+**An arrow shoots things down.** Cross a monster's shot — an arrow, a skull, a bolt, a frost
+bolt, a hex, a bat — and both are gone: the arrow is spent taking it out of the air. A thrown
+boulder is the one thing it cannot stop; the arrow breaks on it and the boulder keeps coming.
+**It breaks things too:** crates, trees, rocks, cacti and chests take one knock an arrow, the
+same as a swing, and the arrow stops in them — so a bow opens a chest from across the field.
+
+**One arrow legendary a run.** The three are exclusive; taking one closes the others.
+
+| | converts | ailment | at the body |
+|---|---|---|---|
+| **Lightning Arrow** | 75% physical → lightning | +25% shock | forks to the **4** nearest bodies within 190px, 50% each, once and never onward |
+| **Fire Arrow** | 80% physical → fire | +20% ignite | bursts: everything within 80px takes the arrow **45% less** |
+| **Chaos Arrow** | 75% physical → chaos | +25% poison | pierces **every** body in its line, unworn |
+
+The arrow converts **first**, the way a PoE skill gem does: its share comes off the top, and
+your own conversion shares out what is left — Lightning Arrow on a hero with 50% physical to
+fire is 75% lightning, 12.5% fire, 12.5% physical. Nothing but an arrow ever reads the
+arrow's table, so the rest of your kit is untouched.
+
+![Lightning Arrow forking off the first body](docs/bow-lightning.png)
+![Fire Arrow bursting](docs/bow-fire.png)
+
+**Deadeye** is the bow's favourite: +1 pierce, +10% attack speed, +60 accuracy and twelve
+dexterity. On the tree, the bow's door opens into draw, nock, sight and light-step lanes, THE
+BARREL is arrows now, and **THE RICOCHET** keystone in dexterity's country reads:
+
+> **Ricochet** — *40% chance for an arrow that would stop to leap to the nearest body it has
+> not hit, up to twice · 15% LESS arrow damage.*
+
+**The Brick Blaster is gone.** It was a physical projectile spell that fitted nothing; its
+flight code, pierce falloff and cards are the arrow's now.
+
+### The shield's three endings
+
+Three keystones on the rim of intelligence's country, straight out of PoE — each a trade only a
+shield build wins:
+
+> **Chaos Inoculation** — *one heart, a far deeper shield, and chaos cannot touch you.*
+> Maximum hearts become **1**. Every heart you gave up comes back as **2 energy shield**, before
+> the increases, so every increased-shield card multiplies it too. The chaos part of any hit does
+> not arrive; a dose never takes hold.
+
+> **Ghost Reaver** — *what you steal becomes your shield, never your blood.*
+> Lifesteal fills the energy shield instead of the hearts.
+
+> **Zealot's Oath** — *what mends you mends your shield, never your hearts.*
+> Regeneration fills the energy shield instead of the hearts — without waiting for the recharge
+> clock, because it is regeneration and not recharge.
+
+Chaos is the damage type that walks past a shield; CI is the answer that makes you immune to
+it. The other two cost exactly what they redirect: with no shield to fill, they are a leech or a
+regen thrown away.
+
+### The guardian guards
+
+Tidal Orbit made the ring breathe in and out — a different way of dealing the same damage. The
+two legendaries that replace it change what the ring is **for**:
+
+- **Aegis Ring** — every brick in the ring **stops one hostile projectile** that crosses it:
+  arrows, bolts, skulls, hexes, a thrown boulder. The brick breaks doing it and rebuilds itself
+  **2.4s** later, and while it is rebuilding it neither blocks nor strikes. Brick count and spin
+  speed become defence: more bricks is a thicker wall, a faster spin sweeps more of the circle.
+- **Twin Ring** — needs the Aegis. A second ring of as many bricks, in gold, turning **the other
+  way**, far enough out that the two can never touch, and blocking too. Its bricks strike on their
+  own clock, so a body caught across both rings is hit by both.
+
+![Aegis and Twin Ring, two bricks rebuilding](docs/twin-ring.png)
+
+Measured on an 80-arrow volley from every direction: a bare hero takes all of it, the Aegis stops
+about 22 of them and the Twin Ring about 45. One ring runs out of bricks partway through a volley
+that long — each rebuilds 2.4s after it breaks — which is exactly what the second ring is for.
+
+### Every hand carries attributes
+
+Every favourite hands over **twelve attribute points**, split by what the hand is — the same
+twelve for all of them, so no hand is ahead on attributes alone; what differs is which defence
+and which damage line they feed:
+
+| hand | STR | DEX | INT |
+|---|--:|--:|--:|
+| No Favourite | 4 | 4 | 4 |
+| Sword & Steel | 8 | 4 | |
+| Reaver's Edge | 4 | 8 | |
+| Earthshaker · Tough Bricks | 12 | | |
+| Guardian Brick | 6 | | 6 |
+| Brickbane | | 8 | 4 |
+| Deadeye | | 12 | |
+| Necromancer | | | 12 |
+| Storm Brick | | 4 | 8 |
+| Bladestorm | 4 | 8 | |
+| Blade Vortex | 6 | 6 | |
+| Block Freeze · Elemental Arts | | | 12 |
+| Bomb Volley | | 6 | 6 |
+
+The split is data on the card and the hover line is printed from it, so the two cannot drift.
+
+### Reduced and less
+
+PoE never writes "−25% increased" or "−20% more". A negative increase is **reduced**, a negative
+more is **less**, and the minus sign goes because the word carries it. This game printed the
+sign — a keystone read "−25% increased damage" — because eighty-odd texts build "N% increased"
+from a number that is usually positive. Rather than audit eighty sites and miss one, the rule is
+applied once, where text leaves for the screen: the page's escaper, every character-sheet row,
+the tree's mod text and the reward card. A label beside its value flips too — *Reduced melee 25%*,
+*Less damage ×0.80* — and a stat named for its cost reads the PoE way: *50% LESS damage over
+time*, no plus. A range like "10–20% increased" is left alone.
+
+### The weapon card stands beside its button
+
+Hovering a weapon shows a card taller than the gap above or below a button in the middle of
+the menu, so the old above-or-below rule clamped it straight down **on top of** the button —
+the card covered its own label and the pointer that summoned it. It stands to the right of the
+button now (to the left for the rightmost one, where the window runs out), level with it, at
+exactly the same size.
+
 **`Ember Core` was never a fire card.** `flatElem` is read by the bolt, by Block Freeze and by
 the Storm Brick alike, so it has always been the single best upgrade a frost build can take —
 and it was called Ember Core, wore a flame, and said *"to your fire bolt"*. Being handed an
@@ -2366,7 +3045,7 @@ say nothing at all on a build that was bleeding and burning: every bleed probe w
 **share** of the hit, and none of them read the damage-over-time pool. There are real
 numbers now — `One wound`, `Damage per wound`, `Fully opened`, and a whole `BURNING` group —
 so an increased-damage-over-time card shows its effect on poison, bleed **and** fire at
-once. Four legendaries (`Tidal Orbit`, `Crackling Storm`, `Returning Blades`,
+once. Four legendaries (`Aegis Ring`, `Crackling Storm`, `Returning Blades`,
 `Absolute Zero`) were silent for the same reason and now have probes of their own. A test
 walks every brick on every weapon and fails if any of them moves nothing.
 
@@ -2377,10 +3056,18 @@ are their own groups.
 
 ### The character sheet — <kbd>C</kbd> — *what am I right now?*
 
+**It opens SIMPLE.** The sheet was written for somebody tuning a build — every pool, every
+formula, every ceiling — and a player who pressed C mid-fight got two hundred and forty rows.
+SIMPLE is the same short list the menu uses, grouped the same way, then your spells and the
+bricks you have taken. **NERD** — the pill at the top, or <kbd>N</kbd> while the sheet is
+open — is everything below, unchanged. It remembers which you left it on.
+
+![The character sheet, SIMPLE](docs/sheet-simple.png)
+
 The hand-written blocks at the top carry the deep explanations. Underneath them,
 **EVERY STAT** is generated straight from the probe list, grouped, with each row's
 explanation on hover — so a probe added for the comparison reaches this screen the same day
-rather than months later. A test asserts all 111 appear.
+rather than months later. A test asserts every probe appears (in NERD, where this lives).
 
 ### The spellbook — <kbd>P</kbd> — *what am I carrying?*
 
@@ -2408,6 +3095,12 @@ The boss block stacks **under** the wave block now rather than being drawn throu
 wave number, its modifier chips and the bodies-left line all live at the top of the screen,
 and the boss's traits were being painted straight over them. One function reports where the
 wave block ends, and the boss block starts below whatever it actually used.
+
+Above the health bar, a **shield track** on the six bosses that carry one, with `RECHARGING`
+written into its right end the moment the clock runs out — because that is the decision you are
+making: a fight you cannot out-damage looks exactly like what it is. Everything above the health
+bar moves up by the track's height when there is one, which is what stops `THE DREAD ROOST` being
+printed straight through its own shield.
 
 Under the health bar, **every debuff on the boss on one line**, left to right — poison,
 bleed, burning, BURNT, chill, shock, frozen — as a **symbol and a count**, no names. On a
@@ -2520,8 +3213,16 @@ Everything below is written by hand in one `<script>`, against a 2D canvas.
 - **Bodies are capsules, not circles.** Every projectile, sweep, beam and blast tests
   against a segment running from the feet to the top of the head, so a bolt that crosses a
   chest connects with it.
-- **A\* on an 8-connected grid**, string-pulled, with a per-frame search budget, local
-  steering, and a stuck-detector that rescues anything that has walked itself into a rock.
+- **A flow field for the chase.** Every monster is after the same hero, so one Dijkstra search
+  runs outward from the hero's cell over a 40px grid (redone when the hero changes cell, about
+  2ms) and every monster walks downhill, string-pulled to the farthest step still in sight. The
+  sight line cannot slip between two blocked cells that touch at a corner, and a body-wide check
+  stops it grazing a lake's edge. Small props are left to local steering — until something gets
+  wedged on one, at which point the grid **learns** it for the rest of the run; a big rock that
+  breaks is taken back off the grid. Local steering slides round what is in front, and a slide
+  can no longer point a body back the way it came. A monster after a skeleton still asks for its
+  own budgeted A\* path. On 40 random maps, one monster at a time from 500–950px, **640 of 640**
+  reach the hero (the old per-monster A\* managed 495, and no knight ever closed in).
 - **A uniform bucket grid** for every "what is near me" question — separation, sword
   swings, whirls, chain targeting — instead of scanning the whole roster.
 - **View-frustum culling** at 1.25× the window for every draw pass.
@@ -2532,7 +3233,15 @@ Everything below is written by hand in one `<script>`, against a 2D canvas.
   arriving is one sound.
 - **Seven biomes** — the Greenwood, the Dust Flats, the Grey Reach, the Mire, the White
   Waste, the Cinder Fields, the Long Meadow — each with its own props, palette and lakes,
-  generated per run.
+  generated per run. Lakes are laid **on the stud grid**, whole cells only, so every stud in the
+  water sits exactly over a stud of the floor and none is cut by the rim; the rim is a plate a
+  cell, a 1×1 on every corner, and some lakes are two plates — an L, a T, a pond with a bay. How
+  wet a run is rolls too. **Ruins** stand where they fall: rings of pillars with a gap or two to
+  walk in by, colonnades you have to go round, heaps of boulders — some pillars snapped to a
+  stump — so no two runs route the same way.
+
+![A two-plate lake on the stud grid](docs/map-lake.png)
+![A ring of ruined pillars](docs/map-ruins.png)
 
 <details>
 <summary><b>Developer note — the test bench</b> (mild spoiler)</summary>

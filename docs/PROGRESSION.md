@@ -536,7 +536,7 @@ share their inner corridor.
 ### One ability at a time
 
 The outer ring is now eight clusters that each name a single brick: `+1 damage with the
-Guardian Brick`, `+1 Brick Blaster pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
+Guardian Brick`, `+1 arrow pierce`, `+1 Storm Brick fork`, `+12% increased Bomb
 Volley rate`, a wider Block Freeze, a heavier bomb. A tree that only ever says *+5% damage*
 has no opinions about anything; a node that names one of your bricks makes the map worth
 re-reading every time the deck hands you something new.
@@ -2168,3 +2168,1349 @@ That is three flakes now with one root — a fixed `sleep()` standing in for a c
 third one found by capturing the failure instead of guessing at it.
 
 6 new breaks, 54 tests green, wave-50 soak clean.
+
+## Twenty-third pass — the bar in front of the bar, and one curve instead of two
+
+> *"I want to implement ES as it's done in PoE. Make sure chaos damage goes through Energy
+> Shield. Make sure some bosses also have Energy Shield, and give the higher tier bosses some
+> chaos damage. Right now the lvl 20-25-30-35-40 bosses are extremely easy to kill... They get
+> oneshotted at times, i dont want that."*
+
+### A defence that pays you for the hits you don't take
+
+Armour pays you for every hit you take. Evasion makes some of them miss. Energy shield is the
+third shape and the only one that **comes back**: a pool in front of the health pool that refills
+at 22% of its maximum a second once you have gone 2.5 seconds untouched.
+
+Four rules, all in one twelve-line function:
+
+```
+· it eats the hit first; what it cannot eat spills through
+· chaos walks past it
+· any damage restarts the recharge clock — including the chaos that walked past
+· it is a SHARE, not a yes-or-no
+```
+
+The fourth is the one that makes it a system rather than a gate. A hit here is already a mix
+carrying its own provenance, so a swing half converted to chaos puts *half of itself* past the
+shield and leaves the other half to be eaten. Nothing needed a special case: `chaosShareOf` reads
+the mix the conversion pipeline already built. It means you never need a chaos build to fight a
+shielded boss — you need *some* chaos, which is a much better thing to want.
+
+The same function runs the hero's shield, a monster's, and a boss's, because the only thing it
+needs is an object with `es` and `esMax`. "Some bosses have one" is therefore a column in a table
+rather than a second system.
+
+Poison is chaos over time, so `ailmentDamage` passes its type through and a dose walks past a
+shield while a burn meets it — the one place where the ailment table and the shield had to agree,
+and they agree by construction rather than by a rule written twice.
+
+### The thing that was actually wrong with the bosses
+
+The complaint was that the bosses at 20/25/30/35/40 fold. Measuring first, before touching a
+number:
+
+```
+w10 OMEGA BRICKTHANE  ULTRA  5,314        w35 THE BONE BARON   4,147
+w20 MEGA BONE BARON   ULTRA 13,813        w45 THE ASH TYRANT   8,213
+w30 ULTRA LAVABRICK   ULTRA 17,740
+```
+
+A wave-45 boss with 8,200 health next to a wave-40 ultra's 56,000. Not a number that wanted
+raising — a **second curve**. The ultras climbed 2.3× a tier with `mobRankMul()` on top; the
+bosses between them climbed a flat 420 a tier with **no monster level at all**, while every
+ordinary skeleton in the game has one. Two formulas for one idea, drifting apart a little more
+every tier for the whole run.
+
+The first repair raised the in-between curve — quadratic in tier, with the monster level added.
+It fixed wave 45 and broke something else: a wave-35 boss came out at ×1.31 of the wave-30 ultra
+it followed. An ultra that is not a wall is not an ultra. Steeper was not the claim.
+
+So there is one curve now. `bossPool(baseHp, st)` is *the* curve; the ultras read it at whole
+steps and the ordinary bosses read the same one at the half-steps between, at `BOSS_SHARE` of it.
+A wave-15 boss is half of what wave 15 is worth, and stays half forever with nobody keeping two
+formulas in step.
+
+```
+w10 ULTRA  5,713          w15  3,063  ×0.54
+w20 ULTRA 16,947          w25  8,230  ×0.49
+w30 ULTRA 24,481          w35 14,623  ×0.60
+w40 ULTRA 64,683
+```
+
+The wave-45 boss went from 8,200 to 44,700. The wave-50 raid is 40% deeper than it was, which is
+the cost of the five ordinary bosses in it no longer evaporating.
+
+### A test that called a correct game broken
+
+The first version of the curve assertion walked the sampled waves in order and demanded each be
+deeper than the last. It failed on a correct build:
+
+```
+wave 15 (LORD LAVABRICK, 3637) is no deeper than wave 10 (6908)
+```
+
+Waves 10/20/30/40 are ultras and 15/25/35 are not, so the pool is *supposed* to dip on the wave
+after an ultra. The comparison crossed the boundary between two kinds of thing. It compares
+within kind now, with the reason written above it.
+
+Then the replacement was wrong in the other direction. "The ordinary bosses must climb at least
+as steeply as the ultras" passes for a build where they climb steeply *past* them — which is
+exactly the overshoot above. The claim that is actually true of a share is a **band**: every
+ordinary boss between 0.40 and 0.90 of the ultra before it, and the share must not drift across
+the run (max/min < 1.6). That catches the original bug at ×0.19, the overshoot at ×1.28, and a
+`BOSS_SHARE` set wrong in either direction — four breaks where the slope version caught one.
+
+### Two more of the same three bugs
+
+**A one-sample measurement.** The curve was read from one spawn a wave. Which boss stands up is a
+roll and so is its rank, and one run put wave 15 at ×0.405 against a floor of 0.40 — a pass by a
+hair and a red suite next run for no reason at all. Twelve spawns a wave, averaged.
+
+**A patch that averaged the signal away.** `stormcol` failed in a suite run at a margin of exactly
+10 against a threshold of 10. A bolt is drawn *jagged*, so it does not sit on the straight line
+between its own endpoints — a 6px patch at the midpoint catches it on some frames and clean
+ground on others. Widening the patch made it **worse**: a thin bright line averaged over a bigger
+box is a line averaged away. What says "a yellow line crossed here" is the **hottest pixel**, not
+the mean one. Margin went from 10±2 to 91±1, and every colour break still fails.
+
+That is four flakes now with one root — a fixed sample standing in for a condition — and two of
+the four were found by reading the captured failure rather than by re-running until it passed.
+
+29 new breaks, 55 tests green, wave-50 soak clean.
+
+## Twenty-fourth pass — the shield you wear
+
+> *"Visualize on the player/monster a little tiny shield that absorbs the player, if he has ES.
+> If the ES is depleted he doesn't have a ES. And make it so its % value is the transparent
+> value. If you have 100% shield, it's less transparent and if you have 0% it's gone."*
+
+Two bars had been added for the shield — one over the XP bar, one over the boss's health — and
+both are in the wrong place for the moment that matters. When something is winding up at you,
+your eyes are on the thing winding up. The boss's shield track is 300 pixels from the boss.
+
+So the pool is drawn on the body that owns it, and **the fraction is the opacity**: full is a
+bright dome, a third left is a hint, empty is nothing at all. No number, no bar, no reading.
+
+Faint on purpose — it sits on top of a body you are trying to watch, and a shield you cannot see
+through hides the wind-up it exists to survive. Same call the mace's teeth got two passes ago.
+The rim carries it; the fill is barely there.
+
+### Where a body is
+
+The first version took `(x, y, r, scale)` and drew an ellipse at a hand-picked offset. It looked
+right on a minifig and nowhere else, because a minifig is one of about six shapes in here.
+
+`bodyLo`, `bodyHi` and `bodyRad` already exist: they are the vertical segment every swing and
+every projectile in the game is tested against, and they already know that a golem is enormous
+and a boss is tall. Drawing the bubble around *those* means it is drawn exactly where the thing
+it protects can be struck, and a golem, a minifig and a bat all fit without any of the three
+being measured by hand.
+
+One thing they cannot know. A bat is **hit** as though it were standing on the floor — that is
+deliberate, and it is what the hit model says — but it is **drawn** in the air, with its height
+computed inside its own draw function and never written down. So the bat boss's bubble was
+hanging over the patch of floor it was hovering above. `drawZ` records the draw height for
+anything that needs to find the drawn body; nothing that hits it reads that field.
+
+### Five early returns
+
+The bubble was first called from inside `drawEnemy`, after `drawFigure`. `drawEnemy` is seven
+shapes behind five early returns — golems, minis, crypt bats, the bat boss, then the minifigs —
+so it only ever reached the minifig path, and every other shape in the game carried a shield it
+never drew.
+
+It is called from the draw list instead, where there is exactly one body per enemy and the bubble
+lands on top of whichever shape it turned out to be. `minifigonly` is the break that puts it
+back.
+
+### A mean is the wrong statistic for "is it there"
+
+The test measures cyan off the canvas. The mean of `blue − red` over a box around the body is the
+right statistic for *how solid* the bubble is — it gives a clean straight ramp, −58.4 / −61.8 /
+−65.0 / −68.1 across the four fractions — and the wrong one for *whether there is one at all*.
+
+`ghostbubble`, which deletes the `f > 0` guard and leaves a dim ring round an empty pool, moved
+that mean by **1.08** against a threshold of 1.2, and passed. A 1.8px ring at a third opacity is
+a rounding error in the mean of a 112×89 box.
+
+Counting the pixels the ring actually paints — anything cooler than −55, which no floor in this
+game ever is — makes the same break show up as 1198 against 985. A hundred times more sensitive,
+and no tuned threshold: the two statistics are used for the two different claims.
+
+### And one more hovering-body flake
+
+The boss case failed about one run in three at first. The bat bobs ten pixels either way while it
+flaps, so a sample box measured once and reused across four frames has the bubble sliding out of
+it — which reads exactly like the shield fading. The box is measured against the body's current
+draw height every time now, and the margin went from 3.6–7.7 to 8.0–10.6 against a threshold of
+5.
+
+That is the fifth flake in this codebase with the same root: something measured once standing in
+for something that moves.
+
+9 new breaks, 56 tests green, wave-50 soak clean.
+
+## Twenty-fifth pass — less on the screen, and a tree you can spend while you play
+
+> *"Change some of the favourite bonuses — we don't have any that give ES, accuracy, STR/DEX/INT,
+> evasion. Lower the ailment chance for the default fire ability. Move the weapon tooltip so I
+> can see the mouse. The main menu shows too much: basic stats and a button for more. Same for
+> the C menu — a simple view and a NERD view. Let me spend skill points as I level up, mid-run.
+> And three named presets I can save and load."*
+
+### Three hands, one per attribute
+
+Each attribute already owns a defence — strength the hearts, dexterity the dodge, intelligence the
+shield — so each gets the opening hand that leans on it: **Brute Strength**, **Fleetfoot**,
+**Arcane Ward**. Some of the attribute, the defence it pays for, and that defence's bricks up more
+often. None is gated to a weapon. The hover card's numbers are the per-point constants multiplied
+out by hand, checked against `ATTR_*` rather than guessed.
+
+### The fireball stops being a certainty
+
+It carries 25% of its own now — PoE's Fireball number — and that *adds* to bought chance, so the
+ailment bricks mean something to a staff. The first version lowered the **embers** too, because
+`AIL_NATIVE` listed `'ember'` as a source; three ember tests went red. They were right: an ember
+**lands as a `'fire'` hit** — the same source name as the bolt — so no table keyed by source can
+tell them apart. The ember says so on the hit instead (`ailSure`), and keeps its certainty,
+because "sets the next one alight" is Ember Scatter's whole card.
+
+And `ail3` had been asserting `'ember'`'s native chance all along — against a source name nothing
+in the game ever hits with. That assertion is gone; `ember.js` flies real embers.
+
+### Two short views, one field
+
+The menu opened on 175 stats and the sheet on 243 rows. Both now open short, on the same list: a
+probe with `basic` is one a player reads to play, and its value is the heading it sits under. The
+short list is a *filter over the same rows*, not a second table, so the two views cannot disagree
+about a number. The menu's long view and the sheet's NERD view are unchanged and remembered.
+
+Three existing tests asserted things about the long views — every probe on the sheet, the layer
+chips, the conversion card — and went red when the default flipped. They now switch to the long
+view first, because that is what they test; the short views have their own claims.
+
+### The card beside the button
+
+The weapon card is taller than the gap above or below a button in the middle of the menu, so
+above-or-below clamped it straight onto the button. It stands beside the button now. The test
+compares the card's size against *the same card placed the old way*: a fixed 300px floor failed the
+staff, whose card is simply narrower.
+
+### The tree mid-run
+
+A level was worth a point only when you **died** — `metaBank` wrote the record at the end. Now the
+record moves on the level-up and the wave clear, <kbd>T</kbd> opens the tree with the world frozen,
+and a node bought lands on the live hero. That last part is safe because of an invariant the tree
+has kept since it was built: **a node only writes pools**, the same ones a brick writes, so applying
+it to a live hero is exactly what applying it at the start does.
+
+Mid-run the tree only grows. Refunds would mean unpicking a node from a live hero, and the
+switches some nodes throw do not unpick cleanly.
+
+**Two tests described runs that cannot happen any more.** `opts` wrote `best.level = 3` onto the
+save in the middle of a run that began at 0, then expected the bank to pay 5; `meta` banked three
+"runs" back to back without starting any of them. A run now remembers the records it began from —
+the death screen needs that, or a record banked live reads as "nothing new". The fix for the
+second was in the game, not the test: a banked run is **over**, so `metaBank` drops its snapshot.
+The first needed its fixture to say where its run began.
+
+### Presets
+
+Three per tree, on the same record as the tree they came from. **LOAD buys, it does not copy** —
+every node goes through `metaCanBuy`, in several passes, so a preset can never put the tree in a
+state it could not reach by hand. The `presetcopy` break (push the list straight in) overspends a
+30-point tree by 6, and the test says so.
+
+**A text field owns its keys.** Naming a preset "Tank" would type a T into a window whose keydown
+handler closes the tree on T. The test types `Tank CN build`; the break that removes the guard is
+caught by a symptom nobody predicted — the game's Space handler swallows the spaces, and the
+preset comes back as `Preset 1TankCNbuild`.
+
+**The side column was squashing its cards.** Adding the presets block made the column taller than
+the window, and flex shrank the info card until its text ran out of the bottom. Its children do not
+shrink now; the column already scrolls.
+
+### Three breaks that proved nothing
+
+`menuleak` and `sheetleak` deleted the `basic` filter — and survived, because a probe with no
+simple heading is dropped by the grouping step anyway. Equivalent code is not a break. Both now
+leak for real (file everything under OFFENCE) and are caught. `tnokey` "survived" because the
+runner counted a crashed test as a pass: with T dead the tree never rendered, the next click
+threw, and no FAILURES line was printed. A crash is a catch, and `brkrun.sh` scores it as one
+now — but a crash is also a worse message than a sentence, so the tree-dependent checks in `qol`
+stop once "T does not open the tree" is recorded, and the break fails by name.
+
+### The bubble test, twice
+
+`bubble` went red on the first suite run: the new `+1 SKILL POINT` float is the shield's own blue,
+and it rose over the hero's head just as the bare frame was sampled. Clearing floating text fixed
+that and exposed a second thing: the hero's own body shifts pose between frames, and its blue legs
+moved the pixel count by ±25. The rim is drawn *outside* the body, so the body's rectangle is now
+masked out of the count. Noise went from ±25 to ±7; the ghost-ring break still reads +197.
+
+That is six flakes in this codebase with the same root — a sample taken of something that moves —
+and this is the first found *before* it flaked, by reading which pixels differed.
+
+### And one of mine
+
+The new fireball assertion went red in a full suite run on a correct build: **0.1975** against
+0.25 ± 0.05. Four hundred samples at p = 0.25 have a standard deviation of 0.022, so that window
+was 2.3σ — a few percent of runs fail for nothing. It is the second recurring bug shape in the
+list at the top of this log (a statistical claim on too few samples), written fresh in the same
+pass that listed it. Two thousand samples puts the window at five sigma; four runs read
+0.243–0.258, and both fireball breaks still fail by a mile.
+
+33 new breaks, 57 tests green, wave-50 soak clean.
+
+## Twenty-sixth pass — attributes on every hand, reduced and less, and The Long Dying repriced
+
+> *"I don't like that you added three separate favourite cards for STR/DEX/INT. I meant include
+> some of those attributes into all the cards, for balance. The Long Dying is extremely
+> overpowered — the spread is too wide, and there should be a 50% reduction for damage over time.
+> And we never say 'reduced' or 'less' — we say −50% increased or −50% more, which makes no
+> sense. Change the keyword when it goes negative, in all cases."*
+
+### I misread the favourites
+
+Three new hands was not what was asked. They are gone, and every existing hand carries **twelve**
+attribute points, split by what it is — Sword & Steel 8/4/0, Brickbane 0/8/4, Block Freeze
+0/0/12, No Favourite 4/4/4. Twelve for all of them is the balance. The split is a field on the card
+and the hover line is printed from it.
+
+**It moved the power budget, and the reason is worth knowing.** A red build that stays home went
+from ×3.47 to ×3.81 against a declared ×3.60 — while its damage ratio *fell*. It buys "+1 heart
+for every 5 INTELLIGENCE", and No Favourite's four INT took it from 6 to 10: over the threshold,
+nine hearts became ten. Bisected, not guessed: the same test on a build with the attributes switched
+off reads ×3.472. The ceiling is restated to ×3.95 with that written beside it — trimming the
+attributes to fit an old number would have been the test deciding the design.
+
+### Reduced and less, once
+
+Eighty-seven texts build "N% increased" or "N% more" from a number that is usually positive. The
+rule is applied where text leaves for the screen instead: `esc()`, `sRow()`, the tree's mod text
+and the reward card. Two shapes — free text ("−25% increased" → "25% reduced") and a label beside
+its value ("Increased melee | −25%" → "Reduced melee | 25%"; "More damage ×0.80" → "Less damage").
+Case is kept, and a range ("10-20% increased") is not a negative number.
+
+A stat named for its cost printed "+50% LESS damage over time", and `metaModGood` read the sign
+alone and painted that cost green. Both fixed, with the obvious trap avoided: **LESS damage
+*taken*** is a bonus and stays one.
+
+**Two breaks survived, and both were holes in the test.** Removing the rewrite from `esc()` passed,
+because nothing on the fixture hero printed a negative increase inside a tooltip; removing it from
+the reward card passed, because no real card can print a negative at all — every card prints its
+own value. The fixture now carries a negative armour increase (its formula tooltip reads
+"(1 + N% increased)"), and the reward check renders a card that says a negative through the reward
+screen's own renderer. Both now fail on their breaks.
+
+### The Long Dying, priced in its own currency
+
+It cost 25% off everything you **hit**, and the build that walks there barely hits — its damage is
+what lingers. With a 210px spread it was the strongest node on the map. Now: 120px, and **50% LESS
+damage over time**.
+
+That needed a slot that did not exist: `dotRate` had an increased pool and no MORE/LESS at all, so
+nothing in the game could make lingering damage smaller. It multiplies `dotMore` after the pool now.
+And checking that every lingering damage goes through `dotRate` found one that did not: the dose a
+chaos-converted hit leaves was handed a raw rate, so increased damage over time and increased chaos
+never touched it. It goes through `dotRate` like the burn and the wound beside it. That is a buff
+to chaos-conversion poison builds, and it is the reason the keystone's cost reaches them at all.
+
+Also fixed while there: the spread read **"+120 px px"** — the stat's name began with "px" and the
+formatter added another.
+
+20 new breaks, 58 tests green, wave-50 soak clean.
+
+## Twenty-seventh pass — the guardian guards
+
+> *"Do Aegis Ring as the first upgrade, the second upgrade is Twin Ring, where the opposite ring is
+> a little further out so it doesn't collide with the inner ring. Both block incoming hits."*
+
+Tidal Orbit is gone. **Aegis Ring**: every brick stops one hostile projectile crossing it, breaks,
+and rebuilds 2.4s later — neither blocking nor striking meanwhile. **Twin Ring** (needs the Aegis):
+a second ring of as many bricks, turning the other way, out at `r + max(2·size + 24, 0.38·r)`, with
+its own strike clock so a body across both is hit by both. The block sits in the one swept check
+every hostile projectile already passes before it can reach the hero, so a new kind of enemy shot is
+blockable by existing.
+
+**Three fixture bugs, found by a volley that would not add up.** Hearts lost read exactly 7 with and
+without a wall that had stopped 12 shots: the fixture set a million hearts and *then* called
+`syncStats`, which rebuilt the pool to 7 — the hero was simply dying. Behind that, hit
+invulnerability swallowed arrows arriving close together, so hearts were not a count of arrows until
+i-frames were held at zero every frame. And "the Twin strikes" was being satisfied by the staff's own
+fireballs landing on the test body; it reads the outer ring's own strike clock now.
+
+**Two claims were too weak to catch their breaks.** "No brick on each ring can touch" was checked
+in one snapshot — but counter-rotating rings line every pair up radially sooner or later, so a twin
+6px outside the first ring passed. The claim is the radial gap, which holds at every phase.
+
+The deleted constants were still exported by the test bridge: a boot-time `ReferenceError`, the
+same trap the log already describes.
+
+10 new breaks, 59 tests green.
+
+## Twenty-eighth pass — the shield's three endings
+
+Chaos Inoculation, Ghost Reaver and Zealot's Oath, as three rim keystones in intelligence's country.
+CI works out the hearts as usual and then hands everything above one back as shield
+(`CI_ES_PER_HEART = 2`) *before* the increases, strips the chaos share from every hit before it
+reaches the shield, and closes the two chaos-over-time doors (`ailmentDamage('chaos')` and
+`poisonPlayer`). Ghost Reaver and Zealot's Oath redirect the leech and the regen tick; Zealot's does
+not wait for the recharge clock, which is the difference between regeneration and recharge.
+
+The layout held: three new clusters and `meta`, `roads`, `nodes`, `shapes` and `metaplay` all stayed
+green, and the home power budget did not move. The one thing that went red was the rule you set two
+passes ago — **no node prints a figure under 0.2** — which caught a 0.03 flat-regen minor on the
+Zealot's cluster. Nothing else in the tree uses flat regen; it is *increased* regeneration now, like
+the rest.
+
+10 new breaks, 60 tests green.
+
+## Twenty-ninth pass — the bow
+
+> *"Let's add the Bow — ranged, dexterity, it shoots arrows, has an arrow favourite. I erase the
+> Brick Blaster ... instead of that legendary we change it to 3 options and you can only pick one."*
+
+The bow is `shoot:true` on its weapon row, and `isArcher()` joins `isCaster()` and `isSlammer()`
+as the third thing that is not a swing. **A lot of gates said `!isCaster()` and meant "swings a
+blade"**; sixteen of them were melee-only in truth (reach, leech, the whirl, Bladestorm, Blade
+Vortex, the rage cards) and read `isMelee()` now, while the shared attack cards — damage, crit,
+accuracy, bleed — stay open to the bow. The Brick Blaster's flight loop, sweep test and pierce
+falloff became the arrow's; everything else of it is deleted, and the bridge was scrubbed of its
+exports before they could throw at boot.
+
+**The conversion is a parcel.** `convTableFor(source)` builds a table per arrow hit: the legendary's
+share off the top of physical, the hero's own physical row scaled into what is left, every other
+row and every gain copied. Only the three arrow sources read it, so a Lightning Arrow never leaks
+into a swing's split.
+
+**The tree moved, and two tests said so honestly.** The bow's door had been drawn since the map was
+built, but locked, so nobody measured from it. Opened, two red prizes standing a few degrees inside
+red's border came out a point cheaper from the bow than from the sword. `DOOR_SPREAD` went 0.70 →
+0.80 — every door still 33° clear of a border — and both are the sword's again. Two thresholds were
+restated rather than met: the home-vs-away margin (×1.12 → ×1.10; measured ×1.116, every per-prize
+pairing still home-first), and one prize's spread across the doors (≥3 → ≥2), because the bow's four
+first steps are walkable by everyone and joined four inner hubs that were not joined before.
+
+**Three fixture bugs in the bow's own test.** A ring of fork targets stood in the arrow's line and
+got hit first; poison ticks were read as "Chaos Arrow was not worn" (it is now *nothing less than one
+arrow*); and a map prop in the firing line stopped Chaos Arrow on one run in five, which is the arrow
+behaving correctly. Two breaks survived until their fixtures stopped coinciding: an arrow and a
+swing are the same number with no barbs on, and a far fork target was never among the four nearest.
+
+36 new breaks, 61 tests green.
+
+## Thirtieth pass — Breach
+
+> *"Let's introduce some of the league mechanics into the game like Breach ... try to flesh this
+> one out."*
+
+One `breach` object per wave, rolled in `startWave` beside the modifiers: `wait` (a few seconds
+into the fight) → `hand` (surfaced, on the edge markers) → `open` → `closing` → gone. The whole
+mechanic hangs off four existing seams rather than a parallel system: the swarm is ordinary
+`spawnEnemy` bodies passed through `breachify` (colours, element, softer, no studs); the death hook
+is two lines at the top of `killEnemy`; the ring is five hand-written rank deltas into the same
+pools cards write (`convGain`, `inc[el]`, `resFlat`, `incMelee`, `armourFlat`, `esFlat`), so it
+survives every `syncStats` rebuild with nobody having to know it exists; and the wave's clear
+check gained one clause, because an empty field under an open breach is not a cleared wave.
+
+**Tuned once against the bosses it sits between.** The Hand of the Lord first came out at 495
+health on wave 8 against a 1,607 boss — a third of a boss as a side objective, with a clock that
+could pull it back through half-dead. It is ×4 an elite now (about a quarter of a boss), and while
+it stands the breach cannot close, for up to twenty seconds.
+
+**The test steps the breach by hand.** The game loop is parked and `updateBreach` is called in
+fixed steps, so the clock, the growth and the hold are exact instead of racing a frame timer. The
+wave-clear rule is tested through the wave's own update, not by asking the helper it calls.
+
+`RING_MAX` already existed — the boss's pull ring — and a second `const` of the same name was a
+boot-time `SyntaxError`, caught before anything else ran. The lords' cap is `LORD_RING_MAX`.
+
+**And one of the previous pass's tests was a coin-flip.** The Aegis check asked for the ring to
+cut a 40-arrow volley's loss to under 0.85 of a bare hero's; across runs it measured 0.72–0.88,
+so it failed about one run in six. Doubling the volley did not rescue the bar — at eighty arrows
+the ring runs out of bricks and the ratio centres near 0.83 — because the bar was the wrong claim.
+It asks now what a block is *worth*: every arrow the wall reports stopping must show up as hearts
+not lost, at least 30% of an average arrow each. All ten Aegis breaks are still caught by it.
+
+38 new breaks, 62 tests green.
+
+## Thirty-first pass — excess is time
+
+> *"Sometimes I get like 3 magnets in a row but I can only have one active at once ... I want the
+> excess to basically increase the time. Instead of taking two magnets in a row making it only
+> reset the timer to 30s, it now instantly adds another +30 seconds."*
+
+One helper, `buffExtend(p, key, full)`, owned by all four ground buffs. `full` is decided *before*
+the pickup levels anything: a magnet has no levels so it is always full; rage and fortune are full
+once they are at ×2 (which the first pickup already reaches); the ward is full at its second stack.
+Full and running → `+BUFF_T`, held at `BUFF_T_MAX = 150`. Anything else starts or restarts the
+clock at thirty, as before. Each buff remembers its clock's full length (`magnetMax`, …) so the HUD
+ring drains against 90s when there are 90s on it, instead of reading "already over" past thirty.
+
+The test drops real pickups on the hero and lets the game collect them. 9 breaks, 63 tests green.
+
+## Thirty-second pass — an arrow meets things
+
+> *"Make sure that the arrow shots actually can deflect (this basically destroys both the arrow
+> AND the projectile it hits). Also make sure it can destroy chests and other breakable stuff."*
+
+Neither was true. The arrow's flight checked `solids` and bodies and nothing else: a crate or a tree
+stopped it without taking a knock, and a **chest is a prop but not a solid**, so an arrow flew
+straight through one — a bow hero could not open a chest without walking up to it.
+
+Two passes in the arrow's flight, before the solids. **Shots:** every enemy-owned projectile whose
+path crosses the arrow's this frame — swept segment against segment, since an arrow and a bolt close
+at over a thousand px/s — dies, and so does the arrow. A thrown boulder breaks the arrow and keeps
+coming. A shot the sword deflected is the hero's and is left alone. **Scenery:** the first breakable
+prop the arrow's path crosses takes one knock, exactly as a swing gives, and breaks at zero; a
+boulder prop stops it unharmed; torches and crystals are air.
+
+The bow test's firing range now clears props as well as solids — they stop arrows now, and a crate
+in the line would be the same one-run-in-five flake the solids were. 11 breaks, 63 tests green.
+
+## Thirty-third pass — the breach is another layer
+
+> *"The breach is bugged, it never finishes: it spawns mobs and when I kill them it refills the
+> timer, so it's an infinite loop. Breach monsters only visible/hit/rendered inside the ring, and
+> the ring should expand to the whole map ... Breach is like another dimension, another layer of
+> hidden monsters that the circle reveals. The bigger the circle gets the harder it will be to keep
+> it open."*
+
+**The loop was arithmetic.** The swarm refilled at up to three bodies every 0.38s to a standing cap
+of 34, and every death bought back a flat 0.28s: a build killing five a second earned 1.4 seconds of
+breach for every second it spent, forever. Nothing in the test measured a breach's *length* — it
+only checked that a kill bought time and that the clock had a cap — so an infinite breach passed.
+
+**The layer.** Opening a breach lays its lord's monsters across the whole floor as plain records —
+packs of 3–6, ~20 bodies per million px² (about 300 on this map), one kind per pack — sorted by
+distance from the hand. The circle grows at `BREACH_SPD` = 110px/s to the farthest corner, and
+revealing is a walk down that sorted list: a record the edge has passed becomes a monster where it
+stood, up to 60 standing at once. `breachSees(e)` is the one rule for "is it here": the draw list,
+`hitEnemy` and the death-time clock all ask it, and `breachHold` keeps every breach body on the
+inside of the edge.
+
+**The clock.** Only a breach kill buys time, and `breachKillT(r) = 0.7 · (250 / max(250, r))^1.25`.
+The rim — where the monsters are met — grows only as fast as r, so time bought per second of perfect
+killing falls as r^-0.25: a wide breach is a race that gets harder. And because the layer is
+finite, even perfect killing ends it.
+
+**The test asks the question that was missing:** how long does a breach last? A hero killing every
+breach body the instant it appears must see it end (34s, circle at 98% of the map, layer empty); four
+kills a second must get a real breach (about 15–23s) that is smaller than the perfect one. "Not drawn
+outside the circle" is read off the screen — a bright yellow Esh body is 0 yellow pixels outside the
+edge and ~20 inside it. 18 new breaks plus the 32 old ones that still apply; all 50 caught.
+
+The ember test's loopback check waited a fixed 1.4s of wall clock and failed once under load; it
+waits for the embers to land now. 63 tests green.
+
+## Thirty-fourth pass — the bow, held and slowed
+
+> *"I don't like how the player holds the bow, it should be rotated 90 degrees clockwise. Also,
+> please lower the initial attack speed of the bow."*
+
+The bow was drawn through the sword's grip — rotated to the blade's angle — so it stuck out flat from
+the hand like a blade. It turns a further `BOW_HOLD_TURN` = a quarter turn clockwise now: limbs up
+and down, belly out front, string towards the body. The test reads it off the screen — the bow's
+wood around the hero spans 9px wide and 32px tall; held the old way it was 32 by 10.
+
+Draw time 0.46s → **0.60s** (2.2 → 1.7 shots a second before any speed): slower than a mace swings,
+quicker than a staff casts. The test compares the live hero's draw against a live mace, not the
+table's number against itself.
+
+Two old statistical checks that failed once each this round were sampled too thin: the Breach
+pixel count now subtracts a baseline read with the body nowhere near (a stud or a flower in the
+window read as nine yellow pixels), and the exposure-share check takes 2,000 hits instead of 400.
+
+**And I pushed this pass before reading its suite run, which had two failures.** Neither was in the
+bow; both were tests asking the wrong question. Breach's "a body inside its circle can be hit"
+swung a 1-damage *attack* at whatever body the layer rolled — a stalker dodges; it asks with no
+evasion now, because the question is whether it is there. And the ember loopback check wanted
+"more stacks after than before", but an ember that lands can throw more, and a pile that reaches
+the cap breaks into a BURNT mark and starts again from one: 2 before and 1 after can be twelve
+stacks' worth of fire. It counts fire laid now — stacks, plus a cap's worth per mark — and the
+break that stops embers landing is still caught. 63 tests green.
+
+## Thirty-fifth pass — a fuller breach, and block
+
+> *"Make sure in Breach that monsters spawn more often as time goes on, it doesn't spawn enough in
+> the beginning or middle. A hidden cap of like 800, more on higher waves. The monsters with a
+> shield block 100% of the bow — make them have a block chance (introduce block as a general
+> mechanic): 50%. Monsters can only block if they carry a shield."*
+
+**The layer.** `breachLayerSize(n)` = 300 + 20 per wave past the first breach wave, to 800. Packs are
+placed around the hand at `rEnd · u^0.8` rather than evenly over the floor (`u^0.5`), so the count
+inside radius r goes as r^1.25: 110 of 800 inside the first 500px instead of ~16, and the second 500px
+holds more than the first. The standing cap went 60 → 90 for the thicker swarm.
+
+**Block.** The knight's rule was a certainty inside `hitEnemy`: anything from its front arc bounced.
+A row now says `shield:true, block:0.5`; `spawnEnemy` copies the chance onto the body only if the row
+carries a shield, and the roll happens on the shield side only. 2,000 arrows at a knight's face
+land 51% of the time; from behind, all of them. 10 breaks, 64 tests green.
+
+## Thirty-sixth pass — the scepter
+
+> *"Build the scepter summoner as its own round: skeleton minions, the skeleton-mages legendary,
+> minion nodes on the tree, and the keystone that gives minions ¾ of your damage types. Draw much
+> inspiration from PoE."*
+
+`summon:true` on the weapon row, and `isSummoner()` becomes the fourth thing that is not a swing.
+Minions are not monsters and not projectiles: a separate `minions` list, stepped by `updateMinions`
+after the monsters (so the monster grid is fresh), drawn through the same `drawFigure` every
+minifig uses — skeleton style, violet robes, a violet ring at the feet so a raised skeleton is never
+read as one of theirs. Their hits go through `hitEnemy` with their own sources (`minion`, and
+`mfire`/`mfrost`/`mshock` for mage bolts, `mburst` for Instability), so resistances, ailments,
+block, the DPS log and the damage colours all treat them like anything else — and
+`convTableFor` hands a minion source *no* conversion table unless the mirror is up.
+
+**Their pools are their own** (`player.minions`), filled only by the scepter's bricks, its favourite
+and `only:['scepter']` tree stats — plus the level pool, so a legion keeps pace with the run. The
+Mirrored Legion keystone is the one door between the two: three quarters of the hero's melee, spell
+and elemental increases, and the hero's conversions; its price is 40% LESS on the hero's own hits,
+tested to land there and not on the legion's.
+
+**The wall** is the cheapest version of "minions protect you" that is real: a monster overlapping a
+skeleton is slowed (the existing `slowT`) and its contact damage drains the skeleton at the rate it
+would have hit you. Monsters still *want* the hero; skeletons are what is in the way.
+
+**Six doors, all real.** The wand's locked door became the scepter's, which made three tree tests
+honest to restate: no unfinished door, 18 records (6 × 3), and one border prize. `k_slow` stands 4°
+inside red's line, and with a sixth door its home and away means met exactly (21.5 each); a prize
+within 6° of a border now has to be *no dearer* from home, every other one strictly cheaper. The
+Breach layer's spread check came down from 20% to 12% past 2000px (the hand's position decides how
+much far floor exists; a piled layer measures 7%). Six weapons now sit on one row of the title.
+
+**Three breaks survived the first draft of the test**, each a fixture that could not tell right from
+wrong: the rally target was also the nearest body; the leash's far body was also out of seek range —
+and, parked, the monster grid was stale so nothing was found at all; and every raise went through
+the function, never the attack button. All fixed; 30 breaks caught. 65 tests green.
+
+## Thirty-seventh pass — a fight you can see
+
+> *"I dont like that monsters just deal damage when you stand ontop of them, i want every monster
+> to either attack/cast their damaging ability ... it needs to be shown to the player ... make sure
+> every enemy ability hits my minions, they are me in that sense ... monsters should attack my
+> minions over me, if they are closer."*
+
+**Strikes, not touches.** The old contact tick is gone from ordinary monsters: in range, a monster
+sets `strikeT = STRIKE_WIND × its attack-speed factor`, slows to a crawl with its arms up, and on
+release draws a `slash` particle and calls `playerDamage` only if the target is still within reach
+and inside a 1.4-rad wedge of where it aimed. Lunges keep their hit-on-arrival. `bodySpace` runs
+after every monster update and pushes it out of the hero (fully) and out of skeletons (half each;
+a boss shoves the skeleton the whole way).
+
+**The stand-in.** Every monster behaviour was written against the global `player`. Rather than
+rewrite forty of them, `updateEnemy` asks `enemyTarget` for the nearer of hero and skeleton (with a
+30px stickiness so it does not flicker between two), and if it is a skeleton it swaps `player` for a
+`minionProxy` — `Object.create(heroObj)` with the skeleton's position, lead and life, never dashing
+and never invulnerable — for the length of that monster's update. `playerDamage` sees `isProxy` and
+routes the hit to `minionHurt`. Bosses always want the hero. A monster's shockwave ring is the one
+place both matter at once: the ring hits every skeleton on its band through `minionsOnRing`, the
+proxied target included (so the proxy's own ring check is skipped — a test caught it landing twice),
+and the hero standing in it through an explicit `heroObj` check.
+
+**Every ability, on the legion.** The boss ring and mace sweep, spikes (once per spike per
+skeleton), bolt beams, frost bursts, pumpkins, fireballs, meteors, venom and brick landings, coil,
+fire and venom pools (each on its own clock per skeleton), bombers, thorns, and the enemy missile
+loop — the first skeleton an arrow crosses takes it, a frost boulder damages and keeps going, a hex
+breaks harmlessly on bones.
+
+**The legion.** Raising at the cap breaks the oldest (`born`) and stands the new one where you
+point; a dead hero raises nothing. A raising rolls `MINION_MIX` — spear, sword, bow. `minionTarget`
+guards the hero first (nearest monster to the hero within 260px), then the nearest to itself inside
+the leash, and with nothing to fight `minionProp` finds a chest or crate. Two epic-only cards:
+**Bone Golem** (`golems` up to 2, converting melee skeletons oldest first; a golem blow is a 62px
+slam) and **Bone Overseer** (a non-fighting lord outside `legion()`, 30% MORE and 25% faster to
+minions within 320px, back 15s after it falls). The scepter is drawn upright; non-hero figures
+carry their weapons at a rest angle that lifts when they strike; archers carry their bow always.
+Intelligence's side gains **BONEWORK**, **GRAVECALL** and the notable **THE CRYPT** — which nudged
+the plain-route budget in the meta test from 2.60 to 2.61 (restated to ≤2.65).
+
+**Proof.** A new `combat` test: a visible wind-up before the wound, no body left inside another,
+nearer-target choice both ways, a melee monster and an archer each hurting only the skeleton,
+ring / boss ring / spike / fire pool / arrow / landing brick each hurting a skeleton, a ring
+landing once on its target and still on the hero beside it, guard-first targeting, a chest opened,
+both cards epic-only, two golems at most and never from archers, a golem slam hitting two bodies,
+the overseer's MORE and its return, 39 minion nodes in blue, and the scepter's pixels standing
+taller than wide. 25 breaks, 25 caught (`nospace` survived the first draft — the approach code
+alone kept the gap — so the test now shoves bodies into each other). 66 tests green.
+
+## Thirty-eighth pass — the volley, the floor, and the way across it
+
+> *"Make the basic minions deal a little bit more damage ... a way to give them 'Greater Multiple
+> Projectiles' ... at least 10-15 at once ... increase the range for the ranged/mages minions, they
+> never move ... i dont want the maximum summon to be only 2 ... combine more of the skilltree so
+> they also grant minion stats in the intellect realm ... show how many minions i have alive ... you
+> cannot spawn minions on obstacles ... fix the blue water sites, their lego-blocks are out of
+> order/symmetry ... add other obstacles, make every run feel a little different ... take a look at
+> how A* pathfinding is doing."*
+
+**The legion.** Spearman ×1.25, swordsman ×1.35, archer ×0.9 of the scepter's hit (were 1.0, 1.1,
+0.7); the golem ×2.75, so it stays 2.2× a spearman. `minionProj()` is 1 + `minions.proj` (hard cap
++14); `minionShoot` fans the whole volley over `min(1.5, 0.11·(n−1))` rad, each shot carrying
+`minions.projMore`. Bone Volley (uncommon+, six takes, +1), Greater Multiple Projectiles
+(legendary, once, +4, 25% LESS) and the tree's *Bone Rain* (+2) reach **13**. The sheet counts a
+volley as `1 + (n−1)·0.4` shots on one body. Archers reach 480px (330), mages 520 (380), and look
+as far as they can shoot. In range, a ranged skeleton keeps a spot in an arc on the hero's side of
+the target and picks a new one at least 50px away every 0.9–1.6s, shooting as it goes. Bone Golem
+takes five times. A skull badge in the ability row counts `LEGION up/max`, and a buff pill names
+the kinds.
+
+**Intelligence feeds the legion.** After the tree is built, every one-stat minor node standing in
+the blue sector — cluster, road or weapon door — gets a *minion sister* from `MINION_SISTERS`:
+spell/elemental damage → 80% as minion damage (60% for one element), cast speed → minion speed,
+shield, resistances and regeneration → minion life. The sisters are `only:['scepter']` stats, so
+to every other weapon the node is unchanged; the meta budget test still passes. A new notable
+cluster, THE VOLLEY, carries *Bone Rain*.
+
+**Floor, not water.** `floorAt(x, y, r)` shoves a point out of lakes and off solids (three passes,
+then a short spiral) and `raiseAt` goes through it, as does the leash's re-rise. `minionStep` now
+slides round solids and runs `collideWorld`, so a skeleton walks the shore instead of the water.
+
+**The lakes were never on the grid.** They were placed at arbitrary pixels, so the per-cell studs
+were clipped by the rim and the rim's 26px plates matched nothing. Lakes are now whole 40px cells,
+so every water stud is centred over a floor stud; the rim is a plate a cell with two studs and a
+1×1 on each corner; 45% of lakes hook a second plate onto a side (an L, a T, a bay), and the edges
+inside the water are never laid. How many lakes a run gets rolls ×0.6–1.4. `lakeGroups` holds the
+plates of each lake for drawing; `waters` still holds plain rectangles, so nothing that collides,
+paths or spawns had to learn a new shape. **Landmarks** — pillar rings with one or two doors,
+colonnades, boulder heaps — are placed per run by `buildLandmarks`; pillars are indestructible
+solids big enough to be on the nav grid, 28% of them snapped to a stump.
+
+**The way across.** A probe — one monster at a time, six kinds, 500–950px from a hero standing
+beside a lake, 40 random maps — found two bugs and one design flaw. Knights held at 70–95px behind
+the shield and *never* came within striking range: 0 of 120 arrived. They now step in whenever the
+sword is ready. The sight line was Bresenham over 72px cells, which could step diagonally between
+two blocked cells and run along a lake's edge inside an "open" cell. And every monster ran its own
+budgeted A\* and followed a cached path, so a body whose turn had not come walked the straight line
+into the shore meanwhile. Now: a 40px grid (big solids and lakes only, padded by a body's width); a
+**flow field** — one Dijkstra from the hero's cell, redone when the hero changes cell, ~2.3ms — that
+every monster after the hero walks downhill, string-pulled to the farthest step in sight; a
+supercover sight line that refuses a diagonal squeeze; `segHitsWater`, a body-wide check against
+the lakes; `navLearn`, which puts a small prop on the grid the first time something is wedged on
+it; and `navRefresh`, which takes a broken rock back off. Monsters after a skeleton keep their own
+A\*. One more came out of chasing the last stragglers: `slideAroundSolids` picks a side of an
+obstacle and holds it for 0.55s so a body does not dither, but a side picked while it wanted one
+direction could point straight back once it wanted another — a brute lunging up past a lake's
+corner was slid *down*, walked back, wound up, and was slid down again forever (a lancer did the
+same). The held side now flips whenever it would point against where the body wants to go. Same
+probe, before → after: **495 → 640 of 640** (excluding knights, 495/520).
+
+**Proof.** `legion2`: the kinds' numbers; volley takes, cap and rarity; GMP legendary-only, +4,
+0.75; Bone Rain +2 to 13; a shot is a 13-wide fan of distinct angles within 1.5 rad, archer and
+mage alike; the sheet's weighting; a hit at 450px; a back line that walks >120px through ≥2 spots in
+4s and never leaves range; no raising in a lake by `raiseAt` or by the scepter; no walking across a
+lake and no wading on after a shove; every spell minor in blue carries a minion sister; the sister
+is scepter-only; the badge reads `LEGION 3/5` for a scepter and never shows for a sword. `nav2`: 14
+maps with every lake plate on the grid, composites, varying lake counts, ruins in every map, stumps,
+pillars solid and on the grid; every water stud drawn at a cell centre and inside the water; the
+corner squeeze refused; the body-wide lake check; the field going round a lake and pointing a body
+along the shore; out-of-sight bodies steered by the field and none by private A\*; a pinch learnt;
+a broken rock forgotten; a knight that strikes; the brute's lunge past a lake corner never slid
+backwards, in the scene and as a direct call with a held side that points back; and 32 lone
+monsters on real maps all arriving (a lancer counts from inside its lunge range). 32 breaks, 32
+caught — `wetwalk` survived the first
+draft (sliding alone kept a walker dry, so the test now shoves one over the shore) and `noflow`
+survived because the repaired A\* also brings a lone body home (so the test now asks what steers
+it), and `slideback` survived one run of the lunge scene on the dice (so it is also a direct call).
+Two old fixtures were tightened after an intermittent failure each: `rage` now clears missiles and
+pools left over from earlier sections before counting a swing's rage, and `ember` holds its bodies
+still, since with the new routing two neighbours can take different ways round a lake. The Necromancer favourite's brick panel overflowed with the two new cards on it; they live on
+THE LEGION bench only. 68 tests green.
+
+## Thirty-ninth pass — golems are their own pool
+
+> *"Skeleton cap has its own cap, golem cap is separate, they are not in the same pool, so 5/5
+> golems + 15/15 skeletons."*
+
+Bone Golem used to turn one of your melee skeletons into a golem, so golems ate legion places.
+Now `legion()` is skeletons only and `golems()` is the other pool: each Bone Golem take (five at
+most) raises one more golem at your side, `updateMinions` keeps the pool full on a clock
+(`GOLEM_BACK`, 10s after one falls), and raising at a full legion replaces the oldest *skeleton*,
+never a golem. The skeleton cap is 15 (was 10). The sheet has a *Bone golems* row, the ability row
+a second badge, **GOLEMS n/m**, beside **LEGION n/m**, and the legion's DPS counts both pools.
+`minionsToGolems` is gone.
+
+**Proof.** `combat`: one golem a take up to five, standing; the six skeletons (three of them
+archers) untouched by five takes; a raising at a full legion leaves all five golems; a fallen golem
+back after its clock. `legion2`: Bone Legion takes the cap to fifteen; the golem badge on screen
+apart from the legion's. Breaks `samepool`, `nogolemback`, `lazygolem`, `cap10`, `nogolembadge`:
+all caught. 68 tests green.
+
+## Fortieth pass — rarities that mean something, the mage, the deep breach, and the run as a link
+
+> *"Fix these common->epic bugs, for instance I get +1 pierce for arrow for both common and
+> uncommon, and epic only gives +2 ... make sure the skeleton mages stand still, if they move they
+> teleport ... fix breach again, endgame breach is easy ... when Breach is destroyed and the circle
+> goes in, don't make all monsters disappear, the ring has to pass over them ... the more further
+> out you are in the ring the more monsters spawn ... can you make it so that the current state of
+> the game is stored ... copy the url and then start on that wave, with all the upgrades."*
+
+**Rarities.** A sweep of every card's `calc` over the rarities it can roll found nine whose value did
+not climb: four fixed at +1 (Split Arrow, Bone Legion, Twin Raising, Bone Volley) and five whose
+`byRar` tables repeated (Piercing Shot `[1,1,2,2,3]`, the three charge generators `[1,1,1,1,2]`,
+Reservoir `[1,1,2,2,3]`). All now climb strictly from their lowest rarity: pierce `[1,2,3,4,5]`
+(cap 8 → 12), Split Arrow / Bone Legion / Bone Volley / the charges `[1,1,2,3,4]` (arrows cap 5 → 9,
+volley cap 6 → 8 projectiles), Twin Raising `[1,1,1,2,3]` stacking to **five a raising**
+(`MINION_PERCAST_MAX`). Legendary is its own pool, so an ordinary card tops out at epic. Reservoir
+now clamps to `CHARGE_CAP_MAX` in `apply`, as its `req` always assumed.
+
+**The mage.** `minionBlink` replaces walking: a hop of at most 130px onto floor, a puff at both ends,
+0.8s between. In range it stands; out of range it blinks closer; crowded it blinks away; idle it
+blinks back to its place only when more than 150px off it. Range 520 → 820 (and the leash for a
+ranged minion is its range, so it fights that far from you), bolts 560 → 960px/s flying 1.3× the
+range, and its own fan: `min(2.8, 0.24·(n−1))` rad against an archer's 1.5.
+
+**The breach closes like PoE's.** `breachClose` no longer kills the swarm: the ring falls in over
+`r / 1100` seconds (1.2 to 4.5), and each frame a body the edge has passed is pulled back through —
+`dead`, `pulled`, no spoils; a body still inside keeps fighting until the edge reaches it.
+
+**More, further out.** The layer is 600 + 40 a wave, to 2,000. Three in ten packs keep the old
+`u^0.8` core round the hand; the rest are laid at `rEnd·u^0.36`, so bodies per area grow with the
+distance and the rim meets more every second as it widens — averaged over five layers, and
+corrected for how much of each band is on the floor at all, the 2,000–2,500px band holds 2–3× the
+500–1,000px band. The standing cap widens from 90 to 180 with the radius (`breachAliveMax`).
+
+**The deep breach.** Rings go to V: stones cost 60/60/60/100/150 (`breachStoneCost`), and past V a
+stone is a Blessed Hoard chest. Every breach leaves a **hoard** at the hand once the ring has fallen
+in, its rarity by kills (+60 for the Hand) against 25/60/110/180/260. With the lord's ring at III+,
+a breach fought past the Hand to 110 kills calls the **Breachlord**: a revenant at 14× its kind's
+health that holds the breach open (35s), pays 40 splinters and a rank, and makes the hoard
+legendary. `player.breachDepth` counts breaches opened this run; each makes the next one's bodies
+12% tougher (to 3×) and 1.5% likelier magic (to 30%).
+
+**The run as a link.** `runLinkState` gathers weapon, difficulty, favourite, map seed, the roster's
+shuffle, the tree's nodes, the build log as `[id, rarity index]`, level, xp, studs, kills, golden
+hearts (now counted), rings, splinters, breach depth; `runLinkEncode` is base64url of the JSON
+(~1.4 KB for a mid-run scepter). `runLinkBoot` reads `#run=` on load, sets weapon/difficulty/
+favourite without touching saved preferences, and `startGame` → `resetRun` uses the link's seed,
+roster and tree (`applyMetaTree` applies the link's nodes when one is loaded); `runLinkApply` then
+sets the level and replays every brick the tree did not already grant, applies the rings, and
+starts the saved wave. A linked run has no `metaRun`, skips `metaBank` and mastery points; TITLE
+drops the link and the hash. COPY RUN LINK sits in the pause menu and on the death screen, with a
+textarea fallback where the clipboard API is missing (a page opened from a file).
+
+**Proof.** `rarity2`: every card's numbers strictly climb or never change; the nine count cards
+give distinct counts; five a raising and it raises five; a mage's bolts ≥900px/s, fly ≥1,000px,
+fan ≥2.5 rad; it picks a body 750px off you; it moves only by blinking. `breach2`: stone costs;
+rank IV at 100, V at 150, a hoard past V, five rows of ring; hoard rarity by depth, the
+Breachlord's legendary hoard, left only once the ring has closed; depth making the second breach
+harder; the Breachlord coming at III (not at II), 14× its kind, holding the breach, paying 40 and a
+rank; the HUD's `42/100 ◆III`. `breach`: the ring falling in without clearing the swarm at once,
+never pulling a body it has not passed, taking every one by the end, paying nothing; the widening
+cap; the far rim's rate. `runlink`: a scepter build with a tree, eight bricks at five rarities,
+level 19, two rings and splinters at wave 17 copied, opened in a fresh page with an EMPTY tree of
+its own, and rebuilt identical across every stat probe, same map and roster, same log order; a
+link copied from it is the same build; its death banks nothing; the buttons; the title letting go.
+Old fixtures restated: `block` (layer 600 → 2,000), `legion2` (volley to +8, fan to 15); in
+`breach`, the pixel check reads its baseline at the body's own spot with the flowers cleared (a
+yellow flower there was an old intermittent failure), the four-a-second hero may no longer bank
+unused kills into a burst, a slower hero's width is measured against its own far corner, and the
+old "second 500px holds more than the first" check gave way to the band rate, since the core is
+packed round the hand on purpose. 29 breaks, 29 caught — `lordfree`, `flatlayer` and `banks`
+survived the first drafts (the ring's value was counted as splinters; one lucky hand position
+passed the rate; the linked run had cleared no wave to bank) and the tests were tightened. 71
+tests green.
+
+## Forty-first pass — a summoner's opening
+
+> *"I just ran the scepter build and I have some nodes specced into minion stuff, but when I'm up
+> against the boss it's almost impossible ... give minion builds a little more advantage in the
+> beginning."*
+
+The run link it came with was replayed and the wave-5 boss (Brickthane, 1,607 health, armour 49)
+fought with the hero holding attack, the legion's numbers logged. The sheet said **73.6 DPS**; the
+boss lost **~20 a second** and took **~70s** to die, against a hero with six hearts. Three things:
+
+- **Holding the scepter recycled the legion.** At a full legion every raise broke the oldest
+  skeleton, every 0.7s, and a new one spends 0.45s climbing out of the floor — so a held button
+  kept the legion mostly rising and rarely swinging (172 raises a minute; ~20% of the damage).
+  `raiseMinion(aim, fresh)`: held (`fresh === false`) it only fills to the cap; a fresh click
+  (`mouse.fresh`, set on mousedown) still replaces the oldest, as asked in the thirty-seventh pass.
+- **Armour ate 59% of every blow.** `armourDR` weighs armour against the size of the hit, so a
+  6.9-damage skeleton against 49 armour landed 2.85. `armourVs(e, source)`: a minion source meets
+  half the armour (`MINION_ARMOUR_PEN`).
+- **An early summoner is fragile.** Base life 10 → 14; the legion starts at four (was three).
+  (This pass also added a level-fading MORE, `minionEarly()`; the next pass replaced it with a
+  higher base.)
+
+(A first probe also showed skeletons "frozen" mid-strike: that was the probe, not the game — a
+level-up opened the card screen and paused the world under it.)
+
+Same run, same boss: **~70s → ~36s**. `minion2` checks the early curve, the half-armour blow
+against a sword's, four skeletons at 14 life, holding versus clicking at a full legion and a held
+raising filling exactly to the cap, and replays the run's own link against its wave-5 boss (must
+fall inside 55s; all four changes reverted it takes 71.6s). Two old fixtures hardened: `summon`'s
+formula check includes the early MORE, and `breach`'s "a body inside its circle can be hit" now
+zeroes the body's block (a knight's shield turned that check into a coin flip). 6 breaks, 6
+caught. 72 tests green.
+
+## Forty-second pass — a higher base, the summon aura, and Convocation
+
+> *"I don't like that you introduced scaling like that for each level ... just higher base
+> damage."* — and then: *"make scepter give an aura, basically a summon aura, it makes you
+> automatically summon minions where you point your cursor until it's maxed, and if some minion dies
+> it automatically refills. And the left click now does what Convocation does in PoE, with a little
+> cooldown."*
+
+**No level curve.** `minionEarly()` and its constants are gone. Instead the scepter's base — the
+number every skeleton's blow is built on — is **2.1** (was 1.6), the same at every level. The run
+from the forty-first pass kills its wave-5 boss in ~40s on that alone (the curve had it at ~36s;
+~70s before either).
+
+**The summon aura.** `updatePlayer` ticks `p.raiseCd` for a summoner and, while the legion is short,
+calls `raiseMinion(aimA, false)` at the cursor — which only ever fills to the cap, never breaks a
+standing skeleton. `raiseMinion` sets `raiseCd` (the scepter's rate, with attack speed and chill),
+not `atkCd`, so the aura and the click never share a clock. A fallen place is refilled on the next
+tick of that clock.
+
+**Convocation.** The scepter's left click is `convocation()`: every skeleton and golem (the
+overseer keeps its own place) is lifted to a ring 50–100px round the hero on the floor
+(`floorAt`), its strike or draw cancelled, and given `regenT = 3` — `updateMinions` mends 25% of
+max life a second while it runs; a 3s cooldown (`p.convoCd`). The click is **latched** on
+mousedown (`mouse.fresh`) and consumed in `updatePlayer`: a quick tap can go down and up between
+two frames, and a first draft that only asked "is the button held?" missed real clicks — caught by
+driving the page with an actual mouse click. The ability row gains a **CALL** badge with the
+cooldown filling its ring.
+
+**Proof.** `minion2` restated: the base is 2.1 and a hit does not move with level alone; the aura
+fills an empty legion in four seconds of no input, leaves a full one alone, refills a fallen place,
+and — three a raising with one place left — stands the one without breaking anybody; a tap (button
+already up) calls a scattered legion home, sets the 3s cooldown and mends at least 40% of life in
+2s, and a second tap inside the cooldown does nothing; the linked run's wave-5 boss falls inside
+55s with nobody pressing anything. `summon`'s "a skeleton at no life still stands" asks about that
+skeleton (the aura may raise others meanwhile); `qol` takes every queued card screen before it
+presses T. Breaks `noaura`, `noconvo`, `noregen`, `nocd`, `heldonly`, `nofresh`, `oldscept`,
+`nopen`, `oldlife`, `oldbase`: all caught. 72 tests green.
+
+## Forty-third pass — the dead that walk
+
+> *"for convocation ... leave a short delay between each minion, like 0.1-0.2 seconds ... remove
+> the basic teleport for skeleton mages, they always stand still regardless ... if you have 9
+> skeletons then 3 of them are spears, 3 rangers, 3 swordsmen ... introduce another monster called
+> zombie ... corpses are only shown if you play a summoner build."*
+
+**Convocation, one by one.** `convocation()` no longer moves anybody itself: it sorts every minion
+(skeletons, golems, zombies — not the overseer) nearest first into `p.convoQ`, and `convoTick(dt)`
+in `updatePlayer` lands one every `CONVO_STEP` = **0.14s** through `convoPull` (lift, ring slot on
+the floor, `regenT`, sparks). The cooldown starts on the click.
+
+**Mages never move.** `minionBlink`, `MAGE_BLINK` and `MAGE_BLINK_CD` are gone. A mage faces its
+target and casts if it is in `K.range`; with nothing to fight it stays put. Nothing else moves it
+either: the "lost minion rises at your side" leash skips mages, the minion–minion spacing treats a
+mage as a post (the other one takes the whole push; two mages never shove), and `bodySpace` makes a
+monster step round a mage (a boss walks over it and grinds it, as before). Because nothing can
+nudge a mage apart once it stands, it has to rise somewhere with room: `mageSpot` walks out from
+the aimed point to the nearest floor no other minion stands on — used by `raiseAt` and by
+`minionsToMages`.
+
+**An even legion.** `nextKind()` raises whichever of spear, sword and bow the legion has fewest of
+(random among ties): nine skeletons are 3/3/3, and any count is within one of even. Mages stay all
+mages.
+
+**The zombie family.** Six rows in `EDEF`, all `style:'zombie'` with `zombie:1` (a torn shirt,
+stitches, green skin, arms held out in front):
+
+| | hp | speed | size | dmg | notes |
+|---|---|---|---|---|---|
+| zombie | 5 | 50 | 0.84 | 1 | ROSTER at 1, outside the bands — every run has it from wave 1 |
+| crawler | 3 | 34 | 0.84 | 1 | a torso drawn top-down, dragging itself (`drawCrawler`) |
+| bloater | 18 | 38 | 1.12 | 1 | `fat` belly; band 2 (waves 6–9); plague breath and burst |
+| zrunner | 6 | 116 | 0.84 | 1 | band 3 (mid game) |
+| zhulk | 26 | 56 | 1.25 | 3 | band 4 |
+| bigcrawler | 11 | 40 | 1.2 | 2 | what a hulk gets up as |
+
+`zombieDeath(e)` runs from `killEnemy`. A zombie, runner or hulk gets up again at **40%**
+(`ZOMBIE_CRAWL`) as a crawler / big crawler, active at once, "IT CRAWLS". A bloater **bursts** into
+8–11 enemy `arrow` projectiles flagged `gib` (drawn as tumbling pieces), each a physical hit on the
+first minion it crosses or on the hero, and leaves nothing. Otherwise a corpse is laid. Breach
+bodies do none of it. The bloater's **plague breath** (`breathWind` → `breath`) is a 150px, ±0.55
+rad cone that turns after you at 1.2 rad/s for 1.1s, ticking every 0.25s: `poisonPlayer` on the
+hero, chaos `minionHurt` on minions in the cone; 4.5s between breaths.
+
+**Corpses, for a summoner only.** `layCorpse` does nothing unless `isSummoner()`; `drawCorpses`
+draws nothing either. A corpse lasts `CORPSE_LIFE` = 30s (fading over the last three), at most 60
+at once.
+
+**Raise Zombie.** A new tree stat `minionZombies` (scepter-only), the notable of the new cluster
+**THE GRAVEYARD** (int country; *Raise Zombie*: that plus +8% minion life), and the same flag as an
+**epic** brick `raisezombie`. With it, the aura also ticks `p.zombieCd` and `raiseZombie()` stands
+a `zombie` minion (`dmg 1.15, rate 0.95, hp 2.2, spd 0.70`) on the corpse nearest the cursor within
+`ZOMBIE_REACH` = 700px of the hero, up to `ZOMBIE_MINION_MAX` = 12. Zombies are their own pool:
+`legion()` excludes them, `zombieMinions()` counts them. The ability row gets a ZOMBIES badge and the
+buff pill "n/12 zombies · k corpses". Ability-row labels with a count now put the count on a second
+line, since "LEGION 4/4" and "ZOMBIES 3/12" ran into each other.
+
+**A new cluster must not move the old ones.** The first draft put THE GRAVEYARD in
+`META_NOTABLES`. The map is self-arranging — each template claims the free site in its country
+with the lowest hash, in list order, and the random fill numbers its clusters (`cad@9`) in site
+order — so one more template took a site from an earlier one and reshuffled the country: 87 nodes
+changed and 73 ids vanished. Every saved tree, preset and run link points at node ids, so the
+linked scepter run from the forty-first pass quietly lost five *Cadence*/*Metronome* nodes (minion
+attack speed 0.57 → 0.65s, minion speed 0.49 → 0.31) and its wave-5 boss took 46–64s instead of
+36–42s — which is how `minion2` caught it. Every quad in blue is already taken, so late templates
+now live in `META_LATE`, each with a `spot` of its own (the widest clear ground left in blue, ~520px
+from every node), appended **after** every other site: all 1040 old nodes keep their id, name,
+stats and position, and the graveyard adds six.
+
+**Proof.** New `zombie` test: eight minions called home land 0.14s apart, the first on the click
+frame; nine raisings are 3/3/3 and every count up to 15 is within one; mages all mages; a mage
+does not move over 6s while the hero walks 1000px off, a spear rises on top of it and an imp
+leans on it, and it still casts at a body 520px out; the roster (zombie at 1 and in no band;
+bloater 5–10 over 40 rolls) and the family's shape; crawlers (zombie and runner → crawler, hulk →
+big crawler, a crawler does not crawl on, breach bodies do nothing, the chance measured over 200
+kills); the breath poisons the hero and rots the minion in the cone but not the one behind; the
+burst throws gibs all four ways that hurt the hero and a minion, with no crawler and no corpse;
+corpses (none for a sword, one for a scepter and only from a zombie, gone after 30s, drawn only
+for a summoner); Raise Zombie (nothing without it, epic but not rare, summoner-only, the first
+zombie on the corpse nearest the cursor, 12 and no more, the legion untouched, a corpse 900px
+away never used); the zombies fight and answer Convocation; THE GRAVEYARD carries the notable,
+is linked into the map, and every one of the 1040 nodes of the tree as it stood before
+(`tree42.ids`, frozen from the previous commit) is still there with the same name, stats and place.
+`rarity2` now asks that a mage never moves at all; `minion2` waits for the staggered Convocation
+to land. Break-builds: `instant`, `slowconvo`, `mageleash`, `mageshove`, `magewalk`, `mageidle`,
+`uneven`, `magemix`, `zlate`, `nocrawl`, `crawlbig`, `brcrawl`, `noburst`, `gibcorpse`, `nopsn`,
+`breathall`, `corpseall`, `drawall`, `norot`, `zcap`, `zpool`, `noreach`, `farthest`, `rarecard`,
+`noflag`, `slowrun`, `notree`, `midlist` (the graveyard back in the notable list), `nolate` (no
+site for it): 29 breaks, 29 caught (four of them only after the test was tightened).
+
+## Forty-fourth pass — a reward screen that fits the build
+
+> *"i have no clue why i get presented with ailment stuff when i dont have anything dealing
+> physical damage on this build, also i get presented with elemental damage when i dont have any
+> elemental spell ... make the buff Rage and Ward affect my minions ... ailment conversion
+> upgrades drop chance should be lowered ... chaos conversion rarer and rare+ ... When playing as
+> sword and mace, Armor and Strength are the normal drop ... remove the Generous Smith ... you
+> should never be presented with 2 defenses at once, or 2 utilities ... whenever i click a reward
+> the game thinks im also casting a spell ... i cannot read the upgrade cards changes"*
+
+**A scepter is not a physical source.** `dealtTypes()` credited every non-caster weapon with
+physical damage, the scepter included — so a bare summoner was offered Hoarfrost, Creeping Blight,
+Rimeblade and the rest. It adds nothing for a summoner now: its sources are its spells and what
+they convert into. `dealsElemental()` gates **Elemental Focus** on a fire, cold or lightning
+source of your own, and `heroHits()` gates **Overcharged Core** (the hero's MORE, which minions
+never read) on the hero dealing anything at all; *Mirrored Legion* opens both, because under it
+minions take a share of those increases. A fresh scepter's offence pool is now attributes, speed,
+crit, the charges, ailment chance, the spells, and the minion bricks.
+
+**Weights.** `cardWeight(u)` multiplies into the draw (after the rarity roll, beside the favourite
+and the reroll shun): every conversion (`u.need`) ×0.5, those ending in chaos ×0.25 (they were
+already rare+; every conversion is uncommon+). Defences and attributes follow the weapon —
+`HOME_ATTR` (sword/mace str, axe/bow dex, staff/scepter int) against `DEF_FAMILY` (armour,
+Plated Rig, Ironbone / evasion, Light on the Feet, Spell Suppression, Quicksilver / energy
+shield, Deep Ward, Runescript): ×1.5 at home, ×0.35 away. Over 1500 screens a sword saw 853
+str bricks against 163 dex and 143 int; a scepter 692 int against 203 and 162.
+
+**One defence, one utility.** When `take()` draws a DEFENSE or UTILITY brick, every other brick of
+that class leaves both the pool and the draw for the rest of the screen. 3600 screens across six
+weapons: none with two of either; offence came twice on 2790 of them.
+
+**Generous Smith is gone.** In its place `heartLvlMul()` = 1 + 3% per monster level above 1, read
+by `mobSpoils` through `heartDropChance()` (and by the three places the sheet prints the rate).
+The tree's heart-drop nodes still increase it. Run links that carry the old brick skip it.
+
+**Rage and ward reach the legion.** `minionDamage` multiplies by `rageMul()`; `minionHurt` puts
+the ward's armour (`armourDR(wardArmour(), n)`) in front of a physical blow and its resistance in
+front of fire, cold and lightning. Chaos goes through, as on the hero.
+
+**A card is not a Convocation.** The scepter's click is latched on mousedown (`mouse.fresh`), and
+the latch was set by every mousedown in the window — picking a reward card was one, and it
+arrived in the first frame of play as Convocation. It is set only in play, and only for a click
+on the canvas.
+
+**The card you are reading stays readable.** With four boss cards on a ~1040px window neither
+side of the row had room for the compare panel, and its last resort pinned it to the window's
+edge — exactly on top of the right-hand card. It now tries outside the row, then beside the
+hovered card itself (over a neighbour), then below or above it. And the reward screen scrolls
+(`justify-content: safe center`) instead of pushing its title off the top once a long run's build
+chips make it taller than the window.
+
+**Proof.** New `cards44`: a bare summoner deals nothing and is offered no conversion, no Elemental
+Focus, no Overcharged Core, and Mirrored Legion opens the last two; a sword still converts and a
+staff still takes Elemental Focus; every conversion uncommon+, chaos rare+, weights 0.5 and 0.25;
+per weapon, 1500 screens where the home family beats each other by 1.6× and neither other is
+zero; 3600 screens with no double defence or utility; Generous Smith absent from the deck, the
+bench and the favourites, and a roll between the wave-1 and wave-30 chances drops a heart at 30
+and not at 1; rage doubles a minion's hit, ward cuts a physical and a fire blow on a minion and
+not a chaos one; a real mouse click on a reward card leaves a scattered legion where it is, and a
+real click on the field calls all four; on a 1044×640 window no compare panel overlaps the card it
+describes and the title is on screen. Break-builds `scepphys`, `elemopen`, `moreopen`, `convw`,
+`chaosw`, `nohome`, `noaway`, `dbldef`, `heartflat`, `heartroll`, `norage`, `noward`, `wardchaos`,
+`clicklatch`, `cmpold`, `noscroll`: 16 breaks, 16 caught.
+
+## Forty-fifth pass — breach pays in rings, and minions pass through each other
+
+> *"i don't think that Breach should reward you too much with chests, i feel like it drops
+> legendary chest all the time, it can give chest but only up to rare quality. Also, minions of
+> different types should be able to walk through each other ... but not their own type."*
+
+**Breach chests stop at rare.** `BREACH_CHEST_MAX = 'rare'` and `breachChestRar()` clamp every
+chest a breach leaves: the hoard's depth table is now 25 common / 60 uncommon / 110 rare, the
+Breachlord's fall makes its hoard rare (it was legendary), and a ring already at V turns further
+stones into an uncommon Blessed Hoard (was epic) and the lord's rank into a rare one (was
+legendary).
+
+**Tribes.** `minionTribe(m)`: every skeleton — spear, sword, bow, mage — is one tribe; golems,
+zombies and the overseer are each their own. The spacing pass between minions only runs inside a
+tribe, and `mageSpot` only looks for room among skeletons, since nothing else can stand in a
+mage's way now.
+
+**Proof.** New `tribe` test: pairs stood on one spot and frozen mid-blow for half a second — a
+spear and a sword, a spear and a bow, two zombies, two golems all end at least a body apart; a
+skeleton and a zombie, a sword and a golem, a zombie and a golem, a mage and a zombie stay where
+they were; the hoard at 30/120/300 kills, with and without the lord, is common/rare/rare/rare, and
+a whole ring's stone and lord pay uncommon and rare. `breach2` restated for the ceiling. Breaks
+`notribe`, `onetribe`, `bigchest`, `lordleg`, `ringepic`: 5 caught.
+
+## Forty-sixth pass — low life is a share of your life
+
+> *"whenever you have 1 hp and like 5000 ES the screen blinks like you are going to die, i want
+> the screen to blink when im at 10% health"*
+
+The red pulse over the screen and the throbbing first row of hearts both fired at **four hearts or
+fewer** — a count, so a 1-heart energy-shield build sat at full life with the screen pulsing
+forever. Both now ask `lowLife()`: life at or below `LOW_LIFE_FRAC` = **10%** of maximum. Energy
+shield does not count; the warning is about the life underneath it.
+
+**Proof.** New `lowlife`: a 1-heart hero at full life has no wash and at 0.1 has it; a 20-heart
+hero has it at 2 and not at 4 — checked on the rule and on the full-screen red fill a rendered
+frame actually paints. Breaks `oldwash`, `oldrule`, `fracbig`: 3 caught.
+
+## Forty-seventh pass — the Abyss
+
+> *"Ah, yes go for Abyss, i like that."* — from the list: a crack that runs across the arena and
+> spawns monsters as you follow it, ending in a small boss and a chest.
+
+**When.** `abyssRoll(n)` on every wave start beside `breachRoll`: from `ABYSS_FROM` = 3, never on a
+boss wave, `ABYSS_CHANCE` = 35%, and the fourth ordinary wave in a row without one always has one
+(`ABYSS_PITY`). It surfaces 4–10s into the fight (`'wait'` → `'idle'`).
+
+**The crack.** `abyssPath()` starts 320–620px from the hero on floor at least 140px from the walls
+and lays up to eight 180–230px segments that wander (±0.55 rad) towards the middle of the map,
+retrying a turn whenever a segment's end or middle would land in a lake, on a boulder or within
+90px of a wall; under 300px in all and there is no abyss that wave. `abyssBuild()` caches the
+cumulative lengths, a jagged edge (a point every 16px knocked up to 6px sideways) and the two
+pits at 34% and 68%. `abyssAt(A, d)` is the point `d` along it and its normal.
+
+**Following.** `'idle'` does nothing until the hero steps onto the eye (`ABYSS_TOUCH`), then
+`'open'`: the front `A.f` advances at `ABYSS_SPD` = 95px/s while the hero is within
+`ABYSS_FOLLOW` = 380px of it, no pit is holding it, and fewer than `ABYSS_ALIVE_MAX` = 45 of its
+own stand. Otherwise `A.idleT` counts; at `ABYSS_ABANDON` = 18s it seals (`'sealed'`) with no pay.
+Every `ABYSS_SPAWN_EVERY` = 110px behind the front `abyssSpawn` stands a pack of 2–4 of one kind
+(`abyssTypes(n)`) either side of the crack, marked `e.abyss` (0.9× life, black and green, climbing
+out rather than assembling).
+
+**Pits.** When the front reaches a pit it stops exactly on it, spills 6–9 (the first magic), each
+tagged `e.abyssPit`; `abyssOnKill` counts them down and the last one clears the pit: studs
+(6 + wave), a 40% chest of common or uncommon, and the crack runs on.
+
+**The Stygian.** At the end, `abyssLord` stands an elite skeleton / brute / revenant (by wave)
+with `ABYSS_LORD_HP` = 6× life, 1.2× size (`'lord'`); its death calls `abyssReward`: a chest at
+the depth — rare 40%, uncommon otherwise, clamped by `ABYSS_CHEST_MAX` = rare — and 20 + 3×wave
+studs (`'done'`, fading over 4s).
+
+**It holds the wave**: `abyssOpenNow()` joins `breachOpenNow()` in the wave-clear condition. An
+untouched abyss is dropped when the wave clears. `drawAbyss()` paints the hairline, the opened gash
+(a green glow, a black core, a pulsing green edge), the pits and the eye, and a green stain under
+its monsters; `drawAbyssHud()` a line and a progress bar under the wave block (moved down under a
+breach's when both are open); an unopened abyss's eye rides the screen's edge like a chest.
+
+**Proof.** New `abyss`: no rolls before wave 3 or on wave 10, a rate between the bounds at wave 7,
+and a forced miss streak broken on the fourth wave; 25 cracks all on floor, 300px+ and some past
+1000px; an untouched crack does not open and is gone when the wave clears; opened on the eye, it
+runs 190px in 2s of following and not a pixel in 2s alone; with nothing queued and nothing
+standing the wave still does not clear; left 19s it seals with no chest and lets go; the first
+pit sits at 34%, holds the front for 2s of following while its pack of 6+ stands, and when they
+die pays studs and a common/uncommon chest and the front runs on; the Stygian is an elite whose
+death leaves one abyss chest, rare, and the abyss goes; a rendered frame and the HUD draw it
+without throwing. Breaks `early`, `bosswave`, `nopity`, `nofollow`, `noseal`, `selfopen`,
+`nopithold`, `nopitpay` (caught once the pit test zeroed the pack's own studs), `nolord`,
+`bigchest`, `nowave`, `outlive`, `nospawn`: 13 caught.
+
+## Forty-eighth pass — a breach ring is for the breach
+
+> *"the breach upgrades from splinters, they should ONLY affect taking damage from breach monsters
+> or dealing damage to them, never should it be applied outside of Breach. Because it's too good
+> otherwise"*
+
+`ringApply` is gone, and with it `RING_RANK`: a ring rank no longer adds a conversion, an
+increase, a resistance, armour or energy shield to the hero. What a ring does now lives at the two
+places a breach body meets you:
+
+- **Dealing:** `hitEnemy` multiplies every hit on a body with `e.breach` by `ringMoreVs(e)` =
+  1 + 8% × ranks, after mitigation and shock — whatever the source, minions included.
+- **Taking:** `playerDamage` starts from `n × ringLessFrom(src)` = 1 − 5% × ranks (at most 60%
+  less), where the source is the breach body itself or the thing it threw (`src.src`).
+
+`ringRanksVs(k)` is every rank you wear, plus the ranks of lord `k`'s own ring a second time. A run
+link still restores the ranks (`p.rings`); there is simply nothing more to apply.
+
+**Proof.** `breach` restated: three ranks of Xoph's Ring leave the hero's conversions, increases,
+resistances, melee, armour and shield exactly as they were; a 10-hit lands 10 on a plain knight,
+14.8 on Xoph's (6 ranks) and 12.4 on Tul's (3); a blow of 4 from a plain body costs 2.4 and from
+Xoph's 1.68 (×0.7), and a thrown thing counts as its thrower; a ring stops at V; ranks survive a
+rebuild. `breach2`: Tul V is 10 ranks against Tul and 5 against Xoph and adds no cold gain. Breaks
+`global`, `nobite`, `bitemany`, `noguard` (caught once the hero actually took the blow),
+`noown`, `nothrown`: 6 caught.
+
+## Forty-ninth pass — strongboxes, a quicker abyss that forks, and more of everything late
+
+> *"another mechanic we can add is Strongboxes, i.e locked chests that spawn monsters and give
+> those monsters various buffs, and when you destroy them you get to open the chest. also improve
+> the speed of Abyss ... make it branch sometimes ... dont show the full path. And for Breach and
+> Abyss in late game, make multiple Breach:es spawn and Multiple Abyss:es spawn."*
+
+**Strongboxes.** `sboxRoll(n)` queues boxes for the fight (from wave 2, not on boss waves: a 30%
+roll, plus 35% from wave 20 and 35% from 35); `updateStrongboxes` places each on open floor
+300–700px off (`sboxPlace`, at most `SBOX_MAX_LIVE` = 3 locked at once). A box is a prop,
+`type:'strongbox'`, indestructible, with a tier (plain 60% / magic 30% / rare 10%) and that many
+mods drawn from `SBOX_MODS` — ids into `BOSS_TRAITS`, so a guardian's IRONCLAD is exactly a
+boss's. Touching it springs it: `sboxBurst` every `SBOX_BURST_T` = 1.4s for the tier's 2/3/4
+bursts, 3–5 bodies each (the first magic on a magic or rare box), every one `e.sbox = box` and run
+through each mod's `apply`. When the bursts are spent and no guardian stands, `sboxOpen` replaces
+the box with a chest of the tier's rarity (common / uncommon / rare, clamped by `SBOX_CHEST_MAX`)
+and studs. A sprung box holds the wave (`sboxActiveNow()` in the clear condition); an untouched
+one survives the wave. Drawn as banded iron with a padlock in the tier's colour and its mods
+written over it; guardians get a gold ring; the HUD line reads "RARE STRONGBOX · 4 guardians
+left"; an unsprung box rides the screen's edge.
+
+**The abyss, rebuilt.** `ABYSS_SPD` 95 → **150**, `ABYSS_FOLLOW` 380 → 420, `ABYSS_SPAWN_EVERY`
+110 → 150 (the same bodies a second at the new pace). **Nothing ahead of the front is drawn**: the
+hairline is gone; the gash is drawn to `f`, with a pulsing tip at the front. **Forks**:
+`abyssBuild` gives the main line a branch with `ABYSS_FORK` = 45% (and a second at 25% from wave
+20), from 20–60% of the way down, turned 0.7–1.3 rad off the line, 3–5 segments, retried up to six
+times along the line and off either side if it runs into a wall. A branch is a crack of its own
+(`crackMeasure`) with one pit at its end; it wakes when the main front passes its fork, runs while
+you follow *its* front (`crackTick`, shared with the main line), and is done when its end pit is
+cleared. The abyss's idle clock only runs while no front moves and no pit holds.
+
+**More than one.** `abyssRoll` fills `abyss` and, from `ABYSS_MULTI` = wave 25 and wave 40 on a
+60% roll each, `abyssExtra`; `updateAbyss` ticks them all (`abyssTick` per abyss), promoting the
+next when the lead is gone. A body remembers its abyss (`e.abyssA`), so kills and pits count where
+they belong; new eyes open 500px from any other. Breaches the same way, but every breach function
+reads the global `breach`, so rather than rewrite them the extras live in `breachExtra` and each
+is ticked and drawn with `breach` swapped to it (`withBreach`). A body carries `e.breachB` and
+`breachOf(e)` answers which breach it belongs to — `breachSees`, the reveal count, the hold, the
+pull-back, the kill clock and the splinter tally all ask it. Extra breaches are of lords not
+already open, and their hands surface 600px from the others (`breachAllNow` keeps the full list
+visible while one is swapped in — the first draft lost the lead from the list mid-swap and put two
+hands 155px apart). The HUD reads "BREACH ×2", "ABYSS ×3".
+
+**Proof.** New `leagues`: the abyss runs 150px in a second of following; idle, not one stroke of
+crack is drawn, and open, every stroke lies within 14px of what has opened and none near the end;
+forks on 20–75% of 60 abysses; a fork sleeps until the main front passes it (waking within 10px),
+runs its own length to a pit of 6+, and is done when that pit is cleared; one abyss at wave 12,
+two at 31, three at 46, the second 400px+ away, idle while the other runs, and kills in one never
+counted by the other; one breach at 12, two at 31, three of three lords at 46; a hand stays idle
+while the other breach is open, its bodies seen only in their own circle, a kill counted by its
+own breach only, the other's clock ticking; twenty rolls never put two hands within 600px;
+strongboxes never before wave 2 or on a boss wave, about 30% at wave 7 and more at 41; a box on
+floor, locked, untouched for 3s and through a cleared wave; a rare box sprung sends its four
+bursts of guardians who are more armoured, harder-hitting and deeper-healthed than a plain body
+of their kind; the wave waits on them; with one alive it is still locked; the last one's death
+leaves a rare chest and studs; the tiers climb. Breaks `slowabyss`, `showpath`, `nofork`,
+`alwaysfork`, `forkawake`, `forknopit`, `oneabyss`, `abysskill`, `onebreach`, `samelord`,
+`breachkill`, `breachsees`, `noextratick`, `crowded` (caught once the spacing was checked over
+twenty rolls), `sboxnever`, `sboxboss`, `sboxself`, `sboxnomods`, `sboxnohold`, `sboxearly`,
+`sboxbig`, `sboxclear`: 22 caught.
+
+## Fiftieth pass — the reward stash
+
+> *"add a new option in the option menu, called auto-loot ... I want the standard mode to be to
+> press R in order to open the reward(s) ... you can now stack rewards ... FIFO order ... if i hold
+> R i basically auto-open until my reward stash is empty ... I want this option to be default."*
+
+Every reward already went through one queue, `pendingPicks`, and the update loop opened its head
+the first frame it could. Now it only does that under the new option **AUTO-LOOT**
+(`OPT.autoLoot`, off by default, saved with the other settings). Otherwise the queue is a stash:
+
+- `lootNow()` shifts the oldest reward and opens its card screen (FIFO).
+- **R** on the field (not a repeat, stash not empty) sets `lootHeld` and calls it.
+- While `lootHeld` and R is down, the update loop opens the next one `LOOT_HOLD_GAP` = 0.25s after
+  you pick from the last, until the stash is empty. Key-up (or losing focus) clears `lootHeld`.
+- The card screen's reroll, also R, now ignores repeats and ignores any press while `lootHeld` —
+  a held R that opened the screen never rerolls it; a fresh press on the screen still does.
+- `drawLootStash()` draws the pill at the bottom centre: "3 REWARDS", a pip per reward in order,
+  and an R key cap.
+
+**Proof.** New `loot`, with real key presses: auto-loot is off on a fresh profile; three rewards
+(a rare chest, a level, a boss) wait and "3 REWARDS" is drawn; R opens the chest alone; picking a
+card does not open the next; holding R — with synthetic auto-repeat keydowns landing on the card
+screen, as a real held key sends — opens the level, then the boss, then leaves the stash empty,
+and rerolls nothing; a fresh R on a card screen rerolls once; auto-loot on opens a reward by itself
+and is saved. `t2` and `char`, which check card screens as they open, switch auto-loot on in
+their fixture; `leagues` waits for a breach's circle to reach a body instead of assuming one
+second is enough. Breaks `defon`, `lifo`, `nohold`, `holdroll` (caught once the repeats were
+simulated), `noroll`, `chain`, `noauto`, `nopill`: 8 caught.
+
+## Fifty-first pass — the endgame boss, a slower bow, a slower ring
+
+> *"try to kill the boss using this build, man he just gets one shotted. I feel like bosses in the
+> endgame should be like 4 times exponentially harder. And i think we should lower the attack
+> speed for bow AND also the brick orbit, its too fast"*
+
+Replayed from its link (a level-49 bow at wave 25, holding attack at the boss, godmode):
+**Bat Sovereign, 6,176 health, dead in 11.0s**, loosing a volley every 0.158s with a guardian
+ring spinning at 4.83.
+
+- **Endgame bosses.** `bossLateMul(n)` = 4 to the power of the decade from wave 20, capped at
+  ×64 — ×4 for waves 20–29, ×16 for 30–39, ×64 from 40. A smooth 4^((n − 15)/10) was the first
+  draft; `es` caught it, because its rule that an ordinary boss never outgrows the ultra five
+  waves before it broke (wave 25 at 1.04× the wave-20 ultra, wave 35 at 1.31×). In steps at each
+  ultra, the pair shares a multiplier and the ladder keeps its shape. `spawnEnemy` applies it to every boss
+  (ultras and the raid too) before the traits and the energy shield, so a VITAL boss's deeper bar
+  and a shield boss's shield both ride it. The bestiary's "health here" row reads it too.
+- **The bow.** Base draw 0.60s → **0.72s**, and a floor of its own, `BOW_RATE_MIN` = **0.22s**
+  (4.5 volleys a second), where every other attack weapon keeps 0.10s.
+- **The guardian ring.** `ORBIT_SPD_BASE` 2.6 → **1.9**, `ORBIT_MAX_SPD` 7.5 → **5.2**. A brick
+  strikes a given body every 1.3/spin seconds, so the hits slow with the spin.
+
+The same run now: **24,704 health, dead in about 30–33s**, a volley every 0.22s, the ring at 3.53.
+
+**Proof.** New `boss51`: the multiplier is 1,1,4,4,16,16,64,64,64 across waves 10–50; a bow with
++5000% attack speed draws at 0.22s while a sword still reaches 0.10s; the ring starts at 1.9 and
+never passes 5.2; and the linked run (through `bossfight.js`) faces a 20,000+ health boss that
+takes 25s or more. Breaks `nolate`, `slowmul`, `nocap`, `bowfloor`, `swordfloor`, `orbitfast`,
+`orbitmax`: 7 caught.
+
+## Fifty-second pass — the boss row's missing pictures, one R for the lot, fewer breach chests, a shorter link
+
+> *"there are some missing icons for bosses, i dont see any icon for when they are electrecuted (by
+> shocked) or burnt ... if i have 4 rewards to open, and if i press R, then i go trough all of the
+> 4 rewards ... breach give out too many chests ... for the URL ... First you zip it then you
+> base64 encode it ... make the ESC menu vertical ... there is no need to see the upgrades that i
+> have gotten down below"*
+
+- **The boss row.** `bossDebuffs` listed `shocked` and `brittle` but `bossDebuffIcon` had no
+  branch for either — the row drew a bare number. They get a bolt in a ring and a cracked ice
+  shard; BURNT gets a charred flame instead of a brown square; and two things that were on
+  bosses all along and never listed are added: **exposure** per element (a cracked shield in the
+  element's colour, seconds left) and Block Freeze's **slow** (an hourglass) when no chill stacks
+  explain it. `BOSS_DEBUFF_KINDS` names every kind the row can show, and the test paints each.
+- **One R for the lot.** An R on the field sets `lootChain`; while it is set and the stash is not
+  empty the update loop opens the next reward `LOOT_HOLD_GAP` after each pick. The chain ends
+  with the stash (or a new run).
+- **Breach chests.** Breach bodies went through `mobSpoils` like anybody else, and hundreds of
+  them rolled the ordinary chest chance. Their chest and mystery-chest rolls are now
+  `BREACH_CHEST_DROP` = 1/12 of it.
+- **The link.** `runLinkEncode` is `'z' + base64url(lzwPack(UTF-8 JSON))`: LZW with codes as wide
+  as the dictionary needs (9 to 16 bits, fixed at 64k entries), so encoder and decoder agree on
+  every width without signalling it. `runLinkDecode` unpacks a `z` link and reads anything else
+  as the old plain base64 JSON, so every link already handed out still opens. The level-49 bow
+  link: 6,459 → 2,813 characters. Synchronous, so the copy button and the boot still get it at
+  once.
+- **The pause menu** is a column (`.btnrow.vstack`), one full-width button under the next.
+- **The reward screen** no longer lists spells and bricks under the cards (`#buildChips` is left
+  empty); the build's stats stay above them.
+
+**Proof.** New `r52`: all eleven debuff kinds paint 12+ pixels on a blank canvas; a boss carrying
+shocked, brittle, burnt, two exposures and a slow lists all six; a roll at half the chest chance
+drops a chest from a plain imp and none from a breach one; a fresh link starts with `z` and
+round-trips, the old link decodes and re-packs to under 60% of its length, and `runLinkURL`
+emits a `z` link; the six pause buttons share one left edge and stack downward; the reward
+screen has 8+ build stats and nothing below the cards. `loot` restated: one R opens chest, level
+and boss in turn. `lzwPack`/`lzwUnpack` were also round-tripped on 300 random arrays and two
+200–300KB ones (past the 64k-entry dictionary). Breaks `noshockedicon`, `nobrittleicon`,
+`noexpose`, `noslow`, `breachchest`, `plainlink`, `nolegacy`, `badwidth`, `hstack`, `chipsback`,
+`nochain`: 11 caught.
