@@ -3443,3 +3443,33 @@ and is saved. `t2` and `char`, which check card screens as they open, switch aut
 their fixture; `leagues` waits for a breach's circle to reach a body instead of assuming one
 second is enough. Breaks `defon`, `lifo`, `nohold`, `holdroll` (caught once the repeats were
 simulated), `noroll`, `chain`, `noauto`, `nopill`: 8 caught.
+
+## Fifty-first pass — the endgame boss, a slower bow, a slower ring
+
+> *"try to kill the boss using this build, man he just gets one shotted. I feel like bosses in the
+> endgame should be like 4 times exponentially harder. And i think we should lower the attack
+> speed for bow AND also the brick orbit, its too fast"*
+
+Replayed from its link (a level-49 bow at wave 25, holding attack at the boss, godmode):
+**Bat Sovereign, 6,176 health, dead in 11.0s**, loosing a volley every 0.158s with a guardian
+ring spinning at 4.83.
+
+- **Endgame bosses.** `bossLateMul(n)` = 4 to the power of the decade from wave 20, capped at
+  ×64 — ×4 for waves 20–29, ×16 for 30–39, ×64 from 40. A smooth 4^((n − 15)/10) was the first
+  draft; `es` caught it, because its rule that an ordinary boss never outgrows the ultra five
+  waves before it broke (wave 25 at 1.04× the wave-20 ultra, wave 35 at 1.31×). In steps at each
+  ultra, the pair shares a multiplier and the ladder keeps its shape. `spawnEnemy` applies it to every boss
+  (ultras and the raid too) before the traits and the energy shield, so a VITAL boss's deeper bar
+  and a shield boss's shield both ride it. The bestiary's "health here" row reads it too.
+- **The bow.** Base draw 0.60s → **0.72s**, and a floor of its own, `BOW_RATE_MIN` = **0.22s**
+  (4.5 volleys a second), where every other attack weapon keeps 0.10s.
+- **The guardian ring.** `ORBIT_SPD_BASE` 2.6 → **1.9**, `ORBIT_MAX_SPD` 7.5 → **5.2**. A brick
+  strikes a given body every 1.3/spin seconds, so the hits slow with the spin.
+
+The same run now: **24,704 health, dead in about 30–33s**, a volley every 0.22s, the ring at 3.53.
+
+**Proof.** New `boss51`: the multiplier is 1,1,4,4,16,16,64,64,64 across waves 10–50; a bow with
++5000% attack speed draws at 0.22s while a sword still reaches 0.10s; the ring starts at 1.9 and
+never passes 5.2; and the linked run (through `bossfight.js`) faces a 20,000+ health boss that
+takes 25s or more. Breaks `nolate`, `slowmul`, `nocap`, `bowfloor`, `swordfloor`, `orbitfast`,
+`orbitmax`: 7 caught.

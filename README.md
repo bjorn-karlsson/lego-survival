@@ -181,7 +181,7 @@ readily a hit opens a wound — and every brick you own scales it from there.
 | **AXE** | 1.15 | 0.40s | 54 | **10%** | **×2.10** | ×0.45 | ×1.55 |
 | **MACE** | **1.70** | 0.54s | *slam* | 3% | ×1.20 | **×1.90** | — |
 | **STAFF** | 1.70 | 0.68s | *bolt* | 6% | ×1.60 | — | — |
-| **BOW** | 1.25 | 0.60s | *arrow* | 7% | ×1.65 | ×0.8 | — |
+| **BOW** | 1.25 | 0.72s | *arrow* | 7% | ×1.65 | ×0.8 | — |
 | **SCEPTER** | 2.10 | 0.70s | *raise* | 5% | ×1.50 | — | — |
 
 **Four of the six do not swing at all.** The staff casts a fireball; the mace opens a
@@ -189,6 +189,10 @@ readily a hit opens a wound — and every brick you own scales it from there.
 (its 2.10 is the base of every skeleton's hit, and 0.70s is one raising). Both trade the whole melee kit — reach, the spin combo, the whirl — for an
 attack of their own, and both are offered the sword's bricks no more than a staff is
 offered the axe's.
+
+**Attack speed has a floor.** A melee weapon swings at most every 0.10s, a staff or scepter
+every 0.34s — and a **bow draws at most every 0.22s**: every loose is a volley, and eight
+volleys a second was a wall of arrows rather than archery.
 
 **What it keeps you alive with**
 
@@ -783,6 +787,13 @@ and every chaos conversion rare or better.
 
 ## The boss ladder
 
+**The endgame boss.** From wave 20 every boss's health is multiplied by **four for every
+decade**: ×4 for waves 20–29, ×16 for 30–39 and ×64 from 40. It steps up at each ultra, so the
+ordinary boss five waves later shares the ultra's multiplier and never outgrows it. A build that
+clears a late wave in a second still has a fight on its hands when the boss arrives — a
+level-49 bow run that took its wave-25 boss in 11 seconds now takes about half a minute.
+(The table below was measured before this multiplier.)
+
 A boss every fifth wave, an ULTRA every tenth, and the grand raid at fifty. Spawned for
 real and read off the live body — and since a boss rolls its own **traits**, every row is
 the mean of twenty of them, which is what you actually meet rather than one run's dice:
@@ -1079,6 +1090,7 @@ offered at all.
 | Critical chance | **80%** | Arrows a shot | 5 | Fortune | ×2 |
 | Critical multiplier | **300%** | Arrow pierce | 8 | Heart stacks | 5 |
 | Regeneration | 0.70/s* | Storm leaps | 15 | Poison on a monster | 9 |
+| Bow draw | every 0.22s | Guardian ring spin | 5.2 rad/s (base 1.9) | Boss health, late | ×64 |
 | Bladestorm swords | 150 | Brickbane doses | 3 | Spore Burst reach | 210 px |
 | Bleed chance | 100% | Bleed damage | 70%/s | Poison, Spore Burst ×2 | 36 / 48 |
 | Bleed wounds | 8 | Fully opened | 560%/s | | |

@@ -1136,7 +1136,7 @@ const SPEED_BASE = 215;        /* px/s */
 const ATK_BASE = 0.34;         /* seconds per swing */
 const DASH_BASE = 0.9;         /* seconds between rolls */
 const MAGNET_BASE = 95;        /* stud pickup radius */
-const ORBIT_SPD_BASE = 2.6;
+const ORBIT_SPD_BASE = 1.9;       /* was 2.6: the ring turned, and hit, too fast */
 /* the storm brick sits at a flat 2.00s and has no rate brick of its own any
    more — its old `Charged Storm` slot is the shock-chance brick now, so the way
    to make the storm come round faster is to own more bricks, not to buy speed */
@@ -1325,7 +1325,11 @@ const ATK_RATE_MIN = 0.10; /* fastest swing interval, from 0.34 */
    wizard — a bolt that bursts and sets a fire has to land as an event you can
    see. Three a second is the fastest a staff will ever go. */
 const CAST_RATE_MIN = 0.34;
-function atkFloor(){ return (isCaster() || isSummoner()) ? CAST_RATE_MIN : ATK_RATE_MIN; }
+/* A BOW'S FLOOR IS ITS OWN too: every loose is a volley, and a volley eight
+   times a second was a wall of arrows, not archery. Four and a half a second is
+   as fast as a bow will ever draw. */
+const BOW_RATE_MIN = 0.22;
+function atkFloor(){ return (isCaster() || isSummoner()) ? CAST_RATE_MIN : isArcher() ? BOW_RATE_MIN : ATK_RATE_MIN; }
 const SPEED_MAX   = 430;   /* twice the starting walk speed */
 const DASH_CD_MIN = 0.30;
 const MAGNET_MAX  = 420;
@@ -1443,7 +1447,7 @@ function chainLeapFrac(i, leaps){
   const t = Math.pow((i-1)/(leaps-1), 0.8);
   return start + (floor - start)*t;
 }
-const ORBIT_MAX_SPD  = 7.5;    /* past this the guardian bricks strobe instead of spinning */
+const ORBIT_MAX_SPD  = 5.2;    /* past this the guardian bricks strobe instead of spinning */
 /* EVERY ABILITY'S OWN FLOOR, in one table. Cast speed is global now, so the
    floors are what keeps each ability recognisable: a storm brick never fires
    more than once a second however much tempo the hero buys, and a bomb volley
@@ -1780,7 +1784,7 @@ const WEAPONS = {
   bow: { id:'bow', name:'BOW', col:'#6ee06e',
     blurb:'Looses arrows instead of swinging. Physical, precise, and never close.',
     shoot:true,
-    dmg:1.25, rate:0.60, reach:0, spinReach:0, crit:0.07, critMult:165,
+    dmg:1.25, rate:0.72, reach:0, spinReach:0, crit:0.07, critMult:165,
     bleed:0.8, spin:1.00, kb:0.60, hold:'bow', throw:'blade',
     lessTaken:0, suppress:0.10, leech:0, leechChance:0,
     /* the precise one at range: a bow finds what it is aimed at */
@@ -4931,6 +4935,18 @@ const ULTRA_FLAT = 1250;    /* ...plus this a tier, so tier one is a fight too *
 const ULTRA_BASE = 1300;
 const BOSS_SHARE = 0.5;     /* an ordinary boss is half the ultra at its own wave */
 const BOSS_BASE_MUL = 3.2;  /* ...off a roster whose bases are a quarter the size */
+/* THE ENDGAME BOSS. From wave 20 every boss's health is multiplied by FOUR FOR
+   EVERY DECADE -- exponentially: x4 for waves 20-29, x16 for 30-39, x64 from 40.
+   In steps at each ultra, not a smooth slope, so the ordinary boss five waves
+   after an ultra shares its multiplier and the ladder keeps its shape (an
+   ordinary boss never outgrows the ultra before it). A late build that deletes
+   a wave in a second should still have a FIGHT when the boss arrives. */
+const BOSS_LATE_FROM = 20, BOSS_LATE_BASE = 4, BOSS_LATE_PER = 10, BOSS_LATE_MAX = 64;
+function bossLateMul(n){
+  const w = n === undefined ? wave.n : n;
+  if(w < BOSS_LATE_FROM) return 1;
+  return Math.min(BOSS_LATE_MAX, Math.pow(BOSS_LATE_BASE, 1 + Math.floor((w - BOSS_LATE_FROM) / BOSS_LATE_PER)));
+}
 function bossPool(baseHp, st){
   return baseHp*1.2*(1 + (st-1)*ULTRA_STEP) + st*ULTRA_FLAT + ULTRA_BASE;
 }
@@ -5089,6 +5105,8 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
        multiplier the health did -- the wave, the difficulty, the monster level
        -- without any of them having to know it exists. AFTER the traits, so a
        VITAL boss's deeper bar is a deeper shield too. */
+    /* the endgame multiplier, before the traits and the shield so both ride it */
+    { const lm = bossLateMul(); if(lm > 1){ e.maxHp = Math.round(e.maxHp * lm); e.hp = e.maxHp; } }
     rollBossTraits(e);
     applyWaveMods(e);
     if(B.es > 0){
@@ -8871,7 +8889,7 @@ const UPGRADES = [
   { id:'orbitspd', name:'Swift Orbit', icon:'clock', cls:'SPELL',
     req:()=>player.orbit.n>0 && player.orbit.spd<ORBIT_MAX_SPD,
     calc:m=>({v:0.22+0.12*m}),
-    desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/2.6).toFixed(1)})`,
+    desc:c=>`Orbit spins ${Math.round(c.v*100)}% faster (hits much more often, capped at ×${(ORBIT_MAX_SPD/ORBIT_SPD_BASE).toFixed(1)})`,
     apply:c=>{ player.inc.orbitSpd += c.v; syncStats(); } },
   { id:'orbm', name:'Orb Mastery', icon:'arcane', cls:'SPELL', minRar:'uncommon',
     req:()=>incRoom('spell'),
@@ -14326,7 +14344,7 @@ function mobStatRows(key){
   if(isBoss){
     const B = BOSSES[key] || SUPERBOSSES[key];
     const st = Math.max(1, Math.floor(wave.n/5));
-    const bhp = Math.round((B.hp*st*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp * mobRankMul());
+    const bhp = Math.round((B.hp*st*1.2 + st*1250 + 1300) * (B.hpMul||1) * difficulty.hp * mobRankMul() * bossLateMul());
     add('BOSS', 'Name', B.name);
     add('BOSS', 'Health here', Math.round(bhp).toLocaleString());
     add('BOSS', 'Contact damage',
