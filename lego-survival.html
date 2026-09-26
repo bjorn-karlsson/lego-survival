@@ -156,6 +156,10 @@
      reward screen taller than a laptop window, and centring pushed its title off
      the top where nothing can scroll to it */
   #upgradeScreen{overflow-y:auto;justify-content:safe center;padding:18px 0}
+  /* THE PAUSE MENU IS A COLUMN: one button under the next, all the same width,
+     the way a menu reads -- a row of six ran off the side of a laptop screen */
+  .btnrow.vstack{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:10px;width:260px;margin:0 auto}
+  .btnrow.vstack .btn{width:100%;margin:0}
   #upgradeScreen h2{font-family:'Titan One';font-size:38px;color:#ffb900;text-shadow:0 4px 0 rgba(0,0,0,.4);letter-spacing:1px}
   #upgradeScreen .sub{color:#dfe4e2;margin:6px 0 26px;font-size:16px}
   #cards{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
@@ -678,7 +682,7 @@
     <div class="studrow"><span></span><span></span><span></span><span></span></div>
     <h2>PAUSED</h2>
     <div class="gap20"></div>
-    <div class="btnrow">
+    <div class="btnrow vstack">
       <button id="resumeBtn" class="btn">RESUME</button>
       <button id="restartBtn" class="btn gray">RESTART</button>
       <button id="pauseTreeBtn" class="btn gray">SKILL TREE</button>
@@ -3058,7 +3062,7 @@ const OPT_DEFS = [
          'quieter screen in a wave of sixty \u2014 the combat log still counts every point' },
   { id:'autoLoot', def:false, name:'AUTO-LOOT',
     note:'every reward opens the moment you earn it. Off, rewards STACK UP instead and wait for '+
-         'you: press R to open the oldest, hold R to open them one after another' },
+         'you: press R once and they open one after another, oldest first, until none are left' },
   { id:'autoLog', def:false, name:'START WITH THE COMBAT LOG',
     note:'open the log as soon as a run begins, instead of pressing L every time. '+
          'SHIFT+L still walks the tabs' },
@@ -3394,7 +3398,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR' && !e.repeat && !lootHeld) doReroll();
-  if(state==='play' && e.code==='KeyR' && !e.repeat && !OPT.autoLoot && pendingPicks.length){ lootHeld = true; lootNow(); }
+  if(state==='play' && e.code==='KeyR' && !e.repeat && !OPT.autoLoot && pendingPicks.length){ lootHeld = true; lootChain = true; lootNow(); }
   if(state==='upgrade' && e.code==='KeyX') rejectReward();
 });
 window.addEventListener('keyup', e=>{ keys[e.code]=false; if(e.code === 'KeyR') lootHeld = false; });
@@ -3546,14 +3550,80 @@ function runLinkState(){
     r:Object.assign({}, p.rings), sp:Object.assign({}, p.splinters), bd:p.breachDepth || 0,
     rt:Math.round(runTime) };
 }
-function runLinkEncode(o){
-  const b = btoa(unescape(encodeURIComponent(JSON.stringify(o))));
-  return b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/* COMPRESSED, THEN BASE64. The JSON is squeezed first with LZW (the family zip
+   comes from: every repeat of a run of bytes already seen becomes one code), and
+   only the squeezed bytes are base64'd for the address bar -- a long run's link
+   comes out at well under half the length. It is synchronous on purpose: the
+   copy button and the boot both want the answer now. A compressed link starts
+   with 'z'; an old one (plain base64 JSON, always 'eyJ...') still opens. */
+function lzwPack(bytes){
+  const dict = new Map(); let next = 256;
+  const out = []; let acc = 0, nb = 0, k = 0;
+  const put = code=>{
+    const width = Math.min(16, Math.ceil(Math.log2(Math.min(65536, 256 + k))));
+    k++;
+    for(let i=width-1;i>=0;i--){ acc = (acc << 1) | ((code >> i) & 1); nb++; if(nb === 8){ out.push(acc); acc = 0; nb = 0; } }
+  };
+  if(!bytes.length) return new Uint8Array(0);
+  let w = String.fromCharCode(bytes[0]), wc = bytes[0];
+  for(let i=1;i<bytes.length;i++){
+    const c = bytes[i], key = w + String.fromCharCode(c);
+    if(dict.has(key)){ w = key; wc = dict.get(key); continue; }
+    put(wc);
+    if(next < 65536) dict.set(key, next++);
+    w = String.fromCharCode(c); wc = c;
+  }
+  put(wc);
+  if(nb) out.push(acc << (8 - nb));
+  return new Uint8Array(out);
 }
-function runLinkDecode(str){
+function lzwUnpack(bytes){
+  const dict = []; for(let i=0;i<256;i++) dict.push([i]);
+  let pos = 0, k = 0;
+  const total = bytes.length * 8;
+  const get = ()=>{
+    const width = Math.min(16, Math.ceil(Math.log2(Math.min(65536, 256 + k))));
+    if(pos + width > total) return -1;
+    let v = 0;
+    for(let i=0;i<width;i++){ v = (v << 1) | ((bytes[pos >> 3] >> (7 - (pos & 7))) & 1); pos++; }
+    k++;
+    return v;
+  };
+  const out = [];
+  let prev = get(); if(prev < 0) return new Uint8Array(0);
+  let w = dict[prev]; out.push(...w);
+  for(;;){
+    const code = get(); if(code < 0) break;
+    let entry;
+    if(code < dict.length) entry = dict[code];
+    else if(code === dict.length) entry = w.concat([w[0]]);
+    else throw new Error('bad run link');
+    for(const b of entry) out.push(b);
+    if(dict.length < 65536) dict.push(w.concat([entry[0]]));
+    w = entry;
+  }
+  return new Uint8Array(out);
+}
+function b64url(bytes){
+  let s = ''; for(const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function unb64url(str){
   let b = String(str).replace(/-/g, '+').replace(/_/g, '/');
   while(b.length % 4) b += '=';
-  const o = JSON.parse(decodeURIComponent(escape(atob(b))));
+  const s = atob(b), out = new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+function runLinkEncode(o){
+  return 'z' + b64url(lzwPack(new TextEncoder().encode(JSON.stringify(o))));
+}
+function runLinkDecode(str){
+  str = String(str);
+  const json = str[0] === 'z'
+    ? new TextDecoder().decode(lzwUnpack(unb64url(str.slice(1))))
+    : new TextDecoder().decode(unb64url(str));          /* an old link: plain base64 JSON */
+  const o = JSON.parse(json);
   if(!o || o.v !== RUNLINK_V || !WEAPONS[o.w]) throw new Error('not a run link');
   return o;
 }
@@ -3632,6 +3702,10 @@ function queuePick(mode, rar){ pendingPicks.push({mode, rar}); }
    press made on the card screen does. */
 const LOOT_HOLD_GAP = 0.25;            /* seconds between one screen and the next on a held R */
 let lootHeld = false, lootGapT = 0;
+/* ONE PRESS OPENS THE LOT: an R on the field starts a chain that opens the next
+   reward the moment you have picked from the last, until the stash is empty --
+   four rewards are four screens in a row, not four presses of R */
+let lootChain = false;
 function lootNow(){
   if(!pendingPicks.length || !player || player.dead || state !== 'play') return false;
   const q = pendingPicks.shift();
@@ -5915,8 +5989,14 @@ function chestRoom(){
 const BOSS_EXTRA = 0.28;
 /* ...but the two doubling bricks stay scarce even here */
 const BOSS_EXTRA_BUFF = 0.12;
+/* A BREACH IS A SWARM, and a swarm rolled the ordinary chest chance hundreds of
+   times over: a deep breach left the floor paved with chests. A breach body's
+   chest (and mystery chest) roll is a twelfth of anybody else's -- the breach
+   pays in splinters and its hoard, not in bricks. */
+const BREACH_CHEST_DROP = 1/12;
 function mobSpoils(e){
   const p = player, m = e.elite ? DROP_ELITE : 1;
+  const cm = m * (e.breach ? BREACH_CHEST_DROP : 1);
   const at = (dx,dy)=>({ x:e.x+rnd(-dx,dx), y:e.y+rnd(-dy,dy) });
   /* the tree's heart drops are an INCREASE to the chance, and every monster
      level adds to it (heartLvlMul) */
@@ -5932,10 +6012,10 @@ function mobSpoils(e){
     pickups.push(makePickup('rage', at(22,22).x, at(22,22).y));
   if(Math.random() < DROP.ward * m && floorRoom('ward'))
     pickups.push(makePickup('ward', at(26,26).x, at(26,26).y));
-  if(Math.random() < DROP.chest * m && chestRoom())
+  if(Math.random() < DROP.chest * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000),
       dead:false, hp:3, r:16, rar: rollRarity('chest') }, 20));
-  if(Math.random() < DROP.wild * m && chestRoom())
+  if(Math.random() < DROP.wild * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
 }
@@ -15301,17 +15381,12 @@ function openUpgrades(mode='wave', forceRar){
   pickChoices(mode);
   renderCards();
   document.getElementById('rerollRow').style.display = mode==='chest' ? 'none' : 'flex';
+  /* THE BRICKS YOU ALREADY HAVE are not listed under the cards any more: the
+     spellbook (and the C sheet) already show them, and on a long run the list
+     grew until it pushed the cards themselves off the screen. The build stats
+     stay above the cards. */
   const chips = document.getElementById('buildChips');
-  const spells = spellSummaries().map(sp=>
-    `<div class="chip spell" data-tip="${esc(sp.tip)}">${esc(sp.name)} · <b>${esc(sp.head)}</b></div>`).join('');
-  const buffs = Object.keys(taken).map(id=>{
-    const u = UPGRADES.find(x=>x.id===id);
-    return (u && u.cls!=='SPELL') ? `<div class="chip">${u.name} ×${taken[id]}</div>` : '';
-  }).join('');
-  chips.innerHTML =
-    (spells ? `<div class="chipgroup"><span class="chiphead">SPELLS — HOVER FOR DAMAGE</span>${spells}</div>` : '') +
-    (buffs  ? `<div class="chipgroup"><span class="chiphead">UPGRADES</span>${buffs}</div>` : '') ||
-    '<div class="chipgroup"><div class="chip">Fresh build — first upgrade!</div></div>';
+  if(chips) chips.innerHTML = '';
   document.getElementById('upTitle').textContent =
     mode==='chest' ? 'TREASURE CHEST!' :
     mode==='bonus' ? 'CALLED-IN WAVE!' :
@@ -24506,10 +24581,22 @@ function hudWaveBottom(){
    mid-fight and a row of words is not something you can read mid-fight.
    The glyphs are DRAWN, not typed: the game's font has no dingbats and a
    missing one renders as a tofu box. */
-function bossDebuffIcon(c, kind, x, y, r){
+function bossDebuffIcon(c, kind, x, y, r, col){
   c.save(); c.translate(x, y);
   c.lineJoin = 'round'; c.lineCap = 'round';
-  if(kind === 'poison'){
+  if(kind === 'expose'){
+    /* a shield with a crack through it, in the element's colour */
+    c.fillStyle = col || '#ffffff';
+    c.beginPath(); c.moveTo(0, -r); c.lineTo(r*0.85, -r*0.6); c.lineTo(r*0.7, r*0.35);
+    c.lineTo(0, r); c.lineTo(-r*0.7, r*0.35); c.lineTo(-r*0.85, -r*0.6); c.closePath(); c.fill();
+    c.strokeStyle = '#141a20'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(-r*0.1, -r*0.8); c.lineTo(r*0.2, -r*0.15); c.lineTo(-r*0.2, r*0.2); c.lineTo(r*0.1, r*0.8); c.stroke();
+  } else if(kind === 'slow'){
+    /* an hourglass in frost */
+    c.fillStyle = '#9fd4ff';
+    c.beginPath(); c.moveTo(-r*0.75, -r); c.lineTo(r*0.75, -r); c.lineTo(0, 0); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-r*0.75, r); c.lineTo(r*0.75, r); c.lineTo(0, 0); c.closePath(); c.fill();
+  } else if(kind === 'poison'){
     c.fillStyle = '#8ac24a';
     c.beginPath(); c.moveTo(0, -r);
     c.bezierCurveTo(r*0.9, -r*0.1, r*0.62, r*0.85, 0, r*0.85);
@@ -24533,10 +24620,14 @@ function bossDebuffIcon(c, kind, x, y, r){
     c.quadraticCurveTo(r*0.42, r*0.2, 0, r*0.85);
     c.fill();
   } else if(kind === 'burnt'){
-    c.fillStyle = '#5a2a12';
-    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.fill();
-    c.strokeStyle = '#ff8a3c'; c.lineWidth = 1.6;
-    roundRect(c, -r*0.82, -r*0.82, r*1.64, r*1.64, r*0.3); c.stroke();
+    /* a charred flame: black at the heart, a glowing orange edge */
+    c.fillStyle = '#2a1206';
+    c.beginPath(); c.moveTo(0, r*0.9);
+    c.quadraticCurveTo(-r*0.95, r*0.1, 0, -r);
+    c.quadraticCurveTo(r*0.95, r*0.1, 0, r*0.9); c.fill();
+    c.strokeStyle = '#ff8a3c'; c.lineWidth = 1.6; c.stroke();
+    c.fillStyle = '#ff5a1a';
+    c.beginPath(); c.arc(0, r*0.35, r*0.22, 0, TAU); c.fill();
   } else if(kind === 'chill'){
     c.strokeStyle = '#bfe3ff'; c.lineWidth = 1.8;
     for(let i=0;i<3;i++){
@@ -24557,9 +24648,28 @@ function bossDebuffIcon(c, kind, x, y, r){
     c.moveTo(r*0.25, -r); c.lineTo(-r*0.55, r*0.12); c.lineTo(-r*0.02, r*0.12);
     c.lineTo(-r*0.3, r); c.lineTo(r*0.6, -r*0.18); c.lineTo(r*0.04, -r*0.18);
     c.closePath(); c.fill();
+  } else if(kind === 'shocked'){
+    /* THE SHOCKED MARK -- electrocuted: a bolt inside a crackling ring. It was
+       listed and counted but never had a picture, so the row showed a bare number */
+    c.strokeStyle = '#fff6a8'; c.lineWidth = 1.4;
+    c.beginPath(); c.arc(0, 0, r*0.95, 0, TAU); c.stroke();
+    c.fillStyle = '#fff6a8';
+    c.beginPath();
+    c.moveTo(r*0.2, -r*0.75); c.lineTo(-r*0.42, r*0.1); c.lineTo(-r*0.02, r*0.1);
+    c.lineTo(-r*0.22, r*0.75); c.lineTo(r*0.45, -r*0.14); c.lineTo(r*0.04, -r*0.14);
+    c.closePath(); c.fill();
+  } else if(kind === 'brittle'){
+    /* BRITTLE -- a cracked shard of ice */
+    c.fillStyle = '#dff2ff';
+    c.beginPath(); c.moveTo(0, -r); c.lineTo(r*0.75, -r*0.2); c.lineTo(r*0.4, r); c.lineTo(-r*0.4, r); c.lineTo(-r*0.75, -r*0.2); c.closePath(); c.fill();
+    c.strokeStyle = '#4d86ad'; c.lineWidth = 1.3;
+    c.beginPath(); c.moveTo(-r*0.1, -r*0.7); c.lineTo(r*0.18, -r*0.1); c.lineTo(-r*0.15, r*0.25); c.lineTo(r*0.1, r*0.8); c.stroke();
   }
   c.restore();
 }
+/* every kind the boss row can list, so a new debuff cannot again arrive with a
+   count and no picture (the test draws each one and counts its paint) */
+const BOSS_DEBUFF_KINDS = ['poison', 'bleed', 'burn', 'burnt', 'chill', 'frozen', 'shock', 'shocked', 'brittle', 'slow', 'expose'];
 function bossDebuffs(e){
   const out = [];
   const psn = (e.poison && e.poison.n) || 0;
@@ -24576,6 +24686,13 @@ function bossDebuffs(e){
   if(shockedMarks(e) > 0) out.push({ k:'shocked', n:shockedMarks(e), col:'#fff6a8' });
   if(frozenMarks(e) > 0) out.push({ k:'brittle', n:frozenMarks(e), col:'#dff2ff' });
   if((e.stunT||0) > 0) out.push({ k:'frozen', n:Math.ceil(e.stunT), col:'#dff2ff' });
+  /* slowed with no chill stacks to show for it: Block Freeze's frost field */
+  else if((e.slowT||0) > 0 && !ch) out.push({ k:'slow', n:Math.ceil(e.slowT), col:'#9fd4ff' });
+  /* EXPOSURE, per element: SCORCHED, BRITTLE, SAPPED, WITHERED -- a resistance
+     your hits have stripped off it, with the seconds it has left. It was on the
+     boss all along and never shown. */
+  if(e.expose) for(const el of EXPOSE_ELEMS)
+    if(e.expose[el] > 0) out.push({ k:'expose', el, n:Math.ceil(e.expose[el]), col:EXPOSE_COL[el], name:EXPOSE_NAME[el] });
   return out;
 }
 function drawBossDebuffs(c, e, cx, y){
@@ -24597,7 +24714,7 @@ function drawBossDebuffs(c, e, cx, y){
     c.strokeStyle = d.col; c.lineWidth = 1.2; c.globalAlpha = 0.65;
     roundRect(c, x, y, w, 18, 8); c.stroke();
     c.globalAlpha = 1;
-    bossDebuffIcon(c, d.k, x + pad + r, y + 9, r);
+    bossDebuffIcon(c, d.k, x + pad + r, y + 9, r, d.col);
     c.fillStyle = d.col; c.textAlign = 'left';
     c.fillText('' + d.n, x + pad + r*2 + 3, y + 9.5);
     x += w + gap;
@@ -25306,7 +25423,7 @@ function resetRun(demo){
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
   minions=[]; corpses=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
-  pendingPicks = []; upgradeMode = 'wave';
+  pendingPicks = []; upgradeMode = 'wave'; lootChain = false;
   rerollsUsed = 0; screenRerolls = 0; shunned = {};
   clogReset();
   buildGround(); buildProps();
@@ -25657,9 +25774,9 @@ function update(dt, raw){
     updateCamera(raw, player.x, player.y);
     if(pendingPicks.length && !player.dead){
       if(OPT.autoLoot) lootNow();
-      /* a held R keeps opening, a breath apart */
-      else if(lootHeld && keys.KeyR){ lootGapT -= raw; if(lootGapT <= 0) lootNow(); }
-    }
+      /* a chain started by R (or a held R) keeps opening, a breath apart */
+      else if(lootChain || (lootHeld && keys.KeyR)){ lootGapT -= raw; if(lootGapT <= 0) lootNow(); }
+    } else lootChain = false;
   }
 }
 function frame(now){

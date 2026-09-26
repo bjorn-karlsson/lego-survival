@@ -3473,3 +3473,44 @@ The same run now: **24,704 health, dead in about 30–33s**, a volley every 0.22
 never passes 5.2; and the linked run (through `bossfight.js`) faces a 20,000+ health boss that
 takes 25s or more. Breaks `nolate`, `slowmul`, `nocap`, `bowfloor`, `swordfloor`, `orbitfast`,
 `orbitmax`: 7 caught.
+
+## Fifty-second pass — the boss row's missing pictures, one R for the lot, fewer breach chests, a shorter link
+
+> *"there are some missing icons for bosses, i dont see any icon for when they are electrecuted (by
+> shocked) or burnt ... if i have 4 rewards to open, and if i press R, then i go trough all of the
+> 4 rewards ... breach give out too many chests ... for the URL ... First you zip it then you
+> base64 encode it ... make the ESC menu vertical ... there is no need to see the upgrades that i
+> have gotten down below"*
+
+- **The boss row.** `bossDebuffs` listed `shocked` and `brittle` but `bossDebuffIcon` had no
+  branch for either — the row drew a bare number. They get a bolt in a ring and a cracked ice
+  shard; BURNT gets a charred flame instead of a brown square; and two things that were on
+  bosses all along and never listed are added: **exposure** per element (a cracked shield in the
+  element's colour, seconds left) and Block Freeze's **slow** (an hourglass) when no chill stacks
+  explain it. `BOSS_DEBUFF_KINDS` names every kind the row can show, and the test paints each.
+- **One R for the lot.** An R on the field sets `lootChain`; while it is set and the stash is not
+  empty the update loop opens the next reward `LOOT_HOLD_GAP` after each pick. The chain ends
+  with the stash (or a new run).
+- **Breach chests.** Breach bodies went through `mobSpoils` like anybody else, and hundreds of
+  them rolled the ordinary chest chance. Their chest and mystery-chest rolls are now
+  `BREACH_CHEST_DROP` = 1/12 of it.
+- **The link.** `runLinkEncode` is `'z' + base64url(lzwPack(UTF-8 JSON))`: LZW with codes as wide
+  as the dictionary needs (9 to 16 bits, fixed at 64k entries), so encoder and decoder agree on
+  every width without signalling it. `runLinkDecode` unpacks a `z` link and reads anything else
+  as the old plain base64 JSON, so every link already handed out still opens. The level-49 bow
+  link: 6,459 → 2,813 characters. Synchronous, so the copy button and the boot still get it at
+  once.
+- **The pause menu** is a column (`.btnrow.vstack`), one full-width button under the next.
+- **The reward screen** no longer lists spells and bricks under the cards (`#buildChips` is left
+  empty); the build's stats stay above them.
+
+**Proof.** New `r52`: all eleven debuff kinds paint 12+ pixels on a blank canvas; a boss carrying
+shocked, brittle, burnt, two exposures and a slow lists all six; a roll at half the chest chance
+drops a chest from a plain imp and none from a breach one; a fresh link starts with `z` and
+round-trips, the old link decodes and re-packs to under 60% of its length, and `runLinkURL`
+emits a `z` link; the six pause buttons share one left edge and stack downward; the reward
+screen has 8+ build stats and nothing below the cards. `loot` restated: one R opens chest, level
+and boss in turn. `lzwPack`/`lzwUnpack` were also round-tripped on 300 random arrays and two
+200–300KB ones (past the 64k-entry dictionary). Breaks `noshockedicon`, `nobrittleicon`,
+`noexpose`, `noslow`, `breachchest`, `plainlink`, `nolegacy`, `badwidth`, `hstack`, `chipsback`,
+`nochain`: 11 caught.

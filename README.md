@@ -723,9 +723,9 @@ default none of them throws a card screen at you in the middle of a fight**. The
 reward in the order they will open (a chest in its rarity's colour, a level-up gold, a boss
 orange, a wave green).
 
-- **R** opens the **oldest** reward — first in, first out.
-- **Hold R** and the next one opens the moment you have picked from the last, a quarter-second
-  apart, until the stash is empty.
+- **One press of R opens them all**, oldest first: the next card screen opens a quarter-second
+  after you pick from the last, until the stash is empty. Four rewards are four screens in a row,
+  not four presses. (Holding R does the same.)
 - **R on a card screen still rerolls** — but only a fresh press made there. A held R that
   started on the field never rerolls anything.
 
@@ -852,6 +852,10 @@ already running at its ceiling and it **adds 30s to the clock** instead of putti
 stack (×1 → ×2, clock back to 30); from the third on, every ward is time. The clock holds at most
 **150s** — five pickups' worth — and the ring round the buff's icon drains against however long
 that clock actually is. Hearts are unchanged: they already stack five deep.
+
+**A breach body rolls a twelfth of the chest chance.** A breach is a swarm, and a swarm of
+hundreds rolling the ordinary chest chance paved the floor with chests; a breach pays in
+splinters and its hoard.
 
 **Hearts get commoner as the monsters level up.** Every level a monster has adds **3%** to
 its heart chance (a level-30 monster drops hearts ×1.87 as often as a level-1 one). There is
@@ -2679,6 +2683,9 @@ splinters and golden hearts. Open the link and that run starts again **at the st
 you copied it on**, the hero rebuilt brick by brick — number for number the same hero, on the same
 map. It is for looking at a death, a build that melts a wave too fast, or a bug; share it and
 someone else sees exactly what you had. A linked run is a replay: it banks nothing to your tree.
+The run is **compressed before it is base64'd** (LZW, zip's family), so a long run's link is well
+under half the length it was — a level-49 bow run went from 6,459 characters to 2,813. New links
+start with `z`; old ones still open.
 **TRY AGAIN** replays the link from its wave; **TITLE** lets go of it.
 
 ### Block
