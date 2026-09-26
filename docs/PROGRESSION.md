@@ -3353,3 +3353,64 @@ Xoph's 1.68 (×0.7), and a thrown thing counts as its thrower; a ring stops at V
 rebuild. `breach2`: Tul V is 10 ranks against Tul and 5 against Xoph and adds no cold gain. Breaks
 `global`, `nobite`, `bitemany`, `noguard` (caught once the hero actually took the blow),
 `noown`, `nothrown`: 6 caught.
+
+## Forty-ninth pass — strongboxes, a quicker abyss that forks, and more of everything late
+
+> *"another mechanic we can add is Strongboxes, i.e locked chests that spawn monsters and give
+> those monsters various buffs, and when you destroy them you get to open the chest. also improve
+> the speed of Abyss ... make it branch sometimes ... dont show the full path. And for Breach and
+> Abyss in late game, make multiple Breach:es spawn and Multiple Abyss:es spawn."*
+
+**Strongboxes.** `sboxRoll(n)` queues boxes for the fight (from wave 2, not on boss waves: a 30%
+roll, plus 35% from wave 20 and 35% from 35); `updateStrongboxes` places each on open floor
+300–700px off (`sboxPlace`, at most `SBOX_MAX_LIVE` = 3 locked at once). A box is a prop,
+`type:'strongbox'`, indestructible, with a tier (plain 60% / magic 30% / rare 10%) and that many
+mods drawn from `SBOX_MODS` — ids into `BOSS_TRAITS`, so a guardian's IRONCLAD is exactly a
+boss's. Touching it springs it: `sboxBurst` every `SBOX_BURST_T` = 1.4s for the tier's 2/3/4
+bursts, 3–5 bodies each (the first magic on a magic or rare box), every one `e.sbox = box` and run
+through each mod's `apply`. When the bursts are spent and no guardian stands, `sboxOpen` replaces
+the box with a chest of the tier's rarity (common / uncommon / rare, clamped by `SBOX_CHEST_MAX`)
+and studs. A sprung box holds the wave (`sboxActiveNow()` in the clear condition); an untouched
+one survives the wave. Drawn as banded iron with a padlock in the tier's colour and its mods
+written over it; guardians get a gold ring; the HUD line reads "RARE STRONGBOX · 4 guardians
+left"; an unsprung box rides the screen's edge.
+
+**The abyss, rebuilt.** `ABYSS_SPD` 95 → **150**, `ABYSS_FOLLOW` 380 → 420, `ABYSS_SPAWN_EVERY`
+110 → 150 (the same bodies a second at the new pace). **Nothing ahead of the front is drawn**: the
+hairline is gone; the gash is drawn to `f`, with a pulsing tip at the front. **Forks**:
+`abyssBuild` gives the main line a branch with `ABYSS_FORK` = 45% (and a second at 25% from wave
+20), from 20–60% of the way down, turned 0.7–1.3 rad off the line, 3–5 segments, retried up to six
+times along the line and off either side if it runs into a wall. A branch is a crack of its own
+(`crackMeasure`) with one pit at its end; it wakes when the main front passes its fork, runs while
+you follow *its* front (`crackTick`, shared with the main line), and is done when its end pit is
+cleared. The abyss's idle clock only runs while no front moves and no pit holds.
+
+**More than one.** `abyssRoll` fills `abyss` and, from `ABYSS_MULTI` = wave 25 and wave 40 on a
+60% roll each, `abyssExtra`; `updateAbyss` ticks them all (`abyssTick` per abyss), promoting the
+next when the lead is gone. A body remembers its abyss (`e.abyssA`), so kills and pits count where
+they belong; new eyes open 500px from any other. Breaches the same way, but every breach function
+reads the global `breach`, so rather than rewrite them the extras live in `breachExtra` and each
+is ticked and drawn with `breach` swapped to it (`withBreach`). A body carries `e.breachB` and
+`breachOf(e)` answers which breach it belongs to — `breachSees`, the reveal count, the hold, the
+pull-back, the kill clock and the splinter tally all ask it. Extra breaches are of lords not
+already open, and their hands surface 600px from the others (`breachAllNow` keeps the full list
+visible while one is swapped in — the first draft lost the lead from the list mid-swap and put two
+hands 155px apart). The HUD reads "BREACH ×2", "ABYSS ×3".
+
+**Proof.** New `leagues`: the abyss runs 150px in a second of following; idle, not one stroke of
+crack is drawn, and open, every stroke lies within 14px of what has opened and none near the end;
+forks on 20–75% of 60 abysses; a fork sleeps until the main front passes it (waking within 10px),
+runs its own length to a pit of 6+, and is done when that pit is cleared; one abyss at wave 12,
+two at 31, three at 46, the second 400px+ away, idle while the other runs, and kills in one never
+counted by the other; one breach at 12, two at 31, three of three lords at 46; a hand stays idle
+while the other breach is open, its bodies seen only in their own circle, a kill counted by its
+own breach only, the other's clock ticking; twenty rolls never put two hands within 600px;
+strongboxes never before wave 2 or on a boss wave, about 30% at wave 7 and more at 41; a box on
+floor, locked, untouched for 3s and through a cleared wave; a rare box sprung sends its four
+bursts of guardians who are more armoured, harder-hitting and deeper-healthed than a plain body
+of their kind; the wave waits on them; with one alive it is still locked; the last one's death
+leaves a rare chest and studs; the tiers climb. Breaks `slowabyss`, `showpath`, `nofork`,
+`alwaysfork`, `forkawake`, `forknopit`, `oneabyss`, `abysskill`, `onebreach`, `samelord`,
+`breachkill`, `breachsees`, `noextratick`, `crowded` (caught once the spacing was checked over
+twenty rolls), `sboxnever`, `sboxboss`, `sboxself`, `sboxnomods`, `sboxnohold`, `sboxearly`,
+`sboxbig`, `sboxclear`: 22 caught.

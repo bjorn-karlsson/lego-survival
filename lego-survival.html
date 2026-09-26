@@ -3434,7 +3434,7 @@ let heroObj = null;
 let wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, done:0 };
 /* the wave's BREACH, if it carries one (see BREACH), and how many ordinary
    waves in a row have gone without */
-let breach = null, breachMiss = 0;
+let breach = null, breachMiss = 0, breachExtra = [];
 let banner = null;
 let choices = [], taken = {};
 let upgradeMode = 'wave';
@@ -5725,8 +5725,9 @@ function killEnemy(e, source){
   logKill(e);
   /* a death INSIDE an open breach feeds its clock, whoever it was; a breach
      body pays its lord's splinters wherever it falls */
-  if(breach) breachOnKill(e);
+  if(e.breach) breachOnKill(e);
   if(e.abyss) abyssOnKill(e);
+  if(e.sbox) sboxOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -6917,6 +6918,7 @@ function startWave(n){
   wave.n = n; wave.queue = composeWave(n);
   breachRoll(n);
   abyssRoll(n);
+  sboxRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
      the numbers on your sheet have already changed when you read the banner. */
@@ -7089,7 +7091,7 @@ function updateWave(dt){
         wave.spawnT = 0.6;
       }
     }
-    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow()){
+    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
@@ -7231,15 +7233,36 @@ function ringLessFrom(src){
   const who = src && (src.breach ? src : (src.src && src.src.breach ? src.src : null));
   return who ? 1 - Math.min(RING_VS.lessCap, RING_VS.less * ringRanksVs(who.breach)) : 1;
 }
-function breachOpenNow(){ return !!(breach && (breach.state === 'open' || breach.state === 'closing')); }
+/* MORE THAN ONE, LATE IN A RUN. `breach` is the one in the lead; the others
+   wait in `breachExtra`, and every per-breach function runs with `breach` set
+   to the one it is working on (withBreach), so none of them had to learn that
+   there could be two. A breach body remembers which one it came out of. */
+const BREACH_MULTI = [[25, 0.6], [40, 0.6]];
+let breachAllNow = null;       /* every breach, captured before the per-breach swap */
+function allBreaches(){ return breachAllNow ? breachAllNow.slice() : breach ? [breach, ...breachExtra] : breachExtra.slice(); }
+function withBreach(B, fn){ const keep = breach; breach = B; try { return fn(); } finally { breach = keep; } }
+function breachOf(e){ return e && e.breach ? (e.breachB || breach) : null; }
+function breachOpenNow(){ return allBreaches().some(B=>B.state === 'open' || B.state === 'closing'); }
+function breachNewAt(lord){
+  return { lord, state:'wait', delay:rnd(BREACH_HAND_DELAY[0], BREACH_HAND_DELAY[1]),
+           x:0, y:0, r:0, rClose:0, age:0, t:0, kills:0, spawnT:0, closeT:0, lordOut:false, spl:0 };
+}
 function breachRoll(n){
-  breach = null;
+  breach = null; breachExtra = [];
   if(sandbox || n < BREACH_FROM || n % 5 === 0) return;
   if(breachMiss < BREACH_PITY - 1 && Math.random() >= BREACH_CHANCE){ breachMiss++; return; }
   breachMiss = 0;
   const lord = BREACH_LORD_KEYS[(Math.random()*BREACH_LORD_KEYS.length)|0];
-  breach = { lord, state:'wait', delay:rnd(BREACH_HAND_DELAY[0], BREACH_HAND_DELAY[1]),
-             x:0, y:0, r:0, rClose:0, age:0, t:0, kills:0, spawnT:0, closeT:0, lordOut:false, spl:0 };
+  breach = breachNewAt(lord);
+  /* late in a run, more of them -- each of a lord not already here */
+  for(const [from, ch] of BREACH_MULTI){
+    if(n < from || Math.random() >= ch) continue;
+    const free = BREACH_LORD_KEYS.filter(k=>!allBreaches().some(B=>B.lord === k));
+    if(!free.length) break;
+    const B = breachNewAt(free[(Math.random()*free.length)|0]);
+    B.delay += rnd(3, 9);
+    breachExtra.push(B);
+  }
 }
 /* somewhere off to one side: far enough to be a decision, near enough to see */
 function breachSpot(){
@@ -7251,6 +7274,8 @@ function breachSpot(){
     let bad = false;
     for(const so of solids) if(dist({x,y}, so) < so.r + 40){ bad = true; break; }
     for(const w of waters) if(x>w.x-40 && x<w.x+w.w+40 && y>w.y-40 && y<w.y+w.h+40) bad = true;
+    /* not on top of another breach's hand */
+    for(const o of allBreaches()) if(o !== breach && o.state !== 'wait' && Math.hypot(o.x - x, o.y - y) < 600) bad = true;
     if(!bad) return { x, y };
   }
   return randomSpawnPos();
@@ -7287,7 +7312,7 @@ function breachNear(B){
 }
 function breachify(e, lord){
   const L = BREACH_LORDS[lord];
-  e.breach = lord;
+  e.breach = lord; e.breachB = breach;
   const deep = Math.min(BREACH_DEPTH_HP_MAX, 1 + BREACH_DEPTH_HP * ((breach && breach.depth) || 0));
   e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP * deep));
   e.xp *= BREACH_XP; e.studs = { a:0, b:0 };
@@ -7341,7 +7366,7 @@ function breachKillT(r){
 }
 /* IS IT HERE? A breach body exists only inside its own circle. */
 function breachSees(e){
-  const B = breach;
+  const B = breachOf(e);
   if(!e.breach) return true;
   if(!B || !(B.state === 'open' || B.state === 'closing')) return false;
   return Math.hypot(e.x - B.x, e.y - B.y) <= B.r + (e.r || 12);
@@ -7405,7 +7430,7 @@ function breachHoard(B){
   addRing(ch.x, ch.y, 10, 380, 120, L.col, 7, 0.5);
   return ch;
 }
-function updateBreach(dt){
+function breachTickOne(dt){
   const B = breach;
   if(!B || !player) return;
   B.age += dt;
@@ -7433,7 +7458,7 @@ function updateBreach(dt){
     B.r = Math.min(B.rEnd || BREACH_R0, B.r + BREACH_SPD*dt);
     B.t -= dt;
     /* the circle reaches them, and they are there */
-    let alive = 0; for(const e of enemies) if(e.breach && !e.dead) alive++;
+    let alive = 0; for(const e of enemies) if(breachOf(e) === B && !e.dead) alive++;
     const cap = breachAliveMax(B.r);
     while(B.layer && B.li < B.layer.length && B.layer[B.li].d <= B.r && alive < cap){
       breachReveal(B, B.layer[B.li++]); alive++;
@@ -7455,7 +7480,7 @@ function updateBreach(dt){
     /* the edge passes over them, and they go back through -- paying nothing */
     const L = BREACH_LORDS[B.lord];
     for(const e of enemies){
-      if(!e.breach || e.dead) continue;
+      if(breachOf(e) !== B || e.dead) continue;
       if(Math.hypot(e.x - B.x, e.y - B.y) <= B.r + (e.r || 12)*0.5) continue;
       e.dead = true; e.pulled = true; B.pulled = (B.pulled || 0) + 1;
       addSparks(e.x, e.y-14, 5, L.col);
@@ -7467,18 +7492,29 @@ function updateBreach(dt){
     }
   }
 }
+function updateBreach(dt){
+  breachAllNow = breach ? [breach, ...breachExtra] : breachExtra.slice();
+  try { updateBreachAll(dt); } finally { breachAllNow = null; }
+}
+function updateBreachAll(dt){
+  if(breach) breachTickOne(dt);
+  breachExtra = breachExtra.map(B=>{ const keep = breach; breach = B; try { breachTickOne(dt); return breach; } finally { breach = keep; } })
+                           .filter(Boolean);
+  /* the first of the others takes the lead once the lead is gone */
+  if(!breach && breachExtra.length) breach = breachExtra.shift();
+}
 /* A BREACH BODY CANNOT LEAVE ITS CIRCLE: one that walks to the edge is held on
    the inside of it, like a wall only it can feel */
 function breachHold(B){
   for(const e of enemies){
-    if(!e.breach || e.dead) continue;
+    if(breachOf(e) !== B || e.dead) continue;
     const dx = e.x - B.x, dy = e.y - B.y, d = Math.hypot(dx, dy), lim = Math.max(0, B.r - (e.r || 12));
     if(d > lim && d > 0){ e.x = B.x + dx/d*lim; e.y = B.y + dy/d*lim; }
   }
 }
 function breachOnKill(e){
-  const B = breach;
-  if(B.state !== 'open' || !e.breach) return;
+  const B = breachOf(e);
+  if(!B || B.state !== 'open') return;
   if(Math.hypot(e.x - B.x, e.y - B.y) > B.r + (e.r || 12)) return;
   B.kills++;
   B.t = Math.min(BREACH_T_MAX, B.t + breachKillT(B.r));
@@ -7488,7 +7524,8 @@ function breachSpoils(e){
   if(!L) return;
   const n = e.breachLord2 ? SPLINTER_LORD2 : e.breachLord ? SPLINTER_LORD : e.magic ? SPLINTER_MAGIC : 1;
   p.splinters[k] = (p.splinters[k] || 0) + n;
-  if(breach && breach.lord === k) breach.spl += n;
+  const B = breachOf(e);
+  if(B && B.lord === k) B.spl += n;
   addSparks(e.x, e.y-18, 2 + n, L.col);
   if(e.breachLord2){
     addDmg(e.x, e.y-90, L.name+' FALLS', L.col, 22);
@@ -7549,6 +7586,18 @@ function drawBreachHand(c, x, y, col, pulse, open, s){
   c.restore();
 }
 function drawBreach(){
+  for(const B of allBreaches()) withBreach(B, drawBreachOne);   /* allBreaches() is read once, before any swap */
+  const c = ctx;
+  /* a stain of its lord under every breach body, so the swarm reads as one
+     thing even when it is mixed into the wave */
+  for(const e of enemies){
+    if(!e.breach || e.dead || !onScreen(e, 40) || !breachSees(e)) continue;
+    const pr = prs(BREACH_LORDS[e.breach].col);
+    c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${e.breachLord ? 0.38 : 0.24})`;
+    c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.5, (e.r||12)*0.62, 0, 0, TAU); c.fill();
+  }
+}
+function drawBreachOne(){
   const B = breach, c = ctx;
   if(B && (B.state === 'hand' || B.state === 'open' || B.state === 'closing')){
     const L = BREACH_LORDS[B.lord], pr = prs(L.col);
@@ -7585,19 +7634,12 @@ function drawBreach(){
       c.globalAlpha = 1;
     }
   }
-  /* a stain of its lord under every breach body, so the swarm reads as one
-     thing even when it is mixed into the wave */
-  for(const e of enemies){
-    if(!e.breach || e.dead || !onScreen(e, 40) || !breachSees(e)) continue;
-    const pr = prs(BREACH_LORDS[e.breach].col);
-    c.fillStyle = `rgba(${pr[0]},${pr[1]},${pr[2]},${e.breachLord ? 0.38 : 0.24})`;
-    c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.5, (e.r||12)*0.62, 0, 0, TAU); c.fill();
-  }
 }
 /* the clock and the count, under the wave block, and the splinters in the corner */
 function drawBreachHud(){
   const p = player;
-  const B = breach;
+  const openB = allBreaches().filter(o=>o.state === 'open');
+  const B = openB[0];
   if(B && B.state === 'open'){
     const L = BREACH_LORDS[B.lord];
     const bw = Math.min(360, cw-80), bx = cw/2 - bw/2, by = hudWaveBottom() + 8;
@@ -7606,7 +7648,7 @@ function drawBreachHud(){
     const held = B.hand && !B.hand.dead && B.hold > 0;
     const lordUp = B.lord2 && !B.lord2.dead;
     const lord2Due = (p.rings[B.lord] || 0) >= LORD_RING_PLAIN && !B.lord2Out;
-    const head = 'BREACH · '+L.name+(B.depth ? ' · DEPTH '+(B.depth+1) : '')+' · '+
+    const head = 'BREACH'+(openB.length > 1 ? ' ×'+openB.length : '')+' · '+L.name+(B.depth ? ' · DEPTH '+(B.depth+1) : '')+' · '+
       (lordUp ? L.name+' HOLDS IT OPEN' : held ? 'THE HAND HOLDS IT OPEN'
       : B.lordOut && lord2Due ? B.kills+' / '+BREACH_LORD2_AT+' for '+L.name
       : B.lordOut ? 'THE HAND IS DOWN'
@@ -7629,64 +7671,73 @@ function drawBreachHud(){
   }
 }
 /* =============================== THE ABYSS ===============================
-   PoE's Abyss, in bricks. Some way into a fight a CRACK surfaces somewhere off
-   to one side: a jagged line across the floor with a green eye at its head.
-   Walk onto the eye and it OPENS -- and keeps opening, down its length, only
-   while you FOLLOW it: step more than ABYSS_FOLLOW away from its front and it
-   stops, and if you leave it stopped for ABYSS_ABANDON seconds it seals and
-   pays nothing. As it opens, abyssal monsters climb out of it behind the front.
-   Twice along it an ABYSSAL PIT tears open and spills a pack; the crack goes no
-   further until the pit's pack is dead, and a cleared pit pays out. At the far
-   end the STYGIAN climbs out -- a champion of the depths -- and when it falls it
-   leaves a chest (rare at most, like a breach's) and a shower of studs.
-   An open abyss holds the wave, the way an open breach does. */
-let abyss = null, abyssMiss = 0;
+   PoE's Abyss, in bricks. Some way into a fight a GREEN EYE opens on the floor
+   somewhere off to one side. Walk onto it and the ground CRACKS -- and keeps
+   cracking, on towards wherever it is going, only while you FOLLOW it: step
+   more than ABYSS_FOLLOW away from its front and it stops, and left stopped for
+   ABYSS_ABANDON seconds it seals and pays nothing. Where it is going is not
+   shown: only what has already opened is on the floor, and a glowing tip where
+   it is tearing now.
+   As it opens, abyssal monsters climb out of it behind the front. Twice along
+   it an ABYSSAL PIT tears open and spills a pack, and the crack goes no further
+   until the pack is dead; a cleared pit pays out. SOMETIMES IT FORKS: a second
+   crack splits off partway and runs its own way, to a pit of its own at its
+   end. At the far end of the main crack the STYGIAN climbs out, and when it
+   falls it leaves a chest (rare at most, like a breach's) and a shower of studs.
+   An open abyss holds the wave, the way an open breach does. Late in a run
+   more than one surfaces in the same wave. */
+let abyss = null, abyssMiss = 0, abyssExtra = [];
 const ABYSS_FROM = 3, ABYSS_CHANCE = 0.35, ABYSS_PITY = 4;
-const ABYSS_DELAY = [4, 10];           /* seconds into the fight before the crack surfaces */
-const ABYSS_DIST = [320, 620];         /* ...and how far from the hero its eye is */
+const ABYSS_DELAY = [4, 10];           /* seconds into the fight before the eye opens */
+const ABYSS_DIST = [320, 620];         /* ...and how far from the hero it is */
 const ABYSS_SEGS = 8, ABYSS_SEG = [180, 230];
 const ABYSS_TOUCH = 56;
-const ABYSS_SPD = 95;                  /* px a second the front runs while you follow it */
-const ABYSS_FOLLOW = 380;              /* ...and how close to the front "following" is */
+const ABYSS_SPD = 150;                 /* px a second the front runs while you follow it */
+const ABYSS_FOLLOW = 420;              /* ...and how close to the front "following" is */
 const ABYSS_ABANDON = 18;              /* stalled this long with nobody following: it seals */
-const ABYSS_SPAWN_EVERY = 110, ABYSS_PACK = [2, 4];
+const ABYSS_SPAWN_EVERY = 150, ABYSS_PACK = [2, 4];
 const ABYSS_PITS = [0.34, 0.68], ABYSS_PIT_PACK = [6, 9];
-const ABYSS_ALIVE_MAX = 45;            /* the front waits while this many of its own still stand */
+const ABYSS_ALIVE_MAX = 45;            /* every front waits while this many of its own still stand */
 const ABYSS_HP = 0.9, ABYSS_MAGIC = 0.1;
 const ABYSS_LORD_HP = 6;
 const ABYSS_CHEST_MAX = 'rare';
 const ABYSS_PIT_CHEST = 0.4;           /* a cleared pit leaves a chest this often (common or uncommon) */
 const ABYSS_LORD_RARE = 0.4;           /* ...and the Stygian's chest is rare this often, else uncommon */
+/* THE FORK: how often a crack splits, where along it, how far off its line and
+   how long the branch runs */
+const ABYSS_FORK = 0.45, ABYSS_FORK2 = 0.25, ABYSS_FORK2_FROM = 20;
+const ABYSS_FORK_AT = [0.2, 0.6], ABYSS_FORK_TURN = [0.7, 1.3], ABYSS_FORK_SEGS = [3, 5];
+/* LATE IN A RUN THERE ARE MORE OF THEM: a second abyss can surface from wave
+   25 and a third from 40, each on its own roll */
+const ABYSS_MULTI = [[25, 0.6], [40, 0.6]];
 const ABYSS_COL = '#6cff9a', ABYSS_DIM = '#0f2a1a';
-function abyssOpenNow(){ return !!(abyss && (abyss.state === 'open' || abyss.state === 'lord')); }
+function allAbysses(){ return abyss ? [abyss, ...abyssExtra] : abyssExtra.slice(); }
+function abyssOpenNow(){ return allAbysses().some(A=>A.state === 'open' || A.state === 'lord'); }
+function abyssNew(){
+  return { state:'wait', delay:rnd(ABYSS_DELAY[0], ABYSS_DELAY[1]), age:0, f:0, len:0, pts:[], cum:[],
+           jag:[], nextSpawn:ABYSS_SPAWN_EVERY, pits:[], pit:null, idleT:0, kills:0, lord:null, fadeT:0, branches:[] };
+}
 function abyssRoll(n){
-  abyss = null;
+  abyss = null; abyssExtra = [];
   if(sandbox || n < ABYSS_FROM || n % 5 === 0) return;
   if(abyssMiss < ABYSS_PITY - 1 && Math.random() >= ABYSS_CHANCE){ abyssMiss++; return; }
   abyssMiss = 0;
-  abyss = { state:'wait', delay:rnd(ABYSS_DELAY[0], ABYSS_DELAY[1]), age:0, f:0, len:0, pts:[], cum:[],
-            jag:[], nextSpawn:ABYSS_SPAWN_EVERY, pits:[], pit:null, idleT:0, kills:0, lord:null, fadeT:0 };
+  abyss = abyssNew();
+  for(const [from, ch] of ABYSS_MULTI)
+    if(n >= from && Math.random() < ch){ const A = abyssNew(); A.delay += rnd(3, 9); abyssExtra.push(A); }
 }
 function abyssFloorOk(x, y, pad){
   const lo = W.wall + pad, hiX = W.w - W.wall - pad, hiY = W.h - W.wall - pad;
   if(x < lo || x > hiX || y < lo || y > hiY) return false;
   return breachFloorOk(x, y);
 }
-/* the line itself: a start near-ish the hero, then segments wandering roughly
-   towards the middle of the floor, never into a lake or a boulder */
-function abyssPath(){
-  const cx = W.w/2, cy = W.h/2;
-  let start = null;
-  for(let i=0;i<80 && !start;i++){
-    const a = rnd(TAU), rr = rnd(ABYSS_DIST[0], ABYSS_DIST[1]);
-    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
-    if(abyssFloorOk(x, y, 140)) start = { x, y };
-  }
-  if(!start) start = randomSpawnPos();
+/* a line of `segs` segments from `start`, heading `h` and wandering (towards the
+   middle of the floor when `centre`), never into a lake or a boulder */
+function abyssLine(start, h, segs, centre){
   const pts = [start];
-  let h = Math.atan2(cy - start.y, cx - start.x) + rnd(-0.8, 0.8);
-  for(let s=0; s<ABYSS_SEGS; s++){
+  for(let s=0; s<segs; s++){
     const prev = pts[pts.length-1];
+    if(centre) h += clamp(angDiff(Math.atan2(W.h/2 - prev.y, W.w/2 - prev.x), h), -0.35, 0.35);
     let next = null;
     for(let t=0; t<14 && !next; t++){
       const hh = h + rnd(-0.55, 0.55) + (t ? (t % 2 ? 1 : -1) * t * 0.25 : 0);
@@ -7700,22 +7751,57 @@ function abyssPath(){
   }
   return pts;
 }
+function abyssPath(){
+  let start = null;
+  for(let i=0;i<80 && !start;i++){
+    const a = rnd(TAU), rr = rnd(ABYSS_DIST[0], ABYSS_DIST[1]);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(abyssFloorOk(x, y, 140) && allAbysses().every(o=>!o.pts.length || Math.hypot(o.x - x, o.y - y) > 500)) start = { x, y };
+  }
+  if(!start) start = randomSpawnPos();
+  return abyssLine(start, Math.atan2(W.h/2 - start.y, W.w/2 - start.x) + rnd(-0.8, 0.8), ABYSS_SEGS, true);
+}
+/* the measured line of a crack: lengths, a jagged edge, and where its pits are */
+function crackMeasure(c, pitFracs){
+  c.cum = [0];
+  for(let i=1;i<c.pts.length;i++) c.cum.push(c.cum[i-1] + Math.hypot(c.pts[i].x - c.pts[i-1].x, c.pts[i].y - c.pts[i-1].y));
+  c.len = c.cum[c.cum.length-1];
+  c.jag = [];
+  for(let d=0; d<=c.len; d+=16){ const q = abyssAt(c, d); c.jag.push({ d, x:q.x + q.nx*rnd(-6, 6), y:q.y + q.ny*rnd(-6, 6) }); }
+  c.pits = pitFracs.map(fr=>({ d:fr*c.len, open:false, cleared:false, alive:0, x:0, y:0 }));
+  c.f = 0; c.nextSpawn = ABYSS_SPAWN_EVERY; c.pit = null;
+}
 function abyssBuild(A){
   A.pts = abyssPath();
-  A.cum = [0];
-  for(let i=1;i<A.pts.length;i++) A.cum.push(A.cum[i-1] + Math.hypot(A.pts[i].x - A.pts[i-1].x, A.pts[i].y - A.pts[i-1].y));
-  A.len = A.cum[A.cum.length-1];
-  /* the jagged edge, laid once: a point every 16px, knocked sideways a little */
-  A.jag = [];
-  for(let d=0; d<=A.len; d+=16){ const q = abyssAt(A, d); A.jag.push({ d, x:q.x + q.nx*rnd(-6, 6), y:q.y + q.ny*rnd(-6, 6) }); }
-  A.pits = ABYSS_PITS.map(fr=>({ d:fr*A.len, open:false, cleared:false, alive:0, x:0, y:0 }));
+  crackMeasure(A, ABYSS_PITS);
   A.x = A.pts[0].x; A.y = A.pts[0].y;
+  /* THE FORKS, decided now and hidden like the rest: each a branch off the main
+     line that wakes when the main front passes the fork, and ends in a pit */
+  A.branches = [];
+  const forks = (Math.random() < ABYSS_FORK ? 1 : 0) + (wave.n >= ABYSS_FORK2_FROM && Math.random() < ABYSS_FORK2 ? 1 : 0);
+  for(let i=0;i<forks;i++){
+    /* a fork that runs straight into a wall is tried again somewhere else along
+       the line, and off the other side -- a few times, then given up */
+    for(let t=0; t<6; t++){
+      const fork = rnd(ABYSS_FORK_AT[0], ABYSS_FORK_AT[1]) * A.len, q = abyssAt(A, fork);
+      const along = Math.atan2(-q.nx, q.ny);                  /* the tangent is (ny, -nx) */
+      const side = (t % 2 ? -1 : 1) * (Math.random() < 0.5 ? 1 : -1);
+      const pts = abyssLine({ x:q.x, y:q.y }, along + side*rnd(ABYSS_FORK_TURN[0], ABYSS_FORK_TURN[1]),
+                            irnd(ABYSS_FORK_SEGS[0], ABYSS_FORK_SEGS[1]), false);
+      if(pts.length < 3) continue;
+      const b = { pts, fork, active:false, done:false };
+      crackMeasure(b, [1]);                                  /* its pit is at its very end */
+      if(b.len < 250) continue;
+      A.branches.push(b);
+      break;
+    }
+  }
 }
-/* a point `d` along the crack, and the unit normal there */
-function abyssAt(A, d){
-  d = clamp(d, 0, A.len);
-  let i = 1; while(i < A.cum.length - 1 && A.cum[i] < d) i++;
-  const a = A.pts[i-1], b = A.pts[i], seg = (A.cum[i] - A.cum[i-1]) || 1, t = (d - A.cum[i-1]) / seg;
+/* a point `d` along a crack, and the unit normal there */
+function abyssAt(c, d){
+  d = clamp(d, 0, c.len);
+  let i = 1; while(i < c.cum.length - 1 && c.cum[i] < d) i++;
+  const a = c.pts[i-1], b = c.pts[i], seg = (c.cum[i] - c.cum[i-1]) || 1, t = (d - c.cum[i-1]) / seg;
   const dx = (b.x - a.x)/seg, dy = (b.y - a.y)/seg;
   return { x:a.x + (b.x - a.x)*t, y:a.y + (b.y - a.y)*t, nx:-dy, ny:dx };
 }
@@ -7726,16 +7812,16 @@ function abyssTypes(n){
   if(n >= 18) t.push('zhulk', 'revenant');
   return t;
 }
-function abyssify(e){
-  e.abyss = true;
+function abyssify(e, A){
+  e.abyss = true; e.abyssA = A || null;
   e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * ABYSS_HP));
   e.col = { head:'#243a2c', torso:ABYSS_DIM, legs:'#0a120d', hands:ABYSS_COL, hair:'#0a120d' };
   e.buildT = Math.max(e.buildT || 0, 0.55);            /* it climbs out, it is not assembled */
   return e;
 }
-function abyssSpawn(A, d, n, magicOne, pit){
+function abyssSpawn(A, c, d, n, magicOne, pit){
   const types = abyssTypes(wave.n), type = types[(Math.random()*types.length)|0];
-  const q = abyssAt(A, d), out = [];
+  const q = abyssAt(c, d), out = [];
   for(let k=0;k<n;k++){
     const side = (k % 2 ? 1 : -1) * rnd(18, 46), along = rnd(-40, 40);
     /* either side of the crack, spread a little along it (the tangent is (ny, -nx)) */
@@ -7743,7 +7829,7 @@ function abyssSpawn(A, d, n, magicOne, pit){
     const n0 = enemies.length;
     spawnEnemy(type, at.x, at.y, false, !!(magicOne && k === 0) || Math.random() < ABYSS_MAGIC);
     if(enemies.length > n0){
-      const e = abyssify(enemies[enemies.length-1]);
+      const e = abyssify(enemies[enemies.length-1], A);
       if(pit){ e.abyssPit = pit; pit.alive++; }
       out.push(e);
     }
@@ -7769,7 +7855,7 @@ function abyssLord(A){
   const n0 = enemies.length;
   spawnEnemy(type, q.x, q.y, true, false);
   if(enemies.length === n0){ abyssReward(A); return; }
-  const e = abyssify(enemies[enemies.length-1]);
+  const e = abyssify(enemies[enemies.length-1], A);
   e.abyssLord = true; e.state = 'active'; e.buildT = 1;
   e.hp = e.maxHp = Math.ceil(e.maxHp * ABYSS_LORD_HP);
   e.scale = (e.scale || 1) * 1.2; e.r = Math.round((e.r || 12) * 1.2);
@@ -7794,13 +7880,13 @@ function abyssReward(A){
   A.state = 'done'; A.fadeT = 4;
 }
 function abyssOnKill(e){
-  const A = abyss;
+  const A = e.abyssA || abyss;
   if(!A || !e.abyss) return;
   A.kills++;
   const pit = e.abyssPit;
   if(pit && !pit.cleared && --pit.alive <= 0){
     pit.cleared = true;
-    if(A.pit === pit) A.pit = null;
+    for(const c of [A, ...A.branches]) if(c.pit === pit) c.pit = null;
     spawnStuds(pit.x, pit.y, 6 + wave.n);
     if(Math.random() < ABYSS_PIT_CHEST) abyssChest(pit.x, pit.y + 24, Math.random() < 0.5 ? 'uncommon' : 'common');
     addRing(pit.x, pit.y, 8, 300, 90, ABYSS_COL, 5, 0.45);
@@ -7808,110 +7894,146 @@ function abyssOnKill(e){
   }
   if(e.abyssLord && A.lord === e) abyssReward(A);
 }
-function updateAbyss(dt){
-  const A = abyss;
-  if(!A || !player) return;
-  A.age += dt;
-  if(A.state === 'wait'){
-    if(wave.state === 'cleared'){ abyss = null; return; }
-    if(wave.state !== 'fight') return;
-    A.delay -= dt;
-    if(A.delay > 0) return;
-    abyssBuild(A);
-    if(A.len < 300){ abyss = null; return; }          /* nowhere to run: no abyss this wave */
-    A.state = 'idle'; A.age = 0;
-    logEvent('   AN ABYSS cracks the floor open', ABYSS_COL);
-    addDmg(A.x, A.y - 50, 'ABYSS', ABYSS_COL, 20);
-    return;
-  }
-  if(A.state === 'idle'){
-    if(wave.state === 'cleared'){ logEvent('   the abyss closes, untouched', ABYSS_COL); abyss = null; return; }
-    if(!player.dead && Math.hypot(player.x - A.x, player.y - A.y) < ABYSS_TOUCH + (player.r || 12)) abyssOpen(A);
-    return;
-  }
-  if(A.state === 'sealed' || A.state === 'done'){
-    A.fadeT -= dt;
-    if(A.fadeT <= 0) abyss = null;
-    return;
-  }
-  if(A.state === 'lord'){
-    if(A.lord && A.lord.dead && A.state === 'lord') abyssReward(A);   /* in case it left without a kill call */
-    return;
-  }
-  /* OPEN: the front runs on while you follow it -- and waits for its pit, and
-     for its own crowd to thin */
-  const front = abyssAt(A, A.f);
+/* ONE CRACK'S FRONT, for a frame: it runs on while you follow it -- and waits
+   for its pit, and for its own crowd to thin. Returns whether it moved. */
+function crackTick(A, c, dt, crowd){
+  if(c.done) return false;
+  const front = abyssAt(c, c.f);
   const near = !player.dead && Math.hypot(player.x - front.x, player.y - front.y) <= ABYSS_FOLLOW;
-  let alive = 0; for(const e of enemies) if(e.abyss && !e.dead) alive++;
-  const held = !!A.pit || alive >= ABYSS_ALIVE_MAX;
-  if(near && !held){
-    A.idleT = 0;
-    A.f = Math.min(A.len, A.f + ABYSS_SPD*dt);
+  const held = !!c.pit || crowd >= ABYSS_ALIVE_MAX;
+  let moved = false;
+  if(near && !held && c.f < c.len){
+    c.f = Math.min(c.len, c.f + ABYSS_SPD*dt); moved = true;
     if(Math.random() < 0.5) addSparks(front.x, front.y - 4, 1, ABYSS_COL);
-  } else if(!held){
-    A.idleT += dt;
-    if(A.idleT >= ABYSS_ABANDON){ abyssSeal(A, 'nobody followed it'); return; }
   }
   /* what climbs out behind the front */
-  while(A.nextSpawn <= A.f && A.nextSpawn < A.len - 40){
-    abyssSpawn(A, A.nextSpawn, irnd(ABYSS_PACK[0], ABYSS_PACK[1]), false, null);
-    A.nextSpawn += ABYSS_SPAWN_EVERY;
+  while(c.nextSpawn <= c.f && c.nextSpawn < c.len - 40){
+    abyssSpawn(A, c, c.nextSpawn, irnd(ABYSS_PACK[0], ABYSS_PACK[1]), false, null);
+    c.nextSpawn += ABYSS_SPAWN_EVERY;
   }
-  /* a pit tears open where the front reaches it, and holds the crack there */
-  for(const pit of A.pits){
-    if(pit.open || A.f < pit.d) continue;
-    pit.open = true; A.f = pit.d;
-    const q = abyssAt(A, pit.d); pit.x = q.x; pit.y = q.y;
-    A.pit = pit;
-    abyssSpawn(A, pit.d, irnd(ABYSS_PIT_PACK[0], ABYSS_PIT_PACK[1]), true, pit);
-    if(pit.alive <= 0){ pit.cleared = true; A.pit = null; }
+  /* a pit tears open where the front reaches it, and holds this crack there */
+  for(const pit of c.pits){
+    if(pit.open || c.f < pit.d - 0.5) continue;
+    pit.open = true; c.f = Math.min(c.f, pit.d);
+    const q = abyssAt(c, pit.d); pit.x = q.x; pit.y = q.y;
+    c.pit = pit;
+    abyssSpawn(A, c, pit.d, irnd(ABYSS_PIT_PACK[0], ABYSS_PIT_PACK[1]), true, pit);
+    if(pit.alive <= 0){ pit.cleared = true; c.pit = null; }
     addRing(q.x, q.y, 10, 380, 110, ABYSS_COL, 7, 0.5); addShake(0.2);
     addDmg(q.x, q.y - 40, 'ABYSSAL PIT', ABYSS_COL, 16);
     logEvent('   an abyssal pit tears open', ABYSS_COL);
     break;
   }
-  if(A.f >= A.len && !A.pit) abyssLord(A);
+  /* a branch is finished when it has run its length and its end pit is cleared */
+  if(c !== A && c.f >= c.len && c.pits.every(p=>p.cleared)) c.done = true;
+  return moved;
 }
-/* the crack on the floor: faint and hairline where it has not opened, a glowing
-   green-edged gash where it has; the pits; the eye at its head */
-function drawAbyss(){
-  const A = abyss, c = ctx;
-  if(A && A.state !== 'wait' && A.jag.length){
-    const pulse = 0.5 + 0.5*Math.sin(vtime*4);
-    const fade = (A.state === 'sealed' || A.state === 'done') ? clamp(A.fadeT / (A.state === 'done' ? 4 : 1.5), 0, 1) : 1;
-    const opened = A.state === 'idle' ? 0 : A.f;
-    const line = (from, to)=>{ c.beginPath(); let first = true;
-      for(const q of A.jag){ if(q.d < from || q.d > to) continue; if(first){ c.moveTo(q.x, q.y); first = false; } else c.lineTo(q.x, q.y); }
-      if(to < A.len && to > from){ const q = abyssAt(A, to); c.lineTo(q.x, q.y); } };
-    c.save(); c.globalAlpha = fade; c.lineCap = 'round'; c.lineJoin = 'round';
-    /* the unopened rest of it: a dark hairline you can follow by eye */
-    c.strokeStyle = 'rgba(12,30,20,0.55)'; c.lineWidth = 3; line(opened, A.len); c.stroke();
-    if(opened > 0){
-      c.strokeStyle = 'rgba(108,255,154,0.28)'; c.lineWidth = 22; line(0, opened); c.stroke();
-      c.strokeStyle = '#06110a'; c.lineWidth = 13; line(0, opened); c.stroke();
-      c.strokeStyle = `rgba(108,255,154,${0.55 + 0.3*pulse})`; c.lineWidth = 2.5; line(0, opened); c.stroke();
+/* one abyss, for a frame. Returns false when it is finished with. */
+function abyssTick(A, dt){
+  A.age += dt;
+  if(A.state === 'wait'){
+    if(wave.state === 'cleared') return false;
+    if(wave.state !== 'fight') return true;
+    A.delay -= dt;
+    if(A.delay > 0) return true;
+    abyssBuild(A);
+    if(A.len < 300) return false;                     /* nowhere to run: no abyss this wave */
+    A.state = 'idle'; A.age = 0;
+    logEvent('   AN ABYSS opens its eye', ABYSS_COL);
+    addDmg(A.x, A.y - 50, 'ABYSS', ABYSS_COL, 20);
+    return true;
+  }
+  if(A.state === 'idle'){
+    if(wave.state === 'cleared'){ logEvent('   the abyss closes, untouched', ABYSS_COL); return false; }
+    if(!player.dead && Math.hypot(player.x - A.x, player.y - A.y) < ABYSS_TOUCH + (player.r || 12)) abyssOpen(A);
+    return true;
+  }
+  if(A.state === 'sealed' || A.state === 'done'){
+    A.fadeT -= dt;
+    return A.fadeT > 0;
+  }
+  let crowd = 0; for(const e of enemies) if(e.abyss && !e.dead && (e.abyssA || abyss) === A) crowd++;
+  /* the forks wake as the main front passes them */
+  for(const b of A.branches) if(!b.active && A.f >= b.fork){
+    b.active = true;
+    const q = abyssAt(b, 0);
+    addRing(q.x, q.y, 8, 320, 90, ABYSS_COL, 5, 0.45);
+    addDmg(q.x, q.y - 40, 'THE ABYSS FORKS', ABYSS_COL, 15);
+    logEvent('   the abyss forks', ABYSS_COL);
+  }
+  let moved = false, holding = false;
+  if(A.state === 'open'){
+    moved = crackTick(A, A, dt, crowd) || moved;
+    holding = holding || !!A.pit;
+  }
+  for(const b of A.branches) if(b.active && !b.done){ moved = crackTick(A, b, dt, crowd) || moved; holding = holding || !!b.pit; }
+  if(A.state === 'lord'){
+    if(A.lord && A.lord.dead && A.state === 'lord') abyssReward(A);   /* in case it left without a kill call */
+    return true;
+  }
+  if(moved || holding) A.idleT = 0;
+  else {
+    A.idleT += dt;
+    if(A.idleT >= ABYSS_ABANDON){ abyssSeal(A, 'nobody followed it'); return true; }
+  }
+  if(A.f >= A.len && !A.pit) abyssLord(A);
+  return true;
+}
+function updateAbyss(dt){
+  if(!player) return;
+  if(abyss && !abyssTick(abyss, dt)) abyss = null;
+  abyssExtra = abyssExtra.filter(A=>abyssTick(A, dt));
+  /* the first of the others takes the lead once the lead is gone */
+  if(!abyss && abyssExtra.length) abyss = abyssExtra.shift();
+}
+/* the crack on the floor -- only what has opened: a glowing green-edged gash,
+   a bright tip where it is tearing now, the pits, and the eye at its head */
+function drawAbyssOne(A){
+  const c = ctx;
+  if(A.state === 'wait' || !A.jag.length) return;
+  const pulse = 0.5 + 0.5*Math.sin(vtime*4);
+  const fade = (A.state === 'sealed' || A.state === 'done') ? clamp(A.fadeT / (A.state === 'done' ? 4 : 1.5), 0, 1) : 1;
+  const line = (k, to)=>{ c.beginPath(); let first = true;
+    for(const q of k.jag){ if(q.d > to) break; if(first){ c.moveTo(q.x, q.y); first = false; } else c.lineTo(q.x, q.y); }
+    const q = abyssAt(k, to); if(first) c.moveTo(q.x, q.y); c.lineTo(q.x, q.y); };
+  c.save(); c.globalAlpha = fade; c.lineCap = 'round'; c.lineJoin = 'round';
+  const cracks = [A, ...A.branches.filter(b=>b.active)];
+  for(const k of cracks){
+    const opened = (A.state === 'idle') ? 0 : k.f;
+    if(opened <= 0) continue;
+    c.strokeStyle = 'rgba(108,255,154,0.28)'; c.lineWidth = 22; line(k, opened); c.stroke();
+    c.strokeStyle = '#06110a'; c.lineWidth = 13; line(k, opened); c.stroke();
+    c.strokeStyle = `rgba(108,255,154,${0.55 + 0.3*pulse})`; c.lineWidth = 2.5; line(k, opened); c.stroke();
+    /* the tip: where it is tearing, and nothing past it */
+    if(opened < k.len && (A.state === 'open' || A.state === 'lord')){
+      const q = abyssAt(k, opened);
+      c.fillStyle = `rgba(108,255,154,${0.35 + 0.35*pulse})`;
+      c.beginPath(); c.arc(q.x, q.y, 9 + 4*pulse, 0, TAU); c.fill();
     }
-    /* the pits */
-    for(const pit of A.pits){
+    for(const pit of k.pits){
       if(!pit.open) continue;
       c.fillStyle = pit.cleared ? 'rgba(6,17,10,0.55)' : 'rgba(4,12,7,0.85)';
       c.beginPath(); c.ellipse(pit.x, pit.y, 40, 20, 0, 0, TAU); c.fill();
       c.strokeStyle = pit.cleared ? 'rgba(108,255,154,0.25)' : `rgba(108,255,154,${0.55 + 0.35*pulse})`; c.lineWidth = 3;
       c.beginPath(); c.ellipse(pit.x, pit.y, 40 + (pit.cleared ? 0 : 4*pulse), 20 + (pit.cleared ? 0 : 2*pulse), 0, 0, TAU); c.stroke();
     }
-    /* the eye at its head: what you walk onto to open it */
-    if(A.state === 'idle' || A.state === 'open'){
-      const s = A.state === 'idle' ? 1 : 0.7;
-      c.fillStyle = 'rgba(4,12,7,0.8)';
-      c.beginPath(); c.ellipse(A.x, A.y, 30*s, 14*s, 0, 0, TAU); c.fill();
-      c.strokeStyle = `rgba(108,255,154,${0.5 + 0.4*pulse})`; c.lineWidth = 2.5;
-      c.beginPath(); c.ellipse(A.x, A.y, (30 + 6*pulse)*s, (14 + 3*pulse)*s, 0, 0, TAU); c.stroke();
-      c.fillStyle = ABYSS_COL;
-      c.beginPath(); c.ellipse(A.x, A.y, 8*s, (3 + 3*pulse)*s, 0, 0, TAU); c.fill();
-    }
-    c.restore();
   }
-  /* a green stain under everything that climbed out of it */
+  /* the eye at its head: what you walk onto to open it */
+  if(A.state === 'idle' || A.state === 'open'){
+    const s = A.state === 'idle' ? 1 : 0.7;
+    c.fillStyle = 'rgba(4,12,7,0.8)';
+    c.beginPath(); c.ellipse(A.x, A.y, 30*s, 14*s, 0, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(108,255,154,${0.5 + 0.4*pulse})`; c.lineWidth = 2.5;
+    c.beginPath(); c.ellipse(A.x, A.y, (30 + 6*pulse)*s, (14 + 3*pulse)*s, 0, 0, TAU); c.stroke();
+    c.fillStyle = ABYSS_COL;
+    c.beginPath(); c.ellipse(A.x, A.y, 8*s, (3 + 3*pulse)*s, 0, 0, TAU); c.fill();
+  }
+  c.restore();
+}
+function drawAbyss(){
+  for(const A of allAbysses()) drawAbyssOne(A);
+  /* a green stain under everything that climbed out of one */
+  const c = ctx;
   for(const e of enemies){
     if(!e.abyss || e.dead || !onScreen(e, 40)) continue;
     c.fillStyle = `rgba(108,255,154,${e.abyssLord ? 0.34 : 0.2})`;
@@ -7919,20 +8041,192 @@ function drawAbyss(){
   }
 }
 function drawAbyssHud(){
-  const A = abyss;
-  if(!A || !(A.state === 'open' || A.state === 'lord')) return;
+  const open = allAbysses().filter(A=>A.state === 'open' || A.state === 'lord');
+  if(!open.length) return;
+  const A = open[0];
   const bw = Math.min(320, cw-80), bx = cw/2 - bw/2;
-  const by = hudWaveBottom() + 8 + (breach && breach.state === 'open' ? 30 : 0);
-  let alive = 0; for(const e of enemies) if(e.abyssPit === A.pit && A.pit && !e.dead) alive++;
-  const head = 'ABYSS · ' + (A.state === 'lord' ? 'THE STYGIAN'
-    : A.pit ? 'ABYSSAL PIT — '+alive+' left'
+  const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0);
+  const pits = [A, ...A.branches].map(c=>c.pit).filter(Boolean);
+  let alive = 0; for(const e of enemies) if(e.abyssPit && pits.includes(e.abyssPit) && !e.dead) alive++;
+  const forks = A.branches.filter(b=>b.active && !b.done).length;
+  const head = 'ABYSS' + (open.length > 1 ? ' ×'+open.length : '') + ' · ' + (A.state === 'lord' ? 'THE STYGIAN'
+    : pits.length ? 'ABYSSAL PIT — '+alive+' left'
     : A.idleT > 0 ? 'FOLLOW THE CRACK · seals in '+Math.ceil(ABYSS_ABANDON - A.idleT)+'s'
-    : Math.round(100*A.f/A.len)+'% down');
+    : Math.round(100*A.f/A.len)+'% down') + (forks ? ' · '+forks+' fork'+(forks > 1 ? 's' : '') : '');
   ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = ABYSS_COL; ctx.fillText(head, cw/2, by);
   ctx.fillStyle = 'rgba(15,20,25,0.55)'; roundRect(ctx, bx, by+10, bw, 6, 3); ctx.fill();
   ctx.fillStyle = ABYSS_COL; roundRect(ctx, bx, by+10, Math.max(3, bw*clamp(A.f/(A.len||1), 0, 1)), 6, 3); ctx.fill();
+}
+/* =============================== STRONGBOXES ===============================
+   PoE's strongbox. Some waves leave a LOCKED IRON CHEST somewhere on the floor,
+   wearing one to three MODS in its tier's colour. Walk onto it and it springs:
+   its GUARDIANS come out of the ground round it in bursts, every one carrying
+   the box's mods (swift, ironclad, brutal, vital, warded, venomous, thorned --
+   the boss traits, on ordinary bodies). Kill every guardian and the lock gives:
+   the box becomes a chest you break open like any other. A box nobody touches
+   stays where it is, locked, for as long as you leave it; a sprung box holds
+   the wave until its guardians are dead. */
+const SBOX_FROM = 2, SBOX_CHANCE = 0.3, SBOX_LATE = [[20, 0.35], [35, 0.35]];
+const SBOX_MAX_LIVE = 3;               /* locked boxes lying about at once, at most */
+const SBOX_DELAY = [3, 9];
+const SBOX_TOUCH = 46;
+/* the three tiers: how many mods, how many bursts of guardians, and the chest */
+const SBOX_TIERS = {
+  plain: { name:'STRONGBOX',        col:'#b8c0c6', mods:1, bursts:2, rar:'common',   w:0.6 },
+  magic: { name:'MAGIC STRONGBOX',  col:'#5a8dff', mods:2, bursts:3, rar:'uncommon', w:0.3 },
+  rare:  { name:'RARE STRONGBOX',   col:'#ffd23a', mods:3, bursts:4, rar:'rare',     w:0.1 },
+};
+const SBOX_MODS = ['swift', 'ironclad', 'brutal', 'vital', 'warded', 'venomous', 'thorned'];
+const SBOX_BURST_T = 1.4, SBOX_PACK = [3, 5], SBOX_RING = [60, 130];
+const SBOX_CHEST_MAX = 'rare';
+let sboxPending = [];
+function sboxRoll(n){
+  sboxPending = [];
+  if(sandbox || n < SBOX_FROM || n % 5 === 0) return;
+  const rolls = [SBOX_CHANCE, ...SBOX_LATE.filter(([from])=>n >= from).map(([, ch])=>ch)];
+  for(const ch of rolls) if(Math.random() < ch) sboxPending.push({ delay:rnd(SBOX_DELAY[0], SBOX_DELAY[1]) });
+}
+function sboxTierRoll(){
+  let r = Math.random();
+  for(const k in SBOX_TIERS){ r -= SBOX_TIERS[k].w; if(r < 0) return k; }
+  return 'plain';
+}
+function sboxLive(){ return props.filter(p=>p.type === 'strongbox' && !p.dead); }
+function sboxActiveNow(){ return props.some(p=>p.type === 'strongbox' && !p.dead && p.sprung); }
+/* a box, somewhere off to one side on open floor */
+function sboxPlace(tier){
+  let at = null;
+  for(let i=0;i<80 && !at;i++){
+    const a = rnd(TAU), rr = rnd(300, 700);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(abyssFloorOk(x, y, 120) && props.every(q=>q.dead || Math.hypot(q.x - x, q.y - y) > 80)) at = { x, y };
+  }
+  if(!at) return null;
+  const T = SBOX_TIERS[tier || sboxTierRoll()];
+  const tk = Object.keys(SBOX_TIERS).find(k=>SBOX_TIERS[k] === T);
+  const pool = SBOX_MODS.slice(), mods = [];
+  for(let i=0;i<T.mods && pool.length;i++) mods.push(pool.splice((Math.random()*pool.length)|0, 1)[0]);
+  const box = { type:'strongbox', x:at.x, y:at.y, r:18, flash:0, seed:rnd(1000), dead:false, hp:3,
+                indestructible:true, tier:tk, mods, sprung:false, bursts:T.bursts, burstT:0, guards:0 };
+  props.push(box);
+  logEvent('   a '+T.name.toLowerCase()+' lies on the floor — '+sboxModNames(box), T.col);
+  addDmg(box.x, box.y - 40, T.name, T.col, 15);
+  return box;
+}
+function sboxModNames(box){
+  return box.mods.map(id=>{ const t = BOSS_TRAITS.find(q=>q.id === id); return t ? t.name : id; }).join(' · ');
+}
+function sboxSpring(box){
+  box.sprung = true; box.burstT = 0;
+  const T = SBOX_TIERS[box.tier];
+  showBanner(T.name, sboxModNames(box), T.col, 1.6, 40);
+  logEvent('   the '+T.name.toLowerCase()+' springs — its guardians come for you', T.col);
+  addRing(box.x, box.y, 10, 360, 110, T.col, 6, 0.5); addShake(0.25); SFX.roar();
+}
+/* one burst of guardians round the box, every one wearing its mods */
+function sboxBurst(box){
+  const types = abyssTypes(wave.n), type = types[(Math.random()*types.length)|0];
+  const n = irnd(SBOX_PACK[0], SBOX_PACK[1]) + (box.tier === 'rare' ? 1 : 0);
+  for(let k=0;k<n;k++){
+    const a = rnd(TAU), rr = rnd(SBOX_RING[0], SBOX_RING[1]);
+    const at = floorAt(box.x + Math.cos(a)*rr, box.y + Math.sin(a)*rr, 14);
+    const n0 = enemies.length;
+    spawnEnemy(type, at.x, at.y, false, box.tier !== 'plain' && k === 0);
+    if(enemies.length === n0) continue;
+    const e = enemies[enemies.length-1];
+    e.sbox = box; box.guards++;
+    for(const id of box.mods){ const t = BOSS_TRAITS.find(q=>q.id === id); if(t) try { t.apply(e); } catch(err){} }
+    e.buildT = Math.max(e.buildT || 0, 0.4);
+  }
+  box.bursts--;
+  addDust(box.x, box.y, 6);
+}
+function sboxOnKill(e){
+  const box = e.sbox;
+  if(!box || box.dead) return;
+  box.guards = Math.max(0, box.guards - 1);
+}
+/* THE LOCK GIVES: the box becomes an ordinary chest of its tier's colour */
+function sboxOpen(box){
+  const T = SBOX_TIERS[box.tier];
+  box.dead = true;
+  const rar = RAR_ORDER.indexOf(T.rar) > RAR_ORDER.indexOf(SBOX_CHEST_MAX) ? SBOX_CHEST_MAX : T.rar;
+  props.push({ type:'chest', x:box.x, y:box.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar, sbox:true });
+  spawnStuds(box.x, box.y, 6 + wave.n + 8*T.mods);
+  spawnBricks(box.x, box.y, ['#5a5f66', '#8a9098', T.col], 10, 200);
+  showBanner('THE LOCK GIVES', (RARITY[rar] || RARITY.common).name+' CHEST INSIDE', T.col, 1.6, 40);
+  logEvent('   the '+T.name.toLowerCase()+' is open: a '+rar+' chest', T.col);
+  SFX.fortune();
+}
+function updateStrongboxes(dt){
+  if(!player) return;
+  if(wave.state === 'fight' && sboxPending.length){
+    for(const s of sboxPending) s.delay -= dt;
+    const due = sboxPending.filter(s=>s.delay <= 0);
+    sboxPending = sboxPending.filter(s=>s.delay > 0);
+    for(const s of due) if(sboxLive().length < SBOX_MAX_LIVE) sboxPlace();
+  }
+  if(wave.state === 'cleared') sboxPending = [];
+  for(const box of sboxLive()){
+    if(!box.sprung){
+      if(!player.dead && Math.hypot(player.x - box.x, player.y - box.y) < SBOX_TOUCH + (player.r || 12)) sboxSpring(box);
+      continue;
+    }
+    if(box.bursts > 0){
+      box.burstT -= dt;
+      if(box.burstT <= 0){ sboxBurst(box); box.burstT = SBOX_BURST_T; }
+      continue;
+    }
+    /* recount, in case something left without a kill call */
+    box.guards = enemies.filter(e=>e.sbox === box && !e.dead).length;
+    if(box.guards <= 0) sboxOpen(box);
+  }
+}
+/* the box: dark iron with bands, a padlock, its tier's colour in the glow and
+   the rivets, and its mods written over it */
+function drawStrongbox(c, p){
+  const T = SBOX_TIERS[p.tier] || SBOX_TIERS.plain, rgb = prs(T.col);
+  const glow = 0.5 + 0.5*Math.sin(vtime*3 + p.seed);
+  c.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${0.12 + 0.12*glow + (p.sprung ? 0.1 : 0)})`;
+  c.beginPath(); c.arc(0, -14, 30 + 5*glow, 0, TAU); c.fill();
+  c.strokeStyle = 'rgba(20,30,40,0.7)'; c.lineWidth = 2;
+  c.fillStyle = '#3d4248'; roundRect(c, -18, -18, 36, 20, 3); c.fill(); c.stroke();
+  c.fillStyle = '#51575e'; roundRect(c, -18, -27, 36, 11, 3); c.fill(); c.stroke();
+  c.fillStyle = '#6c737b'; c.fillRect(-18, -15, 36, 3); c.fillRect(-11, -27, 3, 29); c.fillRect(8, -27, 3, 29);
+  c.fillStyle = T.col;
+  for(const [x, y] of [[-15,-24],[15,-24],[-15,-3],[15,-3]]){ c.beginPath(); c.arc(x, y, 1.8, 0, TAU); c.fill(); }
+  /* the padlock -- open-shackled once it has sprung */
+  c.strokeStyle = T.col; c.lineWidth = 2.2;
+  c.beginPath(); c.arc(0, -16 - (p.sprung ? 3 : 0), 4, Math.PI, 0); c.stroke();
+  c.fillStyle = T.col; roundRect(c, -5, -16, 10, 8, 2); c.fill();
+  c.fillStyle = '#1b1f23'; c.fillRect(-1, -14, 2, 4);
+  c.font = '700 10px Fredoka'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3;
+  const label = p.sprung ? 'GUARDED' : sboxModNames(p);
+  c.strokeText(label, 0, -38); c.fillStyle = T.col; c.fillText(label, 0, -38);
+}
+/* a gold-edged stain under every guardian, so you can see what you have to kill */
+function drawSboxGuards(){
+  const c = ctx;
+  for(const e of enemies){
+    if(!e.sbox || e.dead || !onScreen(e, 40)) continue;
+    const rgb = prs((SBOX_TIERS[e.sbox.tier] || SBOX_TIERS.plain).col);
+    c.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.65)`; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.45, (e.r||12)*0.6, 0, 0, TAU); c.stroke();
+  }
+}
+function drawSboxHud(){
+  const box = props.find(p=>p.type === 'strongbox' && !p.dead && p.sprung);
+  if(!box) return;
+  const T = SBOX_TIERS[box.tier];
+  const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0) + (abyssOpenNow() ? 30 : 0);
+  const left = enemies.filter(e=>e.sbox === box && !e.dead).length;
+  const head = T.name+' · '+(box.bursts > 0 ? 'guardians coming' : left+' guardian'+(left === 1 ? '' : 's')+' left');
+  ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+  ctx.strokeText(head, cw/2, by); ctx.fillStyle = T.col; ctx.fillText(head, cw/2, by);
 }
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
@@ -21319,7 +21613,8 @@ function drawProp(c, p){
   c.save(); c.translate(p.x + jig, p.y);
   c.fillStyle='rgba(15,30,20,0.28)';
   c.beginPath(); c.ellipse(0,2,p.r+6,(p.r+6)*0.42,0,0,TAU); c.fill();
-  if(p.type==='tree'){
+  if(p.type==='strongbox') drawStrongbox(c, p);
+  else if(p.type==='tree'){
     /* trunk: two 1x2 bricks stacked, studs showing at each joint */
     const OL = 'rgba(20,30,40,0.5)';
     c.strokeStyle = OL; c.lineWidth = 2;
@@ -21909,6 +22204,7 @@ function render(){
   }
   drawBreach();
   drawAbyss();
+  drawSboxGuards();
   drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
@@ -22983,13 +23279,19 @@ function render(){
         }, true);
     }
     /* an unopened breach is worth walking to, so it is on the rim like a chest */
-    if(breach && breach.state === 'hand'){
-      const col = BREACH_LORDS[breach.lord].col;
-      edgeMarker(breach.x, breach.y, col, (x,y)=> drawBreachHand(ctx, x, y+9, col, 0.5, false, 0.36), true);
+    for(const B of allBreaches()) if(B.state === 'hand'){
+      const col = BREACH_LORDS[B.lord].col;
+      edgeMarker(B.x, B.y, col, (x,y)=> drawBreachHand(ctx, x, y+9, col, 0.5, false, 0.36), true);
     }
     /* ...and so is an unopened abyss: its green eye */
-    if(abyss && abyss.state === 'idle')
-      edgeMarker(abyss.x, abyss.y, ABYSS_COL, (x,y)=>{ ctx.fillStyle = '#06110a'; ctx.beginPath(); ctx.ellipse(x, y, 11, 6, 0, 0, TAU); ctx.fill();
+    /* a locked strongbox is a prize like a chest */
+    for(const box of sboxLive()) if(!box.sprung){
+      const col = (SBOX_TIERS[box.tier] || SBOX_TIERS.plain).col;
+      edgeMarker(box.x, box.y, col, (x,y)=>{ ctx.fillStyle = '#3d4248'; ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+        roundRect(ctx, x - 8, y - 5, 16, 11, 2); ctx.fill(); ctx.stroke(); }, true);
+    }
+    for(const A of allAbysses()) if(A.state === 'idle')
+      edgeMarker(A.x, A.y, ABYSS_COL, (x,y)=>{ ctx.fillStyle = '#06110a'; ctx.beginPath(); ctx.ellipse(x, y, 11, 6, 0, 0, TAU); ctx.fill();
         ctx.fillStyle = ABYSS_COL; ctx.beginPath(); ctx.ellipse(x, y, 4, 3, 0, 0, TAU); ctx.fill(); }, true);
   }
   const vg = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw,ch)*0.36, cw/2, ch/2, Math.max(cw,ch)*0.72);
@@ -24523,6 +24825,7 @@ function renderHUD(){
   }
   drawBreachHud();
   drawAbyssHud();
+  drawSboxHud();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
     const bname = boss.bname || 'BOSS';
@@ -24955,7 +25258,7 @@ function resetRun(demo){
                                      earned:metaPointsEarned(m0) } : null; }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
-  breach = null; breachMiss = 0; abyss = null; abyssMiss = 0;
+  breach = null; breachMiss = 0; breachExtra = []; abyss = null; abyssMiss = 0; abyssExtra = []; sboxPending = [];
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -25265,6 +25568,7 @@ function update(dt, raw){
     updateWave(dt);
     updateBreach(dt);
     updateAbyss(dt);
+    updateStrongboxes(dt);
     updateFx(dt);
     if(player.swing){
       const sw = player.swing;

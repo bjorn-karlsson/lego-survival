@@ -2574,6 +2574,9 @@ stands (up to 20s) and drops the ring outright, plus fifteen splinters.
   the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
   with fourteen times the health of its kind, which holds the breach open while it stands (up to
   35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is rare** — the best a breach gives.
+- **More than one, late in a run.** From wave 25 a second breach can open in the same wave, and
+  from wave 40 a third — each of a different lord, each on its own 60% roll, their hands at least
+  600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
 - **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
   12% tougher per breach before it (to three times), and more of its packs magic.
 
@@ -2587,27 +2590,57 @@ the Breachlord.
 ### Abyss
 
 From **wave 3**, on any wave that is not a boss wave, there is a **35%** chance (and never four
-ordinary waves in a row without one) that an **ABYSS** cracks the floor open a few seconds into
-the fight: a jagged hairline across the arena, 1,500–1,700px long, with a **green eye** at its
-head. The eye is pinned to the screen's edge like a chest until you find it.
+ordinary waves in a row without one) that an **ABYSS** opens its **green eye** on the floor a few
+seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
 
-- **Walk onto the eye and it opens** — and it keeps opening, down its length at 95px a second,
-  **only while you follow it**: stay within 380px of its front. Walk away and it stops; leave it
-  stopped for **18 seconds** and it **seals**, paying nothing.
-- **Monsters climb out of it** behind the front, a pack of two to four every 110px — imps,
+- **Walk onto the eye and the ground cracks** — and keeps cracking at **150px a second**, but
+  **only while you follow it**: stay within 420px of its front. **Where it is going is not
+  shown** — only what has already torn open is on the floor, with a glowing tip where it is
+  tearing now. Walk away and it stops; leave it stopped for **18 seconds** and it **seals**,
+  paying nothing.
+- **Monsters climb out of it** behind the front, a pack of two to four every 150px — imps,
   zombies and skeletons early, stalkers and bats from wave 7, runners and knights from 12, hulks
   and revenants from 18 — in black with glowing green hands, and a green stain under them.
 - **Two abyssal pits** tear open along it, a third and two thirds of the way down. Each spills a
-  pack of six to nine (one of them magic), and **the crack goes no further until the pit's pack
+  pack of six to nine (one of them magic), and **that crack goes no further until the pit's pack
   is dead**. A cleared pit pays a spray of studs and, 40% of the time, a common or uncommon chest.
-- **The Stygian.** At the end of the crack a champion climbs out — an elite skeleton, brute or
-  revenant by the wave, with six times the life. Its fall **clears the abyss**: a chest at the
-  depth (rare 40% of the time, uncommon otherwise — like a breach, an abyss chest is **never
-  above rare**) and a shower of studs.
+- **It forks.** About half the time a second crack splits off partway down (from wave 20, now and
+  then a third), waking as the main front passes the fork. It runs its own way — follow it too —
+  and ends in a pit of its own.
+- **The Stygian.** At the end of the main crack a champion climbs out — an elite skeleton, brute
+  or revenant by the wave, with six times the life. Its fall **clears the abyss**: a chest at the
+  depth (rare 40% of the time, uncommon otherwise — like a breach, an abyss chest is **never above
+  rare**) and a shower of studs.
 - **An open abyss holds the wave**, the way an open breach does. An abyss you never touched simply
   closes when the wave ends.
+- **Late in a run there are more.** From wave 25 a second abyss can surface in the same wave, and
+  from wave 40 a third, each on its own 60% roll and at least 500px from the others. Each keeps
+  its own monsters, pits and Stygian.
 
 ![An abyss: the opened crack, a pit spilling its pack](docs/abyss.png)
+
+### Strongboxes
+
+From **wave 2**, on any wave that is not a boss wave, there is a **30%** chance that a **locked
+iron strongbox** is left somewhere on the floor (another 35% roll from wave 20 and again from wave
+35; never more than three locked boxes lying about at once). It wears one to three **mods**
+written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
+
+| box | mods | bursts of guardians | the chest inside |
+|---|---|---|---|
+| Strongbox (60%) | 1 | 2 | common |
+| Magic strongbox (30%) | 2 | 3 | uncommon |
+| Rare strongbox (10%) | 3 | 4 | rare |
+
+- **It waits for you.** A box nobody touches stays where it is, locked, across waves.
+- **Walk onto it and it springs.** Its **guardians** come out of the ground round it, a burst of
+  three to five every 1.4s, and **every one carries the box's mods** — an IRONCLAD, BRUTAL, VITAL
+  box sends armoured, hard-hitting, deep-healthed bodies. A gold ring under each shows what you
+  have to kill.
+- **Kill every guardian and the lock gives**: the box becomes a chest of its tier, and some studs.
+  A sprung box holds the wave until its guardians are dead.
+
+![A rare strongbox sprung, its guardians coming](docs/strongbox.png)
 
 ### A run, as a link
 
