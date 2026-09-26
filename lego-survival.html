@@ -3376,7 +3376,7 @@ window.addEventListener('mousedown', e=>{
       if(t >= 0){ clogView = t; SFX.pick(); }
       return;
     }
-    mouse.down = true;
+    mouse.down = true; mouse.fresh = true;
   }
 });
 window.addEventListener('mouseup', e=>{ if(e.button===0) mouse.down=false; });
@@ -5063,7 +5063,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
        it did before any of this existed — it simply is not re-converted */
     if(convKind(source) === 'spell'){
       if(e.suppress && Math.random() < e.suppress){ d *= SUPPRESS_TAKEN; suppressed = true; }
-    } else d *= (1 - armourDR(e.armour||0, d));
+    } else d *= (1 - armourDR(armourVs(e, source), d));
     const el0 = SOURCE_ELEM[source];
     if(el0) d *= (1 - enemyRes(e, el0));
     if(el0 === 'fire') d *= burntMul(e);
@@ -5086,7 +5086,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       /* armour is scaled against the size of the blow it is stopping, so the
          part is the right number to hand it — an unconverted hit is one whole
          part and lands on exactly the arithmetic this used to do */
-      if(k === 'phys' && !asSpell) part *= (1 - armourDR(e.armour||0, part));
+      if(k === 'phys' && !asSpell) part *= (1 - armourDR(armourVs(e, source), part));
       /* THE MONSTER'S OWN ELEMENTAL RESISTANCE. A negative resistance is a
          weakness and multiplies UP, which is how a fire golem is soft to frost
          without needing a second rule. Chaos is not in the table at all. */
@@ -6001,6 +6001,14 @@ function critChance(){
 function critMultPct(){ return Math.min(CRIT_MULT_CAP, player.critMultPct); }
 function critMult(){ return critMultPct()/100; }
 /* The armour curve. Mitigation always uses the ACTUAL hit damage. */
+/* BONE FINDS THE GAPS. Armour is weighed against the size of the blow, so it is
+   hardest on many small hits -- which is exactly what a legion is. A minion's
+   hit ignores half of the armour in front of it. */
+const MINION_ARMOUR_PEN = 0.5;
+function armourVs(e, source){
+  const a = (e && e.armour) || 0;
+  return MINION_SOURCES.has(source) ? a * (1 - MINION_ARMOUR_PEN) : a;
+}
 function armourDR(armour, hit){
   if(armour <= 0 || hit <= 0) return 0;
   return Math.min(ARMOUR_DR_CAP, armour / (armour + 5*hit));
@@ -14615,7 +14623,7 @@ function updatePlayer(dt){
   if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
     if(isCaster())      castBolt(aimA);
     else if(isArcher())  fireArrow(aimA);
-    else if(isSummoner()) raiseMinion(aimA);
+    else if(isSummoner()){ raiseMinion(aimA, !!mouse.fresh); mouse.fresh = false; }
     else if(isSlammer()) startSlam(aimA);
     else                startSwing(aimA);
   }
@@ -15193,9 +15201,18 @@ function arrowRicochet(pr){
      the legion each -- for 80% of a blade's hit.
    - MINION INSTABILITY, the other keystone: a skeleton that falls bursts, and
      everything close takes a share of its life as fire. */
-const MINION_MAX_BASE = 3, MINION_MAX_CAP = 15;
+const MINION_MAX_BASE = 4, MINION_MAX_CAP = 15;
 const MINION_PERCAST_MAX = 5;          /* skeletons a single raising stands up, at most */
-const MINION_HP_BASE = 10, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
+const MINION_HP_BASE = 14, MINION_HP_LVL = 0.12;   /* life, and +12% of it a hero level */
+/* THE LEGION IS STRONGEST WHILE ITS MASTER IS WEAK. A summoner has nothing of its
+   own to fall back on, so its skeletons carry an early MORE that fades with the
+   hero's level: +60% at level 1, gone by level 20 -- the opening and the first
+   bosses, not the endgame. */
+const MINION_EARLY = 0.6, MINION_EARLY_TO = 20;
+function minionEarly(){
+  const lv = (player && player.level) || 1;
+  return 1 + MINION_EARLY * clamp((MINION_EARLY_TO - lv) / (MINION_EARLY_TO - 1), 0, 1);
+}
 const MINION_SPD = 175, MINION_REACH = 30, MINION_RATE = 0.85;
 const MINION_SEEK = 460, MINION_LEASH = 560, MINION_RISE = 0.45;
 const MINION_GUARD = 260;            /* anything this close to you comes first */
@@ -15261,7 +15278,7 @@ function minionInc(){
 function minionKindArg(k){ return typeof k === 'string' ? k : (k ? 'mage' : 'spear'); }
 function minionDamage(k, m){
   const M = player.minions, K = kindOf(minionKindArg(k));
-  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
+  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * minionEarly() * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1);
 }
 function minionRate(k, m){
   return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
@@ -15305,13 +15322,22 @@ function nextKind(){
 }
 /* RAISING. At a full legion the FIRST one you raised crumbles and the new one
    takes its place -- the legion is always the newest of your dead. */
-function raiseMinion(aim){
+/* HOLDING IS NOT RECYCLING. Held down, the scepter raises until the legion is
+   full and then rests; only a fresh click at a full legion breaks the oldest and
+   stands a new one. Holding it used to replace a skeleton every 0.7s -- a
+   legion forever climbing out of the floor and never swinging, a fifth of its
+   damage gone against a boss. `fresh` is true for a click (and for anything
+   that is not the held button: the bench, the tests). */
+function raiseMinion(aim, fresh){
   const p = player, M = p.minions;
   if(!p || p.dead) return;
+  let n = M.perCast || 1;
+  if(fresh === false) n = Math.min(n, minionMax() - legion().length);
+  if(n <= 0) return;
   p.atkCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
   p.castT = 0.2; retPulse = 1;
   const d = Math.min(150, Math.hypot(mouse.wx - p.x, mouse.wy - p.y));
-  for(let i=0; i<(M.perCast || 1); i++){
+  for(let i=0; i<n; i++){
     const L = legion();
     if(L.length >= minionMax()){
       const old = L.reduce((a, z)=>(z.born < a.born ? z : a), L[0]);

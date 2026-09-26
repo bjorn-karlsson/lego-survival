@@ -3012,3 +3012,36 @@ packed round the hand on purpose. 29 breaks, 29 caught — `lordfree`, `flatlaye
 survived the first drafts (the ring's value was counted as splinters; one lucky hand position
 passed the rate; the linked run had cleared no wave to bank) and the tests were tightened. 71
 tests green.
+
+## Forty-first pass — a summoner's opening
+
+> *"I just ran the scepter build and I have some nodes specced into minion stuff, but when I'm up
+> against the boss it's almost impossible ... give minion builds a little more advantage in the
+> beginning."*
+
+The run link it came with was replayed and the wave-5 boss (Brickthane, 1,607 health, armour 49)
+fought with the hero holding attack, the legion's numbers logged. The sheet said **73.6 DPS**; the
+boss lost **~20 a second** and took **~70s** to die, against a hero with six hearts. Three things:
+
+- **Holding the scepter recycled the legion.** At a full legion every raise broke the oldest
+  skeleton, every 0.7s, and a new one spends 0.45s climbing out of the floor — so a held button
+  kept the legion mostly rising and rarely swinging (172 raises a minute; ~20% of the damage).
+  `raiseMinion(aim, fresh)`: held (`fresh === false`) it only fills to the cap; a fresh click
+  (`mouse.fresh`, set on mousedown) still replaces the oldest, as asked in the thirty-seventh pass.
+- **Armour ate 59% of every blow.** `armourDR` weighs armour against the size of the hit, so a
+  6.9-damage skeleton against 49 armour landed 2.85. `armourVs(e, source)`: a minion source meets
+  half the armour (`MINION_ARMOUR_PEN`).
+- **An early summoner is fragile.** `minionEarly()` is a MORE on every minion hit, +60% at hero
+  level 1 falling linearly to nothing at 20 (+32% at 10); base life 10 → 14; the legion starts at
+  four (was three).
+
+(A first probe also showed skeletons "frozen" mid-strike: that was the probe, not the game — a
+level-up opened the card screen and paused the world under it.)
+
+Same run, same boss: **~70s → ~36s**. `minion2` checks the early curve, the half-armour blow
+against a sword's, four skeletons at 14 life, holding versus clicking at a full legion and a held
+raising filling exactly to the cap, and replays the run's own link against its wave-5 boss (must
+fall inside 55s; all four changes reverted it takes 71.6s). Two old fixtures hardened: `summon`'s
+formula check includes the early MORE, and `breach`'s "a body inside its circle can be hit" now
+zeroes the body's block (a knight's shield turned that check into a coin flip). 6 breaks, 6
+caught. 72 tests green.

@@ -2566,7 +2566,7 @@ forever and never hit anything.
 
 The last door on the tree, intelligence's second weapon, and a summoner in the PoE mould. **The
 hero hits nothing.** Holding attack **raises skeletons** out of the floor where you point — one a
-raising, three at a time to begin with — and they walk to whatever is near you and cut it down.
+raising, four at a time to begin with — and they walk to whatever is near you and cut it down.
 They die; you raise more. A raising always lands on floor: point into a lake or at a boulder
 and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
 water and rocks the way you do.
@@ -2588,9 +2588,11 @@ water and rocks the way you do.
   the tree's *Bone Rain* adds two. All of it together is **15 a shot**. The fan widens with the
   count (an archer's to about 85°, a mage's to 160°), so a body far off takes one or two and a
   body close enough to stand in the middle of it takes many.
-- **At a full legion the oldest crumbles.** Raising with every place taken breaks the FIRST
-  skeleton you raised and stands the new one where you point: the legion is always the newest of
-  your dead. A dead hero raises nothing.
+- **At a full legion the oldest crumbles — on a click.** Holding attack raises until the legion
+  is full and then rests; a fresh **click** with every place taken breaks the FIRST skeleton you
+  raised and stands the new one where you point. (Holding used to replace one every 0.7s, so a
+  held button kept the legion climbing out of the floor instead of swinging.) A dead hero raises
+  nothing.
 - **You first.** A skeleton goes for whatever is nearest *you* within 260px; only with nothing
   near you does it take the nearest to itself — never more than 560px from you. With nothing to
   fight it breaks the nearest **chest or crate**, since a summoner has no other way to open one.
@@ -2607,9 +2609,15 @@ water and rocks the way you do.
   rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
   damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's 1.60 + minion flat) ×
-  (1 + your level pool + the minion pool). Nothing you buy for your own hits reaches it, and your
-  conversions do not either. Its life is 10, plus 12% for every hero level, times the minion life
-  pool. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
+  (1 + your level pool + the minion pool) × **the early MORE**. Nothing you buy for your own hits
+  reaches it, and your conversions do not either. Its life is 14, plus 12% for every hero level,
+  times the minion life pool.
+- **Strongest while you are weak.** A summoner has nothing of its own to fall back on, so the
+  legion carries a MORE that fades with your level: **+60% at level 1**, +32% at level 10, gone by
+  level 20 — the opening and the first bosses, not the endgame.
+- **Bone finds the gaps.** Armour is weighed against the size of the blow, so it is hardest on
+  many small hits — which is what a legion is. Every minion hit **ignores half the armour** in
+  front of it. They never leave you: nothing more than 560px from you is theirs to chase, and a skeleton
   that is lost rises again at your side.
 - **Bricks:** Bone Legion (+1 to +3 skeletons by rarity, to 15), Grim Feast (minion damage), Bone
   Armour (minion life), Quickened Bones (minion speed), Sharpened Bones (flat), Twin Raising (+1
