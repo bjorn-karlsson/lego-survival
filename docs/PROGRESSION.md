@@ -3083,3 +3083,94 @@ already up) calls a scattered legion home, sets the 3s cooldown and mends at lea
 skeleton (the aura may raise others meanwhile); `qol` takes every queued card screen before it
 presses T. Breaks `noaura`, `noconvo`, `noregen`, `nocd`, `heldonly`, `nofresh`, `oldscept`,
 `nopen`, `oldlife`, `oldbase`: all caught. 72 tests green.
+
+## Forty-third pass — the dead that walk
+
+> *"for convocation ... leave a short delay between each minion, like 0.1-0.2 seconds ... remove
+> the basic teleport for skeleton mages, they always stand still regardless ... if you have 9
+> skeletons then 3 of them are spears, 3 rangers, 3 swordsmen ... introduce another monster called
+> zombie ... corpses are only shown if you play a summoner build."*
+
+**Convocation, one by one.** `convocation()` no longer moves anybody itself: it sorts every minion
+(skeletons, golems, zombies — not the overseer) nearest first into `p.convoQ`, and `convoTick(dt)`
+in `updatePlayer` lands one every `CONVO_STEP` = **0.14s** through `convoPull` (lift, ring slot on
+the floor, `regenT`, sparks). The cooldown starts on the click.
+
+**Mages never move.** `minionBlink`, `MAGE_BLINK` and `MAGE_BLINK_CD` are gone. A mage faces its
+target and casts if it is in `K.range`; with nothing to fight it stays put. Nothing else moves it
+either: the "lost minion rises at your side" leash skips mages, the minion–minion spacing treats a
+mage as a post (the other one takes the whole push; two mages never shove), and `bodySpace` makes a
+monster step round a mage (a boss walks over it and grinds it, as before). Because nothing can
+nudge a mage apart once it stands, it has to rise somewhere with room: `mageSpot` walks out from
+the aimed point to the nearest floor no other minion stands on — used by `raiseAt` and by
+`minionsToMages`.
+
+**An even legion.** `nextKind()` raises whichever of spear, sword and bow the legion has fewest of
+(random among ties): nine skeletons are 3/3/3, and any count is within one of even. Mages stay all
+mages.
+
+**The zombie family.** Six rows in `EDEF`, all `style:'zombie'` with `zombie:1` (a torn shirt,
+stitches, green skin, arms held out in front):
+
+| | hp | speed | size | dmg | notes |
+|---|---|---|---|---|---|
+| zombie | 5 | 50 | 0.84 | 1 | ROSTER at 1, outside the bands — every run has it from wave 1 |
+| crawler | 3 | 34 | 0.84 | 1 | a torso drawn top-down, dragging itself (`drawCrawler`) |
+| bloater | 18 | 38 | 1.12 | 1 | `fat` belly; band 2 (waves 6–9); plague breath and burst |
+| zrunner | 6 | 116 | 0.84 | 1 | band 3 (mid game) |
+| zhulk | 26 | 56 | 1.25 | 3 | band 4 |
+| bigcrawler | 11 | 40 | 1.2 | 2 | what a hulk gets up as |
+
+`zombieDeath(e)` runs from `killEnemy`. A zombie, runner or hulk gets up again at **40%**
+(`ZOMBIE_CRAWL`) as a crawler / big crawler, active at once, "IT CRAWLS". A bloater **bursts** into
+8–11 enemy `arrow` projectiles flagged `gib` (drawn as tumbling pieces), each a physical hit on the
+first minion it crosses or on the hero, and leaves nothing. Otherwise a corpse is laid. Breach
+bodies do none of it. The bloater's **plague breath** (`breathWind` → `breath`) is a 150px, ±0.55
+rad cone that turns after you at 1.2 rad/s for 1.1s, ticking every 0.25s: `poisonPlayer` on the
+hero, chaos `minionHurt` on minions in the cone; 4.5s between breaths.
+
+**Corpses, for a summoner only.** `layCorpse` does nothing unless `isSummoner()`; `drawCorpses`
+draws nothing either. A corpse lasts `CORPSE_LIFE` = 30s (fading over the last three), at most 60
+at once.
+
+**Raise Zombie.** A new tree stat `minionZombies` (scepter-only), the notable of the new cluster
+**THE GRAVEYARD** (int country; *Raise Zombie*: that plus +8% minion life), and the same flag as an
+**epic** brick `raisezombie`. With it, the aura also ticks `p.zombieCd` and `raiseZombie()` stands
+a `zombie` minion (`dmg 1.15, rate 0.95, hp 2.2, spd 0.70`) on the corpse nearest the cursor within
+`ZOMBIE_REACH` = 700px of the hero, up to `ZOMBIE_MINION_MAX` = 12. Zombies are their own pool:
+`legion()` excludes them, `zombieMinions()` counts them. The ability row gets a ZOMBIES badge and the
+buff pill "n/12 zombies · k corpses". Ability-row labels with a count now put the count on a second
+line, since "LEGION 4/4" and "ZOMBIES 3/12" ran into each other.
+
+**A new cluster must not move the old ones.** The first draft put THE GRAVEYARD in
+`META_NOTABLES`. The map is self-arranging — each template claims the free site in its country
+with the lowest hash, in list order, and the random fill numbers its clusters (`cad@9`) in site
+order — so one more template took a site from an earlier one and reshuffled the country: 87 nodes
+changed and 73 ids vanished. Every saved tree, preset and run link points at node ids, so the
+linked scepter run from the forty-first pass quietly lost five *Cadence*/*Metronome* nodes (minion
+attack speed 0.57 → 0.65s, minion speed 0.49 → 0.31) and its wave-5 boss took 46–64s instead of
+36–42s — which is how `minion2` caught it. Every quad in blue is already taken, so late templates
+now live in `META_LATE`, each with a `spot` of its own (the widest clear ground left in blue, ~520px
+from every node), appended **after** every other site: all 1040 old nodes keep their id, name,
+stats and position, and the graveyard adds six.
+
+**Proof.** New `zombie` test: eight minions called home land 0.14s apart, the first on the click
+frame; nine raisings are 3/3/3 and every count up to 15 is within one; mages all mages; a mage
+does not move over 6s while the hero walks 1000px off, a spear rises on top of it and an imp
+leans on it, and it still casts at a body 520px out; the roster (zombie at 1 and in no band;
+bloater 5–10 over 40 rolls) and the family's shape; crawlers (zombie and runner → crawler, hulk →
+big crawler, a crawler does not crawl on, breach bodies do nothing, the chance measured over 200
+kills); the breath poisons the hero and rots the minion in the cone but not the one behind; the
+burst throws gibs all four ways that hurt the hero and a minion, with no crawler and no corpse;
+corpses (none for a sword, one for a scepter and only from a zombie, gone after 30s, drawn only
+for a summoner); Raise Zombie (nothing without it, epic but not rare, summoner-only, the first
+zombie on the corpse nearest the cursor, 12 and no more, the legion untouched, a corpse 900px
+away never used); the zombies fight and answer Convocation; THE GRAVEYARD carries the notable,
+is linked into the map, and every one of the 1040 nodes of the tree as it stood before
+(`tree42.ids`, frozen from the previous commit) is still there with the same name, stats and place.
+`rarity2` now asks that a mage never moves at all; `minion2` waits for the staggered Convocation
+to land. Break-builds: `instant`, `slowconvo`, `mageleash`, `mageshove`, `magewalk`, `mageidle`,
+`uneven`, `magemix`, `zlate`, `nocrawl`, `crawlbig`, `brcrawl`, `noburst`, `gibcorpse`, `nopsn`,
+`breathall`, `corpseall`, `drawall`, `norot`, `zcap`, `zpool`, `noreach`, `farthest`, `rarecard`,
+`noflag`, `slowrun`, `notree`, `midlist` (the graveyard back in the notable list), `nolate` (no
+site for it): 29 breaks, 29 caught (four of them only after the test was tightened).

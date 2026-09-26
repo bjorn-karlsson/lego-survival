@@ -1162,6 +1162,21 @@ legendary rate of Hard for the privilege.
 
 ## Monsters
 
+### The dead that walk
+
+The crypt has a new family, and it shambles in from **wave 1**:
+
+| | when | what it does |
+|---|---|---|
+| **Zombie** | wave 1 onward | Walks at you and slams you with both hands. When it dies it has a **40%** chance to get up again as a **crawler** — its upper half, dragging itself after you. |
+| **Crawler** | from a dead zombie or runner | Slow and low; the hands still hurt. It does not get up again. |
+| **Bloater** | waves 5–10 (its era's roll) | Round, slow and **tanky**. It plants its feet and retches **plague breath** — a 150px cone that turns after you for a second, **poisoning** you and rotting any minion in it. When it dies it **bursts**: 8–11 body parts fly every way, each a physical hit on you or your minions. It leaves nothing behind. |
+| **Runner** | mid game | A zombie that sprints — more than twice the pace. Also gets up as a crawler. |
+| **Hulk** | later | The original, bigger, with harder hands and much more life — and it gets up as a **big crawler**. |
+
+Every zombie that stays down leaves a corpse for a [summoner](#raise-zombie--the-graveyard). A
+body raised by a [breach](#breach) is breach stuff: it neither crawls on nor leaves anything.
+
 Six things happen to a monster between wave 1 and wave 50, and they compound: it gains a
 **level**, it hits for what its own row says it hits for, it can carry up to **nine** named
 buffs, it arrives in a **pack**, the whole **wave** gets a modifier, and it **resists** what
@@ -2570,21 +2585,24 @@ where your cursor points, one a raising at the scepter's rate (0.70s, sped by at
 the legion is full — four to begin with — and whenever one falls, the aura stands another. They
 walk to whatever is near you and cut it down.
 
-**Left click is CONVOCATION** — PoE's gem, built in: every minion you own (skeletons and golems)
-is pulled back to your side at once and **regenerates 25% of its life a second for 3s**. A 3s
+**Left click is CONVOCATION** — PoE's gem, built in: every minion you own (skeletons, golems and
+zombies) is called back to your side **one by one, nearest first, 0.14s apart** — you watch the
+legion answer — and each **regenerates 25% of its life a second for 3s** as it lands. A 3s
 cooldown; the ability row shows it as **CALL**, the ring filling as it comes back. A raising always lands on floor: point into a lake or at a boulder
 and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
 water and rocks the way you do.
 
-- **A mixed legion.** Each raising rolls what rises: a **spearman** (36%, ×1.25 the scepter's
-  hit), a **swordsman** (36%, ×1.35 — shorter reach, a quicker blow) or a **bone archer** (28%,
-  ×0.9) that shoots from **480px**.
+- **An even legion.** What rises is whichever of **spearman** (×1.25 the scepter's hit),
+  **swordsman** (×1.35 — shorter reach, a quicker blow) and **bone archer** (×0.9, shoots from
+  **480px**) the legion has fewest of, a tie broken at random: nine skeletons are always three of
+  each. With Skeleton Mages every one is a mage.
 - **The back line moves.** Archers do not plant their feet: in range, each keeps a spot in a
   loose arc on your side of the fight and picks a fresh one every second or so, shooting as it
   goes; anything that gets inside its comfort, it steps back from.
-- **Mages stand and cast.** A skeleton mage never walks. It stands where it is and throws; when it
-  has to be somewhere else — closer to a target, out of reach of one, back to your side — it
-  **blinks**, a 130px hop with a puff of its element, at most once every 0.8s. It reaches **820px**
+- **Mages never move.** A skeleton mage rises on a spot of its own and stays there: it does not
+  walk, it does not blink, a skeleton or a monster leaning on it cannot shove it, and it is not
+  pulled back when you walk away. It throws at whatever is in reach from where it stands —
+  **Convocation** is how you bring your mages with you. It reaches **820px**
   (and fights that far from you), and its bolts fly at 960px/s for about 1,070px, fanned much
   wider than an archer's — up to 160° with a full volley.
 - **Greater Multiple Projectiles.** An archer's arrow and a mage's bolt become a **fan**:
@@ -2604,12 +2622,13 @@ water and rocks the way you do.
   and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
-- **Two epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
+- **Three epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
   your side — 3.5× a skeleton's life, 2.75× the scepter's hit, and every blow a slam that lands on
   everything in front of it. **Golems are their own pool**: they take no place in the legion, so a
   full summoner stands **5 golems and 15 skeletons**. A golem that falls rises again 10s later. **Bone Overseer** (once): a staff-bearing lord
   rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
   damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
+  **Raise Zombie** (once): see [the graveyard](#raise-zombie--the-graveyard) below.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
   × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
   it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
@@ -2635,6 +2654,23 @@ water and rocks the way you do.
 ![Skeleton Mages: fire, cold and lightning](docs/scepter-mages.png)
 ![A golem slamming, the overseer at your shoulder, and the crypt fighting back](docs/legion-fight.png)
 ![Archers under Greater Multiple Projectiles, and the LEGION badge](docs/legion-volley.png)
+
+#### Raise Zombie — the graveyard
+
+[Zombies](#the-dead-that-walk) leave a **corpse** when they die — and only a summoner sees it: for
+any other weapon nothing is laid at all. A corpse lies for **30s** (it fades out over the last
+three) with a faint violet ring round it: *this one could stand up for you.*
+
+Take **Raise Zombie** — the notable of **THE GRAVEYARD** on the tree (intelligence's country, with
++8% minion life), or the same thing as an **epic** brick — and the summon aura also raises
+**zombies** from those corpses: the corpse nearest your cursor, within **700px** of you, one a
+raising on the aura's clock, up to **twelve**. Zombies are **their own pool** — they take no place
+in the legion or among the golems, so a full summoner stands 15 skeletons, 5 golems and 12
+zombies. A zombie is a slow, sturdy brawler: 2.2× a skeleton's life, 70% of its speed, and hands
+that hit for 1.15× the scepter's base. They take every minion stat you have, answer Convocation,
+and count on their own badge (**ZOMBIES 7/12**) beside the legion's.
+
+![Zombies, a crawler, the bloater and the hulk; two corpses and three raised zombies](docs/zombies.png)
 
 **On the tree:** the scepter's door opens into minion damage, minion life, minion speed and
 energy-shield lanes. **THE OSSUARY**'s notable *Lord of Bones* adds a skeleton. Intelligence's

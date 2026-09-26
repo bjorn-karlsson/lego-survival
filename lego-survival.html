@@ -3712,7 +3712,7 @@ function newPlayer(){
        own hits reaches it unless something says so (Mirrored Legion does). */
     minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
               mages:false, mirror:false, instab:false, golems:0, golemCd:0, overseer:false, overseerCd:0,
-              proj:0, projMore:1, volleys:0, gmp:false },
+              proj:0, projMore:1, volleys:0, gmp:false, zombies:false },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{}, breachDepth:0,
     storm:{ n:0, dmg:2, rate:STORM_RATE_BASE, cd:2, spd:255, life:1.5, count:8, size:1, boomer:0,
@@ -4506,6 +4506,124 @@ function explode(x,y,r,dmg,opts={}){
   }
 }
 
+/* =============================== THE DEAD THAT WALK ===============================
+   What a zombie does when it dies: gets up again as a crawler (sometimes), bursts
+   (a bloater), and leaves a corpse -- for a summoner's eyes only. */
+const ZOMBIE_CRAWL = { zombie:'crawler', zrunner:'crawler', zhulk:'bigcrawler' };
+const ZOMBIE_CRAWL_CHANCE = 0.4;
+const BLOAT_WIND = 0.55, BLOAT_BREATH = 1.1, BLOAT_TICK = 0.25, BLOAT_RANGE = 150, BLOAT_CONE = 0.55;
+const BLOAT_PSN = 0.35, BLOAT_CD = 4.5;
+const BLOAT_GIBS = [8, 11], BLOAT_GIB_SPD = [230, 330], BLOAT_GIB_LIFE = 0.85, BLOAT_GIB_DMG = 1.2;
+const CORPSE_LIFE = 30, CORPSE_MAX = 60;
+let corpses = [];
+function isZombieType(t){ return !!(EDEF[t] && EDEF[t].zombie); }
+function zombieDeath(e){
+  if(!isZombieType(e.type) || e.breach) return;
+  /* A BLOATER BURSTS: the body comes apart in every direction, and each piece is
+     a physical hit on whatever it flies into -- you, or your minions */
+  if(e.type === 'bloater'){
+    const n = irnd(BLOAT_GIBS[0], BLOAT_GIBS[1]);
+    for(let i=0;i<n;i++){
+      const a = i/n*TAU + rnd(-0.25, 0.25), sp = rnd(BLOAT_GIB_SPD[0], BLOAT_GIB_SPD[1]);
+      projectiles.push({ kind:'arrow', gib:true, owner:'enemy', x:e.x, y:e.y - 16, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        dmg:Math.max(1, Math.round((e.dmg || 1) * BLOAT_GIB_DMG * 10)/10), life:BLOAT_GIB_LIFE, spin:rnd(TAU) });
+    }
+    addRing(e.x, e.y, 12, 380, 110, '#9ede5a', 7, 0.45);
+    spawnBricks(e.x, e.y, ['#9dbb62', '#7e6b4a', '#6b8e23'], 12, 260);
+    addShake(0.25); SFX.boomSmall();
+    return;                                   /* nothing left to lie there */
+  }
+  /* ...AND GETS UP AGAIN. Half of it, anyway. */
+  const crawl = ZOMBIE_CRAWL[e.type];
+  if(crawl && Math.random() < ZOMBIE_CRAWL_CHANCE){
+    const n0 = enemies.length;
+    spawnEnemy(crawl, e.x, e.y, false, false);
+    if(enemies.length > n0){
+      const c2 = enemies[enemies.length-1];
+      c2.state = 'active'; c2.buildT = 1; c2.x = e.x; c2.y = e.y; c2.hitCd = 0.6;
+      addDust(e.x, e.y, 5, 'rgba(90,110,60,');
+      addDmg(e.x, e.y - 34, 'IT CRAWLS', '#9ede5a', 13);
+    }
+    return;                                   /* the rest of it is still moving */
+  }
+  layCorpse(e);
+}
+/* a body on the floor -- laid only for a summoner, the one hero who can use it */
+function layCorpse(e){
+  if(!isSummoner()) return;
+  corpses.push({ x:e.x, y:e.y, t:CORPSE_LIFE, big:(e.scale || 1) > 1.1, a:rnd(TAU), seed:rnd(1000) });
+  if(corpses.length > CORPSE_MAX) corpses.shift();
+}
+function updateCorpses(dt){
+  if(!corpses.length) return;
+  for(const c of corpses) c.t -= dt;
+  corpses = corpses.filter(c=>c.t > 0);
+}
+function drawCorpses(){
+  if(!corpses.length || !isSummoner()) return;
+  const c = ctx;
+  for(const k of corpses){
+    if(!onScreen(k, 60)) continue;
+    const fade = clamp(k.t / 3, 0, 1), s = k.big ? 1.2 : 0.85;
+    c.save(); c.translate(k.x, k.y); c.rotate(k.a); c.globalAlpha = 0.9 * fade;
+    c.fillStyle = 'rgba(30,20,20,0.35)'; c.beginPath(); c.ellipse(0, 2, 20*s, 8*s, 0, 0, TAU); c.fill();
+    c.fillStyle = '#5a5044'; c.strokeStyle = 'rgba(20,20,20,0.5)'; c.lineWidth = 1.5;
+    roundRect(c, -12*s, -5*s, 20*s, 10*s, 3*s); c.fill(); c.stroke();          /* the body */
+    c.fillStyle = '#6f8a52';
+    c.beginPath(); c.arc(12*s, 0, 5.5*s, 0, TAU); c.fill(); c.stroke();        /* the head */
+    c.strokeStyle = '#6f8a52'; c.lineWidth = 3.5*s; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(5*s, -5*s); c.lineTo(12*s, -11*s); c.moveTo(3*s, 5*s); c.lineTo(10*s, 11*s); c.stroke();
+    /* a faint violet mark: this one could stand up for you */
+    c.globalAlpha = 0.35 * fade * (0.6 + 0.4*Math.sin(vtime*3 + k.seed));
+    c.strokeStyle = '#b7a6ff'; c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(0, 1, 22*s, 9*s, 0, 0, TAU); c.stroke();
+    c.restore();
+  }
+}
+/* a piece of a burst bloater, tumbling */
+function drawGib(c, pr){
+  pr.spin = (pr.spin || 0) + 0.3;
+  c.save(); c.translate(pr.x, pr.y); c.rotate(pr.spin);
+  c.fillStyle = '#9dbb62'; c.strokeStyle = 'rgba(20,30,20,0.6)'; c.lineWidth = 1.5;
+  roundRect(c, -5, -3.5, 10, 7, 2); c.fill(); c.stroke();
+  c.fillStyle = '#7a2f24'; c.fillRect(-5, -3.5, 3, 7);
+  c.restore();
+}
+/* the crawler, top-down: a torso dragged along the floor, the head up, the hands
+   reaching and pulling in turn, and nothing below the belt */
+function drawCrawler(c, e){
+  const s = e.scale || 0.84, a = Math.atan2(e.face.y || 0.001, e.face.x || 0.001);
+  const pull = Math.sin(e.walk || 0) * (e.moving ? 1 : 0.2);
+  const T = col=> e.flash > 0 ? mixc(col, '#ffffff', Math.min(1, e.flash*0.85)) : col;
+  c.save(); c.translate(e.x, e.y - 4*s);
+  c.fillStyle = 'rgba(15,30,20,0.3)'; c.beginPath(); c.ellipse(0, 6*s, 17*s, 6*s, 0, 0, TAU); c.fill();
+  if(e.elite){ c.strokeStyle='rgba(255,185,0,0.75)'; c.lineWidth=2.5; c.beginPath(); c.ellipse(0,6*s,19*s,7.5*s,0,0,TAU); c.stroke(); }
+  if(e.magic){ c.setLineDash([5,4]); c.strokeStyle=MAGIC_RING; c.lineWidth=2.5; c.beginPath(); c.ellipse(0,6*s,19*s,7.5*s,0,0,TAU); c.stroke(); c.setLineDash([]); }
+  c.rotate(a);
+  const OL = 'rgba(20,30,40,0.55)';
+  c.lineWidth = 2; c.strokeStyle = OL;
+  /* the torn end, where the legs were */
+  c.fillStyle = T('#7a2f24');
+  c.beginPath(); c.moveTo(-12*s, -6*s); c.lineTo(-16*s, -3*s); c.lineTo(-13*s, 0); c.lineTo(-17*s, 3*s); c.lineTo(-12*s, 6*s); c.closePath(); c.fill();
+  c.fillStyle = T(e.col.torso);
+  roundRect(c, -13*s, -7*s, 20*s, 14*s, 3*s); c.fill(); c.stroke();
+  c.fillStyle = T(sh(e.col.head, -0.12));
+  c.beginPath(); c.moveTo(-6*s, -3*s); c.lineTo(-1*s, -1*s); c.lineTo(-5*s, 3*s); c.closePath(); c.fill();
+  /* the arms: one reaching, one pulling */
+  c.strokeStyle = T(e.col.torso); c.lineWidth = 5*s; c.lineCap = 'round';
+  const r1 = 8 + 7*pull, r2 = 8 - 7*pull;
+  c.beginPath(); c.moveTo(4*s, -6*s); c.lineTo((4 + r1)*s, -10*s); c.stroke();
+  c.beginPath(); c.moveTo(4*s, 6*s); c.lineTo((4 + r2)*s, 10*s); c.stroke();
+  c.fillStyle = T(e.col.hands); c.strokeStyle = OL; c.lineWidth = 1.5;
+  c.beginPath(); c.arc((4 + r1)*s, -10*s, 3.2*s, 0, TAU); c.fill(); c.stroke();
+  c.beginPath(); c.arc((4 + r2)*s, 10*s, 3.2*s, 0, TAU); c.fill(); c.stroke();
+  /* the head, lifted, looking where it is going */
+  c.fillStyle = T(e.col.head); c.lineWidth = 2;
+  c.beginPath(); c.arc(11*s, 0, 7*s, 0, TAU); c.fill(); c.stroke();
+  c.fillStyle = '#1a1a14';
+  c.beginPath(); c.arc(14*s, -2.4*s, 1.3*s, 0, TAU); c.arc(14*s, 2.4*s, 1.3*s, 0, TAU); c.fill();
+  c.restore();
+}
 /* =============================== ENEMIES =============================== */
 const EDEF = {
   imp:     { hp:3,  speed:88,  r:12, scale:0.78, dmg:1, xp:2, studs:[2,4],
@@ -4571,6 +4689,26 @@ const EDEF = {
   blightspitter:{ hp:7, speed:56, r:12, scale:0.95, dmg:1, xp:11, studs:[8,13], fire:3.4,
              res:{fire:-0.20},
              col:{head:'#d8e8bc', torso:'#4c7a2b', legs:'#33551d', hands:'#9ede5a', hair:'#33551d'}, style:'skel' },
+  /* THE DEAD THAT WALK. The zombie shambles at you with its arms out and slams
+     you with both hands; one that falls may get up again as a CRAWLER -- the top
+     half, legs gone, dragging itself along on its hands. The BLOATER ate too
+     much: slower, much tougher, it retches a cone of plague that POISONS, and
+     when it dies it bursts and throws itself in every direction. The RUNNER is
+     the zombie that never learned to shamble; the HULK is the one that was big
+     in life, and it crawls bigger too. All of them leave a corpse -- which only
+     a summoner can see, and only a summoner can use. */
+  zombie:  { hp:5,  speed:50,  r:12, scale:0.84, dmg:1, xp:3, studs:[2,4], zombie:1,
+             col:{head:'#86b25e', torso:'#6a5a44', legs:'#3e4d63', hands:'#86b25e', hair:'#3d5230'}, style:'zombie' },
+  crawler: { hp:3,  speed:34,  r:11, scale:0.84, dmg:1, xp:1, studs:[1,2], zombie:1, crawl:1,
+             col:{head:'#86b25e', torso:'#6a5a44', legs:'#3e4d63', hands:'#86b25e', hair:'#3d5230'}, style:'zombie' },
+  bloater: { hp:18, speed:38,  r:17, scale:1.12, dmg:1, xp:9, studs:[6,10], zombie:1, fat:1, armourMul:1.2,
+             col:{head:'#9dbb62', torso:'#7e6b4a', legs:'#4a4d3a', hands:'#9dbb62', hair:'#4d6630'}, style:'zombie' },
+  zrunner: { hp:6,  speed:116, r:12, scale:0.84, dmg:1, xp:5, studs:[3,6], zombie:1,
+             col:{head:'#7aa65a', torso:'#8a2f2a', legs:'#2e3440', hands:'#7aa65a', hair:'#2b3a22'}, style:'zombie' },
+  zhulk:   { hp:26, speed:56,  r:16, scale:1.25, dmg:3, xp:13, studs:[8,13], zombie:1, armourMul:1.3,
+             col:{head:'#6f9a4c', torso:'#3d4a5c', legs:'#2b2f38', hands:'#6f9a4c', hair:'#243020'}, style:'zombie' },
+  bigcrawler:{ hp:11, speed:40, r:14, scale:1.2, dmg:2, xp:3, studs:[2,4], zombie:1, crawl:1,
+             col:{head:'#6f9a4c', torso:'#3d4a5c', legs:'#2b2f38', hands:'#6f9a4c', hair:'#243020'}, style:'zombie' },
   /* NEW: crypt bat — chains 3 charges in a row */
   cryptbat:{ hp:6, speed:120, r:11, scale:0.9, dmg:1, xp:5, studs:[4,7],
              col:{head:'#4a3f5e', torso:'#3a3350', legs:'#2a2440', hands:'#5a4f70', hair:'#3a3350'}, style:'stalker' },
@@ -5595,6 +5733,7 @@ function killEnemy(e, source){
       for(let i=0;i<po.n;i++) poisonEnemy(e2, dps, dur);
     }
   }
+  zombieDeath(e);
   if(e.type==='direbat'){
     /* it doesn't die quietly — it splits into the small ones */
     const n = irnd(3,5);
@@ -6441,6 +6580,10 @@ function playerDie(){
    roster for a while rather than have it replaced under you every wave. */
 const ROSTER = [
   { k:'imp',         at:1,  cost:1,  flavour:1 },
+  { k:'zombie',      at:1,  cost:1,  flavour:1 },
+  { k:'bloater',     at:6,  cost:5,  flavour:0.9 },
+  { k:'zrunner',     at:13, cost:9,  flavour:1 },
+  { k:'zhulk',       at:18, cost:14, flavour:0.9 },
   { k:'boneling',    at:2,  cost:1,  flavour:1 },
   { k:'archer',      at:3,  cost:2,  flavour:1 },
   { k:'skeleton',    at:5,  cost:3,  flavour:1.2 },
@@ -6491,9 +6634,9 @@ MONSTER_COST.firegolem = 34;  MONSTER_COST.stormgolem = 36;
    roster in the same order, and a shadestorm still cannot turn up on wave 5. */
 const ROSTER_BANDS = [
   ['imp','boneling','archer','spitter','skeleton'],
-  ['shade','cryptbat','brute','knight'],
-  ['stalker','lancer','superimp','hexer','bomber'],
-  ['revenant','lobber','pyromancer','frostmage'],
+  ['shade','cryptbat','brute','knight','bloater'],
+  ['stalker','lancer','superimp','hexer','bomber','zrunner'],
+  ['revenant','lobber','pyromancer','frostmage','zhulk'],
   ['necromancer','stormcaller','jugg','marksman','greenwarden'],
   ['bastion','direbat','pumpkinlord','impmaster'],
   ['shadestorm','pyrolord','frostlord','stormlord','necrolord','overseer']
@@ -8348,6 +8491,13 @@ const UPGRADES = [
       `Golems are their own pool -- they take no place in your legion -- and one that falls rises again ${GOLEM_BACK}s later`,
     apply:c=>{ player.minions.golems = Math.min(BONE_GOLEM_MAX, (player.minions.golems || 0) + 1);
       if(golems().length < golemMax()) raiseGolem(); } },
+  { id:'raisezombie', name:'Raise Zombie', icon:'skull', cls:'OFFENSE', minRar:'epic',
+    req:()=>isSummoner() && !player.minions.zombies,
+    calc:m=>({n:1}),
+    desc:c=>`Your summon aura also RAISES ZOMBIES out of the corpses zombies leave behind -- the one `+
+      `nearest your cursor, within ${ZOMBIE_REACH}px of you -- up to ${ZOMBIE_MINION_MAX}, a pool of their own `+
+      `beside the legion. Tough and slow, with ${kindOf('zombie').hp}\u00d7 a skeleton's life`,
+    apply:c=>{ player.minions.zombies = true; } },
   { id:'boneoverseer', name:'Bone Overseer', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && !player.minions.overseer,
     calc:m=>({n:1}),
@@ -8912,6 +9062,8 @@ const META_STATS = {
   minionDmg:  { n:'increased minion damage', pct:1, w:(p,v)=>{ p.minions.inc += v; }, only:['scepter'] },
   minionLife: { n:'increased minion life',   pct:1, w:(p,v)=>{ p.minions.life += v; }, only:['scepter'] },
   minionSpd:  { n:'increased minion attack and cast speed', pct:1, w:(p,v)=>{ p.minions.spd += v; }, only:['scepter'] },
+  minionZombies:{ n:'your summon aura raises ZOMBIES from corpses, up to twelve',
+                w:(p)=>{ p.minions.zombies = true; }, only:['scepter'] },
   minionProj: { n:'projectile for your skeleton archers and mages', w:(p,v)=>{ p.minions.proj += v; }, only:['scepter'] },
   minionMax:  { n:'skeleton in your legion', w:(p,v)=>{ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + v); }, only:['scepter'] },
   minionLess: { n:'LESS minion damage', pct:1, w:(p,v)=>{ p.minions.more *= (1 - v); }, only:['scepter'] },
@@ -9075,7 +9227,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionProj:'split', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
+  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionProj:'split', minionZombies:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
   prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
@@ -9405,6 +9557,18 @@ for(const wk of WEAPON_KEYS){
 }
 /* ---- THE NOTABLES. One of each, ever, and each one sits in the middle of a
    cluster of its own kind. Deeper `d` means further out and dearer to reach. */
+/* LATE ARRIVALS. A notable added after trees were already being saved goes on a
+   site the map left EMPTY, claimed after everything else is placed -- so no node
+   anybody already owns moves, is renamed or disappears. (Put in the list above,
+   it would take a site from an earlier template and reshuffle a whole country:
+   saved trees, presets and run links would all point at different nodes.) */
+const META_LATE = [
+  /* the dead that were zombies, raised for you */
+  { id:'n_grave', name:'THE GRAVEYARD', sp:'arc', home:'int', d:[2,3], shape:'ring',
+    spot:{ ring:2, rad:4050, deg:262 },        /* the widest clear ground left in blue */
+    minors:[['Grave Soil','minionLife',0.08],['Rot','minionDmg',0.06],['Shamble','minionSpd',0.04]],
+    notable:{ name:'Raise Zombie', mods:[['minionZombies',null],['minionLife',0.08]] } },
+];
 const META_NOTABLES = [
   /* red */
   { id:'n_sword', name:'THE SWORN BLADE', sp:'war', home:'str', d:[1,2], shape:'wheel',
@@ -9900,6 +10064,15 @@ const RING_AT = [0, 5, 12, 22, 34];
       && Math.hypot(o.x-s.x, o.y-s.y) < 1500));
     if(near.length) fits = near;
     s.site = fits[(hash(s.ring*911 + s.j*131 + (gi++)) % fits.length)];
+  }
+  /* THE LATE ARRIVALS, on a site of their own. Every quad is spoken for, so a
+     late template brings its own ground -- a spot picked where nothing stands --
+     appended AFTER every other site, so nothing built before it moves. */
+  for(const t of META_LATE){
+    const a = t.spot.deg*Math.PI/180;
+    sites.push({ ring:t.spot.ring, j:1000 + sites.length, deg:t.spot.deg, rim:false,
+      x:Math.round(CX + Math.cos(a)*t.spot.rad), y:Math.round(CY + Math.sin(a)*t.spot.rad),
+      sec:t.home, site:t });
   }
 
   /* ---- 5. THE CLUSTERS THEMSELVES. TEN SHAPES, and the shape is a drawing
@@ -12318,7 +12491,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
-  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','bonevolley','bonegmp','skelmages'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','raisezombie','bonevolley','bonegmp','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -14637,7 +14810,13 @@ function updatePlayer(dt){
     /* CONVOCATION is a CLICK, latched on mousedown: a quick tap can go down and
        up between two frames, and asking "is it held?" would miss it */
     if(mouse.fresh){ mouse.fresh = false; if(p.stunT <= 0) convocation(); }
+    convoTick(dt);
     if(!p.dead && p.stunT <= 0 && p.raiseCd <= 0 && legion().length < minionMax()) raiseMinion(aimA, false);
+    /* ...and, with Raise Zombie, the dead that were zombies: their own pool, their own clock */
+    p.zombieCd = (p.zombieCd || 0) - dt;
+    if(p.minions.zombies && !p.dead && p.stunT <= 0 && p.zombieCd <= 0 && zombieMinions().length < ZOMBIE_MINION_MAX){
+      if(raiseZombie()) p.zombieCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+    }
   }
   updateSlam(dt);
   if(p.swing){
@@ -15222,9 +15401,9 @@ const MINION_GUARD = 260;            /* anything this close to you comes first *
 const MINION_WIND = 0.2;             /* a skeleton's raised-weapon beat */
 const MINION_CONTACT = 0.9;          /* a boss's body lands on a skeleton this often */
 const MAGE_RANGE = 820, MAGE_KEEP = 300, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAGE_BOLT_SPD = 960;
-/* A MAGE DOES NOT WALK. It stands and casts; when it has to be somewhere else it
-   BLINKS there, a short hop at a time, and its bolts fly far, fast and wide. */
-const MAGE_BLINK = 130, MAGE_BLINK_CD = 0.8, MAGE_BOLT_FLY = 1.3, MAGE_FAN = 0.24, MAGE_FAN_MAX = 2.8;
+/* A MAGE DOES NOT MOVE. It stands where it rose and casts; Convocation is how it
+   is brought anywhere else. Its bolts fly far, fast and wide. */
+const MAGE_BOLT_FLY = 1.3, MAGE_FAN = 0.24, MAGE_FAN_MAX = 2.8;
 const MAGE_ELEMS = ['fire', 'frost', 'shock'];
 const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
 const MIRROR_SHARE = 0.75;
@@ -15241,14 +15420,21 @@ const MINION_KINDS = {
   bow:      { name:'Skeleton Archer',   dmg:0.90, rate:1.00, reach:0,  range:480, keep:240, hp:0.8, spd:1.0, r:11 },
   mage:     { name:'Skeleton Mage',     dmg:MAGE_SHARE, rate:MAGE_RATE, reach:0, range:MAGE_RANGE, keep:MAGE_KEEP, hp:0.8, spd:1.0, r:11 },
   golem:    { name:'Bone Golem',        dmg:2.75, rate:1.25, reach:42, range:0,   hp:3.5, spd:0.80, r:17, aoe:62 },
+  zombie:   { name:'Raised Zombie',     dmg:1.15, rate:0.95, reach:28, range:0,   hp:2.2, spd:0.70, r:12 },
   overseer: { name:'Bone Overseer',     dmg:0,    rate:1,    reach:0,  range:0,   hp:4.0, spd:1.05, r:13 },
 };
-const MINION_MIX = [['spear', 0.36], ['sword', 0.36], ['bow', 0.28]];
+const MINION_MIX = [['spear', 1/3], ['sword', 1/3], ['bow', 1/3]];
 /* BONE GOLEMS ARE THEIR OWN POOL. They are not skeletons and take no place in
    the legion: five golems AND fifteen skeletons. Each Bone Golem is one more
    golem; they rise at your side on their own, and one that falls is back
    GOLEM_BACK seconds later. */
 const BONE_GOLEM_MAX = 5;                 /* the golem epic, up to five times */
+/* RAISE ZOMBIE. With the tree's notable or the epic, the summon aura also raises
+   ZOMBIES -- a pool of their own, up to twelve -- out of the corpses zombies
+   leave behind: the corpse nearest your cursor, within ZOMBIE_REACH of you,
+   stands up for you, on the same clock the skeletons rise on. */
+const ZOMBIE_MINION_MAX = 12, ZOMBIE_REACH = 700;
+const ZOMBIE_MINION_COLORS = { head:'#86b25e', torso:'#4a3d6a', legs:'#2e2744', hands:'#86b25e', hair:'#3d5230' };
 const GOLEM_BACK = 10;
 /* GREATER MULTIPLE PROJECTILES, for the legion. An archer's arrow and a mage's
    bolt become a fan of them: +1 a Bone Volley (six at most), +4 from the
@@ -15292,6 +15478,7 @@ function legionPlan(){
   const M = player.minions, n = minionMax(), g = golemMax();
   const out = []; for(let i=0;i<g;i++) out.push('golem');
   for(let i=0;i<n;i++) out.push(M.mages ? 'mage' : null);
+  for(let i=0;i<zombieMinions().length;i++) out.push('zombie');
   return out;
 }
 function golemMax(){ return clamp((player && player.minions.golems) || 0, 0, BONE_GOLEM_MAX); }
@@ -15315,13 +15502,39 @@ function minionDps(){
   return dps * crit;
 }
 /* the skeletons: what the scepter raises and the legion cap counts */
-function legion(){ return minions.filter(m=>!m.gone && m.kind !== 'overseer' && m.kind !== 'golem'); }
+function legion(){ return minions.filter(m=>!m.gone && m.kind !== 'overseer' && m.kind !== 'golem' && m.kind !== 'zombie'); }
+function zombieMinions(){ return minions.filter(m=>!m.gone && m.kind === 'zombie'); }
+/* the corpse the aura would raise next: nearest the cursor, within reach of you */
+function corpseToRaise(){
+  const h = heroObj || player;
+  let best = null, bd = Infinity;
+  for(const k of corpses){
+    if(Math.hypot(k.x - h.x, k.y - h.y) > ZOMBIE_REACH) continue;
+    const d = Math.hypot(k.x - mouse.wx, k.y - mouse.wy);
+    if(d < bd){ bd = d; best = k; }
+  }
+  return best;
+}
+function raiseZombie(){
+  const k = corpseToRaise();
+  if(!k) return null;
+  corpses = corpses.filter(x=>x !== k);
+  const z = raiseAt(k.x, k.y, 'zombie');
+  addRing(z.x, z.y, 6, 220, 40, '#9ede5a', 4, 0.35);
+  addDust(z.x, z.y, 4, 'rgba(90,110,60,');
+  return z;
+}
+/* AN EVEN LEGION. The kind that rises is whichever of spear, sword and bow the
+   legion has fewest of (a tie is broken at random): nine skeletons are three of
+   each. Mages are all mages. */
 function nextKind(){
   const M = player.minions;
   if(M.mages) return 'mage';
-  let r = Math.random();
-  for(const [k, w] of MINION_MIX){ if((r -= w) < 0) return k; }
-  return 'spear';
+  const have = { spear:0, sword:0, bow:0 };
+  for(const m of legion()) if(have[m.kind] !== undefined) have[m.kind]++;
+  const least = Math.min(have.spear, have.sword, have.bow);
+  const pick = MINION_MIX.map(x=>x[0]).filter(k=>have[k] === least);
+  return pick[(Math.random()*pick.length)|0];
 }
 /* RAISING. The SUMMON AURA calls this on its own clock (`fresh` false): it only
    ever fills the legion to its cap. Called any other way -- the bench, a test --
@@ -15356,33 +15569,50 @@ function raiseMinion(aim, fresh){
    own is pulled back to your side at once and regenerates CONVO_REGEN of its
    life a second for CONVO_REGEN_T seconds. On a CONVO_CD cooldown. */
 const CONVO_CD = 3, CONVO_REGEN = 0.25, CONVO_REGEN_T = 3, CONVO_R0 = 50, CONVO_R1 = 100;
+const CONVO_STEP = 0.14;               /* seconds between one minion arriving and the next */
 function convocation(){
   const p = player;
   if(!p || p.dead || (p.convoCd || 0) > 0) return false;
   const all = minions.filter(m=>!m.gone && m.kind !== 'overseer');
   p.atkCd = 0.2;
   if(!all.length) return false;
-  all.forEach((m, i)=>{
-    const col = m.el ? (MAGE_COL[m.el] || '#b7a6ff') : '#b7a6ff';
-    addSparks(m.x, m.y - 14, 5, col);
-    const a = i / all.length * TAU + rnd(-0.2, 0.2), rr = CONVO_R0 + (i % 3) * (CONVO_R1 - CONVO_R0) / 2;
-    const at = floorAt(p.x + Math.cos(a)*rr, p.y + Math.sin(a)*rr, m.r + 2);
-    m.x = at.x; m.y = at.y; m.lx = m.x; m.ly = m.y;
-    m.spot = null; m.strikeT = 0; m.drawT = 0; m.strikeTgt = null;
-    m.regenT = CONVO_REGEN_T;
-    addSparks(m.x, m.y - 14, 5, col); addRing(m.x, m.y, 4, 200, 24, col, 3, 0.25);
-  });
+  /* ONE BY ONE: nearest first, a beat apart, so the legion is seen to answer */
+  all.sort((a, z)=>Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(z.x - p.x, z.y - p.y));
+  p.convoQ = all; p.convoN = all.length; p.convoI = 0; p.convoT = 0;
   addRing(p.x, p.y, 10, 420, CONVO_R1 + 30, '#b7a6ff', 6, 0.5);
   p.convoCd = CONVO_CD; p.castT = 0.3; retPulse = 1;
   SFX.build();
   logEvent('convocation — '+all.length+' called home', '#b7a6ff');
   return true;
 }
+/* one of them arrives: lifted out where it stood, set down in the ring round you */
+function convoPull(m, i, n){
+  const p = player;
+  if(!m || m.gone || !p) return;
+  const col = m.el ? (MAGE_COL[m.el] || '#b7a6ff') : '#b7a6ff';
+  addSparks(m.x, m.y - 14, 5, col);
+  const a = i / Math.max(1, n) * TAU + rnd(-0.2, 0.2), rr = CONVO_R0 + (i % 3) * (CONVO_R1 - CONVO_R0) / 2;
+  const at = floorAt(p.x + Math.cos(a)*rr, p.y + Math.sin(a)*rr, m.r + 2);
+  m.x = at.x; m.y = at.y; m.lx = m.x; m.ly = m.y;
+  m.spot = null; m.strikeT = 0; m.drawT = 0; m.strikeTgt = null;
+  m.regenT = CONVO_REGEN_T;
+  addSparks(m.x, m.y - 14, 5, col); addRing(m.x, m.y, 4, 200, 24, col, 3, 0.25);
+  SFX.pick && SFX.pick();
+}
+function convoTick(dt){
+  const p = player;
+  if(!p || !p.convoQ || !p.convoQ.length) return;
+  p.convoT -= dt;
+  while(p.convoT <= 0 && p.convoQ.length){
+    convoPull(p.convoQ.shift(), p.convoI++, p.convoN);
+    p.convoT += CONVO_STEP;
+  }
+}
 let minionBorn = 0;
 function raiseAt(x, y, kind){
   const k = kind || nextKind(), K = kindOf(k), hp = minionMaxHp(k);
   /* never out of a lake or a boulder: the nearest floor you could stand on */
-  const at = floorAt(x, y, K.r + 4); x = at.x; y = at.y;
+  const at = k === 'mage' ? mageSpot(x, y, K.r, null) : floorAt(x, y, K.r + 4); x = at.x; y = at.y;
   const m = { x, y, r:K.r, kind:k, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
               moving:false, flash:0, phase:rnd(TAU), slot:minionSlot(), castT:0, strikeT:0, drawT:0,
               born:++minionBorn, scale:k === 'golem' ? 0.62 : 0.82 };
@@ -15392,6 +15622,21 @@ function raiseAt(x, y, kind){
   addRing(x, y, 6, 220, k === 'golem' ? 70 : 46, '#b7a6ff', 4, 0.4);
   spawnBricks(x, y, ['#ede8ff', '#5b4a8f', '#3a2f5e'], 5, 120);
   return m;
+}
+/* A MAGE NEVER MOVES, so nothing may shove it either -- which means it has to
+   RISE somewhere with room: the floor nearest (x,y) that no other minion is
+   standing on */
+function mageSpot(x, y, r, self){
+  const free = (px, py)=> floorClear(px, py, r + 4) &&
+    minions.every(o=>o === self || o.gone || Math.hypot(o.x - px, o.y - py) >= o.r + r);
+  if(free(x, y)) return { x, y };
+  for(let ring=1; ring<=10; ring++)
+    for(let k=0;k<ring*6;k++){
+      const a = k/(ring*6)*TAU + ring, px = x + Math.cos(a)*ring*(r + 6), py = y + Math.sin(a)*ring*(r + 6);
+      if(px < W.wall+30 || py < W.wall+30 || px > W.w-W.wall-30 || py > W.h-W.wall-30) continue;
+      if(free(px, py)) return { x:px, y:py };
+    }
+  return floorAt(x, y, r + 4);
 }
 /* a stable place in the formation, and a stable element for a mage */
 function minionSlot(){
@@ -15403,8 +15648,9 @@ function minionSlot(){
    and the overseer is not one of the rank and file */
 function minionsToMages(){
   for(const m of minions){
-    if(m.kind === 'golem' || m.kind === 'overseer') continue;
+    if(m.kind === 'golem' || m.kind === 'overseer' || m.kind === 'zombie') continue;
     m.kind = 'mage'; m.mage = true; m.el = MAGE_ELEMS[m.slot % MAGE_ELEMS.length];
+    const at = mageSpot(m.x, m.y, m.r, m); m.x = at.x; m.y = at.y;     /* stood where it can stay */
   }
 }
 /* BONE GOLEMS: one rises at your side for every golem owed and not standing */
@@ -15473,23 +15719,6 @@ function minionStep(m, tx, ty, dt, spd){
   collideWorld(m);
   m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
 }
-/* A MAGE'S STEP: a blink of at most MAGE_BLINK toward (tx,ty), onto floor, with a
-   puff where it left and where it lands -- and then it stands again */
-function minionBlink(m, tx, ty){
-  m.moving = false;
-  if((m.blinkCd || 0) > 0) return false;
-  const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
-  if(d < 12) return false;
-  const k = Math.min(MAGE_BLINK, d) / d;
-  const at = floorAt(m.x + dx*k, m.y + dy*k, m.r + 2);
-  const col = MAGE_COL[m.el] || '#b7a6ff';
-  addSparks(m.x, m.y - 14, 6, col); addRing(m.x, m.y, 4, 200, 26, col, 3, 0.25);
-  m.x = at.x; m.y = at.y;
-  addSparks(m.x, m.y - 14, 6, col); addRing(m.x, m.y, 4, 200, 26, col, 3, 0.25);
-  m.blinkCd = MAGE_BLINK_CD; m.blinkT = 0.18;
-  m.face = { x:dx/d, y:dy/d };
-  return true;
-}
 /* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
 function minionBlow(m){
   const K = kindOf(m.kind), t = m.strikeTgt;
@@ -15547,15 +15776,15 @@ function updateMinions(dt){
   const ov = minions.find(m=>m.kind === 'overseer' && !m.gone && m.rise >= 1);
   for(const m of minions){
     m.lx = m.x; m.ly = m.y; m.ldt = dt;
-    m.blinkCd = Math.max(0, (m.blinkCd || 0) - dt); m.blinkT = Math.max(0, (m.blinkT || 0) - dt);
     /* Convocation's mending */
     if(m.regenT > 0){ m.regenT -= dt; m.hp = Math.min(m.maxHp, m.hp + m.maxHp * CONVO_REGEN * dt); }
     m.flash = Math.max(0, m.flash - dt*4);
     m.castT = Math.max(0, m.castT - dt);
     m.buffed = !!(ov && m !== ov && Math.hypot(m.x - ov.x, m.y - ov.y) < OVERSEER_R);
     if(m.rise < 1){ m.rise += dt / MINION_RISE; continue; }
-    /* lost: too far from you, and it simply rises again at your side */
-    if(Math.hypot(m.x - h.x, m.y - h.y) > MINION_LEASH * 1.6){
+    /* lost: too far from you, and it simply rises again at your side -- all but
+       a mage, which stays where it stands until Convocation calls it */
+    if(m.kind !== 'mage' && Math.hypot(m.x - h.x, m.y - h.y) > MINION_LEASH * 1.6){
       const a = rnd(TAU), at = floorAt(h.x + Math.cos(a)*60, h.y + Math.sin(a)*60, m.r + 4);
       m.x = at.x; m.y = at.y; m.rise = 0.4;
     }
@@ -15586,15 +15815,12 @@ function updateMinions(dt){
     if(t){
       const d = Math.hypot(t.x - m.x, t.y - m.y), a = Math.atan2(t.y - m.y, t.x - m.x);
       if(m.kind === 'mage'){
-        /* THE MAGE STANDS AND CASTS. Out of range it blinks closer, a hop at a
-           time; anything inside its comfort, it blinks away from; otherwise it
-           does not move at all. */
-        const want = prop ? 150 : K.range*0.9;
-        if(d > want) minionBlink(m, t.x, t.y);
-        else if(!prop && d < K.keep*0.6) minionBlink(m, m.x - Math.cos(a)*MAGE_BLINK, m.y - Math.sin(a)*MAGE_BLINK);
-        else m.moving = false;
+        /* THE MAGE STANDS AND CASTS. It never moves on its own -- not a step,
+           not a blink: it throws at whatever is in reach from where it rose,
+           and Convocation is how it is brought anywhere else. */
+        m.moving = false;
         m.face = { x:Math.cos(a), y:Math.sin(a) };
-        if(d <= Math.max(want, K.range) && m.atkCd <= 0){
+        if(d <= K.range && m.atkCd <= 0){
           m.castT = 0.18; minionShoot(m, t.x, t.y); m.atkCd = minionRate('mage', m);
         }
       } else if(K.range){
@@ -15648,7 +15874,7 @@ function updateMinions(dt){
       const n = Math.max(1, minions.length), ang = m.slot / n * TAU + vtime*0.15;
       const r = K.range ? 90 : 62;
       const fx = h.x + Math.cos(ang)*r, fy = h.y + Math.sin(ang)*r*0.75;
-      if(m.kind === 'mage'){ if(Math.hypot(fx - m.x, fy - m.y) > 150) minionBlink(m, fx, fy); else m.moving = false; }
+      if(m.kind === 'mage') m.moving = false;
       else if(Math.hypot(fx - m.x, fy - m.y) > 18) minionStep(m, fx, fy, dt, spd*1.1);
       else m.moving = false;
     }
@@ -15667,8 +15893,10 @@ function updateMinions(dt){
   for(let i=0;i<minions.length;i++) for(let j=i+1;j<minions.length;j++){
     const A = minions[i], B = minions[j];
     const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy), want = A.r + B.r;
-    if(d > 0.01 && d < want){ const k = (want - d)/d * 0.5; A.x -= dx*k; A.y -= dy*k; B.x += dx*k; B.y += dy*k; }
-    else if(d <= 0.01){ A.x -= 3; B.x += 3; }
+    /* a mage is a post: the other one steps round it, and two mages never shove */
+    const fa = A.kind === 'mage' ? 0 : B.kind === 'mage' ? 1 : 0.5, fb = B.kind === 'mage' ? 0 : A.kind === 'mage' ? 1 : 0.5;
+    if(d > 0.01 && d < want){ const k = (want - d)/d; A.x -= dx*k*fa; A.y -= dy*k*fa; B.x += dx*k*fb; B.y += dy*k*fb; }
+    else if(d <= 0.01){ A.x -= 6*fa; B.x += 6*fb; }
   }
   for(const m of minions) if(m.hp <= 0 && !m.gone) minionDies(m);
   minions = minions.filter(m=>!m.gone);
@@ -15688,6 +15916,18 @@ function minionDies(m){
       hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, 'mburst', {});
     }
   }
+}
+/* the zombies' badge: a green head, and the count */
+function drawZombieBadge(x, y, n){
+  ctx.save(); ctx.translate(x, y - 2);
+  ctx.fillStyle = '#86b25e'; ctx.strokeStyle = 'rgba(20,20,20,0.6)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(0, -1, 9, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1a1a14';
+  ctx.fillRect(-5, -4, 3, 3); ctx.fillRect(2, -4, 3, 3); ctx.fillRect(-4, 3, 8, 1.6);
+  ctx.fillStyle = '#b7a6ff'; ctx.font = '800 11px Fredoka'; ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(15,20,25,0.9)'; ctx.lineWidth = 3;
+  ctx.strokeText(String(n), 11, 12); ctx.fillText(String(n), 11, 12);
+  ctx.restore();
 }
 /* Convocation's badge: arrows turning in on a point */
 function drawConvoIcon(x, y){
@@ -15761,6 +16001,8 @@ function drawMinion(c, m){
     else if(m.kind === 'overseer'){ o.weapon = 'staff'; o.orbCol = '#ffd76e'; o.hoodCol = '#2a2140'; o.lord = true;
       if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
     else if(m.kind === 'bow'){ o.bowPull = m.drawT > 0 ? clamp(1 - m.drawT/0.3, 0, 1) : 0; }
+    else if(m.kind === 'zombie'){ o.colors = ZOMBIE_MINION_COLORS; o.style = 'zombie'; o.noHelm = true;
+      o.zombieArms = true; o.s = 0.84; if(m.strikeT > 0) o.armsUp = true; }
     else if(m.kind === 'sword'){ o.weapon = 'greatsword'; o.wScale = 0.7; if(m.strikeT > 0) o.armsUp = true; }
     else { o.weapon = 'spear'; if(m.strikeT > 0) o.armsUp = true; }
     drawFigure(c, o);
@@ -16565,9 +16807,10 @@ function bodySpace(e){
     if(m.rise < 1 || m.gone) continue;
     const dx = e.x - m.x, dy = e.y - m.y, d = Math.hypot(dx, dy), min = (e.r||12) + m.r;
     if(d > 0.01 && d < min){
-      const k = (min - d)/d, share = e.type === 'boss' ? 1 : 0.5;
+      /* a mage is rooted: a monster steps round it, and a boss walks over it */
+      const k = (min - d)/d, share = m.kind === 'mage' ? 0 : e.type === 'boss' ? 1 : 0.5;
       m.x -= dx*k*share; m.y -= dy*k*share;
-      if(e.type !== 'boss'){ e.x += dx*k*0.5; e.y += dy*k*0.5; }
+      if(e.type !== 'boss'){ e.x += dx*k*(1 - share); e.y += dy*k*(1 - share); }
     }
   }
 }
@@ -17088,6 +17331,39 @@ function updateEnemyCore(e, dt){
       }
     } else {
       if(e.atkCd<=0 && dP < 400){ e.mode='aim'; e.aimT=0; }
+    }
+  }
+  else if(e.type==='bloater'){
+    /* PLAGUE BREATH: it plants its feet, heaves, and retches a cone of rot that
+       turns slowly after you for a second -- poison on you, rot on your minions */
+    if(e.mode==='breathWind'){
+      e.modeT += dt; vx = 0; vy = 0; e.breathA = toP;
+      if(e.modeT >= BLOAT_WIND){ e.mode = 'breath'; e.modeT = 0; e.breathTick = 0; SFX.grunt(); }
+    } else if(e.mode==='breath'){
+      e.modeT += dt; vx = 0; vy = 0;
+      e.breathA += clamp(angDiff(toP, e.breathA), -1.2*dt, 1.2*dt);
+      e.face = { x:Math.cos(e.breathA), y:Math.sin(e.breathA) };
+      for(let i=0;i<3;i++){
+        const a = e.breathA + rnd(-BLOAT_CONE, BLOAT_CONE), sp = rnd(150, 260);
+        particles.push({ kind:'spark', x:e.x + Math.cos(e.breathA)*14*e.scale, y:e.y - 26*e.scale,
+          vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:0.55, max:0.55, color: Math.random() < 0.5 ? '#9ede5a' : '#6b8e23' });
+      }
+      e.breathTick -= dt;
+      if(e.breathTick <= 0){
+        e.breathTick = BLOAT_TICK;
+        const inCone = t=> Math.hypot(t.x - e.x, t.y - e.y) < BLOAT_RANGE + (t.r || 12) &&
+                           Math.abs(angDiff(Math.atan2(t.y - e.y, t.x - e.x), e.breathA)) < BLOAT_CONE;
+        const dose = Math.max(0.15, (e.dmg || 1) * BLOAT_PSN);
+        const hero = heroObj || player;
+        if(hero && !hero.dead && hero.dash.t <= 0 && inCone(hero)){
+          const keep = player; player = hero; poisonPlayer(dose, PSN_DUR); player = keep;
+        }
+        for(const m of minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, 'chaos');
+      }
+      if(e.modeT >= BLOAT_BREATH){ e.mode = 'chase'; e.atkCd = BLOAT_CD * e.atkS; }
+    } else {
+      vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed;
+      if(!e.docile && dP < BLOAT_RANGE*0.85 && e.atkCd <= 0){ e.mode = 'breathWind'; e.modeT = 0; }
     }
   }
   else if(e.type==='blightspitter'){
@@ -19978,7 +20254,23 @@ function drawFigure(c, o){
   c.beginPath();
   c.moveTo(-9*s,-13*s); c.lineTo(9*s,-13*s); c.lineTo(11*s,-28*s); c.lineTo(-11*s,-28*s);
   c.closePath(); c.fill(); c.stroke();
-  if(o.style==='skel'||o.style==='lancer'){
+  /* a bloater: the belly that ate too much, straining over the belt */
+  if(o.fat){
+    c.fillStyle = T(sh(C.torso, 0.10));
+    c.beginPath(); c.ellipse(0, -19*s, 14*s, 10.5*s, 0, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = T(sh(C.head, -0.05));
+    c.beginPath(); c.ellipse(1.5*s, -16*s, 6*s, 4*s, 0, 0, TAU); c.fill();
+  }
+  if(o.style==='zombie'){
+    /* the shirt it was buried in: torn, and the skin showing through */
+    c.fillStyle = T(sh(C.head, -0.12));
+    c.beginPath(); c.moveTo(-6*s,-24*s); c.lineTo(-2*s,-22*s); c.lineTo(-5*s,-18*s); c.lineTo(-8*s,-20*s); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(4*s,-17*s); c.lineTo(8*s,-15*s); c.lineTo(5*s,-13.5*s); c.closePath(); c.fill();
+    c.strokeStyle = T(sh(C.torso,-0.45)); c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(2*s,-26*s); c.lineTo(2*s,-20*s);
+    for(let k=0;k<3;k++){ c.moveTo(0.5*s, (-25+k*2)*s); c.lineTo(3.5*s, (-25+k*2)*s); }
+    c.stroke(); c.lineWidth = 2; c.strokeStyle = OL;
+  } else if(o.style==='skel'||o.style==='lancer'){
     c.strokeStyle = T(sh(C.torso,-0.4)); c.lineWidth=1.6;
     for(let i=0;i<3;i++){ c.beginPath(); c.moveTo(-7*s,(-24+i*3.6)*s); c.lineTo(7*s,(-24+i*3.6)*s); c.stroke(); }
     c.lineWidth = 2; c.strokeStyle = OL;
@@ -20017,6 +20309,8 @@ function drawFigure(c, o){
     gripR = { x: Math.cos(o.bladeAng)*14*s, y: -20*s + Math.sin(o.bladeAng)*10*s };
     aR = 0;
   }
+  /* the zombie's reach: both arms out in front of it, swaying as it shambles */
+  if(o.zombieArms && !o.armsUp){ aL = -1.4 - walkA*0.25; aR = 1.4 + walkA*0.25; gripR = null; }
   if(o.armsUp){ aL = -2.6; aR = 2.6; gripR = null; }
   /* THE SLAM. `o.slam` runs 0 (mace overhead, both hands on the haft) to 1 (mace
      driven into the floor in front). The far arm crosses over to grip it, which
@@ -21218,6 +21512,7 @@ function render(){
     }
   }
   drawBreach();
+  drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
     const k = clamp(h.life/h.max,0,1);
@@ -21968,7 +22263,8 @@ function render(){
   }
   for(const pr of projectiles){
     if(!onScreen(pr, 90)) continue;
-    if(pr.kind==='arrow') drawArrow(ctx,pr);
+    if(pr.kind==='arrow' && pr.gib) drawGib(ctx, pr);
+    else if(pr.kind==='arrow') drawArrow(ctx,pr);
     else if(pr.kind==='skull') drawSkull(ctx,pr);
     else if(pr.kind==='frostbolt') drawFrostbolt(ctx,pr);
     else if(pr.kind==='frostrock') drawFrostRock(ctx,pr);
@@ -22796,6 +23092,16 @@ function drawEnemy(c, e){
     drawBatBoss(c, e);
     return;
   }
+  if(EDEF[e.type] && EDEF[e.type].crawl){
+    drawCrawler(c, e);
+    if(e.hp < e.maxHp){
+      const w2 = 24;
+      c.fillStyle='rgba(15,20,25,0.6)'; c.fillRect(e.x-w2/2, e.y-30*e.scale, w2, 4);
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a');
+      c.fillRect(e.x-w2/2, e.y-30*e.scale, w2*clamp(e.hp/e.maxHp,0,1), 4);
+    }
+    return;
+  }
   if(e.type==='cryptbat' || e.type==='direbat'){
     drawCryptBat(c, e);
     if(e.hp < e.maxHp){
@@ -22829,6 +23135,7 @@ function drawEnemy(c, e){
     flash:e.flash, colors:e.col, style:e.style, elite:e.elite, magic:e.magic,
     phase:e.phase, angry: e.type!=='boss' };
   if(e.type==='boneling') o.noHelm = true;
+  if(EDEF[e.type] && EDEF[e.type].zombie){ o.noHelm = true; o.zombieArms = true; if(EDEF[e.type].fat) o.fat = true; }
   if(e.type==='revenant') o.horns = true;
   if(e.type==='superimp') o.bigImp = true;
   if(e.type==='necrolord') o.horns = true;
@@ -22859,6 +23166,7 @@ function drawEnemy(c, e){
   if(e.type==='boneling'){ o.weapon = 'greatsword'; o.wScale = 0.45; }
   if(e.type==='knight' || e.type==='bastion'){ o.weapon = 'greatsword'; o.wScale = 0.7; }
   if(e.type==='brute' && e.mode==='windup') o.armsUp = true;
+  if(e.type==='bloater' && (e.mode==='breathWind' || e.mode==='breath')) o.armsUp = true;
   if(e.strikeT > 0) o.armsUp = true;
   if(e.type==='jugg' && e.mode==='wind') o.armsUp = true;
   if(e.type==='lancer'){ o.weapon='spear'; o.armsUp = (e.mode==='windup'||e.mode==='lunge'); }
@@ -23921,6 +24229,7 @@ function renderHUD(){
     for(const m of L) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
     const worth = Object.entries(kinds).map(([k, n])=>n+' '+(k === 'bow' ? 'archer' : k === 'spear' ? 'spear' : k)+(n > 1 ? 's' : ''));
     if(golemMax()) worth.push(golems().length+'/'+golemMax()+' golems');
+    if(player.minions.zombies) worth.push(zombieMinions().length+'/'+ZOMBIE_MINION_MAX+' zombies · '+corpses.length+' corpses');
     if(minions.some(m=>m.kind === 'overseer' && !m.gone)) worth.push('overseer');
     buffs.push({ c:'#b7a6ff', t:'LEGION '+L.length+'/'+minionMax(), more:worth });
   }
@@ -23991,7 +24300,10 @@ function renderHUD(){
       ctx.arc(x, ch-56, 25, -Math.PI/2, -Math.PI/2 + TAU*(1-frac)); ctx.closePath(); ctx.fill();
     }
     ctx.fillStyle='#e8ebe9'; ctx.font='700 11px Fredoka'; ctx.textAlign='center';
-    ctx.fillText(label, x, ch-56+40);
+    /* a count goes on a line of its own: 'ZOMBIES 12/12' is wider than a slot */
+    const two = /^(\S+) (\d+\/\d+)$/.exec(label);
+    if(two){ ctx.fillText(two[1], x, ch-56+37); ctx.font='700 10px Fredoka'; ctx.fillStyle='#b9c0bc'; ctx.fillText(two[2], x, ch-56+49); }
+    else ctx.fillText(label, x, ch-56+40);
   };
   const autos = [];
   /* THE LEGION, COUNTED. In a crowd your skeletons are hard to pick out, so the
@@ -24003,6 +24315,10 @@ function renderHUD(){
       icon:(x,y)=>drawConvoIcon(x, y) });
     const L = legion(), up = L.filter(m=>m.rise >= 1).length, mx = minionMax();
     autos.push({ f: mx ? clamp(up/mx, 0, 1) : 1, label:'LEGION '+up+'/'+mx, icon:(x,y)=>drawLegionIcon(x, y, up) });
+    if(p.minions.zombies){
+      const zu = zombieMinions().filter(m=>m.rise >= 1).length;
+      autos.push({ f: clamp(zu/ZOMBIE_MINION_MAX, 0, 1), label:'ZOMBIES '+zu+'/'+ZOMBIE_MINION_MAX, icon:(x,y)=>drawZombieBadge(x, y, zu) });
+    }
     const gm = golemMax();
     if(gm){
       const gu = golems().filter(m=>m.rise >= 1).length;
@@ -24214,7 +24530,7 @@ let titleClock = 0;
 function resetRun(demo){
   seed = (!demo && runLink && runLink.s) ? runLink.s : (Math.random()*1e9)|0;
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
-  minions=[];
+  minions=[]; corpses=[];
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave';
   rerollsUsed = 0; screenRerolls = 0; shunned = {};
@@ -24542,6 +24858,7 @@ function update(dt, raw){
     separate();
     enemies = enemies.filter(e=>!e.dead);
     updateMinions(dt);
+    updateCorpses(dt);
     updateProjectiles(dt);
     updateWave(dt);
     updateBreach(dt);
