@@ -22,7 +22,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 ## Contents
 
-**Start here** — [Play it](#play-it) · [The loop](#the-loop) · [What's in the box](#whats-in-the-box) · [Controls](#controls)
+**Start here** — [Play it](#play-it) · [Two modes](#two-modes-arcade-and-rpg) · [The loop](#the-loop) · [What's in the box](#whats-in-the-box) · [Controls](#controls)
 
 **The kit** — [Weapons](#weapons) · [Elements & ailments](#elements--ailments)
 
@@ -46,6 +46,28 @@ git clone https://github.com/bjorn-karlsson/lego-survival.git
 That is the whole install. One 500 KB HTML file with a single `<script>` in it. The only
 thing it reaches for over the network is a Google Fonts stylesheet — block it and the game
 runs exactly the same in fallback type.
+
+---
+
+## Two modes: arcade and RPG
+
+The title screen asks first **how** you want to play.
+
+![The title screen with the mode row](docs/modes-title.png)
+
+- **ARCADE** is the game this README describes: a difficulty, a weapon, a favourite, then waves,
+  levels into the arcade skill tree, reward cards, bosses and leagues. **An arcade run has no
+  gear** — nothing is worn, nothing drops, the ritual sells chests instead, and there is no
+  equipment screen. What you pick up in a run is bricks.
+- **RPG · W.I.P.** is the second way to play, and **not playable yet**: START opens a work-in-progress
+  screen. The plan is a character and class, a start outside a town at level 1, a town with your
+  home, stash and a mission board, dungeons, and power that comes from **gear with sockets,
+  skill gems and support gems**, an RPG passive tree and ascendancies — with mana costs, five
+  flasks and Path of Exile's key layout. The [equipment](#equipment), the bag and the stash
+  live here now, behind the screen's **EQUIPMENT & STASH** button.
+  The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+
+The mode you pick is remembered. A run link always opens an arcade run.
 
 ---
 
@@ -766,6 +788,10 @@ orange, a wave green).
 Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you earn it.
 
 ## Equipment
+
+> **RPG mode only.** Since the modes split, arcade runs wear and drop no gear; the equipment
+> screen is reached from the RPG W.I.P. screen (or the title's EQUIPMENT button when RPG is
+> selected). Everything below describes the item model the RPG will be built on.
 
 **The one thing a death leaves you.** Bosses drop gear; walk over a piece and it goes in your
 bag; the bag, the stash and whatever you are wearing are saved the moment anything changes, so the
@@ -3468,7 +3494,7 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |
+| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag. The run waits while it is open |
 | <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |

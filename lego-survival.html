@@ -280,7 +280,7 @@
   .optnote{font-size:12.5px;color:#ffd0d0;font-weight:600;margin-top:10px;min-height:17px}
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
-  #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  #modeRow,#diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
   /* six weapons on one line: a little narrower than the difficulty buttons */
   #weaponRow{gap:8px}
   #weaponRow .diff{position:relative;min-width:88px;padding:7px 9px 6px}
@@ -566,6 +566,21 @@
     padding:16px;font-size:13px;color:#ffd9d9;font-weight:600}
   .sheetfoot{flex:none;text-align:center;font-size:12.5px;color:#ffd0d0;padding:9px 0 11px;font-weight:600}
   /* ---- equipment: PoE's inventory panel ---- */
+  /* ---- the RPG mode's work-in-progress screen ---- */
+  #rpgScreen{z-index:29;overflow:auto;padding:2vh 16px}
+  .rpgwrap{background:linear-gradient(#1f2a33,#151c22);border:3px solid #2e7dd1;border-radius:16px;max-width:640px;
+    padding:18px 22px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:12px;margin:auto 0}
+  .rpgbadge{align-self:flex-start;font-family:'Titan One',cursive;font-size:11px;letter-spacing:2px;color:#12181d;
+    background:#ffd76e;border-radius:6px;padding:3px 9px}
+  .rpgwrap h2{font-family:'Titan One',cursive;color:#8fc2ff;letter-spacing:4px;font-size:34px;margin:0}
+  .rpglede{color:#dbe4ea;font-size:14px;line-height:1.5;margin:0}
+  .rpggrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.rpggrid{grid-template-columns:1fr}}
+  .rpggrid > div{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;color:#c9d2ce;font-size:13px}
+  .rpggrid b{font-family:'Titan One',cursive;letter-spacing:1px;color:#ffd76e;font-weight:400}
+  .rpggrid ul{margin:6px 0 0;padding-left:18px}
+  .rpgnote{color:#8e9aa4;font-size:12px;margin:0}
+  .rpgbtns{display:flex;gap:8px;justify-content:flex-end}
   /* ---- the ritual's offer ---- */
   #ritualScreen{z-index:30;overflow:auto;padding:2vh 0}
   .ritwrap{background:linear-gradient(#2a1a1e,#170e11);border:3px solid #6a1a24;border-radius:16px;max-width:760px;
@@ -678,6 +693,9 @@
     <div class="badge">BRICK-BUILT ACTION RPG</div>
     <canvas id="titleCanvas" width="760" height="400"></canvas>
     <div class="tag">Smash the waves. Grab the studs. Everything falls apart.</div>
+    <div class="favhead">GAME MODE</div>
+    <div id="modeRow"></div>
+    <div class="diffblurb" id="modeBlurb"></div>
     <div class="favhead">DIFFICULTY</div>
     <div id="diffRow"></div>
     <div class="diffblurb" id="diffBlurb"></div>
@@ -803,6 +821,22 @@
       <div id="gearSum" class="gearsum"></div>
     </div>
     <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; Ctrl-click to send between bag and stash &middot; drag anywhere it fits &middot; drop in the bin to destroy</div>
+  </div>
+</div>
+<div id="rpgScreen" class="overlay hidden">
+  <div class="rpgwrap">
+    <div class="rpgbadge">WORK IN PROGRESS</div>
+    <h2>RPG</h2>
+    <p class="rpglede">The second way to play, and not playable yet. You make a character, start outside a town at
+      level 1, clear the fields to reach it, and from there take missions into dungeons. What you carry is
+      what makes you strong: gear with sockets, skill gems and support gems, a passive tree of its own and,
+      later, an ascendancy.</p>
+    <div class="rpggrid">
+      <div><b>Here now</b><ul><li>Equipment, per class</li><li>Inventory and the shared stash</li><li>Item levels, tiers and affixes</li></ul></div>
+      <div><b>Planned</b><ul><li>Town, home and missions</li><li>Click to move, skills on keys, the Ctrl layer</li><li>Mana costs, five flasks</li><li>Gems, supports and sockets</li><li>RPG passive tree and ascendancies</li></ul></div>
+    </div>
+    <p class="rpgnote">The full plan is in <code>docs/RPG-BLUEPRINT.md</code>.</p>
+    <div class="rpgbtns"><button id="rpgGearBtn" class="tbtn">EQUIPMENT &amp; STASH</button><button id="rpgBackBtn" class="tbtn gray">BACK</button></div>
   </div>
 </div>
 <div id="ritualScreen" class="overlay hidden">
@@ -3709,9 +3743,10 @@ window.addEventListener('keydown', e=>{
      pause toggle see the key as well would close the options AND un-pause the
      game in the same press. */
   if(e.code==='Escape' && optOn){ closeOptions(); }
+  else if(e.code==='Escape' && state==='title' && rpgScreenOn()){ toggleRpgScreen(false); }
   else if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && state==='gear'){ toggleGear(); }
-  else if(e.code==='KeyI' && (state==='play' || state==='gear')){ toggleGear(); }
+  else if(e.code==='KeyI' && ((state==='play' && modeHasGear()) || state==='gear')){ toggleGear(); }
   else if(e.code==='Escape' && state==='ritual'){ toggleRitual(); }
   else if(e.code==='KeyU' && (state==='play' || state==='ritual')){ toggleRitual(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
@@ -3844,7 +3879,7 @@ function rebuildWithout(id){
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
   applyMetaTree(p);                     /* the tree is not a brick either... */
   applyFavPerks();                      /* nor is the favourite's starting kit */
-  gearApply(p, true);                   /* nor is what you are wearing */
+  if(modeHasGear()) gearApply(p, true); /* nor is what you are wearing */
   taken = {}; buildLog = [];
   for(const e of keep){
     const u = UPGRADES.find(x=>x.id===e.id);
@@ -3881,7 +3916,7 @@ function runLinkState(){
 }
 /* the gear goes in the link only when there is some, so a bare run's link is
    exactly the length it always was */
-function gearLinkPart(){ const g = gearPackEq(gearEqNow()); return g ? { g } : {}; }
+function gearLinkPart(){ if(!modeHasGear()) return {}; const g = gearPackEq(gearEqNow()); return g ? { g } : {}; }
 /* COMPRESSED, THEN BASE64. The JSON is squeezed first with LZW (the family zip
    comes from: every repeat of a run of bytes already seen becomes one code), and
    only the squeezed bytes are base64'd for the address bar -- a long run's link
@@ -4011,6 +4046,7 @@ function runLinkBoot(){
     difficulty = DIFFS[o.d] || DIFFS.hard;
     favourite = FAVOURITES.find(f=>f.id === o.f) || FAVOURITES[0];
     favSet = new Set(favourite.ids);
+    setGameMode('arcade');                 /* a run is an arcade run: the RPG is not playable yet */
     startGame();
     return true;
   } catch(e){
@@ -7045,6 +7081,7 @@ function updateGearDrops(dt){
 /* what a boss leaves: one piece, and a super boss a second, at least magic */
 function gearBossSpoils(e){
   const lv = gearItemLevel(), out = [];
+  if(!modeHasGear()) return out;          /* an arcade boss drops bricks, not gear */
   const drop = (tier, dx, floor)=>{
     const B = gearRollBase(lv); if(!B) return;
     let r = gearRollRarity(tier); if(floor && r === 'normal') r = 'magic';
@@ -7074,6 +7111,7 @@ function gainXp(n, fromMob){
   const p = player;
   const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : STUD_XP_WAVE_DIV);
   p.xp += n * waveBonus * p.xpMul;
+  const lv0 = p.level;
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*xpStep(p.level)+5);
     p.incAll += 0.05;      /* additive with every other increase, PoE style */
@@ -7085,6 +7123,9 @@ function gainXp(n, fromMob){
     queuePick('level');
     metaLiveBank();
   }
+  /* a level is worth more MANA (and anything else that reads the level), so the
+     pools are rebuilt -- and a level fills the mana pool, PoE's way */
+  if(p.level !== lv0){ syncStats(); p.mana = p.maxMana; }
 }
 /* Damage = (Base + Flat) × (1 + increased) × ∏(1 + more).
    `kind` picks which increased pool applies on top of the global one. */
@@ -9818,6 +9859,8 @@ function ritualCostOf(key){ return Math.round(RITUAL_COST[key] * mobRankMul() * 
 function ritualOffer(){
   let r = Math.random() * RITUAL_OFFER_W.reduce((a, q)=>a + q[1], 0), key = RITUAL_OFFER_W[0][0];
   for(const [k, w] of RITUAL_OFFER_W){ r -= w; if(r <= 0){ key = k; break; } }
+  /* an arcade ritual sells no gear: its gear offers are chests instead */
+  if((key === 'magic' || key === 'rare') && !modeHasGear()) key = key === 'rare' ? 'chest:epic' : 'chest:rare';
   if(key === 'magic' || key === 'rare'){
     const lv = gearItemLevel() + 2, B = gearRollBase(lv);
     if(B) return { id:ritualS.uid++, kind:'gear', key, it:gearMake(B.id, key, lv), cost:ritualCostOf(key) };
@@ -15147,6 +15190,58 @@ function buildWeaponRow(){
   try{ saved = localStorage.getItem('bb_weapon') || 'sword'; }catch(e){}
   setWeapon(WEAPONS[saved] ? saved : 'sword');
 }
+/* ============================== GAME MODES ==============================
+   ARCADE is the game as it is: a difficulty, a weapon, a favourite, waves,
+   levels into the arcade tree, reward cards, bosses and leagues -- and NO
+   gear: nothing is worn, nothing drops, the ritual sells none. RPG is the
+   second way to play and is work in progress: for now it is a screen, and the
+   equipment, the inventory and the stash live behind it (docs/RPG-BLUEPRINT.md).
+   Every piece of gear code is still here, asked through modeHasGear(). */
+const GAME_MODES = {
+  arcade: { name:'ARCADE', col:'#ffb900', blurb:'Waves, reward cards and the arcade skill tree. No gear: what you pick up in a run is bricks.' },
+  rpg:    { name:'RPG · W.I.P.', col:'#6fb6ff', blurb:'A character, a town, dungeons, gear with sockets and skill gems. Not playable yet: your equipment and stash live here.' },
+};
+let GAME_MODE = 'arcade';
+function modeHasGear(){ return GAME_MODE === 'rpg'; }
+function setGameMode(id){
+  GAME_MODE = GAME_MODES[id] ? id : 'arcade';
+  try { localStorage.setItem('bb_mode', GAME_MODE); } catch(e){}
+  const row = document.getElementById('modeRow');
+  if(row) for(const el of row.children){
+    const on = el.dataset.mode === GAME_MODE, col = GAME_MODES[el.dataset.mode].col;
+    el.classList.toggle('on', on);
+    el.style.borderColor = on ? col : 'rgba(255,255,255,.18)';
+    el.style.background = on ? col : 'rgba(9,13,17,.34)';
+    el.style.color = on ? '#12181d' : '#f0e6e6';
+  }
+  const bl = document.getElementById('modeBlurb'); if(bl) bl.textContent = GAME_MODES[GAME_MODE].blurb;
+  const rpg = GAME_MODE === 'rpg';
+  const sb = document.getElementById('startBtn'); if(sb) sb.textContent = rpg ? 'RPG — WORK IN PROGRESS' : 'START ADVENTURE';
+  const gb = document.getElementById('gearBtn'); if(gb) gb.classList.toggle('hidden', !rpg);
+  const pg = document.getElementById('pauseGearBtn'); if(pg) pg.classList.toggle('hidden', !rpg);
+  const tb = document.getElementById('treeBtn'); if(tb) tb.classList.toggle('hidden', rpg);
+}
+function buildModeRow(){
+  const row = document.getElementById('modeRow');
+  if(!row) return;
+  row.innerHTML = Object.keys(GAME_MODES).map(id=>`<div class="diff" data-mode="${id}">${GAME_MODES[id].name}</div>`).join('');
+  for(const el of row.children) el.addEventListener('click', ()=>{ SFX.click(); setGameMode(el.dataset.mode); });
+  let saved = 'arcade';
+  try { saved = localStorage.getItem('bb_mode') || 'arcade'; } catch(e){}
+  setGameMode(saved);
+}
+let gearFromRpg = false;   /* equipment opened from the RPG screen closes back to it */
+function rpgScreenOn(){ const el = document.getElementById('rpgScreen'); return !!el && !el.classList.contains('hidden'); }
+function toggleRpgScreen(show){
+  const el = document.getElementById('rpgScreen');
+  if(el) el.classList.toggle('hidden', !show);
+}
+function rpgOpenGear(){ toggleRpgScreen(false); gearFromRpg = true; toggleGear(); if(!gearOn) gearFromRpg = false; }
+/* START: an arcade run, or -- in RPG -- the work-in-progress screen */
+function startPressed(){
+  if(GAME_MODE === 'rpg'){ try { SFX.click(); } catch(e){} toggleRpgScreen(true); return; }
+  startGame();
+}
 function buildDiffRow(){
   const row = document.getElementById('diffRow');
   if(!row) return;
@@ -17421,6 +17516,7 @@ function toggleGear(){
     state = gearFrom;
     if(state === 'play'){ cv.style.cursor = 'none'; try{ window.focus(); }catch(err){} }
     if(state === 'title') refreshGearBtn();
+    if(gearFromRpg){ gearFromRpg = false; if(state === 'title') toggleRpgScreen(true); }
     try { SFX.click(); } catch(e){}
     return;
   }
@@ -28276,8 +28372,9 @@ function resetRun(demo){
        number, it hands over a BRICK — so it is applied here, once, where a real
        run begins, and never in newPlayer or on the bench's preview heroes. */
     metaGrantBricks(player.metaGrants || []);
-    /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you */
-    gearApply(player, true);
+    /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you --
+       in RPG. An ARCADE run wears nothing. */
+    if(modeHasGear()) gearApply(player, true);
   }
   /* a run starts with a full mana pool, whatever the tree and the gear made it */
   player.mana = player.maxMana;
@@ -28516,7 +28613,9 @@ function showBest(){
   try{ best = +(localStorage.getItem('bb_best')||0); }catch(e){}
   document.getElementById('bestLine').textContent = best>0 ? `Personal best: wave ${best}` : '';
 }
-document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('click', startPressed);
+document.getElementById('rpgBackBtn').addEventListener('click', ()=>{ SFX.click(); toggleRpgScreen(false); });
+document.getElementById('rpgGearBtn').addEventListener('click', rpgOpenGear);
 document.getElementById('treeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 /* audioInit() FIRST on both: a browser will not start an audio context until
    somebody clicks something, and this click is as good as any — otherwise
@@ -28658,6 +28757,7 @@ gearLoad();          /* ...and the gear, for the same reason */
 gearWire();
 resetRun(true);
 buildFavRow();
+buildModeRow();
 buildDiffRow();
 buildWeaponRow();
 refreshTreeBtn();

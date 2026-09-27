@@ -4138,3 +4138,32 @@ stay silent muted. New `quiet`: numbers off leaves LEVEL UP! and nothing numeric
 `fewcalls`, `oneway`, `fogall`, `nodeferagain`, `deferdearer`, `manaflat`, `noregen`, `emptystart`,
 `noglobes`, `nopan`, `nothrottle`, `mutedplays`, `runningnohold`, `loudoff`, `minionloud`, `nodone`,
 `nostuck` caught.
+
+## Sixty-seventh pass — two game modes: arcade, and an RPG that is still a plan
+
+**Arcade and RPG.** The title opens with a mode row. **ARCADE** is the game as it was — difficulty,
+weapon, favourite, waves, the arcade tree, reward cards, bosses, leagues — minus the gear: every
+gear path asks `modeHasGear()`, and in arcade the run wears nothing (`resetRun` and
+`rebuildWithout` skip `gearApply`), a boss's spoils have no gear (`gearBossSpoils` returns
+nothing), the ritual's magic and rare gear offers become rare and epic chests, the run link
+carries no gear part, <kbd>I</kbd> does nothing, and the EQUIPMENT buttons are hidden. The gear
+code, its save and the stash are untouched. **RPG · W.I.P.** turns START into a screen that says
+what the mode will be and holds **EQUIPMENT & STASH**; closing the equipment opened from it comes
+back to it, and <kbd>Esc</kbd> or BACK closes it. The choice is saved (`bb_mode`); a run link
+always boots arcade. The plan for the RPG — class, the Outskirts and a town, missions and
+dungeons, click-to-move, a 20-slot skill bar with PoE's Ctrl layer, mana costs, five flasks,
+skill and support gems in socketed gear, its own tree and ascendancies, a phased roadmap and the
+open questions (chiefly: <kbd>1</kbd>–<kbd>5</kbd> cannot be both skills and flasks) — is
+[RPG-BLUEPRINT.md](RPG-BLUEPRINT.md).
+
+**Also.** A level-up now re-syncs the stats and fills mana (`gainXp`), so a rebuilt hero matches
+the one that levelled.
+
+**Proof.** New `modes`: the title defaults to arcade with no equipment button; picking RPG
+changes START, shows EQUIPMENT, hides the arcade tree and is remembered; START in RPG opens the
+W.I.P. screen and no run; its equipment button opens the gear and returns; Esc and BACK close
+it; an arcade run with a rare helmet saved wears nothing (also after a rebuild), a wave-15 boss
+drops no gear, 400 ritual offers are all chests, <kbd>I</kbd> stays in play and a run link has no
+gear; switched to RPG the same calls drop, sell and wear gear; a run link boots arcade from RPG.
+`gear` now runs in RPG. Breaks `bossgear`, `ritgear`, `wornarcade`, `wornstart`, `ikey`,
+`linkgear`, `rpgruns`, `btnalways`, `nosave`, `noreturn`, `noesc`, `linkrpg` caught.
