@@ -57,7 +57,7 @@ The title screen asks first **how** you want to play.
 
 - **ARCADE** is the game this README describes: a difficulty, a weapon, a favourite, then waves,
   levels into the arcade skill tree, reward cards, bosses and leagues. **An arcade run has no
-  gear** — nothing is worn, nothing drops, the ritual sells chests instead, and there is no
+  gear** — nothing is worn, nothing drops, the ritual sells cards instead, and there is no
   equipment screen. What you pick up in a run is bricks.
 - **RPG · W.I.P.** is the second way to play, and **not playable yet**: START opens a work-in-progress
   screen. The plan is a character and class, a start outside a town at level 1, a town with your
@@ -2918,8 +2918,9 @@ before you shop buys the most:
 
 | offer | costs (×1.11 per MOB LV) | what you get |
 |---|--:|---|
-| magic gear | ~90 | a piece for your hero, **item level +2** over the floor's |
-| rare gear | ~260 | the same, rare |
+| **a card** *(arcade)* | ~110 uncommon · ~260 rare · ~760 epic · ~3600 legendary | that brick at that rarity, **taken on the spot** |
+| magic gear *(RPG)* | ~90 | a piece for your hero, **item level +2** over the floor's |
+| rare gear *(RPG)* | ~260 | the same, rare |
 | rare chest | ~200 | a rare brick, waiting on <kbd>R</kbd> |
 | epic chest | ~600 | an epic brick |
 | legendary chest | ~2800 | a legendary brick |
@@ -2929,7 +2930,18 @@ are fought at, and a legendary chest costs three to five sets of that. Getting o
 **DEFER** is for: put it off, keep your tribute, and each later set — deeper, so it pays more —
 brings it back **10% cheaper**. Expect to defer it three to six times.
 
-- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
+**Cards, in arcade.** An arcade run has no gear, so the altar's gear share — about half the offer —
+is **cards** instead: one named brick at a named rarity, with its text on the tile, the way the
+reward screen shows it. The rarity is rolled first (uncommon 34%, rare 36%, epic 22%, legendary
+8%), then a brick that rarity may hand you and that you can still take — every cap is honoured,
+and no card is on the altar twice (a deferred one included). A card costs more than a chest of
+its rarity: a chest is a draw, the card is the one you wanted. **TAKE** applies it at once. A card
+you have since capped out of reads *YOU CAN NO LONGER TAKE IT* and cannot be bought.
+
+![An arcade ritual offer: cards and chests](docs/ritual-cards.png)
+
+- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash;
+  **TAKE** takes a card.
 - **DEFER** takes an offer off this set and puts it **first in the next set's offer**, **10%
   cheaper** — for the thing you want and cannot afford yet. It comes back as an ordinary offer
   (marked RETURNED); defer it again and it is another 10% off. Six at most at once.

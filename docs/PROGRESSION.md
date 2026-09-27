@@ -4167,3 +4167,26 @@ drops no gear, 400 ritual offers are all chests, <kbd>I</kbd> stays in play and 
 gear; switched to RPG the same calls drop, sell and wear gear; a run link boots arcade from RPG.
 `gear` now runs in RPG. Breaks `bossgear`, `ritgear`, `wornarcade`, `wornstart`, `ikey`,
 `linkgear`, `rpgruns`, `btnalways`, `nosave`, `noreturn`, `noesc`, `linkrpg` caught.
+
+## Sixty-eighth pass — the arcade ritual sells cards
+
+> *"in Ritual Arcade, instead of only getting presented with Chests, you get presented with cards also."*
+
+The altar's gear share (magic and rare gear, about half the offer) is **cards** in arcade instead
+of chests. `ritualCard()` rolls the rarity (uncommon .34, rare .36, epic .22, legendary .08), then
+draws a brick that the rarity may hand you (`rarAllows`) and whose `req` still passes — the same
+rule that keeps a capped stat off the reward screen — weighted like the screen's flat slots
+(`shunMul × cardWeight`), and never one already on the altar or deferred; nothing fits and the
+rarity walks down. Prices sit above the chest of the same rarity: 110 / 260 / 760 / 3600 at MOB LV 0.
+**TAKE** is `applyPick` — logged, counted in `taken` and the build log like a picked card. A card
+that has become untakeable since it was offered (`ritualCardUsable`) is refused (`'maxed'`), shows
+*YOU CAN NO LONGER TAKE IT*, and counts as unaffordable for the auto-close. The tile shows the
+brick's icon, name in its rarity's colour, class, how many you hold, and its text. RPG keeps gear.
+
+**Proof.** New `ritcards`: 150 arcade offers are 52% cards, the rest chests, no gear, no card
+twice, every card takeable; a card is dearer than its chest; TAKE pays, applies, counts and logs it
+and moves the hero's numbers; a card made untakeable is refused, keeps the tribute, shows disabled
+and lets a stuck window close; a deferred card comes back once, 10% cheaper, and the altar does
+not offer it again meanwhile; the tile shows the card and TAKE works from the window; an RPG
+offer has gear and no cards. `modes` counts cards with chests. Breaks `nocards`, `cheapcard`,
+`twice`, `anycard`, `nomaxcheck`, `noapply`, `stuckmaxed`, `nodesc`, `rpgcards` caught.

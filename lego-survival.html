@@ -598,6 +598,7 @@
   .riticon svg{max-width:100%;max-height:100%}
   .ritname{font-family:'Titan One',cursive;font-size:11px;letter-spacing:.5px;text-align:center;min-height:28px;display:flex;align-items:center}
   .ritkind{font-size:10.5px;color:#b9a7aa;text-align:center}
+  .ritdesc{font-size:10.5px;line-height:1.3;color:#e8dcdc;text-align:center;margin:2px 0}
   .ritcost{font-family:'Titan One',cursive;font-size:12px;color:#ffd76e}
   .ritcarried{position:absolute;top:4px;right:6px;font-family:'Titan One';font-size:8.5px;letter-spacing:1px;color:#ffb0b6}
   .ritbtns{display:flex;gap:4px}
@@ -847,7 +848,7 @@
     <div id="ritGrid" class="ritgrid"></div>
     <div id="ritDefer" class="ritdefer"></div>
     <div class="gearbar"><button id="ritRerollBtn" class="tbtn">REROLL</button><button id="ritCloseBtn" class="tbtn gray">CLOSE</button><button id="ritDoneBtn" class="tbtn">DONE</button></div>
-    <div class="sheetfoot">DONE ends this ritual's offer once every altar is finished (deferred items and tribute are kept) &middot; U or ESC to close &middot; BUY with tribute &middot; DEFER to see it again in the next ritual, 10% cheaper</div>
+    <div class="sheetfoot">DONE ends this ritual's offer once every altar is finished (deferred items and tribute are kept) &middot; U or ESC to close &middot; BUY or TAKE with tribute &middot; DEFER to see it again in the next ritual, 10% cheaper</div>
   </div>
 </div>
 <div id="gearTip" class="geartip hidden"></div>
@@ -9593,7 +9594,12 @@ const RITUAL_REROLL = 60, RITUAL_REROLL_GROW = 1.5;
    the level they are fought at; a legendary chest is three to five sets of
    saving -- which is what DEFER is for: put it off, keep the tribute, and come
    back for it a set or three later, 10% cheaper each time you put it off. */
-const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2800 };
+const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2800,
+  /* ARCADE sells CARDS where the RPG sells gear: one named brick at a named
+     rarity, taken the moment it is bought. Dearer than a chest of the same
+     rarity -- a chest is a draw, this is the card you wanted */
+  'card:uncommon':110, 'card:rare':260, 'card:epic':760, 'card:legendary':3600 };
+const RITUAL_CARD_RAR_W = [['uncommon', 0.34], ['rare', 0.36], ['epic', 0.22], ['legendary', 0.08]];
 const RITUAL_OFFER_W = [['magic', 0.24], ['rare', 0.28], ['chest:rare', 0.24], ['chest:epic', 0.16], ['chest:legendary', 0.08]];
 /* what the fog swallows: anything a monster shoots at you from outside */
 /* THE RING IS A WALL for every missile, both ways: nothing flies in and nothing
@@ -9859,14 +9865,39 @@ function ritualCostOf(key){ return Math.round(RITUAL_COST[key] * mobRankMul() * 
 function ritualOffer(){
   let r = Math.random() * RITUAL_OFFER_W.reduce((a, q)=>a + q[1], 0), key = RITUAL_OFFER_W[0][0];
   for(const [k, w] of RITUAL_OFFER_W){ r -= w; if(r <= 0){ key = k; break; } }
-  /* an arcade ritual sells no gear: its gear offers are chests instead */
-  if((key === 'magic' || key === 'rare') && !modeHasGear()) key = key === 'rare' ? 'chest:epic' : 'chest:rare';
+  /* an arcade ritual sells no gear: its gear offers are cards instead */
+  if((key === 'magic' || key === 'rare') && !modeHasGear()){ const c = ritualCard(); if(c) return c; key = 'chest:rare'; }
   if(key === 'magic' || key === 'rare'){
     const lv = gearItemLevel() + 2, B = gearRollBase(lv);
     if(B) return { id:ritualS.uid++, kind:'gear', key, it:gearMake(B.id, key, lv), cost:ritualCostOf(key) };
     key = 'chest:rare';
   }
   return { id:ritualS.uid++, kind:'chest', key, rar:key.slice(6), cost:ritualCostOf(key) };
+}
+/* A CARD ON THE ALTAR. The rarity is rolled first, then a brick that rarity
+   may hand you and that you can still take (every ceiling is a brick's `req`),
+   one of each on the altar at a time, weighted like the reward screen's flat
+   slots. Nothing fits the roll: it walks down, as the reward screen does. */
+function ritualCardUsable(o){
+  const u = UPGRADES.find(x=>x.id === o.uid);
+  if(!u) return false;
+  try { return (!u.req || !!u.req()) && rarAllows(u, o.rar); } catch(e){ return false; }
+}
+function ritualOfferUsable(o){ return o.kind !== 'card' || ritualCardUsable(o); }
+function ritualCard(){
+  let r = Math.random() * RITUAL_CARD_RAR_W.reduce((a, q)=>a + q[1], 0), rar = RITUAL_CARD_RAR_W[0][0];
+  for(const [k, w] of RITUAL_CARD_RAR_W){ r -= w; if(r <= 0){ rar = k; break; } }
+  const shown = new Set([...ritualS.offers, ...ritualS.deferred].filter(q=>q.kind === 'card').map(q=>q.uid));
+  const fits = R=>UPGRADES.filter(u=>!shown.has(u.id) && ritualCardUsable({ uid:u.id, rar:R }));
+  let cands = fits(rar);
+  for(let rk = rarRank(rar) - 1; !cands.length && rk >= rarRank('uncommon'); rk--){ rar = RAR_ORDER[rk]; cands = fits(rar); }
+  if(!cands.length) return null;
+  const wOf = u=>shunMul(u.id) * cardWeight(u);
+  let total = 0; for(const u of cands) total += wOf(u);
+  let x = Math.random() * total, t = cands[cands.length - 1];
+  for(const u of cands){ x -= wOf(u); if(x < 0){ t = u; break; } }
+  const key = 'card:' + rar;
+  return { id:ritualS.uid++, kind:'card', key, uid:t.id, rar, cost:ritualCostOf(key) };
 }
 /* a new set's offer: what you deferred last time first, then fresh ones */
 function ritualOffersNew(){
@@ -9883,7 +9914,7 @@ function ritualCanShop(){ return !ritualS.closed && ritualS.altars.some(A=>A.sta
 function ritualStuck(){
   const S = ritualS;
   if(!S.offers.length) return true;
-  return S.offers.every(o=>o.cost > S.tribute) && S.deferred.length >= RITUAL_DEFER_MAX && S.tribute < ritualRerollCost();
+  return S.offers.every(o=>o.cost > S.tribute || !ritualOfferUsable(o)) && S.deferred.length >= RITUAL_DEFER_MAX && S.tribute < ritualRerollCost();
 }
 /* DONE: the window closes, and once every altar of the set is finished the
    set's offer ends -- what was deferred and the tribute are kept for the next */
@@ -9896,9 +9927,15 @@ function ritualRerollCost(){ return Math.round(RITUAL_REROLL * mobRankMul() * Ma
 function ritualBuy(id){
   const o = ritualS.offers.find(q=>q.id === id);
   if(!o) return 'gone';
+  if(!ritualOfferUsable(o)) return 'maxed';   /* a card you have since capped out of */
   if(ritualS.tribute < o.cost) return 'poor';
   ritualS.tribute -= o.cost;
   ritualS.offers = ritualS.offers.filter(q=>q !== o);
+  if(o.kind === 'card'){
+    applyPick(UPGRADES.find(x=>x.id === o.uid), o.rar);
+    addRing(player.x, player.y, 10, 400, 130, RARITY[o.rar].col, 6, 0.5);
+    return 'card';
+  }
   if(o.kind === 'gear'){
     if(!gearInvAdd(o.it)){ gearDropAt(o.it, player.x, player.y); return 'floor'; }
     logEvent('RITUAL — '+gearName(o.it), GEAR_RAR[o.it.r].col);
@@ -17578,6 +17615,12 @@ function ritualOfferLook(o){
              sub:GEAR_CLS[B.cls].name+' · item level '+o.it.il };
   }
   const R = RARITY[o.rar] || RARITY.common;
+  if(o.kind === 'card'){
+    const u = UPGRADES.find(x=>x.id === o.uid), owned = taken[o.uid] || 0;
+    return { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon] || ''}</svg>`,
+             name:u.name, col:R.col, sub:R.name+' CARD · '+u.cls+(owned ? ' · you have ×'+owned : ''),
+             desc:signWords(u.desc(u.calc(R.mult), owned)) };
+  }
   return { icon:ritualChestSvg(R.col), name:R.name+' CHEST', col:R.col, sub:'a '+o.rar+' brick, opened on R' };
 }
 function renderRitual(){
@@ -17590,13 +17633,14 @@ function renderRitual(){
   const g = document.getElementById('ritGrid');
   if(g){
     g.innerHTML = S.offers.length ? S.offers.map(o=>{
-      const L = ritualOfferLook(o), afford = S.tribute >= o.cost;
+      const L = ritualOfferLook(o), usable = ritualOfferUsable(o), afford = S.tribute >= o.cost && usable;
       const canDefer = S.deferred.length < RITUAL_DEFER_MAX;
       return `<div class="ritcard${afford ? '' : ' poor'}" data-id="${o.id}">`+
         (o.carried ? '<div class="ritcarried">RETURNED</div>' : '')+
         `<div class="riticon">${L.icon}</div><div class="ritname" style="color:${L.col}">${L.name}</div>`+
-        `<div class="ritkind">${L.sub}</div><div class="ritcost">${o.cost} tribute</div>`+
-        `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>BUY</button>`+
+        `<div class="ritkind">${L.sub}</div>`+(L.desc ? `<div class="ritdesc">${L.desc}</div>` : '')+
+        `<div class="ritcost">${usable ? o.cost+' tribute' : 'YOU CAN NO LONGER TAKE IT'}</div>`+
+        `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>${o.kind === 'card' ? 'TAKE' : 'BUY'}</button>`+
         `<button class="tbtn gray" data-act="defer"${canDefer ? '' : ' disabled'}>DEFER</button></div></div>`;
     }).join('') : '<div class="ritkind" style="grid-column:1/-1;padding:20px">NOTHING LEFT ON OFFER</div>';
   }
@@ -17619,8 +17663,10 @@ function ritualUiWire(){
     if(b.dataset.act === 'buy'){
       const L = ritualOfferLook(o), r = ritualBuy(id);
       if(r === 'poor'){ ritualNote('NOT ENOUGH TRIBUTE', true); return; }
+      if(r === 'maxed'){ ritualNote('YOU CAN NO LONGER TAKE '+L.name, true); return; }
       ritualNote(r === 'floor' ? 'BAG FULL — '+L.name+' LIES AT YOUR FEET'
-               : r === 'chest' ? L.name+' — WAITING ON R' : L.name+' — IN YOUR BAG');
+               : r === 'chest' ? L.name+' — WAITING ON R'
+               : r === 'card' ? L.name+' — TAKEN' : L.name+' — IN YOUR BAG');
       gearTipHide();
       try { SFX.fortune(); } catch(e){}
     } else {
