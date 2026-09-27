@@ -1592,11 +1592,11 @@ opposite sides (at least 110° apart round it, where the roads allow — never l
 leave one road, cross the group and come out on another, instead of stepping into a pocket and
 back out the way you came. A cluster on the rim keeps one way in; there is no further on.
 
-**A long way in is a road, not a leap.** A slip road longer than 330px carries an attribute node
-per step of it (two at most), paying the ground it crosses like any lane — so the jump into a
-group is a short walk, and no slip road on the map is longer than a lane's own step. A tree saved
-before a road grew its nodes is **healed** when it loads: if you owned both ends, the nodes between
-are placed for you (and if that would overspend, the newest nodes are handed back as always).
+**Attributes are the highway's, and nothing else's.** Step off the road and every point you
+spend buys the thing you left it for: a slip road runs straight from the highway into a group,
+however long it is, with no small attribute nodes on it. The highway itself has **junctions** —
+the node where roads meet — drawn bigger and paying **three times** a lane node's attribute for the
+same single point, PoE's way, so the road has places worth walking to and not just a toll.
 
 **The empty ground is filled.** Every quad between the roads that used to stand bare now holds a
 group, and a quad with room to spare beside its own group takes a second, smaller one — 193

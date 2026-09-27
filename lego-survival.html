@@ -10947,6 +10947,10 @@ const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next 
    does to your actual damage.) */
 const META_MIN_FLAT = 0.2;
 const LANE_STEP = 560;
+/* THE JUNCTIONS ARE WORTH STOPPING AT. PoE draws the node where roads meet
+   bigger and pays three times the attribute for the same one point, so the
+   highway has places worth walking to and not just a toll between them. */
+const HUB_MUL = 3, HUB_R = 29;
 const LANE_VARY = 0.46;   /* and how much that wanders, per lane */
 /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
@@ -11556,9 +11560,6 @@ let META_SITES = [];
 /* how much clear ground a quad needs, beside its own group, to take a second:
    this far from every road, and this far from the middle of every group */
 const SAT_WALL = 160, SAT_GAP = 330;
-/* a slip road longer than this carries a node per step of it (two at most) */
-const BRIDGE_STEP = 330;
-const META_BRIDGES = [];
 /* how far round from its first way in a cluster's second one has to be */
 const THROUGH_ANGLE = 110*Math.PI/180;
 const META_NODE_R = { start:46, legend:44, keystone:40, notable:34, minor:25, travel:19 };
@@ -11589,7 +11590,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       const sec = metaSectorOf(deg), use = META_TRAVEL[sec] || META_TRAVEL.core;
       hubs.push({ ring:ri, j, deg:((deg%360)+360)%360, r:rad, x, y, sec,
         node: push({ id:'h'+ri+'_'+j, kind:'travel', spoke:sec, cl:null, road:'hub',
-          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] }) });
+          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]*HUB_MUL]], req:[] }) });
     }
   });
   const ringHubs = ri=> hubs.filter(h=>h.ring === ri);
@@ -12270,7 +12271,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       const sec = metaSectorAt(n.x, n.y);
       if(n.spoke === sec) continue;
       const use = META_TRAVEL[sec] || META_TRAVEL.core;
-      n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]]];
+      n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]*(n.road === 'hub' ? HUB_MUL : 1)]];
     }
   })();
 
@@ -12320,27 +12321,11 @@ const RING_AT = [0, 5, 12, 22, 34];
       }
       return false;
     };
-    /* A LONG WAY IN IS A ROAD, NOT A LEAP. A slip road four hundred feet long
-       with nothing on it read as a wire rather than a path; PoE puts a small
-       node or two on anything that long. Every connector past BRIDGE_STEP gets
-       one per step (two at most), paying the ground it crosses like any lane.
-       Recorded, so a tree saved when the road was one leap can be healed. */
-    let bn = 0;
-    const bridge = (a, b)=>{
-      const d = Math.hypot(b.x-a.x, b.y-a.y), k = Math.min(2, Math.floor(d / BRIDGE_STEP));
-      if(k <= 0){ add(a.id, b.id); return; }
-      const mids = [];
-      let prev = a;
-      for(let i=1;i<=k;i++){
-        const t = i/(k+1), x = Math.round(a.x + (b.x-a.x)*t), y = Math.round(a.y + (b.y-a.y)*t);
-        const sec = metaSectorAt(x, y), use = META_TRAVEL[sec] || META_TRAVEL.core;
-        const n = push({ id:'br'+(bn++), kind:'travel', spoke:sec, cl:null, road:'bridge',
-          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
-        add(prev.id, n.id); prev = n; mids.push(n.id);
-      }
-      add(prev.id, b.id);
-      META_BRIDGES.push({ a:a.id, b:b.id, mids });
-    };
+    /* A WAY OFF THE HIGHWAY IS A STRAIGHT LINE into what it leads to. Attribute
+       nodes belong to the highway and nowhere else: step off it and every point
+       you spend buys the thing you left the road for. (A slip road with nodes
+       of its own on it was tried, and read as the highway leaking into the
+       groups.) */
     for(const c of META_CLUSTERS){
       const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
       const mine = c.nodes.map(id=>META_BY_ID[id]).filter(Boolean);
@@ -12399,7 +12384,7 @@ const RING_AT = [0, 5, 12, 22, 34];
         if(picked.length >= cap) break;
       }
       c.ways = picked.length;
-      for(const o of picked) bridge(o.ln, o.n);
+      for(const o of picked) add(o.ln.id, o.n.id);
     }
   }
 
@@ -12754,20 +12739,9 @@ function metaPresetCost(pr){
 function metaToggle(){ if(!META) metaLoad(); META.on = !META.on; metaSave(); return META.on; }
 /* A COST RISE CAN LEAVE A SAVE OVERSPENT, and a layout change can leave it
    disconnected. Refund the newest nodes until both hold. */
-/* A ROAD THAT GREW NODES. A tree saved when a slip road was one leap holds
-   both of its ends and nothing between them; those nodes are placed for it
-   (and paid for -- if the points are not there, the trim below takes back the
-   last things bought, as it always has). */
-function metaHealBridges(m){
-  for(const br of META_BRIDGES){
-    if(m.nodes.indexOf(br.a) < 0 || m.nodes.indexOf(br.b) < 0) continue;
-    for(const id of br.mids) if(m.nodes.indexOf(id) < 0) m.nodes.push(id);
-  }
-}
 function metaTrim(){
   for(const d of Object.keys(DIFFS)) for(const w of WEAPON_KEYS){
     const m = META[d][w];
-    metaHealBridges(m);
     let guard = 0;
     while(m.nodes.length && guard++ < 500){
       if(metaPointsSpent(m) > metaPointsEarned(m)){ m.nodes.pop(); continue; }
@@ -13072,14 +13046,14 @@ function metaSpokeCol(id){
   const sp = META_SPOKES.find(x=>x.id===id);
   return sp ? sp.col : '#9fb0bd';
 }
-function metaNodeRadius(n){ return META_NODE_R[n.kind] || 14; }
+function metaNodeRadius(n){ return n.road === 'hub' ? HUB_R : (META_NODE_R[n.kind] || 14); }
 function metaKindName(n){
   return (n.kind === 'start' && n.soon) ? 'NOT BUILT YET'
        : n.kind === 'start' ? 'STARTING POINT'
        : n.kind === 'legend' ? 'LEGENDARY'
        : n.kind === 'keystone' ? 'KEYSTONE'
        : n.kind === 'notable' ? 'NOTABLE'
-       : n.kind === 'travel' ? 'PATH' : 'MINOR';
+       : n.kind === 'travel' ? (n.road === 'hub' ? 'JUNCTION' : 'PATH') : 'MINOR';
 }
 /* the card that follows the cursor — name, what it gives, what it costs */
 function metaTipHtml(n, m){
@@ -13213,9 +13187,10 @@ function renderTree(){
        flame in the tree and a flame on a card are the same flame.
        Rank is the frame: a keystone gets a broken ring round it, a legendary a
        whole second one. */
+    const pz = n.road === 'hub' ? 12 : 8;
     const glyph = n.kind === 'travel'
-      ? `<path d="M${n.x-8} ${n.y} h16 M${n.x} ${n.y-8} v16" fill="none" `+
-        `stroke="${has?'#0d1218':col}" stroke-width="5" stroke-linecap="round" `+
+      ? `<path d="M${n.x-pz} ${n.y} h${pz*2} M${n.x} ${n.y-pz} v${pz*2}" fill="none" `+
+        `stroke="${has?'#0d1218':col}" stroke-width="${n.road === 'hub' ? 6.5 : 5}" stroke-linecap="round" `+
         `opacity="${has?1:0.9}" pointer-events="none"/>`
       : isStart
         ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+

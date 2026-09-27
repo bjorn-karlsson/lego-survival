@@ -3734,3 +3734,29 @@ set goes to the mace it was wielding. `meta` (power budget) and `nodes` pass on 
 `rerollkey`, `bmnopool`, `noscale`, `nodrawscale`, `nofill`, `nosat`, `nothrough`, `nobridge`,
 `lateany`, `noheal`, `lateonbase`, `oneset`, `midrunswap`: 13 caught.
 
+## Fifty-eighth pass — attributes only on the highway, and junctions worth stopping at
+
+> *"now you introduced to many attribute nodes again ... only keep the attribute nodes as the
+> "highways" ... sometimes there are joined attribute nodes that are a little bigger, they give 3x
+> the amount for the same cost ... when going off the highway you dont put points into small
+> attributes, but to those specific rewards"* — with PoE's highway lit and the branches off it
+> going straight into notables.
+
+- **The bridges are gone.** Last pass put one or two attribute nodes on every slip road over 330px;
+  that was the highway leaking into the groups. A way off the highway is a straight line into what
+  it leads to again, however long (`META_BRIDGES`, `BRIDGE_STEP` and the save healing that came
+  with them are removed; a save that held a `br*` node simply loses that id when it loads). The
+  through-rule and the filled ground from last pass stay.
+- **Junctions.** Every hub (`road:'hub'`) pays `HUB_MUL` = 3 times the attribute of a lane node for
+  one point and is drawn at `HUB_R` = 29 with a bigger plus (`metaNodeRadius` and the glyph only —
+  the layout radius is untouched, so no node moves). Tooltip kind: JUNCTION.
+- **The budget, restated.** With `HUB_MUL` at 1 every power line in `meta` passes as it stood; at 3
+  the stay-at-home walk is x4.27 and the straight walk x3.21, and the attributes are the whole of the
+  difference. The declared lines move to x4.40 and x3.30, with the same few percent of slack: a
+  deliberate change, not creep.
+
+**Proof.** `r56` restated: no travel node off the highway and no `br*` id; every junction pays 3,
+every lane node 1, and a junction is drawn bigger than a lane node at the same cost of 1; every
+`tree42` node keeps its id, name and place (junctions matched without their stats, as in `zombie`).
+`shapes` now recognises a junction's wider plus. Breaks `hub1`, `hubsmall` caught.
+
