@@ -315,6 +315,11 @@ crits would otherwise feed. So the payoff for critting *is* the mechanic.
 > and each able to crit on its own. **You keep swinging**, and up to **4** can be in the air at
 > once — **6** at rank two.
 
+**Every crit throws, however few are left.** With nobody else in reach — the last monster of a
+wave, a lone boss — the axe leaves your hand for the body you just crit and reaps it again; and if
+that crit already killed it, the axe still flies its arc out past where it stood and comes home,
+taking anybody who walks into it on the way.
+
 **You keep the axe.** The first cut of this left the hero standing there empty-handed until the
 blade came home, which read as a punishment for critting on a build whose whole idea is
 critting: stack attack speed, crit more, swing less. What flies is a *copy*. A second critical

@@ -1164,6 +1164,7 @@ const REAVE_BOUNCES = 3;     /* bodies after the one that threw it */
 const REAVE_MUL     = 0.70;  /* of the critical that threw it, per body */
 const REAVE_SPEED   = 760;
 const REAVE_SEEK    = 320;   /* how far it will reach for the next one */
+const REAVE_SOLO_PAST = 150; /* a lone throw's turning point, this far beyond its body */
 /* short, not absent: forty crits in one frame -- a bladestorm burst landing all
    at once -- must still throw ONE axe and not forty. */
 const REAVE_CD      = 0.16;
@@ -21347,9 +21348,21 @@ function throwReave(from, dmg){
   if(reaveAir() >= reaveAirMax()) return null;
   const seen = new Set([from]);
   const tgt = reaveTarget(from.x, from.y, seen);
-  if(!tgt) return null;
   p.reaveCd = REAVE_CD;
   SFX.whoosh && SFX.whoosh();
+  if(!tgt){
+    /* A CRIT ALWAYS THROWS, however few are left. With nobody else in reach the
+       axe leaves YOUR hand for the body you just crit and reaps it again -- and
+       it carries a turning point past it, so a body your crit has already
+       finished still sees the axe fly its arc and come home. */
+    const a = Math.atan2(from.y - p.y, from.x - p.x);
+    const pr = { kind:'reave', x:p.x, y:p.y - 14, px:p.x, py:p.y - 14,
+                 dmg, legs:REAVE_BOUNCES, tgt:from, hit:new Set(), spin:rnd(TAU),
+                 life:REAVE_LIFE, back:false, solo:true,
+                 wx:from.x + Math.cos(a)*REAVE_SOLO_PAST, wy:from.y - 16 + Math.sin(a)*REAVE_SOLO_PAST };
+    projectiles.push(pr);
+    return pr;
+  }
   const pr = { kind:'reave', x:from.x, y:from.y - 14, px:from.x, py:from.y - 14,
                dmg, legs:REAVE_BOUNCES, tgt, hit:seen, spin:rnd(TAU),
                life:REAVE_LIFE, back:false };
@@ -21789,7 +21802,9 @@ function updateProjectiles(dt){
       pr.life -= dt;
       const t = pr.tgt;
       const live = !pr.back && t && !t.dead && t.state === 'active';
-      const goX = live ? t.x : player.x, goY = live ? t.y - 16 : player.y - 14;
+      /* a lone throw whose body is gone flies on to its turning point first */
+      const way = !pr.back && !live && pr.wx !== undefined;
+      const goX = live ? t.x : way ? pr.wx : player.x, goY = live ? t.y - 16 : way ? pr.wy : player.y - 14;
       const a = Math.atan2(goY - pr.y, goX - pr.x);
       pr.x += Math.cos(a)*REAVE_SPEED*dt; pr.y += Math.sin(a)*REAVE_SPEED*dt;
       if(Math.random() < 0.7)
@@ -21798,6 +21813,11 @@ function updateProjectiles(dt){
           color: Math.random() < 0.5 ? '#e0a81a' : '#ffe9b0' });
       if(Math.hypot(pr.x - goX, pr.y - goY) < 26){
         if(pr.back){ pr.dead = true; }
+        else if(way){
+          pr.wx = undefined;
+          const nxt = pr.legs > 0 ? reaveTarget(pr.x, pr.y, pr.hit) : null;
+          if(nxt) pr.tgt = nxt; else pr.back = true;
+        }
         else {
           if(live && !pr.hit.has(t)){
             pr.hit.add(t);

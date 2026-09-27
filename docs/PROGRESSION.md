@@ -3792,3 +3792,23 @@ a break's attribute-coloured plus. (The reroll section now declines its rewards 
 one, so a random Blademaster can no longer land before the Blademaster section.) Breaks
 `nobreaks`, `ownbreak`, `smallbreak`, `whirl1x`, `whirlold` caught.
 
+## Sixtieth pass — the reaving axe flies at the last one too
+
+> *"for the Reaving axe, right now it cannot launch against 1 target, make it so, i want to throw
+> that axe whenever it crits, regardless of how many monsters are alive."*
+
+- `throwReave` refused to throw when `reaveTarget` found nobody but the body just struck — the one
+  the crit came from is excluded, so with one monster left there was never a target. Now a crit
+  with nobody else in reach throws a **solo** blade: it leaves the hero's hand for the struck body
+  (with a fresh hit list, so it reaps it again), carrying a turning point `REAVE_SOLO_PAST` = 150
+  beyond it. If the crit has already killed that body, the blade flies on to the turning point,
+  looks there for anyone new, and otherwise comes home. The air ceiling, the cooldown and "a
+  bounce never throws another" are untouched; with others about, it still leaps from the struck
+  body exactly as before.
+
+**Proof.** New `reave2` (crit roll pinned, since crit chance is capped below certain): one monster,
+a crit — a solo blade leaves the hero's hand, hits it again and comes home; a crit that kills the
+last monster still throws, and the blade flies out past 100 and back; a monster standing at the
+turning point is reaped; with a second monster about, the blade still leaps from the struck body
+to it. `reave` unchanged. Breaks `nosolo`, `noturn` caught.
+
