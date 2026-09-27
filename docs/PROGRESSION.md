@@ -4065,3 +4065,76 @@ golem's buff depends on whether it has risen yet, which a stat snapshot should n
 increased elemental damage" and gives exactly 0.4 × 25% + its own 6%; flipped on, the same hits
 expose again. `poe4`, which measures the exposure mechanic itself, flips the switch on for its run.
 `combo` passes again.
+
+## Sixty-sixth pass — a horde in a wider ring, deferrals that come back cheaper, mana, the globes, and the layered sound
+
+> *"Make the ritual ring bigger, and make them summon much more monsters inside of their waves.
+> Also projectiles cannot fly into the ring nor can any projectile escape the ring. Also when i've
+> chosen something to be deffered ... it shoulndt be deffered again, i should have to click deferr
+> again if i wish, lowering the price again. ... the layered sound was perfect. For mana, yes it
+> should be option 2 ... for now mana does nothing. But make it implemented. ... moove the health,
+> energy shield and mana into their own pools like in PoE"* — and, mid-way: *"when i toggle of
+> damage numbers, this also means incoming damage for both me and minions ... Block, Perfect,
+> dodge, miss, Schorched ... ritual should close when i cannot do anything in it, or if i press
+> Done ... the game thinks the wave is completed whenever i have 0 monsters left and i open a
+> ritual, then it thinks the new wave should start"*
+
+**Ritual.**
+- `RITUAL_R` 300 → **450**, `RITUAL_GAP` 820 → 1100. `ritualBudget(n)` 10 + n/3 → **24 + n**, pulses
+  of 6–9 every 1.6s, up to 26 standing. `RITUAL_TRIB` 10 → 4, so an altar still pays about the same.
+- **The ring is a wall both ways**: `ritualClamp` kills any projectile whose step crosses `RITUAL_R`
+  in either direction (`(was >= R) !== (now >= R)`) — every kind, the hero's and the minions' too,
+  except what stands still where it was put (`RITUAL_FOG_STILL`: a vortex totem, a brickbane cloud).
+- **Deferring lowers the price**: `RITUAL_DEFER_MUL` 1.2 → **0.9**. A deferred offer returns in the
+  next set as an ordinary offer (a RETURNED tag, no longer "DEFERRED"), and can be deferred again for
+  another 10% (`o.defers` counts). Legendary chest 2000 → **2800** so three to six deferrals, not
+  one or two, get you there.
+- **DONE** (`ritualFinish`) closes the window and, once every altar is done, ends the set's offer
+  (`S.closed`; deferred offers and tribute kept; U has nothing to open, the HUD line goes).
+  `ritualStuck()` — nothing on offer, or nothing affordable with no room to defer and no tribute
+  for a reroll — closes it on its own after an action.
+- **The wave bug**: a cleared wave held for an untouched altar let go the moment the ritual BEGAN
+  (the altar was no longer "left"), so the next wave started under it. `leagueRunning()` (an open
+  breach or abyss, a sprung box, a ritual under way) now also holds a cleared wave, and a ritual
+  pauses the breather's clock.
+
+**Mana** (option 2, nothing spends it yet). `maxMana` = (40 + 4 a level + INT/2 + `manaFlat`) ×
+(1 + `inc.mana`), `manaRegen` = (1.75% of it + `manaRegenFlat`) × (1 + `inc.manaRegen`), rebuilt in
+`syncStats` keeping what is in the pool, ticked in `updatePlayer`, full at the start of a run.
+`spendMana(n)` is the door the active skills will use. Tree/gear writers `mana`, `incMana`,
+`manaRegen`, `incManaRegen`; sheet rows under MANA.
+
+**The globes.** The heart row and the shield bar are gone from the top left. `drawPoolGlobes`
+draws the **life globe** bottom left (red liquid to `hp/maxHp`, the **shield** as a translucent
+pale-blue layer over it plus a rim ring that empties with it, the rim throbbing on low life) and
+the **mana globe** bottom right, each with its number over its maximum. The ability row starts at
+`GLOBE_ROW_X` beside the life globe; dash and buffs step left from the mana globe; the level bar
+moves up to the top left; the music toast sits above the life globe.
+
+**Sound.** The Sound Lab's LAYERED design is the game's sound now: `tone()`/`noiseHit()` stay for
+the music, and every one of the 26 effects is rebuilt as transient + body + ring, with modal
+(inharmonic) plastic and metal, pitch jitter, a generated-impulse room send and stereo placement.
+`sfxAt(x).hit()` places a sound by its world x against the camera — hits and brick bursts use it.
+The throttle (`every`) now only counts sounds that actually play, so a sound skipped while muted or
+before audio starts no longer silences the next real one. The effects low-pass opened 7.2k → 11k to
+keep the clicks.
+
+**Damage numbers off** now also silences incoming damage figures (burns, leech, shield), minion
+damage and every combat word — MISS, BLOCKED, EVADED, PERFECT!, DEFLECT!, SUPPRESSED, IMMUNE,
+SCORCHED!, ELECTROCUTED!, FROZEN SOLID, CHILLED/SHOCKED/BURNT ×n, curses, EMPOWERED — by routing
+those 33 calls through `addHitNum`. Loot, a level, pickups, boss shouts, league labels and tribute
+still float.
+
+**Proof.** `ritual`: a 450 ring; a monster's arrow in, the hero's arrow out and a minion's bolt in
+all stop, a totem stays, an arrow inside flies; an altar calls 38 at wave 14, all inside; a
+returned offer is not in the deferred list, defers again for 10% less; DONE ends a finished set's
+offer and a stuck window closes. `hold`: a ritual begun on a cleared wave keeps wave 14 until its
+monsters die, then 15. New `pools`: mana is 40 + 4/level + INT/2, full, regenerating 1.75%; spent,
+refused past the pool, refilled at its rate and capped; fed by the four writers and a level;
+untouched by ten seconds of spells; the HUD draws a life globe (with the shield) bottom left and
+a mana globe bottom right; all 26 sounds build voices, sit right/left by screen x, throttle, and
+stay silent muted. New `quiet`: numbers off leaves LEVEL UP! and nothing numeric or combat.
+`leagues2` still finds a legendary three to five and a half sets deep. Breaks `smallring`,
+`fewcalls`, `oneway`, `fogall`, `nodeferagain`, `deferdearer`, `manaflat`, `noregen`, `emptystart`,
+`noglobes`, `nopan`, `nothrottle`, `mutedplays`, `runningnohold`, `loudoff`, `minionloud`, `nodone`,
+`nostuck` caught.

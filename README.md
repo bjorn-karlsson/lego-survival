@@ -173,6 +173,26 @@ In a hurry? **Hold F mid-fight** to call the next wave down early and fight both
 
 ---
 
+## Life, shield and mana
+
+**Three pools, PoE's way, as globes.** Bottom left, the **life globe**: red, with your hearts in
+it (*4.5 / 7*). Your **energy shield** is a pale-blue layer poured over it and a ring round its
+rim that empties as the shield does. Bottom right, the **mana globe**. The ability row sits beside
+the life globe and the dash and buffs beside the mana globe; the level bar keeps the top left.
+When you are on low life the life globe's rim throbs red.
+
+![The life globe with its shield, the ability row, and the mana globe](docs/globes.png)
+
+**Mana is here, and nothing spends it yet.** It fills, it is shown, the tree and gear can raise
+it — and every automatic spell is still free. It is the pool that ACTIVE skills on keys will cost
+when they come.
+
+| | |
+|---|---|
+| maximum | **40**, +**4** a level, +**1 for every 2 INTELLIGENCE**, + flat, × (1 + increased) |
+| regeneration | **1.75% of the maximum a second** + flat, × (1 + increased regeneration) |
+| a new run | starts full |
+
 ## Weapons
 
 Your weapon is a **table row**, not a special case in the code. It sets the physical side
@@ -1086,7 +1106,7 @@ Maximum hearts come from three rungs: `Sturdy Plates` adds them flat, **`Reinfor
 is an epic **+40% increased** (+60% at legendary), and `Titanium Chassis` is a legendary
 **100% MORE**, twice over.
 
-**Low life is 10% of your maximum.** The screen pulses red and your first row of hearts throbs
+**Low life is 10% of your maximum.** The screen pulses red and the rim of your life globe throbs
 when your life is at or below a tenth of what it can be — energy shield does not count, so a
 1-heart shield build only sees it when the one heart is nearly gone.
 
@@ -2450,15 +2470,15 @@ does not also un-pause the run. Every switch is written to disk the moment you c
 |---|---|
 | **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
 | **SOUND** | every hit, pickup, cast and smash |
-| **DAMAGE NUMBERS** | the figures that float off a monster when you hit it |
+| **DAMAGE NUMBERS** | every number and word that floats off a hit — yours, the ones you take, your minions' |
 | **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
 | **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
 
-**DAMAGE NUMBERS turns off the numbers and nothing else.** Everything else that floats off a
-body is an *event* worth reading — `FROZEN SOLID`, a curse landing, `LEVEL UP!` — and a player
-who wanted a quieter screen in a wave of sixty did not ask to stop being told those. So the
-switch sits on the one call the outgoing damage figures make, not on the floater system. The
-combat log still counts every point either way.
+**DAMAGE NUMBERS off is a quiet fight.** No figure off a monster, off you (a burn or a leech) or
+off your minions, and none of the combat words either: `MISS`, `BLOCKED`, `EVADED`, `PERFECT!`,
+`DEFLECT!`, `SUPPRESSED`, `SCORCHED!`, `FROZEN SOLID`, `CHILLED ×3` and the rest. What is not combat
+text still floats — loot, `LEVEL UP!`, a pickup, a boss calling its attack, a league appearing,
+ritual tribute. The combat log still counts every point either way.
 
 **RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
 best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
@@ -2846,13 +2866,15 @@ diamond on the screen's rim for each one that still has something to give.
   magic) stands round it and **does nothing** — it does not come for you, it does not hold the
   wave, and your minions leave it alone. **Hit one, or walk within 210px of the altar or of any of
   them, and the whole pack wakes at once.** Kill it and the altar is free: *STEP IN TO BEGIN*.
-- **Step onto a free altar and the circle closes.** A 300px ring of red runes; **you cannot walk
+- **Step onto a free altar and the circle closes.** A **450px** ring of red runes; **you cannot walk
   out of it until the ritual is done**, and neither can your legion. What was inside when it
-  closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in
-  — and nothing it shoots comes through the fog either. The wave's own bodies wait until it is
+  closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in.
+  **The ring is a wall for every missile, both ways**: nothing shot from outside comes in, and
+  nothing you (or your minions) shoot from inside gets out. The wave's own bodies wait until it is
   over, and a running ritual holds the wave.
-- **The altar calls its monsters** into the circle, a pulse of three to five every 2s (never
-  more than twelve standing), **10 + wave/3** of them in all — 14% magic, 6% elite.
+- **The altar calls a horde** into the circle: a pulse of six to nine every 1.6s (never more
+  than twenty-six standing), **24 + the wave** of them in all — 14% magic, 6% elite. A ritual
+  begun after the wave's last monster died still holds the next wave until its own last one falls.
 - **The altar strikes at you itself**, every 3–5s: a **MARK** burns under your feet and bursts
   1.15s later (fire — step out of it; two marks from wave 20, three from 30), or a **RING** gathers
   on the altar and rolls out across the whole circle (chaos — dodge through it). Each hits like
@@ -2861,7 +2883,7 @@ diamond on the screen's rim for each one that still has something to give.
 
 **Tribute.** Every monster the altar calls pays **tribute** when it dies: **10** for a plain one,
 ×2 magic, ×4 elite — and **×1.11 for every MOB LV it carries**, so a deeper monster pays more.
-Guards pay nothing. A wave-14 altar is worth about 200.
+Guards pay nothing. There are far more of them now, so each pays a smaller share (**4** for a plain one at MOB LV 0): a wave-14 altar is still worth about 200.
 
 **The offer (<kbd>U</kbd>).** Once an altar of the set is done, <kbd>U</kbd> opens the
 **RITUAL** window (the run waits while it is open). It offers **eight** things, and **the same
@@ -2874,17 +2896,20 @@ before you shop buys the most:
 | rare gear | ~260 | the same, rare |
 | rare chest | ~200 | a rare brick, waiting on <kbd>R</kbd> |
 | epic chest | ~600 | an epic brick |
-| legendary chest | ~2000 | a legendary brick |
+| legendary chest | ~2800 | a legendary brick |
 
 **A legendary is not one set's worth.** Three altars pay about 550–750 tribute at the level they
 are fought at, and a legendary chest costs three to five sets of that. Getting one is what
 **DEFER** is for: put it off, keep your tribute, and each later set — deeper, so it pays more —
-brings it back at ×1.2. Expect to defer it three to six times.
+brings it back **10% cheaper**. Expect to defer it three to six times.
 
 - **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
-- **DEFER** takes an offer off this set and puts it **first in the next set's offer**, at ×1.2 its
-  cost — for the thing you want and cannot afford yet. Six at most; a deferred offer cannot be
-  deferred again.
+- **DEFER** takes an offer off this set and puts it **first in the next set's offer**, **10%
+  cheaper** — for the thing you want and cannot afford yet. It comes back as an ordinary offer
+  (marked RETURNED); defer it again and it is another 10% off. Six at most at once.
+- **DONE** closes the window, and once every altar of the set is finished it ends the set's offer
+  (deferred offers and tribute are kept). With nothing left to do — nothing on offer, or nothing
+  affordable with no room to defer and no tribute to reroll — the window closes on its own.
 - **REROLL** replaces everything on offer except what you deferred into it, for ~60 tribute,
   ×1.5 each time within a set.
 - Tribute carries on to the next set; what a set offered and you did not buy or defer goes when
@@ -3201,6 +3226,13 @@ roll. It is **`Elemental Core`** now and says what it feeds.
 ---
 
 ## Sound
+
+**Every effect is LAYERED now** — picked by ear in the Sound Lab against the old versions and the
+ZzFX library. A sound is built the way a real one is heard: a **click**, a **body** (a thud, a
+sweep of air, a burst of noise) and a **ring**. Plastic and metal ring at the uneven, inharmonic
+overtones struck objects have, so a brick sounds like a brick and a shield like metal. Every
+voice varies a little in pitch each time, **hits and brick bursts sit left or right where they
+happen on screen**, and everything sends a little into a short room. No library, no sound files.
 
 **Music and sound are separate switches, both on the menu, both remembered.** `M` still
 takes everything down at once — which is what you want when somebody walks into the room,

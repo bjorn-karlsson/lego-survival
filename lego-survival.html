@@ -812,8 +812,8 @@
     <div class="rithead"><span id="ritTrib"></span><span id="ritNote"></span></div>
     <div id="ritGrid" class="ritgrid"></div>
     <div id="ritDefer" class="ritdefer"></div>
-    <div class="gearbar"><button id="ritRerollBtn" class="tbtn">REROLL</button><button id="ritCloseBtn" class="tbtn gray">CLOSE</button></div>
-    <div class="sheetfoot">U or ESC to close &middot; BUY with tribute &middot; DEFER to see it again in the next ritual, for a little more</div>
+    <div class="gearbar"><button id="ritRerollBtn" class="tbtn">REROLL</button><button id="ritCloseBtn" class="tbtn gray">CLOSE</button><button id="ritDoneBtn" class="tbtn">DONE</button></div>
+    <div class="sheetfoot">DONE ends this ritual's offer once every altar is finished (deferred items and tribute are kept) &middot; U or ESC to close &middot; BUY with tribute &middot; DEFER to see it again in the next ritual, 10% cheaper</div>
   </div>
 </div>
 <div id="gearTip" class="geartip hidden"></div>
@@ -1450,6 +1450,13 @@ function syncStats(){
     }
     p.esMax = Math.max(0, ((p.esFlat||0) + p.ciEs) * (1 + (p.inc.es||0) + intOf()*ATTR_INT_ES));
     p.es = (was <= 0) ? p.esMax : Math.min(p.es || 0, p.esMax); }
+  /* MANA, rebuilt the same way: what is in the pool is kept, clamped, and a
+     pool seen for the first time starts full */
+  { const was = p.maxMana || 0;
+    p.maxMana = Math.max(0, (MANA_BASE + MANA_PER_LVL*((p.level || 1) - 1) + intOf()*MANA_PER_INT + (p.manaFlat || 0))
+                         * (1 + (p.inc.mana || 0)));
+    p.mana = (was <= 0) ? p.maxMana : Math.min(p.mana || 0, p.maxMana);
+    p.manaRegen = Math.max(0, (p.maxMana*MANA_REGEN_PCT + (p.manaRegenFlat || 0)) * (1 + (p.inc.manaRegen || 0))); }
   p.bleedShare  = Math.min(BLEED_SHARE_MAX, BLEED_SHARE_BASE + (p.bleedShareFlat||0));
   /* --- everything that used to be capped where the card wrote it ------------
      Same shape every time: (base + flat) x (1 + sum increased) x each more,
@@ -2413,7 +2420,7 @@ function exposeEnemy(e, el){
   const fresh = !(e.expose[el] > 0);
   e.expose[el] = EXPOSE_T;
   if(fresh){
-    addDmg(e.x, e.y - 44*(e.scale||1), EXPOSE_NAME[el], EXPOSE_COL[el], 14);
+    addHitNum(e.x, e.y - 44*(e.scale||1), EXPOSE_NAME[el], EXPOSE_COL[el], 14);
     addSparks(e.x, e.y - 18*(e.scale||1), 4, EXPOSE_COL[el]);
   }
 }
@@ -3238,8 +3245,9 @@ window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
 const OPT_KEY = 'bb_opts';
 const OPT_DEFS = [
   { id:'dmgNumbers', def:true,  name:'DAMAGE NUMBERS',
-    note:'the figures that float off a monster when you hit it. Off is a much '+
-         'quieter screen in a wave of sixty \u2014 the combat log still counts every point' },
+    note:'every number and word that floats off a hit: yours, the ones you take, your minions\', '+
+         'and MISS, BLOCKED, PERFECT!, SCORCHED! and the rest. Off is a much quieter screen in a wave '+
+         'of sixty \u2014 the combat log still counts every point' },
   { id:'autoLoot', def:false, name:'AUTO-LOOT',
     note:'every reward opens the moment you earn it. Off, rewards STACK UP instead and wait for '+
          'you: press R once and they open one after another, oldest first, until none are left' },
@@ -3337,9 +3345,10 @@ function audioInit(){
     A.comp.ratio.value = 7; A.comp.attack.value = 0.004; A.comp.release.value = 0.16;
     A.master.connect(A.comp); A.comp.connect(A.ctx.destination);
     A.sfxLid = A.ctx.createBiquadFilter();
-    A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 7200; A.sfxLid.Q.value = 0.4;
+    A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 11000; A.sfxLid.Q.value = 0.4;   /* high enough to keep the clicks */
     A.sfxLid.connect(A.master);
     A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN; A.sfx.connect(A.sfxLid);
+    sfxLayerInit();
     A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN; A.mus.connect(A.master);
     const nb = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
     const d = nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
@@ -3372,62 +3381,195 @@ function noiseHit(dur,vol,fc,fc1,type='bandpass',when=0,dest=A.sfx){
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
   s.connect(f); f.connect(g); g.connect(dest); s.start(t); s.stop(t+dur+0.02);
 }
+/* ============================ THE SOUND, LAYERED ============================
+   Every effect is built the way a real one is heard: a CLICK (the transient),
+   a BODY (a thud, a sweep of air, a burst of noise) and a RING. Plastic and
+   metal ring at the uneven, inharmonic overtones struck objects have, which is
+   what the ear hears as an object and not a beep. Every voice varies a little
+   in pitch, sits somewhere left or right -- hits and bricks where they happen
+   on screen -- and sends a little into a short room, so a fight has depth
+   instead of a machine-gun of identical tones. Picked by ear in the Sound Lab,
+   against the old one-oscillator versions and ZzFX. */
+const SFXL = { verbIn:null, noise:null, curve:null };
+function sfxLayerInit(){
+  const ctx = A.ctx;
+  /* the room: a generated impulse, decaying noise in two channels, fed in small */
+  const verb = ctx.createConvolver();
+  const len = Math.floor(ctx.sampleRate*1.1), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for(let c=0;c<2;c++){ const d = ir.getChannelData(c); for(let i=0;i<len;i++) d[i] = (Math.random()*2 - 1) * Math.pow(1 - i/len, 3.2); }
+  verb.buffer = ir;
+  SFXL.verbIn = ctx.createGain(); SFXL.verbIn.gain.value = 0.22;
+  SFXL.verbIn.connect(verb); verb.connect(A.sfx);
+  const nb = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate), d = nb.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = Math.random()*2 - 1;
+  SFXL.noise = nb;
+  SFXL.curve = new Float32Array(1024);
+  for(let i=0;i<1024;i++){ const x = i/512 - 1; SFXL.curve[i] = Math.tanh(2.2*x); }
+}
+function sfxLive(){ return !!(A.ctx && !A.muted && A.sfxOn !== false && SFXL.noise); }
+/* WHERE A SOUND IS: the next one called after sfxAt(x) sits at that point of the screen */
+let sfxPanNext = null;
+function sfxAt(x){
+  if(typeof x === 'number' && typeof cam !== 'undefined' && cw > 0)
+    sfxPanNext = clamp((x - cam.x) * (zoom || 1) / (cw/2), -1, 1) * 0.8;
+  return SFX;
+}
+function sfxPan(spread){
+  if(sfxPanNext !== null){ const p = sfxPanNext; sfxPanNext = null; return p; }
+  return rnd(-(spread || 0.3), spread || 0.3);
+}
+function voice(pan, wet){
+  const ctx = A.ctx, g = ctx.createGain(), p = ctx.createStereoPanner();
+  p.pan.value = clamp(pan, -1, 1);
+  g.connect(p); p.connect(A.sfx);
+  const s = ctx.createGain(); s.gain.value = wet === undefined ? 0.35 : wet;
+  g.connect(s); s.connect(SFXL.verbIn);
+  return g;
+}
+function lenv(g, t, a, peak, dec){
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
+}
+function losc(dest, type, f0, f1, t, a, peak, dec){
+  const ctx = A.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if(f1) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + a + dec);
+  lenv(g, t, a, peak, dec); o.connect(g); g.connect(dest); o.start(t); o.stop(t + a + dec + 0.05);
+  return o;
+}
+function lnoise(dest, t, a, peak, dec, ftype, f0, f1, q){
+  const ctx = A.ctx, s = ctx.createBufferSource(); s.buffer = SFXL.noise;
+  const f = ctx.createBiquadFilter(); f.type = ftype || 'bandpass'; f.frequency.setValueAtTime(f0 || 1000, t);
+  if(f1) f.frequency.exponentialRampToValueAtTime(f1, t + a + dec);
+  f.Q.value = q || 1;
+  const g = ctx.createGain(); lenv(g, t, a, peak, dec);
+  s.connect(f); f.connect(g); g.connect(dest);
+  s.start(t, Math.random()*1.5); s.stop(t + a + dec + 0.05);
+}
+const PLASTIC = [[1, 1, 1], [2.76, .5, .7], [5.40, .28, .45], [8.93, .15, .3]];
+const METAL   = [[1, 1, 1], [2.32, .7, .9], [4.25, .45, .8], [6.63, .3, .7], [9.38, .18, .6]];
+function modal(dest, t, f, modes, peak, dec){ for(const [r, amp, d] of modes) losc(dest, 'sine', f*r, 0, t, 0.001, peak*amp, dec*d); }
+function lclick(dest, t, peak, f){ lnoise(dest, t, 0.0005, peak, 0.006, 'highpass', f || 2500, 0, 0.7); }
+const jit = (v, k)=>v * (1 + rnd(-k, k));
+function whooshAt(v, t, f0, up, dur, peak, q){
+  const ctx = A.ctx, s = ctx.createBufferSource(); s.buffer = SFXL.noise;
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q || 2.2;
+  f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f0*up, t + dur*0.4); f.frequency.exponentialRampToValueAtTime(f0*1.1, t + dur);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + dur*0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(v); s.start(t, Math.random()); s.stop(t + dur + 0.03);
+}
 /* A cue that fires once per body in a crowd is not a cue, it is noise. `every`
    drops a repeat of the same sound inside a short window, so a wave of six
    monsters building at once is ONE thud and a hundred studs hoovered up by a
    magnet is a run of notes rather than a solid tone. */
 const sfxLast = {};
 function every(key, gap){
-  const t = A.ctx ? A.ctx.currentTime : 0;
+  /* only a sound that is actually going to play takes its slot */
+  if(!sfxLive()) return false;
+  const t = A.ctx.currentTime;
   if(sfxLast[key] !== undefined && t - sfxLast[key] < gap) return false;
   sfxLast[key] = t;
   return true;
 }
+/* every sound goes through here: nothing plays while muted, and a sound that
+   throws never takes the frame down with it */
+function sfxPlay(fn){ if(!sfxLive()){ sfxPanNext = null; return; } try { fn(A.ctx.currentTime); } catch(err){} }
 const SFX = {
-  swing(){ noiseHit(0.13,0.26,820,240,'bandpass'); },
-  hit(){ if(!every('hit',0.035)) return;
-    tone('triangle',190,70,0.09,0.42); noiseHit(0.05,0.26,1900,0,'bandpass'); },
-  /* bricks are wood and plastic, not glass: fewer voices, lower, triangle */
-  brick(n=5){ const v = Math.min(4, n); for(let i=0;i<v;i++){ const w=rnd(0,0.06);
-    tone('triangle', rnd(620,1500), rnd(280,520), 0.055, 0.10, A.sfx, w); } },
-  stud(k){ if(!every('stud',0.045)) return;
-    tone('sine', 620*Math.pow(2,Math.min(k,12)/12), 0, 0.12, 0.17);
-    tone('sine', 930*Math.pow(2,Math.min(k,12)/12), 0, 0.09, 0.07, A.sfx, 0.02); },
-  heart(){ tone('sine',520,0,0.15,0.2); tone('sine',780,0,0.2,0.2,A.sfx,0.09); },
-  magnet(){ tone('sine',300,1400,0.4,0.25); tone('sine',450,2100,0.4,0.15,A.sfx,0.06); },
-  fortune(){ [660,880,1100,1320].forEach((f,i)=> tone('triangle',f,0,0.14,0.2,A.sfx,i*0.07)); },
-  dash(){ noiseHit(0.16,0.2,1400,300,'bandpass'); },
-  hurt(){ tone('square',210,80,0.22,0.35); noiseHit(0.12,0.25,800,0,'lowpass'); },
-  bomb(){ if(!every('bomb',0.05)) return;
-    tone('sine',110,35,0.5,0.7); noiseHit(0.4,0.42,2400,180,'lowpass'); },
-  boomSmall(){ if(!every('boomSmall',0.05)) return;
-    tone('sine',140,50,0.3,0.34); noiseHit(0.2,0.2,1300,0,'lowpass'); },
-  levelup(){ [523,659,784,1046].forEach((f,i)=> tone('triangle',f,0,0.18,0.14,A.sfx,i*0.08)); },
-  pick(){ tone('triangle',760,1140,0.12,0.16); },
-  deflect(){ if(!every('deflect',0.05)) return;
-    tone('triangle',1150,1700,0.09,0.17); noiseHit(0.05,0.14,2600,900,'bandpass'); },
-  clank(){ if(!every('clank',0.05)) return;
-    tone('square',1700,640,0.07,0.15); noiseHit(0.04,0.13,2800,0,'bandpass'); },
-  grunt(){ if(!every('grunt',0.12)) return; tone('sawtooth',130,60,0.3,0.22); },
-  roar(){ tone('sawtooth',90,45,0.8,0.45); tone('sawtooth',95,50,0.8,0.26,A.sfx,0.05); },
-  click(){ tone('triangle',620,0,0.06,0.13); },
-  /* THE SPAWN. One shrill square blip per body meant a wave arriving sounded
-     like a fax machine. It is a soft low thud now, and only the first body of a
-     batch gets one — the rest arrive silently. */
-  build(){ if(!every('build',0.22)) return;
-    tone('triangle', rnd(300,380), 170, 0.10, 0.08);
-    noiseHit(0.07, 0.07, 700, 260, 'lowpass'); },
-  zap(){ if(!every('zap',0.04)) return;
-    tone('square',1250,430,0.08,0.11); noiseHit(0.04,0.10,3200,1200,'highpass'); },
-  whoosh(){ noiseHit(0.35,0.3,700,200,'bandpass'); },
-  freeze(){ if(!every('freeze',0.08)) return;
-    tone('sine',1500,280,0.35,0.18); noiseHit(0.3,0.12,4200,1100,'bandpass'); },
-  fireball(){ if(!every('fireball',0.05)) return;
-    noiseHit(0.3,0.26,560,140,'lowpass'); tone('sawtooth',220,90,0.25,0.13); },
-  thunder(){ if(!every('thunder',0.06)) return;
-    noiseHit(0.12,0.30,3000,260,'highpass'); tone('triangle',900,80,0.16,0.24); },
-  vortex(){ noiseHit(0.5,0.32,500,1400,'bandpass'); tone('sawtooth',300,600,0.4,0.12); },
-  slam(){ tone('sine',90,40,0.25,0.6); noiseHit(0.18,0.3,900,0,'lowpass'); }
+  swing(){ sfxPlay(t=>whooshAt(voice(sfxPan(), 0.15), t, jit(700, .1), 3.2, 0.19, 0.5)); },
+  hit(){ if(!every('hit',0.035)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.25);
+    lclick(v, t, 0.5, 3000);
+    losc(v, 'sine', jit(150, .08), 55, t, 0.002, 0.85, 0.11);
+    lnoise(v, t, 0.001, 0.33, 0.05, 'bandpass', jit(1400, .15), 700, 1.4);
+    modal(v, t + 0.002, jit(420, .12), PLASTIC, 0.11, 0.06); }); },
+  brick(n=5){ sfxPlay(t0=>{ const pan = sfxPan(), k = Math.min(8, n + 1);
+    for(let i=0;i<k;i++){ const v = voice(pan + rnd(-.3, .3), 0.3), t = t0 + (i ? rnd(0.01, 0.16) : 0);
+      lclick(v, t, 0.22, 3500); modal(v, t, rnd(900, 2600), PLASTIC, rnd(0.06, 0.14), rnd(0.03, 0.07)); }
+    losc(voice(pan, 0.2), 'sine', 180, 70, t0, 0.002, 0.35, 0.08); }); },
+  stud(k){ if(!every('stud',0.045)) return; sfxPlay(t=>{ const v = voice(sfxPan(0.2), 0.3), f = 1600*Math.pow(2, Math.min(k || 0, 12)/12);
+    lclick(v, t, 0.13, 5000); modal(v, t, jit(f, .02), PLASTIC, 0.12, 0.09);
+    losc(v, 'sine', f*1.5, 0, t + 0.01, 0.004, 0.08, 0.22); }); },
+  heart(){ sfxPlay(t=>{ const v = voice(0, 0.5);
+    for(const [f, d] of [[523.25, 0], [783.99, .09], [1046.5, .18]]){
+      losc(v, 'sine', f, 0, t + d, 0.015, 0.2, 0.35); losc(v, 'triangle', f*2.002, 0, t + d, 0.015, 0.035, 0.2); } }); },
+  magnet(){ sfxPlay(t=>{ const v = voice(0, 0.45);
+    losc(v, 'sine', 300, 1400, t, 0.02, 0.22, 0.4); losc(v, 'sine', 452, 2100, t + 0.05, 0.02, 0.12, 0.38);
+    for(let i=0;i<5;i++) modal(v, t + 0.08 + i*0.06, 1400 + i*260, PLASTIC, 0.05, 0.06); }); },
+  fortune(){ sfxPlay(t=>{ const v = voice(0, 0.5);
+    [1318.5, 1568, 1975.5, 2637].forEach((f, i)=>{ lclick(v, t + i*0.07, 0.08, 6000); modal(v, t + i*0.07, f, METAL, 0.06, 0.25); }); }); },
+  dash(){ sfxPlay(t=>whooshAt(voice(0, 0.12), t, 900, 2.4, 0.16, 0.42, 1.6)); },
+  hurt(){ sfxPlay(t=>{ const v = voice(0, 0.2), sh = A.ctx.createWaveShaper(); sh.curve = SFXL.curve; sh.connect(v);
+    losc(v, 'sine', 120, 45, t, 0.002, 0.95, 0.18); losc(sh, 'sawtooth', jit(210, .06), 90, t, 0.004, 0.33, 0.2);
+    lnoise(v, t, 0.001, 0.42, 0.12, 'lowpass', 1800, 300, 0.8); }); },
+  bomb(){ if(!every('bomb',0.05)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(0.25), 0.7);
+    lclick(v, t, 0.75, 1500); losc(v, 'sine', 90, 28, t, 0.003, 1.1, 0.6);
+    lnoise(v, t, 0.002, 0.95, 0.75, 'lowpass', 6000, 160, 0.7);
+    for(let i=0;i<12;i++) lclick(v, t + rnd(0.05, 0.6), rnd(0.05, 0.16), rnd(2000, 6000)); }); },
+  boomSmall(){ if(!every('boomSmall',0.05)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(0.3), 0.5);
+    lclick(v, t, 0.45, 1800); losc(v, 'sine', 130, 45, t, 0.003, 0.6, 0.3);
+    lnoise(v, t, 0.002, 0.5, 0.3, 'lowpass', 3500, 220, 0.7);
+    for(let i=0;i<5;i++) lclick(v, t + rnd(0.03, 0.3), rnd(0.04, 0.1), rnd(2000, 5000)); }); },
+  levelup(){ sfxPlay(t=>{ const v = voice(0, 0.55);
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i)=>{
+      losc(v, 'triangle', f, 0, t + i*0.075, 0.006, 0.18, 0.28); losc(v, 'sine', f*2, 0, t + i*0.075, 0.006, 0.05, 0.2);
+      losc(v, 'sine', f*1.003, 0, t + i*0.075, 0.006, 0.07, 0.35); });
+    lnoise(v, t + 0.28, 0.02, 0.07, 0.5, 'highpass', 6000, 9000, 0.5); }); },
+  pick(){ sfxPlay(t=>{ const v = voice(sfxPan(0.15), 0.3);
+    lclick(v, t, 0.12, 5000); modal(v, t, jit(1200, .03), PLASTIC, 0.1, 0.08); losc(v, 'sine', 1800, 2400, t + 0.02, 0.005, 0.07, 0.12); }); },
+  deflect(){ if(!every('deflect',0.05)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.35);
+    lclick(v, t, 0.5, 4500); modal(v, t, jit(1300, .06), METAL, 0.14, 0.18); }); },
+  clank(){ if(!every('clank',0.05)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.35);
+    lclick(v, t, 0.55, 4000); modal(v, t, jit(760, .06), METAL, 0.18, 0.3); }); },
+  grunt(){ if(!every('grunt',0.12)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.3);
+    const sh = A.ctx.createWaveShaper(); sh.curve = SFXL.curve;
+    const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    sh.connect(lp); lp.connect(v);
+    losc(sh, 'sawtooth', jit(140, .1), 65, t, 0.02, 0.28, 0.28);
+    lnoise(v, t, 0.02, 0.12, 0.25, 'bandpass', 600, 300, 0.8); }); },
+  roar(){ sfxPlay(t=>{ const ctx = A.ctx, v = voice(0, 0.45), dur = 0.9;
+    const sh = ctx.createWaveShaper(); sh.curve = SFXL.curve;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t); lp.frequency.linearRampToValueAtTime(1100, t + 0.25); lp.frequency.exponentialRampToValueAtTime(250, t + dur);
+    const trem = ctx.createGain(), lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+    lfo.frequency.value = 28; lfoG.gain.value = 0.35; lfo.connect(lfoG); lfoG.connect(trem.gain); trem.gain.value = 0.65;
+    sh.connect(lp); lp.connect(trem); trem.connect(v);
+    for(const d of [0, 7, -9]){ const o = losc(sh, 'sawtooth', 82 + d, 48 + d/2, t, 0.06, 0.38, dur); o.detune.value = d*3; }
+    lnoise(v, t, 0.05, 0.22, dur, 'bandpass', 700, 300, 0.7);
+    lfo.start(t); lfo.stop(t + dur + 0.1); }); },
+  click(){ sfxPlay(t=>{ const v = voice(0, 0.1); lclick(v, t, 0.18, 4000); modal(v, t, 2200, PLASTIC, 0.06, 0.03); }); },
+  /* THE SPAWN: a soft low thud, and only the first body of a batch gets one */
+  build(){ if(!every('build',0.22)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.3);
+    losc(v, 'sine', jit(200, .1), 80, t, 0.004, 0.3, 0.1); modal(v, t + 0.01, jit(700, .1), PLASTIC, 0.06, 0.05);
+    lnoise(v, t, 0.003, 0.13, 0.08, 'lowpass', 900, 300, 0.7); }); },
+  zap(){ if(!every('zap',0.04)){ sfxPanNext = null; return; } sfxPlay(t=>{ const ctx = A.ctx, v = voice(sfxPan(), 0.25);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.setValueAtTime(jit(1600, .1), t);
+    for(let i=1;i<8;i++) o.frequency.setValueAtTime(rnd(300, 2600), t + i*0.012);
+    lenv(g, t, 0.001, 0.15, 0.1); o.connect(g); g.connect(v); o.start(t); o.stop(t + 0.14);
+    lnoise(v, t, 0.0008, 0.45, 0.05, 'highpass', 4000, 2000, 0.7);
+    lnoise(v, t, 0.002, 0.25, 0.2, 'bandpass', 180, 90, 1); }); },
+  whoosh(){ sfxPlay(t=>whooshAt(voice(sfxPan(), 0.2), t, 500, 2.8, 0.35, 0.45, 1.8)); },
+  freeze(){ if(!every('freeze',0.08)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.6);
+    for(const [f, d] of [[2100, 0], [2900, .03], [3700, .05], [5100, .08]]) modal(v, t + d, jit(f, .03), [[1,1,1],[2.4,.3,.6]], 0.06, 0.5);
+    lnoise(v, t, 0.01, 0.18, 0.4, 'highpass', 7000, 3000, 0.5);
+    losc(v, 'sine', 600, 240, t, 0.002, 0.18, 0.12); }); },
+  fireball(){ if(!every('fireball',0.05)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.4);
+    lnoise(v, t, 0.04, 0.45, 0.35, 'lowpass', 400, 1600, 0.8);
+    lnoise(v, t + 0.03, 0.02, 0.22, 0.4, 'bandpass', 2400, 900, 0.9);
+    for(let i=0;i<6;i++) lclick(v, t + rnd(0.05, 0.4), rnd(0.03, 0.08), rnd(1500, 4000));
+    losc(v, 'sine', 140, 60, t, 0.02, 0.3, 0.3); }); },
+  thunder(){ if(!every('thunder',0.06)){ sfxPanNext = null; return; } sfxPlay(t=>{ const v = voice(sfxPan(), 0.6);
+    lnoise(v, t, 0.0008, 0.6, 0.06, 'highpass', 3500, 1500, 0.7);
+    lnoise(v, t + 0.02, 0.03, 0.5, 0.6, 'lowpass', 900, 120, 0.8);
+    losc(v, 'sine', 90, 40, t, 0.01, 0.5, 0.5); }); },
+  vortex(){ sfxPlay(t=>{ const ctx = A.ctx, v = voice(0, 0.3), dur = 0.5;
+    const s = ctx.createBufferSource(); s.buffer = SFXL.noise;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 3; f.frequency.value = 900;
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 9; lg.gain.value = 500; lfo.connect(lg); lg.connect(f.frequency);
+    const g = ctx.createGain(); lenv(g, t, 0.08, 0.45, dur);
+    s.connect(f); f.connect(g); g.connect(v); s.start(t, Math.random()); s.stop(t + dur + 0.12); lfo.start(t); lfo.stop(t + dur + 0.12); }); },
+  slam(){ sfxPlay(t=>{ const pan = sfxPan(0.1), v = voice(pan, 0.55);
+    lclick(v, t, 0.85, 1200); losc(v, 'sine', 75, 30, t, 0.002, 1.2, 0.35);
+    lnoise(v, t, 0.002, 0.65, 0.3, 'lowpass', 2500, 200, 0.7);
+    for(let i=0;i<5;i++) modal(voice(pan + rnd(-.5, .5), 0.3), t + rnd(0.04, 0.3), rnd(500, 1300), PLASTIC, rnd(.04, .08), .05); }); }
 };
 const mf = m=> 440*Math.pow(2,(m-69)/12);
 /* Six tracks. Each is 16 sixteenth-steps long: a bass line, two alternating lead
@@ -3990,7 +4132,7 @@ function newPlayer(){
        it started as, which is exactly what the game did before any of this. */
     conv: blankConv(),
     inc:{ hp:0, speed:0, magnet:0, studs:0, atk:0, cast:0, roll:0, regen:0, heart:0,
-          acc:0, eva:0, es:0,
+          acc:0, eva:0, es:0, mana:0, manaRegen:0,
           elem:0, fire:0, frost:0, shock:0, boltR:0,
           /* CHAOS IS NOT ELEMENTAL, so it gets its own increase and takes no
              part in the elemental one. That is the entire difference. */
@@ -4084,6 +4226,7 @@ function newPlayer(){
     /* ENERGY SHIELD. Zero to start, like evasion: it is a defence you choose.
        `esT` is the clock since the last time anything touched you. */
     esFlat:0, es:0, esMax:0, esT:0, esFlash:0,
+    manaFlat:0, manaRegenFlat:0, mana:0, maxMana:0, manaRegen:0,
     /* the tree's sentences. Each is a rule, not a pool, so each is a flag. */
     critAilAll:false, noCrit:false, ailFull:false,
     /* what BRICKS and the TREE handed over; the weapon's own is in WEAPONS */
@@ -4475,7 +4618,7 @@ function breakProp(p){
     : p.type==='cactus'? ['#3d7a2b','#4b9b41','#57a33c']
     : ['#7b5132','#915f3d','#583927'];
   spawnBricks(p.x, p.y, cols, p.type==='rock'?12:10, 190);
-  SFX.brick(6); addShake(0.18);
+  sfxAt(p.x).brick(6); addShake(0.18);
   if(p.type==='crate'){
     spawnStuds(p.x, p.y, irnd(4,9));
     if(Math.random()<0.35) pickups.push(makePickup('heart', p.x+rnd(-14,14), p.y+rnd(-14,14)));
@@ -4607,11 +4750,11 @@ function fmtHp(v){
 function addDmg(x,y,txt,color='#fff',size=17){
   dmgTexts.push({x:x+rnd(-8,8), y:y-30, txt, color, size, life:0.8, vy:-52});
 }
-/* THE DAMAGE FIGURES, and only those. Everything else that floats is an EVENT
-   worth reading -- FROZEN SOLID, a curse landing, a level -- and a player who
-   turned the numbers off did not ask to stop being told those. So the switch
-   lives here, on the one call the outgoing damage numbers make, rather than on
-   addDmg where it would quietly swallow half the game's feedback. */
+/* THE COMBAT TEXT, and only that. DAMAGE NUMBERS off means a quiet fight: no
+   figure off a monster, none off you, none off your minions, and none of the
+   combat words either -- MISS, BLOCKED, EVADED, PERFECT!, DEFLECT!, SCORCHED!,
+   FROZEN SOLID, CHILLED ×3 and the rest. What is NOT combat text still floats:
+   loot, a level, a pickup, a boss calling its attack, a league appearing. */
 function addHitNum(x,y,txt,color,size){
   if(!OPT.dmgNumbers) return;
   addDmg(x,y,txt,color,size);
@@ -5494,7 +5637,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      wound was already landed. */
   if(isAttack(source) && !opts.quiet && !opts.drain && !opts.reave
      && (e.evasion || 0) > 0 && Math.random() > heroHitChance(e)){
-    addDmg(e.x, e.y-40*(e.scale||1), 'MISS', '#c9b8e8', 14);
+    addHitNum(e.x, e.y-40*(e.scale||1), 'MISS', '#c9b8e8', 14);
     clogRun.evaded++;
     logEventK('ev|'+(e.bname||e.type), (e.bname||e.type)+' slipped your swing', '#c9b8e8');
     addSparks(e.x, e.y-18, 4, '#9b45d6');
@@ -5510,7 +5653,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     if(Math.abs(angDiff(e.faceA, fromAtt)) < BLOCK_ARC && Math.random() < e.block){
       const px2 = e.x + Math.cos(fromAtt)*16*e.scale, py2 = e.y - 20*e.scale + Math.sin(fromAtt)*10*e.scale;
       addSparks(px2, py2, 4, '#cfd6dd');
-      addDmg(e.x, e.y-42*e.scale, 'BLOCKED', '#cfd6dd', 14);
+      addHitNum(e.x, e.y-42*e.scale, 'BLOCKED', '#cfd6dd', 14);
       clogRun.blocked++;
       logEventK('bl|'+e.type, e.type+' blocked with its shield', '#cfd6dd');
       SFX.clank();
@@ -5699,7 +5842,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       });
     }
     addShake(crit?0.13:0.08);
-    SFX.hit();
+    sfxAt(e.x).hit();
   }
   logDealt(e, d, source, crit, suppressed, mix);
   if(e.hp<=0) killEnemy(e, source);
@@ -5718,7 +5861,7 @@ function leechFrom(d){
     const gain = Math.min(d * p.leech, p.esMax * LEECH_HIT_CAP, p.esMax - p.es);
     if(gain <= 0.005) return;
     p.es = Math.round((p.es + gain)*100)/100;
-    addDmg(p.x, p.y - 58, '+'+fmtHp(gain), ES_COL, 14);
+    addHitNum(p.x, p.y - 58, '+'+fmtHp(gain), ES_COL, 14);
     clogRun.leeched = (clogRun.leeched||0) + gain;
     return;
   }
@@ -5727,7 +5870,7 @@ function leechFrom(d){
   const heal = Math.min(d * p.leech, p.maxHp * LEECH_HIT_CAP, p.maxHp - p.hp);
   if(heal <= 0.005) return;
   p.hp = Math.round((p.hp + heal)*100)/100;
-  addDmg(p.x, p.y - 58, '+'+fmtHp(heal), LEECH_COL, 14);
+  addHitNum(p.x, p.y - 58, '+'+fmtHp(heal), LEECH_COL, 14);
   clogRun.leeched = (clogRun.leeched||0) + heal;
 }
 /* Lay poison on one body. A fresh dose refreshes the clock and takes the higher
@@ -5805,7 +5948,7 @@ function shockEnemy(e, n){
     if(!e.shocked) e.shocked = { n:0, t:0 };
     e.shocked.n = Math.min(SHOCKED_MAX, e.shocked.n + 1);
     e.shocked.t = SHOCKED_T;
-    addDmg(e.x, e.y-46*(e.scale||1), 'SHOCKED \u00d7'+e.shocked.n, '#ffe95a', 15);
+    addHitNum(e.x, e.y-46*(e.scale||1), 'SHOCKED \u00d7'+e.shocked.n, '#ffe95a', 15);
     addRing(e.x, e.y, 6, 180, 42, '#ffe95a', 4, 0.3);
     addSparks(e.x, e.y-18*(e.scale||1), 6, '#fff6a8');
   }
@@ -5833,7 +5976,7 @@ function zeroShatter(e){
     addRing(e.x, e.y, 12, (rr-12)/FZ_T, rr, FX.friend.frostDeep, 7, FZ_T);
     addRing(e.x, e.y, 6, (rr*0.6-6)/(FZ_T*0.8), rr*0.6, FX.friend.frost, 4, FZ_T*0.8);
     addSparks(e.x, e.y-16, 8 + marks*3, '#dff2ff');
-    addDmg(e.x, e.y-52*(e.scale||1), 'SHATTER ×'+marks, '#dff2ff', 16);
+    addHitNum(e.x, e.y-52*(e.scale||1), 'SHATTER ×'+marks, '#dff2ff', 16);
     SFX.freeze();
     /* a straight scan, not the bucket grid: a death can be triggered from
        anywhere in the frame, and the grid is only current during the update */
@@ -5856,11 +5999,11 @@ function freezeSolid(e, quiet){
   if(e.type !== 'boss'){
     e.stunT = Math.max(e.stunT||0, FREEZE_STUN_T);
     if(!quiet){
-      addDmg(e.x, e.y-46*(e.scale||1), 'FROZEN SOLID', '#dff2ff', 15);
+      addHitNum(e.x, e.y-46*(e.scale||1), 'FROZEN SOLID', '#dff2ff', 15);
       addSparks(e.x, e.y-16, 7, '#ffffff');
     }
   } else if(!quiet){
-    addDmg(e.x, e.y-46*(e.scale||1), 'BRITTLE ×'+e.frozen.n, '#dff2ff', 15);
+    addHitNum(e.x, e.y-46*(e.scale||1), 'BRITTLE ×'+e.frozen.n, '#dff2ff', 15);
     addSparks(e.x, e.y-16, 6, '#dff2ff');
   }
 }
@@ -5898,7 +6041,7 @@ function burnEnemy(e, hit, depth){
     if(!e.burnt) e.burnt = { n:0, t:0 };
     e.burnt.n = Math.min(BURNT_MAX, e.burnt.n + 1);
     e.burnt.t = BURNT_T;
-    addDmg(e.x, e.y-46*(e.scale||1), 'BURNT \u00d7'+e.burnt.n, '#ff6a2a', 15);
+    addHitNum(e.x, e.y-46*(e.scale||1), 'BURNT \u00d7'+e.burnt.n, '#ff6a2a', 15);
     addRing(e.x, e.y, 6, 200, 46, '#ff8a3c', 4, 0.35);
     addSparks(e.x, e.y-18, 7, '#ff9a3c');
   }
@@ -6074,7 +6217,7 @@ function killEnemy(e, source){
     addRing(e.x, e.y, 4, 240, rad*0.6, '#d6ffa0', 5, 0.4);
     addSparks(e.x, e.y-16, 10 + po.n*2, '#8ede4a');
     SFX.freeze();
-    addDmg(e.x, e.y-52, 'SPORES ×'+po.n, '#8ede4a', 17);
+    addHitNum(e.x, e.y-52, 'SPORES ×'+po.n, '#8ede4a', 17);
     /* a straight scan rather than the bucket grid: a death can be triggered from
        anywhere in the frame, and the grid is only current during the update pass */
     const dps = po.dps*BANE_BURST_KEEP, dur = Math.max(2, po.t*0.8);
@@ -6120,7 +6263,7 @@ function killEnemy(e, source){
   const fort = player.fortuneT>0 ? player.fortuneMul : 1;
   const cols = [e.col.head, e.col.torso, e.col.legs, e.col.head];
   spawnBricks(e.x, e.y, cols, e.type==='boss'?30:10+irnd(0,4), e.type==='boss'?330:200);
-  SFX.brick(e.type==='boss'?10:6);
+  sfxAt(e.x).brick(e.type==='boss'?10:6);
   addShake(e.type==='boss'?0.55:0.16);
   let amount = irnd(e.studs.a, e.studs.b);
   amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort);
@@ -7073,6 +7216,20 @@ function attrOf(id, p, w){
 }
 function strOf(p, w){ return attrOf('str', p, w); }
 function intOf(p, w){ return attrOf('int', p, w); }
+/* ================================ MANA ================================
+   PoE's third pool. It is here, it fills and it is shown -- and for now nothing
+   spends it: the automatic spells stay free, and mana is what the ACTIVE skills
+   on keys will cost when they come (spendMana is their door).
+     maximum  = (40 + 4 a level + 1 for every 2 INTELLIGENCE + flat) x (1 + increased)
+     regen    = (1.75% of the maximum a second + flat) x (1 + increased regen) */
+const MANA_BASE = 40, MANA_PER_LVL = 4, MANA_PER_INT = 0.5, MANA_REGEN_PCT = 0.0175;
+const MANA_COL = '#3f7bff';
+function spendMana(n){
+  const p = player;
+  if(!p || !(n >= 0) || (p.mana || 0) + 1e-9 < n) return false;
+  p.mana = Math.max(0, p.mana - n);
+  return true;
+}
 function dexOf(p, w){ return attrOf('dex', p, w); }
 function incSpellAll(){ return player.incSpell + (weapon.incSpell || 0) + intOf()*ATTR_INT_SPELL; }
 function incMeleeAll(){ return player.incMelee + (weapon.incMelee || 0) + strOf()*ATTR_STR_DMG; }
@@ -7238,7 +7395,7 @@ function addBrand(elem){
   const p = player;
   p.brand[elem] = (p.brand[elem] || 0) + 1;
   p.brandT[elem] = BRAND_T;
-  addDmg(p.x, p.y-84, BRAND_NAME[elem]+' ×'+p.brand[elem], BRAND_COL[elem], 18);
+  addHitNum(p.x, p.y-84, BRAND_NAME[elem]+' ×'+p.brand[elem], BRAND_COL[elem], 18);
   logEvent(BRAND_NAME[elem]+' ×'+p.brand[elem]+' — '+elem+' resistance '+
     Math.round((1-elemTake(elem))*100)+'%', BRAND_COL[elem]);
 }
@@ -7250,7 +7407,7 @@ function applyCurse(kind, src){
   p.curse[kind] = Math.min(C.cap, C.step * elemPower(src) * p.curseN[kind]);
   p.curse.t = Math.max(p.curse.t, 14);
   if(p.curseN[kind] > beforeN){
-    addDmg(p.x, p.y-62, C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+'!', C.col, 17);
+    addHitNum(p.x, p.y-62, C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+'!', C.col, 17);
     logEvent(C.name+(p.curseN[kind]>1?' ×'+p.curseN[kind]:'')+' — -'+
       Math.round(p.curse[kind]*100)+'% for '+Math.ceil(p.curse.t)+'s', C.col);
     addRing(p.x, p.y, 10, 260, 60, C.col, 4, 0.45);
@@ -7263,7 +7420,7 @@ function updateCurses(dt){
   if(p.curse.t <= 0){
     for(const k of CURSE_KEYS){ p.curse[k] = 0; p.curseN[k] = 0; }
     p.curse.t = 0;
-    addDmg(p.x, p.y-62, 'CURSE LIFTED', '#a5e06e', 16);
+    addHitNum(p.x, p.y-62, 'CURSE LIFTED', '#a5e06e', 16);
   } else if(Math.random() < 0.25){
     const live = CURSE_KEYS.filter(k=>p.curse[k] > 0);
     if(live.length)
@@ -7299,12 +7456,12 @@ function ailmentBreak(elem, src){
     p.chill.stacks = Math.max(0, p.chill.stacks - AIL_BREAK);   /* five are spent */
     if(p.chill.stacks <= 0) p.chill.t = 0;
     addBrand('frost');
-    addDmg(p.x, p.y-70, 'FROZEN SOLID!', '#bfe3ff', 22);
+    addHitNum(p.x, p.y-70, 'FROZEN SOLID!', '#bfe3ff', 22);
     addRing(p.x, p.y, 10, 320, 90, '#bfe3ff', 7, 0.6);
     SFX.freeze(); addShake(0.3);
   } else if(elem==='fire'){
     addBrand('fire');
-    addDmg(p.x, p.y-70, 'SCORCHED!', '#ff8a3c', 22);
+    addHitNum(p.x, p.y-70, 'SCORCHED!', '#ff8a3c', 22);
     addRing(p.x, p.y, 10, 320, 90, '#ff8a3c', 7, 0.6);
     SFX.fireball(); addShake(0.25);
   } else if(elem==='shock'){
@@ -7315,7 +7472,7 @@ function ailmentBreak(elem, src){
     p.shock.stacks = Math.max(0, p.shock.stacks - AIL_BREAK);
     if(p.shock.stacks <= 0) p.shock.t = 0;
     addBrand('shock');
-    addDmg(p.x, p.y-76, 'ELECTROCUTED!', '#ffe95a', 24);
+    addHitNum(p.x, p.y-76, 'ELECTROCUTED!', '#ffe95a', 24);
     addRing(p.x, p.y, 8, 420, 130, '#ffe95a', 9, 0.6);
     for(let i=0;i<7;i++) addZap(p.x+rnd(-70,70), p.y-90, p.x, p.y-14, 0);
     SFX.thunder(); addShake(0.55);
@@ -7335,7 +7492,7 @@ function applyAilment(elem, src, stacks){
     const b = p.burn;
     if(!b.list) b.list = [];
     b.list.push({ dps: 3*take/BURN_DUR, t: BURN_DUR });
-    addDmg(p.x, p.y-58, 'BURNING ×'+b.list.length, '#ff8a3c', 15);
+    addHitNum(p.x, p.y-58, 'BURNING ×'+b.list.length, '#ff8a3c', 15);
     logEventK('ail|fire', 'burning ×'+b.list.length, '#ff8a3c');
     /* the fifth fire is spent branding you, and the pile carries on from there */
     if(b.list.length >= AIL_BREAK){
@@ -7345,7 +7502,7 @@ function applyAilment(elem, src, stacks){
   } else if(elem==='frost'){
     p.chill.stacks += (take >= 0.5 ? 1 : 0.5);
     p.chill.t = Math.max(p.chill.t, 5 * take);
-    addDmg(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
+    addHitNum(p.x, p.y-58, 'CHILLED ×'+Math.round(p.chill.stacks), '#bfe3ff', 15);
     logEventK('ail|frost', 'chilled ×'+Math.round(p.chill.stacks), '#bfe3ff');
     if(p.chill.stacks >= AIL_BREAK) ailmentBreak('frost', src);
   } else if(elem==='shock'){
@@ -7353,7 +7510,7 @@ function applyAilment(elem, src, stacks){
     const add = many > 1 ? many * clamp(take, 0, 1) : (take >= 0.5 ? 1 : 0.5);
     p.shock.stacks += add;
     p.shock.t = Math.max(p.shock.t, 6 * take);
-    addDmg(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
+    addHitNum(p.x, p.y-58, 'SHOCKED ×'+Math.round(p.shock.stacks), '#ffe95a', 15);
     logEventK('ail|shock', 'shocked ×'+Math.round(p.shock.stacks), '#ffe95a');
     if(p.shock.stacks >= AIL_BREAK) ailmentBreak('shock', src);
   }
@@ -7384,7 +7541,7 @@ function ailmentDamage(n, quiet, type){
   p.hp = Math.round((p.hp - n)*100)/100;
   p.regenStall = REGEN_STALL;
   p.flash = 1; redFlash = Math.max(redFlash, 0.35);
-  if(!quiet) addDmg(p.x, p.y-44, '-'+fmtHp(n), '#ff8a3c', 16);
+  if(!quiet) addHitNum(p.x, p.y-44, '-'+fmtHp(n), '#ff8a3c', 16);
   logTaken(n, {type:'ailment'}, null, false, false);
   if(p.hp<=0){ p.hp=0; playerDie(); }
 }
@@ -7429,7 +7586,7 @@ function updateAilments(dt){
     const show = p.burn.acc >= 1;
     if(show) p.burn.acc -= 1;
     if(deal > 0) ailmentDamage(deal, !show);
-    if(show) addDmg(p.x, p.y-44, '-1', '#ff8a3c', 16);
+    if(show) addHitNum(p.x, p.y-44, '-1', '#ff8a3c', 16);
     if(Math.random() < 0.5)
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40), vx:rnd(-14,14), vy:rnd(-80,-30),
         life:0.4, max:0.4, color: Math.random()<0.5?'#ff9a3c':'#ffd166'});
@@ -7453,7 +7610,7 @@ function updateAilments(dt){
     const show = p.psn.acc >= 1;
     if(show) p.psn.acc -= 1;
     if(deal > 0) ailmentDamage(deal, !show, 'chaos');
-    if(show) addDmg(p.x, p.y-44, '-1', '#8ac24a', 16);
+    if(show) addHitNum(p.x, p.y-44, '-1', '#8ac24a', 16);
     if(Math.random() < 0.4)
       particles.push({kind:'spark', x:p.x+rnd(-12,12), y:p.y-rnd(6,40),
         vx:rnd(-12,12), vy:rnd(-60,-20), life:0.45, max:0.45,
@@ -7492,7 +7649,7 @@ function playerDamage(n, src, elem, spell){
      happened before any of this existed. Attacks only, for the same reason the
      hero's own swing is: a thrown rock still lands where it was thrown. */
   if(!isSpell && evasionValue() > 0 && Math.random() > mobHitChance(src)){
-    addDmg(p.x, p.y-56, 'EVADED', '#c9b8e8', 16);
+    addHitNum(p.x, p.y-56, 'EVADED', '#c9b8e8', 16);
     addSparks(p.x, p.y-18, 4, '#c9b8e8');
     clogRun.evaded++;
     p.invuln = IFRAME_T*0.5;
@@ -7508,13 +7665,13 @@ function playerDamage(n, src, elem, spell){
   let scrit = false, supp = false;
   if(p.shock.stacks > 0 && Math.random() < shockCritChance()){
     d *= 1.8; scrit = true;
-    addDmg(p.x, p.y-64, 'SHOCK CRIT!', '#ffe95a', 18);
+    addHitNum(p.x, p.y-64, 'SHOCK CRIT!', '#ffe95a', 18);
     addShake(0.2);
   }
   if(isSpell){
     if(Math.random() < suppressChance()){
       d *= SUPPRESS_TAKEN; supp = true;
-      addDmg(p.x, p.y-70, 'SUPPRESSED', '#9fd4ff', 16);
+      addHitNum(p.x, p.y-70, 'SUPPRESSED', '#9fd4ff', 16);
     }
     /* a LESS multiplier, after suppression, so the two stack the way more and
        less always do rather than competing for the same pool */
@@ -7541,7 +7698,7 @@ function playerDamage(n, src, elem, spell){
     const ci = (elem === 'chaos') ? 1 : clamp(((src && (src.chaosShare
                || (src.src && src.src.chaosShare))) || 0), 0, 1);
     n = n * (1 - ci);
-    if(n <= 0.001){ addDmg(p.x, p.y-56, 'IMMUNE', '#8ede4a', 15); p.invuln = IFRAME_T; return; }
+    if(n <= 0.001){ addHitNum(p.x, p.y-56, 'IMMUNE', '#8ede4a', 15); p.invuln = IFRAME_T; return; }
   }
   /* THE SHIELD TAKES IT. After the log, so what you read is the hit that was
      thrown at you; what reaches the hearts is what is left of it. A monster's
@@ -7560,7 +7717,7 @@ function playerDamage(n, src, elem, spell){
     const ate = was - (p.es || 0);
     if(ate > 0.01){
       p.esFlash = 1;
-      addDmg(p.x, p.y - 50, '-'+fmtHp(ate), ES_COL, 14);
+      addHitNum(p.x, p.y - 50, '-'+fmtHp(ate), ES_COL, 14);
       addSparks(p.x, p.y - 20, 4, ES_COL);
     }
     if(n <= 0.001){ p.invuln = IFRAME_T; p.flash = 1; return; }
@@ -7580,7 +7737,7 @@ function playerDamage(n, src, elem, spell){
 }
 function perfectDodge(x,y){
   tScale = 0.35;
-  addDmg(player.x, player.y-52, 'PERFECT!', '#9fdc7e', 20);
+  addHitNum(player.x, player.y-52, 'PERFECT!', '#9fdc7e', 20);
   addRing(x, y, 8, 260, 70, '#9fdc7e', 5, 0.4);
   spawnStuds(player.x, player.y, 3);
   player.bomb.cd = Math.max(0, player.bomb.cd - 2);
@@ -7962,6 +8119,9 @@ function leagueLeft(){
   for(const A of ritualS.altars) if(A.state === 'guarded' || A.state === 'ready') out.push('ritual');
   return out;
 }
+/* league content that is RUNNING right now: an open breach or abyss, a sprung
+   strongbox, a ritual under way */
+function leagueRunning(){ return breachOpenNow() || abyssOpenNow() || sboxActiveNow() || ritualActiveNow(); }
 function leagueLeftText(){
   const L = leagueLeft(), n = k=>L.filter(x=>x === k).length, out = [];
   const say = (k, one, many)=>{ const c = n(k); if(c) out.push(c === 1 ? one : c+' '+many); };
@@ -8040,13 +8200,16 @@ function updateWave(dt){
      ritual altar still untouched on the map, the wave HOLDS (wave.hold) under a
      prompt: do the content and it carries on by itself the moment the last of
      it is done, or press F to leave it (see waveGoOn). */
+  /* ...and ANYTHING STILL RUNNING holds it too. A ritual begun on a cleared
+     wave is no longer "left" (it is running), so without this the next wave
+     started under it the moment its altar lit. The breather waits as well. */
   if(wave.state==='cleared'){
     if(wave.hold && !leagueLeft().length) wave.hold = false;
-    if(!wave.hold && wave.t >= WAVE_CLEAR_HOLD) startWave(wave.n + 1);
+    if(!wave.hold && !leagueRunning() && wave.t >= WAVE_CLEAR_HOLD) startWave(wave.n + 1);
     return;
   }
   if(wave.state==='ready'){
-    wave.readyT -= dt;
+    if(!ritualActiveNow()) wave.readyT -= dt;
     if(wave.readyT <= 0) beginFight();
     return;
   }
@@ -9361,35 +9524,41 @@ function drawSboxHud(){
    than the floor drops, and chests of rare to legendary bricks. The offer is the
    same for all three altars of a set and what you do not spend is kept, so
    saving the shopping until the third altar buys the most. An offer you want
-   but cannot afford can be DEFERRED: it comes back in the next set's offer, at
-   a little more tribute. A set's wave holds while its ritual is running. */
+   but cannot afford can be DEFERRED: it comes back in the next set's offer as
+   an ordinary offer, 10% cheaper -- and can be deferred again, for another 10%.
+   A set's wave holds while its ritual is running. */
 const RITUAL_FROM = 7;                 /* = LEAGUE_FROM; how often is leagueRoll's */
 const RITUAL_N = 3;                     /* altars in a set */
 const RITUAL_DELAY = [4, 10];           /* seconds into the fight before they rise */
-const RITUAL_R = 300;                   /* the circle */
+const RITUAL_R = 450;                   /* the circle: room to fight a crowd in */
 const RITUAL_TOUCH = 40;
 const RITUAL_WAKE_R = 210;              /* a sleeping pack wakes when you come this close to the altar or to one of them */
-const RITUAL_GAP = 820;                 /* altars of a set stand at least this far apart */
+const RITUAL_GAP = 1100;                /* altars of a set stand at least this far apart */
 const RITUAL_GUARD = [5, 7];
-function ritualBudget(n){ return 10 + Math.floor(n/3); }   /* monsters one altar calls */
-const RITUAL_PULSE_T = 2.0, RITUAL_PACK = [3, 5], RITUAL_ALIVE = 12;
+/* A RITUAL IS A HORDE. An altar calls 24 + the wave of them, in pulses of six to
+   nine, with up to 26 standing inside at once */
+function ritualBudget(n){ return 24 + n; }   /* monsters one altar calls */
+const RITUAL_PULSE_T = 1.6, RITUAL_PACK = [6, 9], RITUAL_ALIVE = 26;
 const RITUAL_MAGIC = 0.14, RITUAL_ELITE = 0.06;
 const RITUAL_ABIL_T = [3.2, 4.8];       /* between the altar's own strikes */
 const RITUAL_MARK_R = 72, RITUAL_MARK_T = 1.15;
 const RITUAL_RING_WAIT = 0.7, RITUAL_RING_SPD = 250, RITUAL_RING_BAND = 14;
-const RITUAL_TRIB = 10;                 /* a plain body at MOB LV 0; x2 magic, x4 elite, x the level's worth */
+const RITUAL_TRIB = 4;                  /* a plain body at MOB LV 0 (a smaller share: there are far more of them); x2 magic, x4 elite, x the level's worth */
 const RITUAL_COL = '#ff3a4a';
-const RITUAL_OFFERS = 8, RITUAL_DEFER_MUL = 1.2, RITUAL_DEFER_MAX = 6;
+const RITUAL_OFFERS = 8, RITUAL_DEFER_MUL = 0.9, RITUAL_DEFER_MAX = 6;   /* a deferral takes 10% off */
 const RITUAL_REROLL = 60, RITUAL_REROLL_GROW = 1.5;
 /* what an offer costs at MOB LV 0, before the level's worth */
 /* A LEGENDARY IS NOT ONE SET'S WORTH. Three altars pay roughly 550 tribute at
    the level they are fought at; a legendary chest is three to five sets of
    saving -- which is what DEFER is for: put it off, keep the tribute, and come
-   back for it a set or three later at x1.2 each time. */
-const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2000 };
+   back for it a set or three later, 10% cheaper each time you put it off. */
+const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2800 };
 const RITUAL_OFFER_W = [['magic', 0.24], ['rare', 0.28], ['chest:rare', 0.24], ['chest:epic', 0.16], ['chest:legendary', 0.08]];
 /* what the fog swallows: anything a monster shoots at you from outside */
-const RITUAL_FOG_KINDS = ['arrow', 'batbolt', 'bolt', 'frostbolt', 'frostrock', 'hexbolt', 'skull', 'spit', 'venom', 'zorb', 'jrock'];
+/* THE RING IS A WALL for every missile, both ways: nothing flies in and nothing
+   flies out. Only what stands still where it was put -- a vortex totem, a
+   brickbane cloud -- is not a missile */
+const RITUAL_FOG_STILL = ['vtotem', 'gas'];
 function ritualBlank(){ return { altars:[], pending:null, tribute:0, offers:[], deferred:[], rerollN:0, fx:[], active:null, set:0, uid:1 }; }
 let ritualS = ritualBlank();
 function ritualActiveNow(){ return !!ritualS.active; }
@@ -9604,9 +9773,9 @@ function ritualClamp(){
     if(e.ritualSide > 0) inside(e, (e.r || 12)); else outside(e, (e.r || 12));
   }
   for(const pr of projectiles){
-    if(pr.dead || pr.deflected || RITUAL_FOG_KINDS.indexOf(pr.kind) < 0 || pr.px === undefined) continue;
+    if(pr.dead || RITUAL_FOG_STILL.indexOf(pr.kind) >= 0 || pr.px === undefined) continue;
     const was = Math.hypot(pr.px - A.x, pr.py - A.y), now = Math.hypot(pr.x - A.x, pr.y - A.y);
-    if(was >= RITUAL_R && now < RITUAL_R){ pr.dead = true; addDust(pr.x, pr.y, 3, 'rgba(120,40,50,'); }
+    if((was >= RITUAL_R) !== (now >= RITUAL_R)){ pr.dead = true; addDust(pr.x, pr.y, 3, 'rgba(120,40,50,'); }
   }
 }
 function updateRitual(dt){
@@ -9661,10 +9830,25 @@ function ritualOffersNew(){
   const carry = ritualS.deferred.map(o=>Object.assign(o, { carried:true }));
   ritualS.deferred = [];
   ritualS.rerollN = 0;
+  ritualS.closed = false;
   ritualS.offers = carry.slice(0, RITUAL_OFFERS);
   while(ritualS.offers.length < RITUAL_OFFERS) ritualS.offers.push(ritualOffer());
 }
-function ritualCanShop(){ return ritualS.altars.some(A=>A.state === 'done') && (ritualS.offers.length > 0 || ritualS.tribute > 0); }
+function ritualCanShop(){ return !ritualS.closed && ritualS.altars.some(A=>A.state === 'done') && ritualS.offers.length > 0; }
+/* NOTHING LEFT TO DO: nothing on offer, or nothing affordable, no room to defer
+   and no tribute for a reroll */
+function ritualStuck(){
+  const S = ritualS;
+  if(!S.offers.length) return true;
+  return S.offers.every(o=>o.cost > S.tribute) && S.deferred.length >= RITUAL_DEFER_MAX && S.tribute < ritualRerollCost();
+}
+/* DONE: the window closes, and once every altar of the set is finished the
+   set's offer ends -- what was deferred and the tribute are kept for the next */
+function ritualFinish(){
+  const S = ritualS;
+  if(S.altars.length && S.altars.every(A=>A.state === 'done')){ S.offers = []; S.closed = true; }
+  if(ritualOn) toggleRitual();
+}
 function ritualRerollCost(){ return Math.round(RITUAL_REROLL * mobRankMul() * Math.pow(RITUAL_REROLL_GROW, ritualS.rerollN)); }
 function ritualBuy(id){
   const o = ritualS.offers.find(q=>q.id === id);
@@ -9683,9 +9867,11 @@ function ritualBuy(id){
 }
 function ritualDefer(id){
   const o = ritualS.offers.find(q=>q.id === id);
-  if(!o || o.carried || ritualS.deferred.length >= RITUAL_DEFER_MAX) return false;
+  if(!o || ritualS.deferred.length >= RITUAL_DEFER_MAX) return false;
   ritualS.offers = ritualS.offers.filter(q=>q !== o);
   o.cost = Math.round(o.cost * RITUAL_DEFER_MUL);
+  o.defers = (o.defers || 0) + 1;
+  o.carried = false;
   ritualS.deferred.push(o);
   return true;
 }
@@ -9811,7 +9997,8 @@ function drawRitualHud(){
   if(A){
     const alive = enemies.filter(e=>e.ritual === A && !e.dead).length;
     head = 'RITUAL · '+(A.left > 0 ? A.left+' to come · ' : '')+alive+' standing · '+S.tribute+' tribute';
-  } else head = 'RITUAL · '+done+'/'+S.altars.length+' done · '+S.tribute+' tribute · U to spend';
+  } else if(!ritualCanShop()) return;
+  else head = 'RITUAL · '+done+'/'+S.altars.length+' done · '+S.tribute+' tribute · U to spend';
   ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = RITUAL_COL; ctx.fillText(head, cw/2, by);
@@ -11286,6 +11473,10 @@ const META_STATS = {
   incHp:      { n:'increased maximum hearts', pct:1, w:(p,v)=>{ p.inc.hp += v; } },
   incCritMult:{ n:'increased critical damage', pct:1, w:(p,v)=>{ p.incCritMult += v; } },
   moreHp:     { n:'MORE maximum hearts',          pct:1, w:(p,v)=>{ p.hpMore *= (1+v); } },
+  mana:       { n:'maximum MANA',                 w:(p,v)=>{ p.manaFlat += v; } },
+  incMana:    { n:'increased maximum MANA',       pct:1, w:(p,v)=>{ p.inc.mana += v; } },
+  manaRegen:  { n:'MANA regenerated a second',    w:(p,v)=>{ p.manaRegenFlat += v; } },
+  incManaRegen:{ n:'increased MANA regeneration', pct:1, w:(p,v)=>{ p.inc.manaRegen += v; } },
   regen:      { n:'hearts a second regenerated',         w:(p,v)=>{ p.regenFlat += v; } },
   incRegen:   { n:'increased regeneration',       pct:1, w:(p,v)=>{ p.inc.regen += v; } },
   leech:      { n:'lifesteal share',              pct:1, w:(p,v)=>{ p.leechFlat += v; },
@@ -15784,6 +15975,10 @@ const STAT_PROBES = [
   { g:'ACCURACY', k:'vs a hard dodger', get:()=> hitChance(accuracyValue(), EVA_BASE*3)*100,
     fmt:v=>v.toFixed(1)+'%',
     why:'a shade, or anything under SLIPPERY. This is the number accuracy is bought for' },
+  { g:'MANA', k:'Maximum', get:()=> player ? player.maxMana : 0, fmt:v=>Math.round(v)+'', zero:true,
+    why:'40, 4 more a level, 1 for every 2 INTELLIGENCE, times increased mana. Nothing spends it yet: it is the pool the active skills will cost' },
+  { g:'MANA', k:'Regeneration', get:()=> player ? player.manaRegen : 0, fmt:v=>v.toFixed(1)+'/s', zero:true,
+    why:'1.75% of your maximum a second, times increased mana regeneration' },
   { g:'ENERGY SHIELD', k:'Maximum', basic:'DEFENCE', get:()=> player ? player.esMax : 0,
     fmt:v=>fmtHp(v), zero:true,
     why:'a second bar in front of your hearts. It takes the hit first, and CHAOS goes '+
@@ -17300,9 +17495,9 @@ function renderRitual(){
   if(g){
     g.innerHTML = S.offers.length ? S.offers.map(o=>{
       const L = ritualOfferLook(o), afford = S.tribute >= o.cost;
-      const canDefer = !o.carried && S.deferred.length < RITUAL_DEFER_MAX;
+      const canDefer = S.deferred.length < RITUAL_DEFER_MAX;
       return `<div class="ritcard${afford ? '' : ' poor'}" data-id="${o.id}">`+
-        (o.carried ? '<div class="ritcarried">DEFERRED</div>' : '')+
+        (o.carried ? '<div class="ritcarried">RETURNED</div>' : '')+
         `<div class="riticon">${L.icon}</div><div class="ritname" style="color:${L.col}">${L.name}</div>`+
         `<div class="ritkind">${L.sub}</div><div class="ritcost">${o.cost} tribute</div>`+
         `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>BUY</button>`+
@@ -17337,6 +17532,7 @@ function ritualUiWire(){
       try { SFX.click(); } catch(e){}
     }
     renderRitual();
+    if(ritualStuck()){ gearTipHide(); setTimeout(()=>{ if(ritualOn && ritualStuck()) ritualFinish(); }, 700); }
   });
   g.addEventListener('mousemove', ev=>{
     const card = ev.target.closest('.ritcard');
@@ -17351,6 +17547,7 @@ function ritualUiWire(){
     renderRitual();
   });
   document.getElementById('ritCloseBtn').addEventListener('click', ()=>toggleRitual());
+  document.getElementById('ritDoneBtn').addEventListener('click', ()=>ritualFinish());
 }
 let gearNoteT = null;
 function gearNote(t, bad){
@@ -17941,6 +18138,8 @@ function updatePlayer(dt){
      is a thing you bought and the other is a thing that heals you slowly */
   esTick(p, dt);
   p.esFlash = Math.max(0, (p.esFlash||0) - dt*3);
+  /* mana fills on its own clock, always */
+  if(p.maxMana > 0 && p.mana < p.maxMana) p.mana = Math.min(p.maxMana, (p.mana || 0) + (p.manaRegen || 0)*dt);
   const regen = p.regenStall > 0 ? 0 : cursedRegen();
   /* ZEALOT'S OATH: the same regeneration, into the shield -- and none of it
      into the hearts. It does not wait for the recharge clock: it is regen, not
@@ -18140,7 +18339,7 @@ function updatePlayer(dt){
             const a2 = tgt ? angTo(pr,tgt) : aimA;
             pr.vx = Math.cos(a2)*460; pr.vy = Math.sin(a2)*460;
             pr.owner='player'; pr.deflected=true; pr.homing=false;
-            addSparks(pr.x,pr.y,5,'#ffe08a'); SFX.deflect(); addDmg(p.x,p.y-46,'DEFLECT!','#ffe08a',14);
+            addSparks(pr.x,pr.y,5,'#ffe08a'); SFX.deflect(); addHitNum(p.x,p.y-46,'DEFLECT!','#ffe08a',14);
           }
         }
       }
@@ -18308,7 +18507,7 @@ function updatePlayer(dt){
           addSparks(en.x, en.y-16, 3, FX.friend.frost);
         }
       }
-      if(cnt>0) addDmg(p.x, p.y-52, (fz.stun?'FROZEN SOLID ×':'CHILLED ×')+cnt, '#bfe3ff', 16);
+      if(cnt>0) addHitNum(p.x, p.y-52, (fz.stun?'FROZEN SOLID ×':'CHILLED ×')+cnt, '#bfe3ff', 16);
     }
   }
   const bo = p.bomb;
@@ -20168,7 +20367,7 @@ function minionHurt(m, n, elem){
     else if(elem === 'fire' || elem === 'frost' || elem === 'shock') n *= 1 - Math.min(RES_CAP, wardRes());
   }
   m.hp -= n; m.flash = 1;
-  addDmg(m.x, m.y - 34, fmtHp(n), elem === 'fire' ? '#ff9a5a' : elem === 'frost' ? '#9fdcff'
+  addHitNum(m.x, m.y - 34, fmtHp(n), elem === 'fire' ? '#ff9a5a' : elem === 'frost' ? '#9fdcff'
          : elem === 'shock' ? '#fff07a' : '#c9b8ff', 12);
 }
 /* every raised skeleton inside a circle, once each */
@@ -20766,7 +20965,7 @@ function updateEnemyCore(e, dt){
             addSparks(e2.x, e2.y-20, 3, '#ffe95a');
           }
         }
-        if(cnt>0) addDmg(e.x, e.y-60, 'EMPOWERED ×'+cnt, '#ffe95a', 16);
+        if(cnt>0) addHitNum(e.x, e.y-60, 'EMPOWERED ×'+cnt, '#ffe95a', 16);
       }
     } else {
       if(e.atkCd<=0 && dP < 700){
@@ -27458,60 +27657,80 @@ function drawStudHUD(x,y,col=PAL.gold){
   ctx.beginPath(); ctx.ellipse(-4.5,-2.4,2.6,1.4,-0.5,0,TAU); ctx.fill();
   ctx.restore();
 }
+/* ============================== THE GLOBES ==============================
+   Life, energy shield and mana, each its own pool, the way PoE shows them: a
+   glass globe of liquid at each bottom corner. The life globe is red; the
+   shield is a pale-blue layer poured over it and a ring round its rim that
+   empties as the shield does; the mana globe is blue. The number in each is
+   what is in it, over what it holds. */
+const GLOBE_R = 50, GLOBE_PAD = 24;
+const GLOBE_ROW_X = 2*GLOBE_R + GLOBE_PAD + 46;     /* where the ability row starts, beside a globe */
+const LIFE_COL = '#d3242b';
+function globeCentre(side){ return { x: side < 0 ? GLOBE_PAD + GLOBE_R : cw - GLOBE_PAD - GLOBE_R, y: ch - GLOBE_PAD - GLOBE_R }; }
+function globeLiquid(c, x, y, r, frac, top, bottom, alpha){
+  if(!(frac > 0)) return;
+  const lvl = y + r - 2*r*clamp(frac, 0, 1);
+  const g = c.createLinearGradient(0, lvl, 0, y + r);
+  g.addColorStop(0, top); g.addColorStop(1, bottom);
+  c.save(); c.globalAlpha = alpha === undefined ? 1 : alpha; c.fillStyle = g;
+  c.beginPath(); c.moveTo(x - r, y + r);
+  for(let i=0;i<=24;i++){ const xx = x - r + i/24*2*r; c.lineTo(xx, lvl + (frac < 1 ? Math.sin(vtime*3 + i*0.7)*2 : 0)); }
+  c.lineTo(x + r, y + r); c.closePath(); c.fill(); c.restore();
+}
+function drawGlobe(c, x, y, r, fill, glow){
+  /* the socket: a dark disc, then the liquid clipped to the glass, then glass */
+  c.save();
+  c.fillStyle = 'rgba(12,16,20,0.82)';
+  c.beginPath(); c.arc(x, y, r + 6, 0, TAU); c.fill();
+  c.beginPath(); c.arc(x, y, r, 0, TAU); c.clip();
+  c.fillStyle = '#0c0f13'; c.fillRect(x - r, y - r, 2*r, 2*r);
+  fill(c);
+  const hl = c.createRadialGradient(x - r*0.35, y - r*0.45, 2, x - r*0.35, y - r*0.45, r*0.9);
+  hl.addColorStop(0, 'rgba(255,255,255,0.35)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = hl; c.fillRect(x - r, y - r, 2*r, 2*r);
+  c.restore();
+  /* the rim: a brick-grey bezel with four studs, and a glow when it is asked for */
+  c.strokeStyle = glow || '#5f6770'; c.lineWidth = glow ? 4 : 3;
+  c.beginPath(); c.arc(x, y, r + 2, 0, TAU); c.stroke();
+  c.fillStyle = '#8a929a';
+  for(let k=0;k<4;k++){ const a = -Math.PI/4 + k*Math.PI/2; c.beginPath(); c.arc(x + Math.cos(a)*(r + 4), y + Math.sin(a)*(r + 4), 3.2, 0, TAU); c.fill(); }
+}
+function globeText(c, x, y, big, small, col){
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '700 20px "Titan One"'; c.lineWidth = 4; c.strokeStyle = 'rgba(10,12,16,0.85)';
+  c.strokeText(big, x, y - 4); c.fillStyle = col || '#ffffff'; c.fillText(big, x, y - 4);
+  if(small){ c.font = '700 11px Fredoka'; c.lineWidth = 3; c.strokeText(small, x, y + 15); c.fillStyle = '#e8ebe9'; c.fillText(small, x, y + 15); }
+}
+function drawPoolGlobes(p){
+  const c = ctx, r = GLOBE_R;
+  /* LIFE, with the SHIELD over it */
+  { const { x, y } = globeCentre(-1);
+    const lf = clamp(p.hp/(p.maxHp || 1), 0, 1), ef = p.esMax > 0 ? clamp((p.es || 0)/p.esMax, 0, 1) : 0;
+    const low = lowLife() && p.hp > 0;
+    drawGlobe(c, x, y, r, cc=>{
+      globeLiquid(cc, x, y, r, lf, '#ff4b3e', '#a3121a');
+      if(p.esMax > 0) globeLiquid(cc, x, y, r, ef, 'rgba(210,245,255,0.9)', 'rgba(90,190,235,0.9)', 0.45 + 0.15*(p.esFlash || 0));
+    }, low ? `rgba(255,60,60,${0.6 + 0.4*Math.sin(vtime*6)})` : null);
+    if(p.esMax > 0 && ef > 0){
+      c.strokeStyle = ES_COL; c.lineWidth = 4; c.lineCap = 'round';
+      c.beginPath(); c.arc(x, y, r + 9, -Math.PI/2, -Math.PI/2 + TAU*ef); c.stroke(); c.lineCap = 'butt';
+    }
+    globeText(c, x, y, fmtHp(p.hp), '/ '+fmtHp(p.maxHp)+(p.esMax > 0 ? '  ·  '+fmtHp(p.es || 0)+' ES' : ''));
+  }
+  /* MANA */
+  { const { x, y } = globeCentre(1);
+    const mf = p.maxMana > 0 ? clamp((p.mana || 0)/p.maxMana, 0, 1) : 0;
+    drawGlobe(c, x, y, r, cc=>globeLiquid(cc, x, y, r, mf, '#5b93ff', '#1a3cae'));
+    globeText(c, x, y, Math.floor(p.mana || 0)+'', '/ '+Math.round(p.maxMana || 0)+' mana', '#dfe8ff');
+  }
+}
 function renderHUD(){
   if(state==='title' || !player) return;
   const p = player;
-  let xpY;
-  /* THE POOLED READOUT IS DECIDED BY THE BAR, NOT BY WHAT IS LEFT IN IT. This
-     used to switch on CURRENT health, so a hero with 250 maximum sitting on 40
-     fell back to one-pip-per-heart and drew two hundred and fifty of them —
-     sixteen rows of empty hearts across the screen. */
-  if(p.maxHp > HEART_POOL_AT){
-    /* too many hearts to draw one each: three symbolic ones, a third of the pool apiece */
-    const third = Math.max(1, p.maxHp/3);
-    for(let i=0;i<3;i++)
-      drawHeartAt(34+i*28, 36, (p.hp - i*third)/third, HEART_ROW_COLS[0], 1);
-    const txt = fmtHp(p.hp);
-    ctx.font='700 30px "Titan One"'; ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=5;
-    ctx.strokeText(txt, 122, 38);
-    ctx.fillStyle='#ffd76e'; ctx.fillText(txt, 122, 38);
-    ctx.font='600 12px Fredoka'; ctx.fillStyle='#c9d2ce';
-    ctx.fillText('/ '+p.maxHp, 122+txt.length*17+8, 40);
-    xpY = 66;
-  } else {
-    const rows = Math.ceil(p.maxHp/HEARTS_PER_ROW);
-    for(let i=0;i<p.maxHp;i++){
-      const row = Math.floor(i/HEARTS_PER_ROW);
-      const col = i%HEARTS_PER_ROW;
-      const frac = clamp(p.hp - i, 0, 1);
-      const lowPulse = (lowLife() && frac>0 && row===0) ? 1+Math.sin(vtime*6)*0.1 : 1;
-      drawHeartAt(34 + col*28, 36 + row*25, frac, HEART_ROW_COLS[row%HEART_ROW_COLS.length], lowPulse);
-    }
-    xpY = 36 + rows*25 + 8;
-  }
-  /* THE SHIELD SITS ON TOP OF THE HEARTS, which is where it stands in the
-     fight. A slim bar rather than pips: it is one pool, it moves in fractions,
-     and it refills while you watch -- three things a row of hearts says badly.
-     Nothing is drawn at all until you own some, so a hero who never bought a
-     shield has exactly the HUD they had before it existed. */
-  if(p.esMax > 0){
-    const f = clamp((p.es||0)/p.esMax, 0, 1);
-    ctx.fillStyle = 'rgba(15,20,25,0.62)';
-    roundRect(ctx, 24, xpY - 1, 216, 9, 4); ctx.fill();
-    if(f > 0){
-      ctx.fillStyle = ES_COL;
-      ctx.globalAlpha = 0.9 + 0.1*(p.esFlash||0);
-      roundRect(ctx, 25.5, xpY + 0.5, Math.max(3, 213*f), 6, 3); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    ctx.font='700 9px Fredoka'; ctx.textAlign='right'; ctx.textBaseline='middle';
-    ctx.fillStyle = ((p.esT||0) <= 0 && f < 1) ? '#bfeaff' : ES_COL;
-    ctx.fillText(((p.esT||0) <= 0 && f < 1 ? '\u25b2 ' : '') + fmtHp(p.es||0) + ' / ' + fmtHp(p.esMax),
-                 236, xpY + 3.5);
-    ctx.textAlign='left';
-    xpY += 14;
-  }
+  /* THE POOLS ARE GLOBES NOW, PoE's: life (with the shield over it) bottom
+     left, mana bottom right -- drawn with the ability row below. The top left
+     keeps the level and its bar. */
+  let xpY = 22;
   const bx = 24;
   ctx.fillStyle = 'rgba(15,20,25,0.6)';
   roundRect(ctx, bx+26, xpY, 190, 12, 6); ctx.fill();
@@ -27884,7 +28103,9 @@ function renderHUD(){
     for(let r2=0;r2<2;r2++) for(let c2=0;c2<3;c2++) drawStudG(ctx,-5+c2*5,-2+r2*4.4,1.7,PAL.dred);
     ctx.restore();
   }});
-  autos.forEach((a,i)=> autoSlot(34 + i*62, a.f, a.icon, a.label));
+  /* the globes first, and the ability row starts where the life globe ends */
+  drawPoolGlobes(p);
+  autos.forEach((a,i)=> autoSlot(GLOBE_ROW_X + i*62, a.f, a.icon, a.label));
   const ab = (x, cd, cdMax, drawFn, label)=>{
     ctx.fillStyle='rgba(15,20,25,0.6)';
     ctx.beginPath(); ctx.arc(x, ch-56, 27, 0, TAU); ctx.fill();
@@ -27900,24 +28121,24 @@ function renderHUD(){
     ctx.fillStyle='#e8ebe9'; ctx.font='700 11px Fredoka'; ctx.textAlign='center';
     ctx.fillText(label, x, ch-56+42);
   };
-  ab(cw-140, p.dash.cd, p.dash.cdMax, (x,y)=>{
+  ab(cw-GLOBE_ROW_X, p.dash.cd, p.dash.cdMax, (x,y)=>{
     ctx.strokeStyle='#9fdc7e'; ctx.lineWidth=3.5; ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath(); ctx.moveTo(x-11,y-9); ctx.lineTo(x-2,y); ctx.lineTo(x-11,y+9);
     ctx.moveTo(x+2,y-9); ctx.lineTo(x+11,y); ctx.lineTo(x+2,y+9); ctx.stroke();
   }, 'SPACE');
   if(p.magnetT>0)
-    ab(cw-214, (p.magnetMax||BUFF_T)-p.magnetT, (p.magnetMax||BUFF_T), (x,y)=> drawMagnetIcon(x,y), Math.ceil(p.magnetT)+'s');
+    ab(cw-GLOBE_ROW_X-74, (p.magnetMax||BUFF_T)-p.magnetT, (p.magnetMax||BUFF_T), (x,y)=> drawMagnetIcon(x,y), Math.ceil(p.magnetT)+'s');
   if(p.fortuneT>0)
-    ab(cw-288, (p.fortuneMax||BUFF_T)-p.fortuneT, (p.fortuneMax||BUFF_T), (x,y)=> drawFortuneIcon(x,y,p.fortuneMul),
+    ab(cw-GLOBE_ROW_X-148, (p.fortuneMax||BUFF_T)-p.fortuneT, (p.fortuneMax||BUFF_T), (x,y)=> drawFortuneIcon(x,y,p.fortuneMul),
        '×'+p.fortuneMul+' · '+Math.ceil(p.fortuneT)+'s');
   if(p.rageT>0)
-    ab(cw-362, (p.rageMax||BUFF_T)-p.rageT, (p.rageMax||BUFF_T), (x,y)=> drawRageIcon(x,y,p.rageMul),
+    ab(cw-GLOBE_ROW_X-222, (p.rageMax||BUFF_T)-p.rageT, (p.rageMax||BUFF_T), (x,y)=> drawRageIcon(x,y,p.rageMul),
        '×'+p.rageMul+' dmg · '+Math.ceil(p.rageT)+'s');
   if(p.wardT>0)
-    ab(cw-436, (p.wardMax||BUFF_T)-p.wardT, (p.wardMax||BUFF_T), (x,y)=> drawWardIcon(x,y,p.wardN),
+    ab(cw-GLOBE_ROW_X-296, (p.wardMax||BUFF_T)-p.wardT, (p.wardMax||BUFF_T), (x,y)=> drawWardIcon(x,y,p.wardN),
        '+'+wardArmour()+' arm · '+Math.ceil(p.wardT)+'s');
   if(p.regenBoostT>0)
-    ab(cw-510, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
+    ab(cw-GLOBE_ROW_X-370, HEART_REGEN_T-p.regenBoostT, HEART_REGEN_T, (x,y)=> drawRegenIcon(x,y),
        '×'+HEART_STACK_MUL[Math.min(HEART_STACK_MAX,p.heartStacks||1)]+' · '+
        cursedRegen().toFixed(2)+'/s · '+Math.ceil(p.regenBoostT)+'s');
   if(musicToast){
@@ -27928,8 +28149,8 @@ function renderHUD(){
       ctx.textAlign='left'; ctx.font='700 12px Fredoka';
       ctx.globalAlpha = a2;
       ctx.strokeStyle='rgba(15,20,25,0.85)'; ctx.lineWidth=4;
-      ctx.strokeText('♪  '+musicToast.name, 26, ch-120);
-      ctx.fillStyle='#ffd76e'; ctx.fillText('♪  '+musicToast.name, 26, ch-120);
+      ctx.strokeText('♪  '+musicToast.name, 26, ch - 2*GLOBE_R - 44);
+      ctx.fillStyle='#ffd76e'; ctx.fillText('♪  '+musicToast.name, 26, ch - 2*GLOBE_R - 44);
       ctx.globalAlpha = 1;
     }
   }
@@ -28058,6 +28279,8 @@ function resetRun(demo){
     /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you */
     gearApply(player, true);
   }
+  /* a run starts with a full mana pool, whatever the tree and the gear made it */
+  player.mana = player.maxMana;
   /* the records as this run found them -- see metaLiveBank */
   if(!META) metaLoad();
   { const m0 = metaCur();
