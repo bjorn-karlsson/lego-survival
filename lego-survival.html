@@ -5480,6 +5480,168 @@ function rollBossTraits(b){
   if(b.traits.length)
     logEvent((b.bname||'BOSS')+' — '+b.traits.map(t=>t.name).join(' + '), '#ffb900');
 }
+/* ============================== RARE MONSTER MODIFIERS ==============================
+   Path of Exile's rares: from wave 6 every rare (the gold-ringed elite) rolls
+   named modifiers -- one, two from wave 15, three from wave 30, never the same
+   twice -- and wears their names over its head, so you can read what you are
+   walking into. Each one changes how the fight goes, not only how long. */
+const RARE_MOD_FROM = 6;
+const RM_NEAR_R = 300;                  /* PROXIMAL TANGIBILITY: close enough to hurt it */
+const RM_SOUL_R = 650, RM_SOUL_MAX = 12;
+const RM_CORE_T = 1.4, RM_CORE_R = 120, RM_CORE_MUL = 2.5;
+function rareModCount(n){ n = n ?? wave.n; return n >= 30 ? 3 : n >= 15 ? 2 : n >= RARE_MOD_FROM ? 1 : 0; }
+const RARE_MODS = [
+  { id:'hasted',      name:'HASTED',      col:'#a5e06e', tip:'moves 30% faster and attacks faster',
+    apply(e){ e.speed *= 1.30; e.atkS *= 0.78; e.touchCd *= 0.78; } },
+  { id:'armoured',    name:'ARMOURED',    col:'#b8bfbb', tip:'double armour, and +25% to every elemental resistance',
+    apply(e){ e.armour *= 2; for(const k of ['fire','frost','shock']) e.res[k] = Math.min(0.75, (e.res[k] || 0) + 0.25); } },
+  { id:'regen',       name:'REGENERATING', col:'#ff8a8a', tip:'regenerates 2.5% of its life a second',
+    apply(e){ e.rmRegen = 0.025; } },
+  { id:'volatile',    name:'VOLATILE',    col:'#ff8a3c', tip:'dies into a core that bursts 1.4s later for fire damage -- step away',
+    apply(e){ e.rmVolatile = true; } },
+  { id:'souleater',   name:'SOUL EATER',  col:'#c9b8e8', tip:'every monster that dies near it makes it bigger, faster and harder-hitting',
+    apply(e){ e.rmSoul = 0; } },
+  { id:'proximal',    name:'PROXIMAL TANGIBILITY', col:'#9fd4ff', tip:'can only be hurt while you stand within its ring',
+    apply(e){ e.rmNear = RM_NEAR_R; } },
+  { id:'berserk',     name:'BERSERKER',   col:'#ff5a4a', tip:'below half its life it hits 50% harder and moves 30% faster',
+    apply(e){ e.rmBerserk = 1; } },
+  { id:'unstoppable', name:'UNSTOPPABLE', col:'#ffd166', tip:'cannot be knocked back, slowed, chilled, frozen or stunned',
+    apply(e){ e.rmUnstop = true; } },
+  { id:'envenomed',   name:'ENVENOMED',   col:'#8ede4a', tip:'every hit it lands poisons you',
+    apply(e){ e.rmVenom = true; } },
+];
+const RARE_MOD_BY_ID = Object.fromEntries(RARE_MODS.map(m=>[m.id, m]));
+function applyRareMod(e, id){
+  const M = RARE_MOD_BY_ID[id];
+  if(!M || (e.rmods || []).includes(id)) return false;
+  (e.rmods = e.rmods || []).push(id);
+  M.apply(e);
+  return true;
+}
+function rollRareMods(e){
+  const want = rareModCount(), pool = RARE_MODS.map(m=>m.id);
+  for(let i=0; i<want && pool.length; i++) applyRareMod(e, pool.splice((Math.random()*pool.length)|0, 1)[0]);
+}
+/* every frame, for a body that carries any of them */
+function rareModTick(e, dt){
+  if(e.rmRegen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*e.rmRegen*dt);
+  if(e.rmBerserk === 1 && e.hp < e.maxHp*0.5){
+    e.rmBerserk = 2; e.dmg = e.dmg*1.5; e.speed *= 1.30; e.atkS *= 0.85;
+    addHitNum(e.x, e.y - 60*(e.scale||1), 'BERSERK!', '#ff5a4a', 16);
+    addRing(e.x, e.y, 8, 300, 90, '#ff5a4a', 5, 0.4);
+  }
+  if(e.rmUnstop){ e.kx = 0; e.ky = 0; e.slowT = 0; e.chillN = 0; e.chillT = 0; e.frozen = null; e.stunT = 0; }
+}
+/* the rest happens when something dies */
+let rmCores = [];
+function rareModOnKill(e){
+  if(e.rmVolatile){
+    rmCores.push({ x:e.x, y:e.y, t:RM_CORE_T, dmg:Math.max(2, (e.dmg || 1)*RM_CORE_MUL), type:'volatile core', bname:'a volatile core' });
+  }
+  for(const o of enemies){
+    if(o === e || o.dead || o.rmSoul === undefined || o.rmSoul >= RM_SOUL_MAX) continue;
+    if(Math.hypot(o.x - e.x, o.y - e.y) > RM_SOUL_R) continue;
+    o.rmSoul++; o.dmg = o.dmg*1.06; o.speed *= 1.03; o.scale *= 1.025; o.r *= 1.025;
+    if(Math.random() < 0.5) particles.push({ kind:'spark', x:e.x, y:e.y - 20, vx:(o.x - e.x)*1.4, vy:(o.y - e.y)*1.4, life:0.6, max:0.6, color:'#c9b8e8' });
+  }
+  if(e.kindred) kindredOnKill(e);
+}
+function updateRareMods(dt){
+  if(!rmCores.length) return;
+  const h = heroObj || player;
+  for(const c of rmCores){
+    c.t -= dt;
+    if(c.t > 0) continue;
+    c.done = true;
+    addRing(c.x, c.y, 10, 520, RM_CORE_R, '#ff8a3c', 9, 0.45);
+    addSparks(c.x, c.y - 10, 16, '#ffb066'); addShake(0.12);
+    try { SFX.bomb(); } catch(err){}
+    if(h && !h.dead && Math.hypot(h.x - c.x, h.y - c.y) < RM_CORE_R + (h.r || 12)) playerDamage(c.dmg, c, 'fire', true);
+    minionsIn(c.x, c.y, RM_CORE_R, m=>minionHurt(m, c.dmg, 'fire', c));
+  }
+  rmCores = rmCores.filter(c=>!c.done);
+}
+/* ---- KINDRED: a magic pack that has to die together ----
+   One magic pack in three from wave 8 is bound: every member that dies makes
+   the rest bigger, tougher and harder-hitting. Picked off one at a time, the
+   last of them is a monster; brought down together, they never grow. */
+const KINDRED_FROM = 8, KINDRED_CHANCE = 0.35, KINDRED_MAX = 8;
+const KINDRED_HP = 1.15, KINDRED_DMG = 1.20, KINDRED_SPD = 1.06, KINDRED_SIZE = 1.10, KINDRED_HEAL = 0.15;
+let kindredUid = 0;
+function kindredGrow(o){
+  if((o.kinN || 0) >= KINDRED_MAX) return false;
+  o.kinN = (o.kinN || 0) + 1;
+  const hpK = o.hp / Math.max(1, o.maxHp);
+  o.maxHp = o.maxHp*KINDRED_HP;
+  o.hp = Math.min(o.maxHp, o.maxHp*hpK + o.maxHp*KINDRED_HEAL);
+  o.dmg = o.dmg*KINDRED_DMG; o.speed *= KINDRED_SPD; o.scale *= KINDRED_SIZE; o.r *= KINDRED_SIZE;
+  o.flash = 1;
+  addRing(o.x, o.y, 8, 300, 70*o.scale, MAGIC_COL, 5, 0.4);
+  addHitNum(o.x, o.y - 56*o.scale, 'KINDRED ×'+o.kinN, MAGIC_COL, 15);
+  return true;
+}
+function kindredOnKill(e){
+  for(const o of enemies) if(o !== e && !o.dead && o.kindred === e.kindred) kindredGrow(o);
+}
+/* the magic pack, as the wave spawns it: n bodies in a loose ring, bound or not */
+function spawnMagicPack(type, pos, n){
+  const kin = wave.n >= KINDRED_FROM && Math.random() < KINDRED_CHANCE ? ++kindredUid : 0;
+  const out = [];
+  for(let k=0;k<n;k++){
+    const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
+    spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+      clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
+    const e = enemies[enemies.length-1];
+    if(kin) e.kindred = kin;
+    out.push(e);
+  }
+  return out;
+}
+/* DRAWN over everything: a rare's names, its ring if it has one, the cores, and
+   a bound pack's tethers */
+function drawMonsterMods(){
+  const c = ctx;
+  for(const k of rmCores){
+    const f = 1 - clamp(k.t / RM_CORE_T, 0, 1);
+    c.fillStyle = `rgba(255,138,60,${0.08 + 0.12*f})`; c.beginPath(); c.arc(k.x, k.y, RM_CORE_R, 0, TAU); c.fill();
+    c.setLineDash([10,8]); c.strokeStyle = `rgba(255,176,102,${0.5 + 0.35*Math.sin(vtime*18)})`; c.lineWidth = 3;
+    c.beginPath(); c.arc(k.x, k.y, RM_CORE_R, 0, TAU); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = 'rgba(255,230,160,0.9)'; c.lineWidth = 3; c.beginPath(); c.arc(k.x, k.y, 10 + (RM_CORE_R - 10)*f, 0, TAU); c.stroke();
+    c.fillStyle = '#ffb066'; c.beginPath(); c.arc(k.x, k.y - 8, 7 + 3*Math.sin(vtime*20), 0, TAU); c.fill();
+  }
+  const groups = new Map();
+  c.textAlign = 'center';
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || !onScreen(e, 120)) continue;
+    if(e.kindred){ const g = groups.get(e.kindred) || []; g.push(e); groups.set(e.kindred, g); }
+    if(!e.rmods || !e.rmods.length) continue;
+    if(e.rmNear){
+      c.setLineDash([8,9]); c.strokeStyle = 'rgba(159,212,255,0.45)'; c.lineWidth = 2;
+      c.beginPath(); c.arc(e.x, e.y, e.rmNear, 0, TAU); c.stroke(); c.setLineDash([]);
+    }
+    let y = e.y - 64*(e.scale || 1) - 8;
+    c.font = '700 12px Fredoka';
+    for(let i = e.rmods.length - 1; i >= 0; i--){
+      const M = RARE_MOD_BY_ID[e.rmods[i]];
+      const t = M.id === 'souleater' && e.rmSoul ? M.name+' ×'+e.rmSoul : M.name;
+      c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3; c.strokeText(t, e.x, y);
+      c.fillStyle = M.col; c.fillText(t, e.x, y);
+      y -= 13;
+    }
+  }
+  for(const g of groups.values()){
+    if(g.length < 1) continue;
+    let cx = 0, cy = 0; for(const e of g){ cx += e.x; cy += e.y; } cx /= g.length; cy /= g.length;
+    c.strokeStyle = `rgba(110,160,255,${0.22 + 0.12*Math.sin(vtime*4)})`; c.lineWidth = 2;
+    for(const e of g){ c.beginPath(); c.moveTo(cx, cy); c.lineTo(e.x, e.y - 14*(e.scale||1)); c.stroke(); }
+    const top = Math.min(...g.map(e=>e.y - 60*(e.scale||1)));
+    const n = Math.max(...g.map(e=>e.kinN || 0));
+    const t = 'KINDRED' + (n ? ' ×'+n : '');
+    c.font = '700 12px Fredoka';
+    c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3; c.strokeText(t, cx, top - 6);
+    c.fillStyle = MAGIC_COL; c.fillText(t, cx, top - 6);
+  }
+}
 function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   const tier = Math.max(1, Math.floor(wave.n/5));
   if(type==='boss'){
@@ -5618,6 +5780,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   /* LAST, so a modifier multiplies the finished number rather than a base the
      wave curve and the monster level have not been applied to yet */
   applyWaveMods(e);
+  if(elite) rollRareMods(e);
   enemies.push(e);
   SFX.build();
 }
@@ -5667,6 +5830,11 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   if(e.dead||e.state!=='active') return;
   if(e.breach && !breachSees(e)) return;          /* outside its circle it is not there to hit */
   if(ritualOutside(e)) return;                    /* beyond a running ritual's wall */
+  /* PROXIMAL TANGIBILITY: out of its ring, nothing of yours touches it */
+  if(e.rmNear){ const h = heroObj || player;
+    if(h && Math.hypot(h.x - e.x, h.y - e.y) > e.rmNear){
+      if((e.rmNearT || 0) <= vtime){ e.rmNearT = vtime + 0.6; addHitNum(e.x, e.y - 44*(e.scale||1), 'INTANGIBLE', '#9fd4ff', 13); }
+      return; } }
   /* a sleeping ritual guard wakes -- and its whole pack with it */
   if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); e.dormant = false; }
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
@@ -6223,6 +6391,7 @@ function killEnemy(e, source){
   if(e.abyss) abyssOnKill(e);
   if(e.sbox) sboxOnKill(e);
   if(e.ritual || e.ritualGuard) ritualOnKill(e);
+  rareModOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -7686,6 +7855,9 @@ function playerDamage(n, src, elem, spell){
   /* a VENOMOUS boss leaves something behind on every hit */
   if(src && src.venom && !p.dead && p.invuln<=0 && p.dash.t<=0)
     applyAilment('fire', src);
+  /* an ENVENOMED rare poisons with every hit it lands */
+  if(src && src.rmVenom && !p.dead && p.invuln<=0 && p.dash.t<=0)
+    poisonPlayer(Math.max(0.2, (src.dmg || 1)*0.35), PSN_DUR);
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   const isSpell = (spell === undefined) ? !!elem : spell;
   /* AND THE OTHER HALF OF THE CONTEST. Evasion is the defence you CHOOSE -- a
@@ -8299,12 +8471,7 @@ function updateWave(dt){
               /* THE MAGIC GOES ON ALL OF THEM. It used to be three copies each
                  carrying the full modifier; it is a whole band now, and the
                  modifier is smaller per body to pay for the extra bodies. */
-              const n = packSize + irnd(0, 3);
-              for(let k=0;k<n;k++){
-                const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
-                spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
-              }
+              spawnMagicPack(type, pos, packSize + irnd(0, 3));
             } else if(packable && roll < 0.09*pk + 0.12*pk){
               /* AN ELITE IS ONE BODY WITH A COURT, not three of the same thing.
                  Three identical elites was a damage spike with no shape to it;
@@ -20572,6 +20739,7 @@ function updateEnemyCore(e, dt){
      in them meant the next frame read `vx = e.lx * chargeSpd` as roughly two
      thousand times four hundred and thirty, and every golem, direbat, lancer
      and boss that charged was flung into the far corner of the map. */
+  if(e.rmods) rareModTick(e, dt);
   e.spdNow = dt > 0 ? Math.hypot(e.x - (e._spx ?? e.x), e.y - (e._spy ?? e.y)) / dt : 0;
   e._spx = e.x; e._spy = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
@@ -26344,6 +26512,7 @@ function render(){
     ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y);
     ctx.globalAlpha = 1;
   }
+  drawMonsterMods();
   drawGearLabels();
   ctx.restore();
   renderHUD();
@@ -28463,7 +28632,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachExtra = []; abyss = null; abyssExtra = []; leagueMiss = 0; sboxPending = [];
-  ritualS = ritualBlank();
+  ritualS = ritualBlank(); rmCores = []; kindredUid = 0;
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -28782,6 +28951,7 @@ function update(dt, raw){
     updateStrongboxes(dt);
     updateRitual(dt);
     ritualClamp();
+    updateRareMods(dt);
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
