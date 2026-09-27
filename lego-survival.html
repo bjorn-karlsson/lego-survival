@@ -5666,6 +5666,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
   if(e.breach && !breachSees(e)) return;          /* outside its circle it is not there to hit */
+  if(ritualOutside(e)) return;                    /* beyond a running ritual's wall */
   /* a sleeping ritual guard wakes -- and its whole pack with it */
   if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); e.dormant = false; }
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
@@ -7679,6 +7680,7 @@ function updateAilments(dt){
    hits meet armour — never both. */
 function playerDamage(n, src, elem, spell){
   const p = player;
+  if(src && ritualOutside(src)) return;           /* from beyond a running ritual's wall */
   if(p && p.isProxy){ minionHurt(p.minion, n, elem); return; }
   if(godMode) return;
   /* a VENOMOUS boss leaves something behind on every hit */
@@ -9609,6 +9611,18 @@ const RITUAL_FOG_STILL = ['vtotem', 'gas'];
 function ritualBlank(){ return { altars:[], pending:null, tribute:0, offers:[], deferred:[], rerollN:0, fx:[], active:null, set:0, uid:1 }; }
 let ritualS = ritualBlank();
 function ritualActiveNow(){ return !!ritualS.active; }
+/* THE RING IS A WALL FOR HARM, not only for missiles: while a ritual runs,
+   nothing outside its circle can hurt anything inside, and nothing inside --
+   you, your legion, your burns -- can hurt anything outside. Everything of
+   yours is inside, so each gate only has to ask about the other party: the
+   monster you hit, or whatever hit you (a monster, a missile, a patch of
+   ground). A monster's side is fixed when the circle closes. */
+function ritualOutside(o){
+  const A = ritualS.active;
+  if(!A || !o || !isFinite(o.x) || !isFinite(o.y)) return false;
+  if(o.ritualSide !== undefined) return o.ritualSide < 0;
+  return Math.hypot(o.x - A.x, o.y - A.y) >= RITUAL_R;
+}
 function ritualLive(){ return ritualS.altars.filter(A=>A.state !== 'done'); }
 /* A RITUAL SET THIS WAVE, if the league roll picked one (`k` > 0) and none is
    already standing -- one set at a time */
@@ -20499,8 +20513,9 @@ function bodySpace(e){
 }
 /* A SKELETON TAKES A HIT. No armour and no resistances -- it is bones -- so it
    takes what the hit says. */
-function minionHurt(m, n, elem){
+function minionHurt(m, n, elem, src){
   if(!m || m.gone || m.rise < 1 || !(n > 0)) return;
+  if(src && ritualOutside(src)) return;           /* from beyond a running ritual's wall */
   /* ...except under your WARD: its armour stands in front of every physical
      blow and its resistance in front of fire, cold and lightning, for the
      legion exactly as for you (chaos goes through, as it does on you) */
@@ -21050,7 +21065,7 @@ function updateEnemyCore(e, dt){
         if(hero && !hero.dead && hero.dash.t <= 0 && inCone(hero)){
           const keep = player; player = hero; poisonPlayer(dose, PSN_DUR); player = keep;
         }
-        for(const m of minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, 'chaos');
+        for(const m of minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, 'chaos', e);
       }
       if(e.modeT >= BLOAT_BREATH){ e.mode = 'chase'; e.atkCd = BLOAT_CD * e.atkS; }
     } else {
@@ -21145,7 +21160,7 @@ function updateEnemyCore(e, dt){
            armour, at any wave, for a monster that has to reach you to work. */
         if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead)
           playerDamage(Math.max(2, e.dmg*2.6), e);
-        minionsIn(e.x, e.y, 85, m=>{ if(!(player.isProxy && player.minion === m)) minionHurt(m, Math.max(2, e.dmg*2.6)); });
+        minionsIn(e.x, e.y, 85, m=>{ if(!(player.isProxy && player.minion === m)) minionHurt(m, Math.max(2, e.dmg*2.6), null, e); });
         return;
       }
     } else {
@@ -21673,7 +21688,7 @@ function maceSpin(b, dt, tier, enr, toP){
     const half = Math.atan2(m.r + MACE_BLADE_HALF, Math.max(8, dm)), pa = Math.atan2(m.y - b.y, m.x - b.x);
     const from = angDiff(pa, prevA), to = angDiff(pa, b.whirlA);
     if((from <= half && from >= -half) || (to <= half && to >= -half) || (from > 0 && to < 0 && (from - to) < Math.PI)){
-      m.maceCd = vtime + MACE_TICK; minionHurt(m, b.dmg+1);
+      m.maceCd = vtime + MACE_TICK; minionHurt(m, b.dmg+1, null, b);
     }
   }
   if(Math.random()<0.7){
@@ -21726,7 +21741,7 @@ function updateBoss(b, dt, toP, dP){
     addSparks(player.x, player.y-18, 3, '#ffb066');
   }
   if(b.thorns){
-    minionsIn(b.x, b.y, b.r + 30, m=>{ if((m.thornCd||0) <= vtime){ m.thornCd = vtime + 0.6; minionHurt(m, Math.max(1, Math.round(b.dmg*0.25))); } });
+    minionsIn(b.x, b.y, b.r + 30, m=>{ if((m.thornCd||0) <= vtime){ m.thornCd = vtime + 0.6; minionHurt(m, Math.max(1, Math.round(b.dmg*0.25)), null, b); } });
   }
   if(b.super){ updateSuperBoss(b, dt, toP, dP); return; }
   const enr = b.hp < b.maxHp*0.5;
@@ -22282,7 +22297,7 @@ function updateSpikes(dt){
     }
     if(sp.t >= SPIKE_RISE*0.45 && sp.t < SPIKE_RISE+SPIKE_HOLD && minions.length){
       sp.mHit = sp.mHit || new Set();
-      minionsIn(sp.x, sp.y, 20, m=>{ if(!sp.mHit.has(m)){ sp.mHit.add(m); minionHurt(m, sp.dmg); } });
+      minionsIn(sp.x, sp.y, 20, m=>{ if(!sp.mHit.has(m)){ sp.mHit.add(m); minionHurt(m, sp.dmg, null, sp); } });
     }
     if(sp.t >= sp.life) sp.dead = true;
   }
@@ -22662,8 +22677,8 @@ function updateProjectiles(dt){
         for(const m of minions){
           if(m.rise < 1 || m.gone) continue;
           if(!sweepsBody(m, pr.px, pr.py, pr.x, pr.y, pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0))) continue;
-          if(pr.kind === 'frostrock'){ if(!(pr.mHit && pr.mHit.has(m))){ (pr.mHit = pr.mHit || new Set()).add(m); minionHurt(m, pr.dmg||1, 'frost'); } continue; }
-          if(pr.kind !== 'hexbolt') minionHurt(m, pr.dmg||1, pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null);
+          if(pr.kind === 'frostrock'){ if(!(pr.mHit && pr.mHit.has(m))){ (pr.mHit = pr.mHit || new Set()).add(m); minionHurt(m, pr.dmg||1, 'frost', pr); } continue; }
+          if(pr.kind !== 'hexbolt') minionHurt(m, pr.dmg||1, pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null, pr);
           addSparks(pr.x, pr.y, 3, '#c9b8ff');
           pr.dead = true; break;
         }
@@ -22748,7 +22763,7 @@ function updateProjectiles(dt){
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
           playerDamage(pr.dmg || 1, pr, 'shock');
         for(const m of minions) if(m.rise >= 1 && !m.gone && segDist(pr.x, pr.y, ex, ey, m.x, m.y - 14) < 9 + m.r)
-          minionHurt(m, pr.dmg || 1, 'shock');
+          minionHurt(m, pr.dmg || 1, 'shock', pr);
       }
       if(!pr.dead && !player.dead &&
          sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
@@ -22779,7 +22794,7 @@ function updateProjectiles(dt){
         addRing(pr.x,pr.y,20,340,pr.r,FX.foe.frost,8,0.45);
         addSparks(pr.x,pr.y,14,FX.foe.frostDeep);
         SFX.freeze(); addShake(0.25);
-        minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, pr.dmg || 1, 'frost'));
+        minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, pr.dmg || 1, 'frost', pr));
         if(!player.dead){
           const d = dist(pr, player);
           if(d < pr.r){
@@ -23102,7 +23117,7 @@ function updateProjectiles(dt){
           addRing(pr.x, pr.y, 20, 520, pr.r, '#ff9a3c', 11, 0.5);
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
           SFX.bomb();
-          minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, (pr.dmg || 1)*1.5, 'fire'));
+          minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, (pr.dmg || 1)*1.5, 'fire', pr));
           if(dist(pr,player) < pr.r && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else playerDamage((pr.dmg || 1)*1.5, pr, 'fire');
@@ -23139,7 +23154,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
-          minionsIn(pr.x, pr.y, fr*0.87, m=>minionHurt(m, pr.dmg || 1, 'fire'));
+          minionsIn(pr.x, pr.y, fr*0.87, m=>minionHurt(m, pr.dmg || 1, 'fire', pr));
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -23154,7 +23169,7 @@ function updateProjectiles(dt){
           hazards.push({kind:'venom', x:pr.x, y:pr.y, r:fr, life:VENOM_LIFE, max:VENOM_LIFE,
                         dmg: pr.dmg, tick:0, seed:rnd(TAU)});
           SFX.boomSmall();
-          minionsIn(pr.x, pr.y, fr*0.7, m=>minionHurt(m, pr.dmg || 1));
+          minionsIn(pr.x, pr.y, fr*0.7, m=>minionHurt(m, pr.dmg || 1, null, pr));
           if(dist(pr,player)<fr*0.7 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg, pr, null);
@@ -23166,7 +23181,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
-          minionsIn(pr.x, pr.y, fr*0.85, m=>minionHurt(m, pr.dmg || 1, 'fire'));
+          minionsIn(pr.x, pr.y, fr*0.85, m=>minionHurt(m, pr.dmg || 1, 'fire', pr));
           if(dist(pr,player)<fr*0.85 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -23177,7 +23192,7 @@ function updateProjectiles(dt){
           : pr.kind==='jrock' ? {rr:80, cols:['#8b8f8a','#6d6e68','#b6532b'], shk:0.3}
           : {rr:46, cols:['#3d7a2b','#8ac24a','#2f5e23'], shk:0.18};
         explode(pr.x, pr.y, conf.rr, 0, {hostile:true, brickCols:conf.cols, shake:conf.shk});
-        minionsIn(pr.x, pr.y, conf.rr, m=>minionHurt(m, pr.dmg || shotPow(pr.src, pr.kind)));
+        minionsIn(pr.x, pr.y, conf.rr, m=>minionHurt(m, pr.dmg || shotPow(pr.src, pr.kind), null, pr));
         if(dist(pr,player)<conf.rr && !player.dead){
           if(player.dash.t>0){ if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x,pr.y); } }
           else if(player.invuln<=0){
@@ -25546,6 +25561,22 @@ function render(){
       ctx.beginPath(); ctx.arc(e.x,e.y,130,0,TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(255,230,150,0.8)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(e.x,e.y, 24 + 106*(1-k), 0, TAU); ctx.stroke();
+    }
+    /* THE BLOATER'S PLAGUE BREATH, where it will land: the cone and how far it
+       reaches, drawn from the moment it plants its feet -- filling outwards as
+       the heave builds so it lands at the rim as the breath comes -- and then
+       turning with the breath while it lasts. Flat, like the hit it shows. */
+    if(e.type==='bloater' && (e.mode==='breathWind' || e.mode==='breath')){
+      const wind = e.mode==='breathWind', k = wind ? clamp(e.modeT/BLOAT_WIND,0,1) : 1;
+      const a = e.breathA ?? 0, R = BLOAT_RANGE;
+      const cone = rr=>{ ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.arc(e.x, e.y, rr, a - BLOAT_CONE, a + BLOAT_CONE); ctx.closePath(); };
+      cone(R);
+      ctx.fillStyle = wind ? `rgba(158,222,90,${0.06 + 0.08*k})` : `rgba(120,190,60,${0.22 + 0.06*Math.sin(vtime*14)})`;
+      ctx.fill();
+      ctx.setLineDash(wind ? [10,8] : []);
+      ctx.strokeStyle = `rgba(190,240,120,${wind ? 0.5 + 0.3*Math.sin(vtime*16) : 0.8})`; ctx.lineWidth = 3; ctx.stroke();
+      ctx.setLineDash([]);
+      if(wind){ cone(R*k); ctx.fillStyle = 'rgba(190,240,120,0.18)'; ctx.fill(); }
     }
     /* generic small shockwave rings (jugg) */
     if(e.ring && e.type!=='revenant' && e.type!=='boss'){
