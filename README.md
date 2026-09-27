@@ -919,7 +919,7 @@ An **elite rolls every line eight times over**.
 | ❤️ Heart | 1.00% | 8.0% | ×1.5 regeneration for 30s — **stacks five deep** |
 | 🧲 Magnet | 0.34% | 2.7% | hoovers up every **stud** on the field for 30s |
 | 🍀 Fortune | 0.34% | 2.7% | ×2 studs and XP, and up to +25% rarity find |
-| 📦 Chest | 0.34% | 2.7% | a reward roll on the chest table |
+| 📦 Chest | 0.17% | 1.36% | a reward roll on the chest table — half what it was: the rest are in [strongboxes](#strongboxes) |
 | 💢 Rage | 0.08% | 0.64% | ×2 damage, a MORE multiplier, for 30s |
 | 🛡️ Ward | 0.08% | 0.64% | +40 armour and +12% all resistance per stack, to ×2 |
 | 💛 Golden heart | 0.11% | 0.88% | **+3 maximum hearts, permanently** |
@@ -987,7 +987,10 @@ rolled, boss spoils included:
 | 🛡️ Ward | 0.06 | 0.10 | 0.09 | 0.15 | **0.10** |
 
 Across the whole forty waves that is roughly **45 hearts, 21 chests, 20 magnets, 14
-fortunes, 6 golden hearts, and four each of rage and ward.** The two doubling bricks are
+fortunes, 6 golden hearts, and four each of rage and ward.** (The chest line was measured before
+a body's chest chance was halved: bodies now leave about half of those chests, and the
+difference comes out of [strongboxes](#strongboxes) — twice as common, with a fourth, epic tier —
+and the [Ritual](#ritual)'s offer.) The two doubling bricks are
 things that happen to a run, not things it runs on.
 
 A magnet pulls **studs only**. Every prize in that table is something you walk to — and
@@ -2759,16 +2762,22 @@ seconds into the fight. The eye is pinned to the screen's edge like a chest unti
 
 ### Strongboxes
 
-From **wave 2**, on any wave that is not a boss wave, there is a **30%** chance that a **locked
-iron strongbox** is left somewhere on the floor (another 35% roll from wave 20 and again from wave
-35; never more than three locked boxes lying about at once). It wears one to three **mods**
-written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
+**The chests live here now.** A body drops half the chests it used to, and the boxes come twice
+as often to make up for it. From **wave 2**, on any wave that is not a boss wave, there is a
+**50%** chance that a **locked iron strongbox** is left somewhere on the floor (another 40% roll
+from wave 12, and 45% more from wave 20 and again from wave 35; never more than four locked boxes
+lying about at once). It wears one to four **mods** written over it — the boss traits: SWIFT,
+IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
 
-| box | mods | bursts of guardians | the chest inside |
-|---|---|---|---|
-| Strongbox (60%) | 1 | 2 | common |
-| Magic strongbox (30%) | 2 | 3 | uncommon |
-| Rare strongbox (10%) | 3 | 4 | rare |
+| box | mods | bursts of guardians | each burst | leads each burst | the chest inside |
+|---|---|---|---|---|---|
+| Strongbox (52%) | 1 | 2 | 3–5 | — | common |
+| Magic strongbox (30%) | 2 | 3 | 3–5 | a magic one | uncommon |
+| Rare strongbox (12%) | 3 | 4 | 4–6 | a magic one | rare |
+| **Epic strongbox** (6%, from wave 10) | 4 | 5 | 6–8 | **an elite** | **epic** |
+
+The **epic strongbox** is the hard one: four of the seven mods on every guardian, five bursts of
+six to eight, each led by an elite — and an epic chest when the lock gives.
 
 - **It waits for you.** A box nobody touches stays where it is, locked, across waves.
 - **Walk onto it and it springs.** Its **guardians** come out of the ground round it, a burst of
@@ -2779,6 +2788,60 @@ written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VEN
   A sprung box holds the wave until its guardians are dead.
 
 ![A rare strongbox sprung, its guardians coming](docs/strongbox.png)
+
+### Ritual
+
+PoE's Ritual. From **wave 12**, an ordinary (non-boss) wave has a **30%** chance to raise a
+**set of three altars** a few seconds into the fight — and never more than three waves go by
+without one while no set is standing. They rise at least 820px apart, on open floor, with a
+diamond on the screen's rim for each one that still has something to give.
+
+- **Each altar is guarded, and the guards are asleep.** A pack of five to seven (one of them
+  magic) stands round it and **does nothing** — it does not come for you, it does not hold the
+  wave, and your minions leave it alone. **Hit one, or walk within 210px of the altar or of any of
+  them, and the whole pack wakes at once.** Kill it and the altar is free: *STEP IN TO BEGIN*.
+- **Step onto a free altar and the circle closes.** A 300px ring of red runes; **you cannot walk
+  out of it until the ritual is done**, and neither can your legion. What was inside when it
+  closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in
+  — and nothing it shoots comes through the fog either. The wave's own bodies wait until it is
+  over, and a running ritual holds the wave.
+- **The altar calls its monsters** into the circle, a pulse of three to five every 2s (never
+  more than twelve standing), **10 + wave/3** of them in all — 14% magic, 6% elite.
+- **The altar strikes at you itself**, every 3–5s: a **MARK** burns under your feet and bursts
+  1.15s later (fire — step out of it; two marks from wave 20, three from 30), or a **RING** gathers
+  on the altar and rolls out across the whole circle (chaos — dodge through it). Each hits like
+  one of the wave's monsters, a little harder.
+- **Kill everything it calls and the ritual is complete.**
+
+**Tribute.** Every monster the altar calls pays **tribute** when it dies: **10** for a plain one,
+×2 magic, ×4 elite — and **×1.11 for every MOB LV it carries**, so a deeper monster pays more.
+Guards pay nothing. A wave-14 altar is worth about 200.
+
+**The offer (<kbd>U</kbd>).** Once an altar of the set is done, <kbd>U</kbd> opens the
+**RITUAL** window (the run waits while it is open). It offers **eight** things, and **the same
+eight for every altar of the set** — so what you do not spend is kept, and finishing all three
+before you shop buys the most:
+
+| offer | costs (×1.11 per MOB LV) | what you get |
+|---|--:|---|
+| magic gear | ~60 | a piece for your hero, **item level +2** over the floor's |
+| rare gear | ~150 | the same, rare |
+| rare chest | ~90 | a rare brick, waiting on <kbd>R</kbd> |
+| epic chest | ~220 | an epic brick |
+| legendary chest | ~520 | a legendary brick |
+
+- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
+- **DEFER** takes an offer off this set and puts it **first in the next set's offer**, at ×1.2 its
+  cost — for the thing you want and cannot afford yet. Six at most; a deferred offer cannot be
+  deferred again.
+- **REROLL** replaces everything on offer except what you deferred into it, for ~60 tribute,
+  ×1.5 each time within a set.
+- Tribute carries on to the next set; what a set offered and you did not buy or defer goes when
+  the next set rises.
+
+![A ritual running: the circle, the fog, a mark and the altar's ring](docs/ritual.png)
+
+![The ritual's offer](docs/ritual-offer.png)
 
 ### A run, as a link
 
@@ -3307,6 +3370,7 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
 | <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |
+| <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |

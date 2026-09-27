@@ -566,6 +566,29 @@
     padding:16px;font-size:13px;color:#ffd9d9;font-weight:600}
   .sheetfoot{flex:none;text-align:center;font-size:12.5px;color:#ffd0d0;padding:9px 0 11px;font-weight:600}
   /* ---- equipment: PoE's inventory panel ---- */
+  /* ---- the ritual's offer ---- */
+  #ritualScreen{z-index:30;overflow:auto;padding:2vh 0}
+  .ritwrap{background:linear-gradient(#2a1a1e,#170e11);border:3px solid #6a1a24;border-radius:16px;max-width:760px;
+    padding:12px 18px 4px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 40px rgba(255,58,74,.18);display:flex;flex-direction:column;align-items:center;margin:auto 0}
+  .ritwrap h2{font-family:'Titan One',cursive;color:#ff5a64;letter-spacing:3px;font-size:26px;text-align:center}
+  .ritwrap .sheetsub{text-align:center;font-size:12.5px;color:#e0c9cc;max-width:640px;margin:2px 0 6px}
+  .rithead{display:flex;gap:14px;align-items:center;font-family:'Titan One',cursive;font-size:15px;letter-spacing:2px;color:#ffb0b6;margin:2px 0 8px}
+  .rithead b{color:#fff;font-size:18px}
+  #ritNote{font-family:'Fredoka',sans-serif;font-size:12px;letter-spacing:0}
+  .ritgrid{display:grid;grid-template-columns:repeat(4,160px);gap:10px}
+  @media (max-width:720px){.ritgrid{grid-template-columns:repeat(2,150px)}}
+  .ritcard{background:rgba(0,0,0,.38);border:2px solid rgba(255,255,255,.12);border-radius:10px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
+  .ritcard.poor .ritcost{color:#ff8a6a}
+  .riticon{width:64px;height:64px;display:flex;align-items:center;justify-content:center}
+  .riticon svg{max-width:100%;max-height:100%}
+  .ritname{font-family:'Titan One',cursive;font-size:11px;letter-spacing:.5px;text-align:center;min-height:28px;display:flex;align-items:center}
+  .ritkind{font-size:10.5px;color:#b9a7aa;text-align:center}
+  .ritcost{font-family:'Titan One',cursive;font-size:12px;color:#ffd76e}
+  .ritcarried{position:absolute;top:4px;right:6px;font-family:'Titan One';font-size:8.5px;letter-spacing:1px;color:#ffb0b6}
+  .ritbtns{display:flex;gap:4px}
+  .ritbtns .tbtn{padding:5px 9px;font-size:10px}
+  .ritbtns .tbtn:disabled{opacity:.35;cursor:default}
+  .ritdefer{font-size:11.5px;color:#c9b3b6;margin:8px 0 0;text-align:center;max-width:640px}
   #gearScreen{--gc:40px;z-index:30;overflow:auto;justify-content:flex-start;padding:2vh 0}
   .gearwrap{background:linear-gradient(#232a31,#181d22);border:3px solid #3a444d;border-radius:16px;
     padding:12px 18px 4px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;margin:auto 0}
@@ -780,6 +803,17 @@
       <div id="gearSum" class="gearsum"></div>
     </div>
     <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; Ctrl-click to send between bag and stash &middot; drag anywhere it fits &middot; drop in the bin to destroy</div>
+  </div>
+</div>
+<div id="ritualScreen" class="overlay hidden">
+  <div class="ritwrap">
+    <h2>RITUAL</h2>
+    <div class="sheetsub" id="ritSub"></div>
+    <div class="rithead"><span id="ritTrib"></span><span id="ritNote"></span></div>
+    <div id="ritGrid" class="ritgrid"></div>
+    <div id="ritDefer" class="ritdefer"></div>
+    <div class="gearbar"><button id="ritRerollBtn" class="tbtn">REROLL</button><button id="ritCloseBtn" class="tbtn gray">CLOSE</button></div>
+    <div class="sheetfoot">U or ESC to close &middot; BUY with tribute &middot; DEFER to see it again in the next ritual, for a little more</div>
   </div>
 </div>
 <div id="gearTip" class="geartip hidden"></div>
@@ -3516,6 +3550,8 @@ window.addEventListener('keydown', e=>{
   else if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && state==='gear'){ toggleGear(); }
   else if(e.code==='KeyI' && (state==='play' || state==='gear')){ toggleGear(); }
+  else if(e.code==='Escape' && state==='ritual'){ toggleRitual(); }
+  else if(e.code==='KeyU' && (state==='play' || state==='ritual')){ toggleRitual(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
   if(e.code==='KeyC' && (state==='play'||state==='char')) toggleChar();
   if(e.code==='KeyN' && state==='char') setSheetNerd(!sheetNerd);
@@ -5430,6 +5466,8 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
   if(e.breach && !breachSees(e)) return;          /* outside its circle it is not there to hit */
+  /* a sleeping ritual guard wakes -- and its whole pack with it */
+  if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); e.dormant = false; }
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
      a swing has to catch a body that is moving, a fireball arrives where it was
      aimed. A tick or a drain is not a fresh swing and never re-rolls -- the
@@ -5983,6 +6021,7 @@ function killEnemy(e, source){
   if(e.breach) breachOnKill(e);
   if(e.abyss) abyssOnKill(e);
   if(e.sbox) sboxOnKill(e);
+  if(e.ritual || e.ritualGuard) ritualOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -6102,7 +6141,9 @@ const DROP = {
      At a fifth of a chest they turn up about once every three waves each. */
   rage:    0.0008,
   ward:    0.0008,
-  chest:   0.0034,
+  /* ...and a chest from a body is HALF that now: the chests moved into the
+     strongboxes, which you have to fight for */
+  chest:   0.0017,
   /* The exception. The golden heart is the only body drop that makes you
      permanently stronger, so it stays rare — about one every five waves. */
   gheart:  0.0011,
@@ -7847,6 +7888,7 @@ function startWave(n){
   breachRoll(n);
   abyssRoll(n);
   sboxRoll(n);
+  ritualRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
      the numbers on your sheet have already changed when you read the banner. */
@@ -7959,9 +8001,10 @@ function updateWave(dt){
     return;
   }
   if(wave.state==='fight'){
-    const alive = enemies.filter(e=>!e.dead && e.state==='active').length;
+    const alive = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant).length;
     const cap = Math.min(MAX_ALIVE, 30 + wave.n*16);
-    if(wave.queue.length && alive < cap){
+    /* a running ritual holds the wave's own bodies back until it is done */
+    if(wave.queue.length && alive < cap && !ritualActiveNow()){
       wave.spawnT -= dt;
       if(wave.spawnT<=0){
         const batch = wave.n<3?1:(wave.n<6?2:(wave.n<12?3:(wave.n<25?4:6)));
@@ -8028,7 +8071,8 @@ function updateWave(dt){
         wave.spawnT = 0.6;
       }
     }
-    if(!wave.queue.length && enemies.length===0 && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow()){
+    /* a sleeping ritual pack is not the wave's: it waits for you across waves */
+    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant) && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
@@ -9004,20 +9048,27 @@ function drawAbyssHud(){
    the boss traits, on ordinary bodies). Kill every guardian and the lock gives:
    the box becomes a chest you break open like any other. A box nobody touches
    stays where it is, locked, for as long as you leave it; a sprung box holds
-   the wave until its guardians are dead. */
-const SBOX_FROM = 2, SBOX_CHANCE = 0.3, SBOX_LATE = [[20, 0.35], [35, 0.35]];
-const SBOX_MAX_LIVE = 3;               /* locked boxes lying about at once, at most */
+   the wave until its guardians are dead.
+   THE CHESTS LIVE HERE NOW. A body drops half the chests it used to, and the
+   boxes come twice as often to make up for it -- plus a fourth tier, the EPIC
+   STRONGBOX: four mods, five bursts, bigger bursts, an elite at the head of
+   each, and an epic chest inside. */
+const SBOX_FROM = 2, SBOX_CHANCE = 0.5, SBOX_LATE = [[12, 0.4], [20, 0.45], [35, 0.45]];
+const SBOX_MAX_LIVE = 4;               /* locked boxes lying about at once, at most */
 const SBOX_DELAY = [3, 9];
 const SBOX_TOUCH = 46;
-/* the three tiers: how many mods, how many bursts of guardians, and the chest */
+/* the four tiers: how many mods, how many bursts of guardians (and how many
+   extra bodies in each), and the chest */
 const SBOX_TIERS = {
-  plain: { name:'STRONGBOX',        col:'#b8c0c6', mods:1, bursts:2, rar:'common',   w:0.6 },
-  magic: { name:'MAGIC STRONGBOX',  col:'#5a8dff', mods:2, bursts:3, rar:'uncommon', w:0.3 },
-  rare:  { name:'RARE STRONGBOX',   col:'#ffd23a', mods:3, bursts:4, rar:'rare',     w:0.1 },
+  plain: { name:'STRONGBOX',        col:'#b8c0c6', mods:1, bursts:2, extra:0, rar:'common',   w:0.52 },
+  magic: { name:'MAGIC STRONGBOX',  col:'#5a8dff', mods:2, bursts:3, extra:0, rar:'uncommon', w:0.30 },
+  rare:  { name:'RARE STRONGBOX',   col:'#ffd23a', mods:3, bursts:4, extra:1, rar:'rare',     w:0.12 },
+  epic:  { name:'EPIC STRONGBOX',   col:'#b05aff', mods:4, bursts:5, extra:3, rar:'epic',     w:0.06 },
 };
+const SBOX_EPIC_FROM = 10;             /* no epic box before this wave */
 const SBOX_MODS = ['swift', 'ironclad', 'brutal', 'vital', 'warded', 'venomous', 'thorned'];
 const SBOX_BURST_T = 1.4, SBOX_PACK = [3, 5], SBOX_RING = [60, 130];
-const SBOX_CHEST_MAX = 'rare';
+const SBOX_CHEST_MAX = 'epic';
 let sboxPending = [];
 function sboxRoll(n){
   sboxPending = [];
@@ -9025,9 +9076,11 @@ function sboxRoll(n){
   const rolls = [SBOX_CHANCE, ...SBOX_LATE.filter(([from])=>n >= from).map(([, ch])=>ch)];
   for(const ch of rolls) if(Math.random() < ch) sboxPending.push({ delay:rnd(SBOX_DELAY[0], SBOX_DELAY[1]) });
 }
-function sboxTierRoll(){
-  let r = Math.random();
-  for(const k in SBOX_TIERS){ r -= SBOX_TIERS[k].w; if(r < 0) return k; }
+function sboxTierRoll(n){
+  n = n === undefined ? wave.n : n;
+  const ks = Object.keys(SBOX_TIERS).filter(k=>k !== 'epic' || n >= SBOX_EPIC_FROM);
+  let r = Math.random() * ks.reduce((a, k)=>a + SBOX_TIERS[k].w, 0);
+  for(const k of ks){ r -= SBOX_TIERS[k].w; if(r < 0) return k; }
   return 'plain';
 }
 function sboxLive(){ return props.filter(p=>p.type === 'strongbox' && !p.dead); }
@@ -9065,12 +9118,15 @@ function sboxSpring(box){
 /* one burst of guardians round the box, every one wearing its mods */
 function sboxBurst(box){
   const types = abyssTypes(wave.n), type = types[(Math.random()*types.length)|0];
-  const n = irnd(SBOX_PACK[0], SBOX_PACK[1]) + (box.tier === 'rare' ? 1 : 0);
+  const n = irnd(SBOX_PACK[0], SBOX_PACK[1]) + ((SBOX_TIERS[box.tier] || {}).extra || 0);
   for(let k=0;k<n;k++){
     const a = rnd(TAU), rr = rnd(SBOX_RING[0], SBOX_RING[1]);
     const at = floorAt(box.x + Math.cos(a)*rr, box.y + Math.sin(a)*rr, 14);
     const n0 = enemies.length;
-    spawnEnemy(type, at.x, at.y, false, box.tier !== 'plain' && k === 0);
+    /* the first of a burst leads it: magic from a magic box up, and an ELITE
+       from an epic one */
+    const lead = k === 0 && box.tier !== 'plain';
+    spawnEnemy(type, at.x, at.y, lead && box.tier === 'epic', lead && box.tier !== 'epic');
     if(enemies.length === n0) continue;
     const e = enemies[enemies.length-1];
     e.sbox = box; box.guards++;
@@ -9195,6 +9251,475 @@ function drawSboxHud(){
   ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = T.col; ctx.fillText(head, cw/2, by);
+}
+/* ================================== RITUAL ==================================
+   PoE's Ritual. From wave RITUAL_FROM an ordinary wave may raise a SET of three
+   ALTARS somewhere on the map, each ringed by a pack of its GUARDS. The guards
+   are ASLEEP: they stand where they stand and never come for you until you hit
+   one or walk up to them -- then the whole pack wakes at once. Kill the pack
+   and its altar is free.
+   Step onto a free altar and the RITUAL BEGINS. A circle closes round it and
+   you are inside it until it is done: you cannot walk out, what was inside
+   stays inside, and what was outside stands in the FOG beyond the ring and
+   cannot come in -- nor can anything it shoots. The altar calls its own
+   monsters into the circle in pulses, and between them it strikes at you
+   itself: a MARK burns under your feet and bursts a moment later, and a RING
+   rolls out of the altar across the whole circle. Kill everything it calls and
+   the ritual is complete.
+   Every monster the altar calls pays TRIBUTE when it dies -- more for a magic
+   one, far more for an elite, and more for every MOB LV it carries. Tribute
+   is spent at the RITUAL (U) on what the set is offering: gear a little deeper
+   than the floor drops, and chests of rare to legendary bricks. The offer is the
+   same for all three altars of a set and what you do not spend is kept, so
+   saving the shopping until the third altar buys the most. An offer you want
+   but cannot afford can be DEFERRED: it comes back in the next set's offer, at
+   a little more tribute. A set's wave holds while its ritual is running. */
+const RITUAL_FROM = 12, RITUAL_CHANCE = 0.3, RITUAL_PITY = 4;
+const RITUAL_N = 3;                     /* altars in a set */
+const RITUAL_DELAY = [4, 10];           /* seconds into the fight before they rise */
+const RITUAL_R = 300;                   /* the circle */
+const RITUAL_TOUCH = 40;
+const RITUAL_WAKE_R = 210;              /* a sleeping pack wakes when you come this close to the altar or to one of them */
+const RITUAL_GAP = 820;                 /* altars of a set stand at least this far apart */
+const RITUAL_GUARD = [5, 7];
+function ritualBudget(n){ return 10 + Math.floor(n/3); }   /* monsters one altar calls */
+const RITUAL_PULSE_T = 2.0, RITUAL_PACK = [3, 5], RITUAL_ALIVE = 12;
+const RITUAL_MAGIC = 0.14, RITUAL_ELITE = 0.06;
+const RITUAL_ABIL_T = [3.2, 4.8];       /* between the altar's own strikes */
+const RITUAL_MARK_R = 72, RITUAL_MARK_T = 1.15;
+const RITUAL_RING_WAIT = 0.7, RITUAL_RING_SPD = 250, RITUAL_RING_BAND = 14;
+const RITUAL_TRIB = 10;                 /* a plain body at MOB LV 0; x2 magic, x4 elite, x the level's worth */
+const RITUAL_COL = '#ff3a4a';
+const RITUAL_OFFERS = 8, RITUAL_DEFER_MUL = 1.2, RITUAL_DEFER_MAX = 6;
+const RITUAL_REROLL = 60, RITUAL_REROLL_GROW = 1.5;
+/* what an offer costs at MOB LV 0, before the level's worth */
+const RITUAL_COST = { magic:60, rare:150, 'chest:rare':90, 'chest:epic':220, 'chest:legendary':520 };
+const RITUAL_OFFER_W = [['magic', 0.24], ['rare', 0.30], ['chest:rare', 0.24], ['chest:epic', 0.16], ['chest:legendary', 0.06]];
+/* what the fog swallows: anything a monster shoots at you from outside */
+const RITUAL_FOG_KINDS = ['arrow', 'batbolt', 'bolt', 'frostbolt', 'frostrock', 'hexbolt', 'skull', 'spit', 'venom', 'zorb', 'jrock'];
+function ritualBlank(){ return { altars:[], pending:null, miss:0, tribute:0, offers:[], deferred:[], rerollN:0, fx:[], active:null, set:0, uid:1 }; }
+let ritualS = ritualBlank();
+function ritualActiveNow(){ return !!ritualS.active; }
+function ritualLive(){ return ritualS.altars.filter(A=>A.state !== 'done'); }
+function ritualRoll(n){
+  if(sandbox || n < RITUAL_FROM || n % 5 === 0) return;
+  if(ritualS.pending || ritualLive().length) return;       /* one set at a time */
+  if(Math.random() < RITUAL_CHANCE || ritualS.miss + 1 >= RITUAL_PITY){
+    ritualS.miss = 0; ritualS.pending = { delay:rnd(RITUAL_DELAY[0], RITUAL_DELAY[1]) };
+  } else ritualS.miss++;
+}
+/* a spot for an altar: open floor under most of its circle, clear of the
+   walls, of the other altars and of the hero */
+function ritualSpot(taken){
+  const pad = RITUAL_R + 60;
+  for(let i=0;i<160;i++){
+    const a = rnd(TAU), rr = rnd(520, 1700);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(!abyssFloorOk(x, y, pad)) continue;
+    if(taken.some(q=>Math.hypot(q.x - x, q.y - y) < RITUAL_GAP)) continue;
+    if(props.some(q=>!q.dead && q.type === 'strongbox' && Math.hypot(q.x - x, q.y - y) < 160)) continue;
+    let ok = 0;
+    for(let k=0;k<8;k++) if(breachFloorOk(x + Math.cos(k/8*TAU)*RITUAL_R*0.6, y + Math.sin(k/8*TAU)*RITUAL_R*0.6)) ok++;
+    if(ok >= 6) return { x, y };
+  }
+  return null;
+}
+function ritualPlaceSet(){
+  const taken = [];
+  for(let i=0;i<RITUAL_N;i++){ const at = ritualSpot(taken); if(at) taken.push(at); }
+  if(!taken.length) return false;
+  ritualS.set++;
+  ritualS.altars = taken.map(at=>({ x:at.x, y:at.y, state:'guarded', guards:0, woke:false, seed:rnd(1000),
+                                     left:0, pulseT:0, abilT:0, t:0, earned:0, set:ritualS.set }));
+  for(const A of ritualS.altars) ritualGuards(A);
+  ritualOffersNew();
+  showBanner('RITUAL', ritualS.altars.length+' ALTARS HAVE RISEN — KILL THEIR GUARDS', RITUAL_COL, 2.2, 46);
+  logEvent('   RITUAL — '+ritualS.altars.length+' altars have risen; their guards sleep until you come for them', RITUAL_COL);
+  SFX.roar();
+  return true;
+}
+/* the sleeping pack round an altar */
+function ritualGuards(A){
+  const types = abyssTypes(wave.n), type = types[(Math.random()*types.length)|0];
+  const n = irnd(RITUAL_GUARD[0], RITUAL_GUARD[1]);
+  for(let k=0;k<n;k++){
+    const a = k/n*TAU + rnd(-0.2, 0.2), rr = rnd(70, 130);
+    const at = floorAt(A.x + Math.cos(a)*rr, A.y + Math.sin(a)*rr, 14);
+    const n0 = enemies.length;
+    spawnEnemy(type, at.x, at.y, false, k === 0);
+    if(enemies.length === n0) continue;
+    const e = enemies[enemies.length-1];
+    e.dormant = true; e.ritualGuard = A; e.faceA = a + Math.PI;
+    A.guards++;
+  }
+}
+/* THE PACK WAKES AS ONE: hit one, or come close, and all of them come */
+function ritualWake(A){
+  if(!A || A.woke) return;
+  A.woke = true;
+  for(const e of enemies) if(e.ritualGuard === A && e.dormant){ e.dormant = false; e.atkCd = Math.max(e.atkCd, 0.35); }
+  addRing(A.x, A.y, 20, 320, 160, RITUAL_COL, 4, 0.45);
+  logEvent('   the altar\'s guards wake', RITUAL_COL);
+}
+/* a sleeping guard does nothing at all, until something wakes its pack */
+function ritualDormantTick(e){
+  const h = heroObj || player, A = e.ritualGuard;
+  if(h && !h.dead && (Math.hypot(h.x - e.x, h.y - e.y) < RITUAL_WAKE_R ||
+                      (A && Math.hypot(h.x - A.x, h.y - A.y) < RITUAL_WAKE_R))){
+    if(A) ritualWake(A); else e.dormant = false;
+    return false;
+  }
+  e.moving = false;
+  collideWorld(e);
+  return true;
+}
+function ritualTribute(e){
+  return Math.max(1, Math.round(RITUAL_TRIB * mobRankMul(e.mlvl || 0) * (e.elite ? 4 : e.magic ? 2 : 1)));
+}
+function ritualOnKill(e){
+  if(e.ritualGuard){
+    const A = e.ritualGuard;
+    A.guards = Math.max(0, A.guards - 1);
+    return;
+  }
+  if(!e.ritual) return;
+  const t = ritualTribute(e);
+  ritualS.tribute += t; e.ritual.earned += t;
+  addDmg(e.x, e.y - 50*(e.scale||1), '+'+t+' TRIBUTE', RITUAL_COL, 13);
+}
+/* STEP ONTO A FREE ALTAR: the circle closes */
+function ritualStart(A){
+  A.state = 'active'; A.t = 0; A.left = ritualBudget(wave.n); A.pulseT = 0.9; A.abilT = rnd(RITUAL_ABIL_T[0], RITUAL_ABIL_T[1]); A.earned = 0;
+  ritualS.active = A;
+  /* what is inside now stays inside, and what is outside stays out */
+  for(const e of enemies) e.ritualSide = Math.hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
+  /* the legion comes in with you */
+  for(const m of minions){
+    const d = Math.hypot(m.x - A.x, m.y - A.y);
+    if(d > RITUAL_R - 30){ const a = rnd(TAU), rr = rnd(40, RITUAL_R*0.5); m.x = A.x + Math.cos(a)*rr; m.y = A.y + Math.sin(a)*rr; }
+  }
+  showBanner('THE RITUAL BEGINS', 'SURVIVE WHAT THE ALTAR CALLS', RITUAL_COL, 1.8, 44);
+  logEvent('   the ritual begins — the circle holds you until it is done', RITUAL_COL);
+  addRing(A.x, A.y, 10, 700, RITUAL_R, RITUAL_COL, 6, 0.6); addShake(0.3); SFX.roar();
+}
+function ritualInsideSpot(A, pad){
+  const h = heroObj || player;
+  for(let i=0;i<20;i++){
+    const a = rnd(TAU), rr = rnd(RITUAL_R*0.3, RITUAL_R - pad);
+    const at = floorAt(A.x + Math.cos(a)*rr, A.y + Math.sin(a)*rr, 14);
+    if(Math.hypot(at.x - A.x, at.y - A.y) > RITUAL_R - pad) continue;
+    if(h && Math.hypot(at.x - h.x, at.y - h.y) < 110) continue;
+    return at;
+  }
+  const a = rnd(TAU);
+  return { x:A.x + Math.cos(a)*RITUAL_R*0.6, y:A.y + Math.sin(a)*RITUAL_R*0.6 };
+}
+/* the altar calls a pulse of its own monsters into the circle */
+function ritualPulse(A){
+  const types = abyssTypes(wave.n), type = types[(Math.random()*types.length)|0];
+  const n = Math.min(A.left, irnd(RITUAL_PACK[0], RITUAL_PACK[1]));
+  for(let k=0;k<n;k++){
+    const at = ritualInsideSpot(A, 24), n0 = enemies.length;
+    const elite = Math.random() < RITUAL_ELITE, magic = !elite && Math.random() < RITUAL_MAGIC;
+    spawnEnemy(type, at.x, at.y, elite, magic);
+    A.left--;
+    if(enemies.length === n0) continue;
+    const e = enemies[enemies.length-1];
+    e.ritual = A; e.ritualSide = 1;
+    addRing(at.x, at.y, 4, 180, 44, RITUAL_COL, 3, 0.4);
+  }
+}
+/* WHAT ONE OF THE ALTAR'S STRIKES HITS FOR: an ordinary monster's blow at this
+   wave and level, times k */
+function ritualHit(k){
+  const lvl = mobLevel(), rankMul = mobRankMul();
+  const dmgB = ((lvl-1)*0.55 + Math.pow(Math.max(0, lvl-8), 1.45)*0.14) * rankMul;
+  return Math.max(1, Math.round((10 + dmgB) * (difficulty.dmg || 1) * k));
+}
+/* THE ALTAR STRIKES: a mark under you that bursts, or a ring out of the altar */
+function ritualCast(A, kind){
+  const h = heroObj || player;
+  kind = kind || (Math.random() < 0.6 ? 'mark' : 'ring');
+  if(kind === 'mark'){
+    const n = wave.n >= 30 ? 3 : wave.n >= 20 ? 2 : 1;
+    for(let i=0;i<n;i++){
+      const a = rnd(TAU), off = i ? rnd(70, 140) : 0;
+      let x = h.x + Math.cos(a)*off, y = h.y + Math.sin(a)*off;
+      const d = Math.hypot(x - A.x, y - A.y), lim = RITUAL_R - RITUAL_MARK_R*0.5;
+      if(d > lim){ x = A.x + (x - A.x)*lim/d; y = A.y + (y - A.y)*lim/d; }
+      ritualS.fx.push({ kind:'mark', A, x, y, r:RITUAL_MARK_R, t:-i*0.25, T:RITUAL_MARK_T, dmg:ritualHit(1.6) });
+    }
+  } else {
+    ritualS.fx.push({ kind:'ring', A, x:A.x, y:A.y, r:18, t:0, wait:RITUAL_RING_WAIT, hit:false, dmg:ritualHit(1.1) });
+  }
+  addRing(A.x, A.y, 6, 200, 50, RITUAL_COL, 4, 0.35);
+}
+function ritualFxTick(dt){
+  const h = heroObj || player;
+  for(const f of ritualS.fx){
+    f.t += dt;
+    if(f.kind === 'mark'){
+      if(f.t >= f.T && !f.done){
+        f.done = true;
+        if(h && !h.dead && Math.hypot(h.x - f.x, h.y - f.y) < f.r + (h.r || 12)) playerDamage(f.dmg, { x:f.x, y:f.y, type:'ritual', bname:'the ritual altar' }, 'fire', true);
+        addRing(f.x, f.y, 10, 520, f.r + 10, '#ff6a3a', 6, 0.35);
+        addSparks(f.x, f.y - 6, 10, '#ff8a4a'); addShake(0.12);
+        try { SFX.boomSmall(); } catch(err){}
+      }
+    } else if(f.kind === 'ring'){
+      if(f.t < f.wait) continue;
+      f.r += RITUAL_RING_SPD*dt;
+      if(!f.hit && h && !h.dead && Math.abs(Math.hypot(h.x - f.x, h.y - f.y) - f.r) < RITUAL_RING_BAND + (h.r || 12)){
+        f.hit = true; playerDamage(f.dmg, { x:f.x, y:f.y, type:'ritual', bname:'the ritual altar' }, 'chaos', true);
+      }
+      if(f.r >= RITUAL_R) f.done = true;
+    }
+  }
+  ritualS.fx = ritualS.fx.filter(f=>!(f.done && (f.kind !== 'mark' || f.t > f.T + 0.05)));
+}
+function ritualDone(A){
+  A.state = 'done'; ritualS.active = null; ritualS.fx = ritualS.fx.filter(f=>f.A !== A);
+  for(const e of enemies) delete e.ritualSide;
+  const left = ritualLive().length;
+  showBanner(left ? 'RITUAL COMPLETE' : 'ALL RITUALS COMPLETE',
+    '+'+A.earned+' TRIBUTE · '+ritualS.tribute+' TO SPEND · U', RITUAL_COL, 2.0, 44);
+  logEvent('   ritual complete: +'+A.earned+' tribute ('+ritualS.tribute+' held) — U to spend it'+(left ? ', or save it for the other '+left : ''), RITUAL_COL);
+  addRing(A.x, A.y, 10, 600, RITUAL_R, '#ffd76e', 6, 0.6);
+  SFX.fortune();
+}
+/* THE CIRCLE HOLDS: the hero and the legion inside, the inside monsters inside,
+   the outside ones out -- and nothing the outside ones shoot comes through */
+function ritualClamp(){
+  const A = ritualS.active;
+  if(!A) return;
+  const inside = (o, pad)=>{
+    const dx = o.x - A.x, dy = o.y - A.y, d = Math.hypot(dx, dy), lim = RITUAL_R - pad;
+    if(d > lim && d > 0.01){ o.x = A.x + dx*lim/d; o.y = A.y + dy*lim/d; }
+  };
+  const outside = (o, pad)=>{
+    const dx = o.x - A.x, dy = o.y - A.y, d = Math.hypot(dx, dy), lim = RITUAL_R + pad;
+    if(d < lim){ const k = d > 0.01 ? lim/d : 0; o.x = d > 0.01 ? A.x + dx*k : A.x + lim; o.y = d > 0.01 ? A.y + dy*k : A.y; }
+  };
+  const h = heroObj || player;
+  if(h && !h.dead) inside(h, (h.r || 12) + 2);
+  for(const m of minions) if(!m.gone) inside(m, (m.r || 10) + 2);
+  for(const e of enemies){
+    if(e.dead) continue;
+    if(e.ritualSide === undefined) e.ritualSide = e.ritual === A || Math.hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
+    if(e.ritualSide > 0) inside(e, (e.r || 12)); else outside(e, (e.r || 12));
+  }
+  for(const pr of projectiles){
+    if(pr.dead || pr.deflected || RITUAL_FOG_KINDS.indexOf(pr.kind) < 0 || pr.px === undefined) continue;
+    const was = Math.hypot(pr.px - A.x, pr.py - A.y), now = Math.hypot(pr.x - A.x, pr.y - A.y);
+    if(was >= RITUAL_R && now < RITUAL_R){ pr.dead = true; addDust(pr.x, pr.y, 3, 'rgba(120,40,50,'); }
+  }
+}
+function updateRitual(dt){
+  if(!player) return;
+  const S = ritualS;
+  if(S.pending && wave.state === 'fight'){
+    S.pending.delay -= dt;
+    if(S.pending.delay <= 0){ S.pending = null; ritualPlaceSet(); }
+  }
+  for(const A of S.altars){
+    if(A.state === 'guarded'){
+      A.guards = enemies.filter(e=>e.ritualGuard === A && !e.dead).length;
+      if(A.guards <= 0){
+        A.state = 'ready'; A.woke = true;
+        addRing(A.x, A.y, 10, 400, 120, RITUAL_COL, 5, 0.5);
+        logEvent('   an altar is free — step onto it to begin the ritual', RITUAL_COL);
+      }
+    }
+  }
+  const h = heroObj || player;
+  if(!S.active && h && !h.dead){
+    for(const A of S.altars) if(A.state === 'ready' && Math.hypot(h.x - A.x, h.y - A.y) < RITUAL_TOUCH + (h.r || 12)){ ritualStart(A); break; }
+  }
+  const A = S.active;
+  if(A){
+    A.t += dt;
+    const alive = enemies.filter(e=>e.ritual === A && !e.dead).length;
+    if(A.left > 0){
+      A.pulseT -= dt;
+      if(A.pulseT <= 0 && alive < RITUAL_ALIVE){ ritualPulse(A); A.pulseT = RITUAL_PULSE_T; }
+    }
+    A.abilT -= dt;
+    if(A.abilT <= 0){ ritualCast(A); A.abilT = rnd(RITUAL_ABIL_T[0], RITUAL_ABIL_T[1]) * (wave.n >= 30 ? 0.8 : 1); }
+    if(A.left <= 0 && alive === 0) ritualDone(A);
+  }
+  ritualFxTick(dt);
+}
+/* ---- THE OFFER ---- */
+function ritualCostOf(key){ return Math.round(RITUAL_COST[key] * mobRankMul() * rnd(0.88, 1.12)); }
+function ritualOffer(){
+  let r = Math.random() * RITUAL_OFFER_W.reduce((a, q)=>a + q[1], 0), key = RITUAL_OFFER_W[0][0];
+  for(const [k, w] of RITUAL_OFFER_W){ r -= w; if(r <= 0){ key = k; break; } }
+  if(key === 'magic' || key === 'rare'){
+    const lv = gearItemLevel() + 2, B = gearRollBase(lv);
+    if(B) return { id:ritualS.uid++, kind:'gear', key, it:gearMake(B.id, key, lv), cost:ritualCostOf(key) };
+    key = 'chest:rare';
+  }
+  return { id:ritualS.uid++, kind:'chest', key, rar:key.slice(6), cost:ritualCostOf(key) };
+}
+/* a new set's offer: what you deferred last time first, then fresh ones */
+function ritualOffersNew(){
+  const carry = ritualS.deferred.map(o=>Object.assign(o, { carried:true }));
+  ritualS.deferred = [];
+  ritualS.rerollN = 0;
+  ritualS.offers = carry.slice(0, RITUAL_OFFERS);
+  while(ritualS.offers.length < RITUAL_OFFERS) ritualS.offers.push(ritualOffer());
+}
+function ritualCanShop(){ return ritualS.altars.some(A=>A.state === 'done') && (ritualS.offers.length > 0 || ritualS.tribute > 0); }
+function ritualRerollCost(){ return Math.round(RITUAL_REROLL * mobRankMul() * Math.pow(RITUAL_REROLL_GROW, ritualS.rerollN)); }
+function ritualBuy(id){
+  const o = ritualS.offers.find(q=>q.id === id);
+  if(!o) return 'gone';
+  if(ritualS.tribute < o.cost) return 'poor';
+  ritualS.tribute -= o.cost;
+  ritualS.offers = ritualS.offers.filter(q=>q !== o);
+  if(o.kind === 'gear'){
+    if(!gearInvAdd(o.it)){ gearDropAt(o.it, player.x, player.y); return 'floor'; }
+    logEvent('RITUAL — '+gearName(o.it), GEAR_RAR[o.it.r].col);
+    return 'bag';
+  }
+  queuePick('chest', o.rar);
+  logEvent('RITUAL — a '+o.rar+' chest, waiting on R', (RARITY[o.rar] || RARITY.common).col);
+  return 'chest';
+}
+function ritualDefer(id){
+  const o = ritualS.offers.find(q=>q.id === id);
+  if(!o || o.carried || ritualS.deferred.length >= RITUAL_DEFER_MAX) return false;
+  ritualS.offers = ritualS.offers.filter(q=>q !== o);
+  o.cost = Math.round(o.cost * RITUAL_DEFER_MUL);
+  ritualS.deferred.push(o);
+  return true;
+}
+function ritualReroll(){
+  const c = ritualRerollCost();
+  if(ritualS.tribute < c) return false;
+  ritualS.tribute -= c; ritualS.rerollN++;
+  const keep = ritualS.offers.filter(o=>o.carried);
+  ritualS.offers = keep;
+  while(ritualS.offers.length < RITUAL_OFFERS) ritualS.offers.push(ritualOffer());
+  return true;
+}
+/* ---- DRAWN ---- */
+function drawRitualAltar(c, A){
+  const pulse = 0.5 + 0.5*Math.sin(vtime*3 + A.seed);
+  const lit = A.state === 'ready' || A.state === 'active', done = A.state === 'done';
+  /* the circle it will close, faint until it does */
+  if(!done && A.state !== 'active'){
+    c.save(); c.setLineDash([14, 12]); c.lineDashOffset = -vtime*18;
+    c.strokeStyle = `rgba(255,58,74,${A.state === 'ready' ? 0.35 + 0.2*pulse : 0.16})`; c.lineWidth = 2.5;
+    c.beginPath(); c.arc(A.x, A.y, RITUAL_R, 0, TAU); c.stroke(); c.restore();
+  }
+  /* the stone */
+  c.fillStyle = done ? 'rgba(40,40,44,0.7)' : 'rgba(30,8,14,0.72)';
+  c.beginPath(); c.ellipse(A.x, A.y, 46, 22, 0, 0, TAU); c.fill();
+  c.strokeStyle = done ? '#5a5f66' : `rgba(255,58,74,${lit ? 0.6 + 0.4*pulse : 0.35})`; c.lineWidth = 3;
+  c.beginPath(); c.ellipse(A.x, A.y, 46, 22, 0, 0, TAU); c.stroke();
+  /* runes round the rim */
+  if(!done){
+    c.fillStyle = `rgba(255,120,120,${lit ? 0.8 : 0.35})`;
+    for(let i=0;i<8;i++){
+      const a = i/8*TAU + vtime*(lit ? 0.8 : 0.2);
+      c.fillRect(A.x + Math.cos(a)*38 - 2, A.y + Math.sin(a)*17 - 2, 4, 4);
+    }
+  }
+  /* four horns of stone */
+  c.fillStyle = done ? '#4a4e54' : '#3a2a2e';
+  for(const [dx, dy] of [[-30, -4], [30, -4], [-16, 8], [16, 8]]){
+    c.beginPath(); c.moveTo(A.x + dx - 6, A.y + dy); c.lineTo(A.x + dx, A.y + dy - 30); c.lineTo(A.x + dx + 6, A.y + dy); c.closePath(); c.fill();
+  }
+  /* the shard, floating over it, while it lives */
+  if(!done){
+    const bob = Math.sin(vtime*2 + A.seed)*4, y0 = A.y - 44 + bob;
+    c.fillStyle = `rgba(255,58,74,${lit ? 0.25 + 0.2*pulse : 0.12})`;
+    c.beginPath(); c.arc(A.x, y0, 20 + 6*pulse, 0, TAU); c.fill();
+    c.fillStyle = lit ? '#ff3a4a' : '#8a2a34'; c.strokeStyle = 'rgba(20,4,8,0.8)'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(A.x, y0 - 16); c.lineTo(A.x + 8, y0); c.lineTo(A.x, y0 + 14); c.lineTo(A.x - 8, y0); c.closePath(); c.fill(); c.stroke();
+  }
+  c.font = '700 10px Fredoka'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3;
+  const label = A.state === 'guarded' ? 'RITUAL ALTAR · GUARDED' : A.state === 'ready' ? 'STEP IN TO BEGIN' : A.state === 'done' ? 'COMPLETE' : '';
+  if(label){ c.strokeText(label, A.x, A.y + 34); c.fillStyle = done ? '#9ba19d' : RITUAL_COL; c.fillText(label, A.x, A.y + 34); }
+}
+function drawRitual(){
+  const c = ctx;
+  for(const A of ritualS.altars) if(onScreen(A, RITUAL_R + 40)) drawRitualAltar(c, A);
+  /* a dark stain under a sleeping guard, and a red one under a woken one */
+  for(const e of enemies){
+    if(!(e.ritualGuard || e.ritual) || e.dead || !onScreen(e, 40)) continue;
+    c.fillStyle = e.dormant ? 'rgba(60,10,20,0.35)' : 'rgba(255,58,74,0.22)';
+    c.beginPath(); c.ellipse(e.x, e.y + 2, (e.r||12)*1.45, (e.r||12)*0.6, 0, 0, TAU); c.fill();
+  }
+  /* the altar's strikes */
+  for(const f of ritualS.fx){
+    if(f.kind === 'mark'){
+      if(f.t < 0) continue;
+      const k = clamp(f.t/f.T, 0, 1);
+      c.fillStyle = `rgba(255,70,50,${0.10 + 0.22*k})`;
+      c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.fill();
+      c.fillStyle = `rgba(255,120,60,${0.25 + 0.3*k})`;
+      c.beginPath(); c.arc(f.x, f.y, f.r*k, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(255,90,60,${0.6 + 0.4*k})`; c.lineWidth = 2.5;
+      c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.stroke();
+    } else if(f.kind === 'ring'){
+      if(f.t < f.wait){
+        const k = f.t/f.wait;
+        c.fillStyle = `rgba(160,60,255,${0.2 + 0.3*k})`;
+        c.beginPath(); c.arc(f.x, f.y, 30 + 20*k, 0, TAU); c.fill();
+        continue;
+      }
+      c.strokeStyle = 'rgba(170,80,255,0.85)'; c.lineWidth = RITUAL_RING_BAND;
+      c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(240,210,255,0.7)'; c.lineWidth = 3;
+      c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.stroke();
+    }
+  }
+}
+/* THE FOG, over everything outside the circle while a ritual runs */
+function drawRitualFog(){
+  const A = ritualS.active;
+  if(!A) return;
+  const c = ctx;
+  c.save();
+  c.beginPath();
+  c.rect(VIEW.x0 - 50, VIEW.y0 - 50, VIEW.x1 - VIEW.x0 + 100, VIEW.y1 - VIEW.y0 + 100);
+  c.arc(A.x, A.y, RITUAL_R, 0, TAU, true);
+  c.fillStyle = 'rgba(26,6,12,0.52)';
+  c.fill('evenodd');
+  /* rolling banks of it just outside the ring */
+  for(let i=0;i<22;i++){
+    const a = i/22*TAU + vtime*0.12 + Math.sin(vtime*0.5 + i)*0.05;
+    const rr = RITUAL_R + 40 + 22*Math.sin(vtime*0.8 + i*1.7);
+    const x = A.x + Math.cos(a)*rr, y = A.y + Math.sin(a)*rr;
+    const g = c.createRadialGradient(x, y, 4, x, y, 70);
+    g.addColorStop(0, 'rgba(90,30,40,0.30)'); g.addColorStop(1, 'rgba(90,30,40,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, 70, 0, TAU); c.fill();
+  }
+  /* the ring */
+  const pulse = 0.5 + 0.5*Math.sin(vtime*4);
+  c.strokeStyle = `rgba(255,58,74,${0.7 + 0.3*pulse})`; c.lineWidth = 5;
+  c.beginPath(); c.arc(A.x, A.y, RITUAL_R, 0, TAU); c.stroke();
+  c.setLineDash([6, 22]); c.lineDashOffset = vtime*30; c.strokeStyle = 'rgba(255,200,200,0.6)'; c.lineWidth = 3;
+  c.beginPath(); c.arc(A.x, A.y, RITUAL_R - 9, 0, TAU); c.stroke();
+  c.restore();
+}
+function drawRitualHud(){
+  const S = ritualS;
+  if(!S.altars.length) return;
+  const A = S.active, live = ritualLive().length, done = S.altars.length - live;
+  if(!A && !done) return;
+  const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0) + (abyssOpenNow() ? 30 : 0) + (sboxActiveNow() ? 20 : 0);
+  let head;
+  if(A){
+    const alive = enemies.filter(e=>e.ritual === A && !e.dead).length;
+    head = 'RITUAL · '+(A.left > 0 ? A.left+' to come · ' : '')+alive+' standing · '+S.tribute+' tribute';
+  } else head = 'RITUAL · '+done+'/'+S.altars.length+' done · '+S.tribute+' tribute · U to spend';
+  ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+  ctx.strokeText(head, cw/2, by); ctx.fillStyle = RITUAL_COL; ctx.fillText(head, cw/2, by);
 }
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
@@ -16545,6 +17070,119 @@ function toggleGear(){
   renderGear();
   try { SFX.click(); } catch(e){}
 }
+/* ---- THE RITUAL'S OFFER (U) ----
+   What the current set of altars is offering, what it costs in tribute, and
+   what you have. The run stands still while it is open. */
+let ritualOn = false, ritualFrom = 'play', ritualNoteT = null;
+function toggleRitual(){
+  const el = document.getElementById('ritualScreen');
+  if(!el) return;
+  if(ritualOn){
+    ritualOn = false;
+    el.classList.add('hidden');
+    gearTipHide();
+    state = ritualFrom;
+    if(state === 'play'){ cv.style.cursor = 'none'; try{ window.focus(); }catch(err){} }
+    try { SFX.click(); } catch(e){}
+    return;
+  }
+  if(state !== 'play') return;
+  if(!ritualCanShop()){
+    if(player) addDmg(player.x, player.y - 60, ritualS.altars.length ? 'FINISH A RITUAL FIRST' : 'NO RITUAL YET', '#ff8a8a', 14);
+    return;
+  }
+  if(!GEAR) gearLoad();
+  ritualFrom = state; ritualOn = true; state = 'ritual';
+  el.classList.remove('hidden');
+  cv.style.cursor = 'default';
+  ritualNote('');
+  renderRitual();
+  try { SFX.click(); } catch(e){}
+}
+function ritualNote(t, bad){
+  const n = document.getElementById('ritNote');
+  if(!n) return;
+  n.textContent = t || ''; n.style.color = bad ? '#ff8a6a' : '#9fdc7e';
+  clearTimeout(ritualNoteT);
+  if(t) ritualNoteT = setTimeout(()=>{ n.textContent = ''; }, 3200);
+}
+function ritualChestSvg(col){
+  return `<svg viewBox="0 0 40 32"><rect x="4" y="12" width="32" height="17" rx="2" fill="#8a5a2b" stroke="#1b1f23" stroke-width="1.2"/>`+
+    `<path d="M4 12 Q20 -1 36 12 Z" fill="#a86c33" stroke="#1b1f23" stroke-width="1.2"/>`+
+    `<rect x="3" y="10.5" width="34" height="3.2" fill="${col}"/><circle cx="20" cy="19.5" r="3.2" fill="${col}"/></svg>`;
+}
+function ritualOfferLook(o){
+  if(o.kind === 'gear'){
+    const B = GEAR_BASE_BY_ID[o.it.b], R = GEAR_RAR[o.it.r];
+    return { icon:gearIconSvg(o.it), name:gearName(o.it), col:R.col,
+             sub:GEAR_CLS[B.cls].name+' · item level '+o.it.il };
+  }
+  const R = RARITY[o.rar] || RARITY.common;
+  return { icon:ritualChestSvg(R.col), name:R.name+' CHEST', col:R.col, sub:'a '+o.rar+' brick, opened on R' };
+}
+function renderRitual(){
+  const S = ritualS;
+  const done = S.altars.filter(A=>A.state === 'done').length;
+  const sub = document.getElementById('ritSub');
+  if(sub) sub.textContent = done+' of '+S.altars.length+' altars complete · every altar in a set offers the same, and tribute you do not spend is kept';
+  const tr = document.getElementById('ritTrib');
+  if(tr) tr.innerHTML = 'TRIBUTE <b>'+S.tribute+'</b>';
+  const g = document.getElementById('ritGrid');
+  if(g){
+    g.innerHTML = S.offers.length ? S.offers.map(o=>{
+      const L = ritualOfferLook(o), afford = S.tribute >= o.cost;
+      const canDefer = !o.carried && S.deferred.length < RITUAL_DEFER_MAX;
+      return `<div class="ritcard${afford ? '' : ' poor'}" data-id="${o.id}">`+
+        (o.carried ? '<div class="ritcarried">DEFERRED</div>' : '')+
+        `<div class="riticon">${L.icon}</div><div class="ritname" style="color:${L.col}">${L.name}</div>`+
+        `<div class="ritkind">${L.sub}</div><div class="ritcost">${o.cost} tribute</div>`+
+        `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>BUY</button>`+
+        `<button class="tbtn gray" data-act="defer"${canDefer ? '' : ' disabled'}>DEFER</button></div></div>`;
+    }).join('') : '<div class="ritkind" style="grid-column:1/-1;padding:20px">NOTHING LEFT ON OFFER</div>';
+  }
+  const d = document.getElementById('ritDefer');
+  if(d) d.textContent = S.deferred.length
+    ? 'DEFERRED TO THE NEXT RITUAL ('+S.deferred.length+'/'+RITUAL_DEFER_MAX+'): '+S.deferred.map(o=>ritualOfferLook(o).name+' · '+o.cost).join(' — ')
+    : '';
+  const rb = document.getElementById('ritRerollBtn');
+  if(rb){ const c = ritualRerollCost(); rb.textContent = 'REROLL · '+c; rb.disabled = S.tribute < c; }
+}
+function ritualUiWire(){
+  const g = document.getElementById('ritGrid');
+  if(!g || g.dataset.wired) return;
+  g.dataset.wired = '1';
+  g.addEventListener('click', ev=>{
+    const b = ev.target.closest('button[data-act]'), card = ev.target.closest('.ritcard');
+    if(!b || !card || b.disabled) return;
+    const id = +card.dataset.id, o = ritualS.offers.find(q=>q.id === id);
+    if(!o) return;
+    if(b.dataset.act === 'buy'){
+      const L = ritualOfferLook(o), r = ritualBuy(id);
+      if(r === 'poor'){ ritualNote('NOT ENOUGH TRIBUTE', true); return; }
+      ritualNote(r === 'floor' ? 'BAG FULL — '+L.name+' LIES AT YOUR FEET'
+               : r === 'chest' ? L.name+' — WAITING ON R' : L.name+' — IN YOUR BAG');
+      gearTipHide();
+      try { SFX.fortune(); } catch(e){}
+    } else {
+      if(ritualDefer(id)){ ritualNote('DEFERRED — IT COMES BACK IN THE NEXT RITUAL'); gearTipHide(); }
+      try { SFX.click(); } catch(e){}
+    }
+    renderRitual();
+  });
+  g.addEventListener('mousemove', ev=>{
+    const card = ev.target.closest('.ritcard');
+    const o = card && ritualS.offers.find(q=>q.id === +card.dataset.id);
+    if(o && o.kind === 'gear') gearTipShow({ entry:{ it:o.it }, list:'inv' }, ev.clientX, ev.clientY);
+    else gearTipHide();
+  });
+  g.addEventListener('mouseleave', ()=>gearTipHide());
+  document.getElementById('ritRerollBtn').addEventListener('click', ()=>{
+    if(ritualReroll()){ ritualNote('THE OFFER CHANGES'); try { SFX.click(); } catch(e){} }
+    else ritualNote('NOT ENOUGH TRIBUTE', true);
+    renderRitual();
+  });
+  document.getElementById('ritCloseBtn').addEventListener('click', ()=>toggleRitual());
+}
 let gearNoteT = null;
 function gearNote(t, bad){
   const n = document.getElementById('gearNote');
@@ -18140,7 +18778,7 @@ function minionTarget(m){
   const h = heroObj || player;
   let best = null, bd = MINION_GUARD;
   for(const e of enemiesNear(h.x, h.y, MINION_GUARD, _minBuf)){
-    if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+    if(e.dead || e.state !== 'active' || !breachSees(e) || e.dormant) continue;
     const d = Math.hypot(e.x - h.x, e.y - h.y);
     if(d < bd){ bd = d; best = e; }
   }
@@ -18151,7 +18789,7 @@ function minionTarget(m){
   const leash = Math.max(MINION_LEASH, kindOf(m.kind).range || 0);
   bd = seek;
   for(const e of enemiesNear(m.x, m.y, seek, _minBuf)){
-    if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+    if(e.dead || e.state !== 'active' || !breachSees(e) || e.dormant) continue;
     if(Math.hypot(e.x - h.x, e.y - h.y) > leash) continue;   /* never far from you */
     const d = Math.hypot(e.x - m.x, e.y - m.y);
     if(d < bd){ bd = d; best = e; }
@@ -19393,6 +20031,8 @@ function updateEnemyCore(e, dt){
     }
     return;
   }
+  /* a sleeping ritual guard stands where it was put */
+  if(e.dormant && ritualDormantTick(e)) return;
   if(e.docile){
     e.wanderT -= dt;
     if(e.wanderT<=0){ const sp = randomSpawnPos(); e.wx=sp.x; e.wy=sp.y; e.wanderT=rnd(2,5); }
@@ -24073,6 +24713,7 @@ function render(){
   drawBreach();
   drawAbyss();
   drawSboxGuards();
+  drawRitual();
   drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
@@ -24763,7 +25404,7 @@ function render(){
       ctx.restore();
     }
   }
-  const aliveList = enemies.filter(e=>!e.dead && e.state==='active');
+  const aliveList = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant);
   const markFew = state==='play' && aliveList.length>0 && aliveList.length<=6;
   if(markFew){
     for(const e of aliveList){
@@ -25085,6 +25726,7 @@ function render(){
       ctx.globalAlpha = 1;
     }
   }
+  drawRitualFog();
   ctx.textAlign='center';
   for(const t of dmgTexts){
     if(!onScreen(t, 60)) continue;
@@ -25147,6 +25789,10 @@ function render(){
     for(const d of gearDrops) if(d.it.r === 'rare')
       edgeMarker(d.x, d.y, '#ffff77', (x,y)=>{ ctx.fillStyle = '#ffff77'; ctx.strokeStyle = 'rgba(20,20,10,0.7)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
+    /* a ritual altar that still has something to give */
+    for(const A of ritualS.altars) if(A.state === 'guarded' || A.state === 'ready')
+      edgeMarker(A.x, A.y, RITUAL_COL, (x,y)=>{ ctx.fillStyle = A.state === 'ready' ? RITUAL_COL : '#6a1a24'; ctx.strokeStyle = 'rgba(20,4,8,0.8)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
     for(const A of allAbysses()) if(A.state === 'idle')
       edgeMarker(A.x, A.y, ABYSS_COL, (x,y)=>{ ctx.fillStyle = '#06110a'; ctx.beginPath(); ctx.ellipse(x, y, 11, 6, 0, 0, TAU); ctx.fill();
         ctx.fillStyle = ABYSS_COL; ctx.beginPath(); ctx.ellipse(x, y, 4, 3, 0, 0, TAU); ctx.fill(); }, true);
@@ -26644,7 +27290,7 @@ function renderHUD(){
   if(wave.n>0){
     ctx.textAlign='center'; ctx.font='700 20px "Titan One"';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
-    const left = enemies.filter(e=>!e.dead&&e.state==='active').length + wave.queue.length;
+    const left = enemies.filter(e=>!e.dead&&e.state==='active'&&!e.dormant).length + wave.queue.length;
     /* the monster LEVEL rides beside the wave number once it starts to bite —
        it is the number that explains why wave 60 hurts more than wave 50, so it
        has to be something you can actually see */
@@ -26725,6 +27371,7 @@ function renderHUD(){
   drawBreachHud();
   drawAbyssHud();
   drawSboxHud();
+  drawRitualHud();
   drawLootStash();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){
@@ -27161,6 +27808,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachMiss = 0; breachExtra = []; abyss = null; abyssMiss = 0; abyssExtra = []; sboxPending = [];
+  ritualS = ritualBlank();
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -27440,6 +28088,7 @@ document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click(
 document.getElementById('pauseTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
 document.getElementById('gearBtn').addEventListener('click', ()=>{ SFX.click(); toggleGear(); });
 document.getElementById('pauseGearBtn').addEventListener('click', ()=>{ toggleGear(); });
+ritualUiWire();
 document.getElementById('pauseLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
 document.getElementById('overLinkBtn').addEventListener('click', e=>{ SFX.click(); runLinkCopy(e.currentTarget); });
 
@@ -27474,6 +28123,8 @@ function update(dt, raw){
     updateBreach(dt);
     updateAbyss(dt);
     updateStrongboxes(dt);
+    updateRitual(dt);
+    ritualClamp();
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){

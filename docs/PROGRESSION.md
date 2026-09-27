@@ -3812,3 +3812,86 @@ last monster still throws, and the blade flies out past 100 and back; a monster 
 turning point is reaped; with a second monster about, the blade still leaps from the struck body
 to it. `reave` unchanged. Breaks `nosolo`, `noturn` caught.
 
+
+## Sixty-first pass — fewer chests on the floor, more in strongboxes, and the Ritual
+
+> *"decrees the amount of normal chests that drop, and increase the strongbox chests instead, also
+> include epic strongboxes, they are a little harder. Now, i feel that we can include another
+> League mechanic from PoE, and that is ritual ... three rituals on the map ... first you have to
+> kill the surrounding pack in order to open it (now these packs dont auto-aggro/target the
+> player, they stay in place until you attack or move towards them) ... a circle that you cannot
+> walk past ... Outside the circle is Fog, monsters outside stay outside, and mosnters inside stay
+> inside ... the ritual thing in the middle sometimes does abilities that damage the player ...
+> When killing monsters you gain ritual points ... higher level monsters reward more ... open a
+> ritual tab and do buy gear or upgrade with these points. You can also wait until you do all 3
+> encounters to max out the reward. And you can also defeer items"*
+
+**Chests into strongboxes.**
+- `DROP.chest` 0.0034 → **0.0017**: a body leaves half the chests it did.
+- `SBOX_CHANCE` 0.3 → **0.5**, and the late rolls grow to `[[12, 0.4], [20, 0.45], [35, 0.45]]`;
+  `SBOX_MAX_LIVE` 3 → 4. Across a run that is roughly twice the boxes, and each is a chest.
+- A fourth tier, **EPIC STRONGBOX** (`#b05aff`): 4 mods, 5 bursts, `extra: 3` bodies in every
+  burst (the rare's +1 moved into the same `extra` field), each burst **led by an elite** instead
+  of a magic body, and an **epic** chest (`SBOX_CHEST_MAX` → 'epic'). Weights 0.52 / 0.30 / 0.12
+  / 0.06, with the epic filtered out below `SBOX_EPIC_FROM` = 10 (`sboxTierRoll(n)` renormalises
+  over what is allowed).
+
+**Ritual.** One module after the strongboxes, one run-state object `ritualS` (reset in
+`resetRun`).
+- *When.* `ritualRoll(n)` in `startWave`: from `RITUAL_FROM` = 12, not on boss waves, only while
+  no set is standing or pending; 30% with a pity at 4. The set rises `RITUAL_DELAY` 4–10s into
+  the fight: up to `RITUAL_N` = 3 altars 520–1700px from the hero, `RITUAL_GAP` = 820 apart, on
+  floor with six of eight points at 0.6R also floor, clear of strongboxes.
+- *Sleeping guards.* `ritualGuards` spawns 5–7 of one type (the first magic) round each altar
+  with `e.dormant` and `e.ritualGuard`. In `updateEnemyCore`, after the stun block, a dormant
+  body runs `ritualDormantTick` and returns: it only collides with the world. It wakes — with its
+  whole pack, `ritualWake(A)` — when the hero comes within `RITUAL_WAKE_R` = 210 of it or of the
+  altar, or when anything lands a hit (`hitEnemy`, before evasion/block). `minionTarget` skips
+  dormant bodies. The wave-clear test became `!enemies.some(e=>!e.dead && !e.dormant)`, and the
+  alive count, the bodies-left HUD and the few-left edge markers ignore them too — a sleeping pack
+  waits across waves and never holds one.
+- *The circle.* A freed altar (`guarded` → `ready` when its guards are dead) starts on touch
+  (`ritualStart`): every enemy is stamped `ritualSide` ±1 by where it stands; the legion is
+  pulled inside. `ritualClamp()`, run after every update in the main loop, keeps the hero, the
+  minions and the +1 side inside `RITUAL_R` = 300 and the −1 side outside it (anything new is
+  stamped by position on first sight), and kills any hostile projectile (`RITUAL_FOG_KINDS`) that
+  crosses the ring inward. `ritualActiveNow()` holds the wave's clear and pauses its queue.
+- *The encounter.* `ritualBudget(n)` = 10 + n/3 monsters, called by `ritualPulse` 3–5 at a time
+  every 2s while fewer than 12 stand, inside the circle and at least 110px from the hero; 14%
+  magic, 6% elite. Every 3.2–4.8s `ritualCast`: a **mark** (72px, bursts after 1.15s, fire; 2 of
+  them from wave 20 and 3 from 30) or a **ring** (gathers 0.7s, rolls out at 250px/s, chaos,
+  hits once). Damage `ritualHit(k)` is an ordinary monster's blow at this wave and level
+  (the `dmgB` curve from `spawnEnemy`), k = 1.6 and 1.1. Done when the budget is spent and none
+  is standing.
+- *Tribute.* `ritualTribute(e)` = 10 × `mobRankMul(e.mlvl)` × (4 elite / 2 magic / 1). Guards
+  pay none.
+- *The offer.* Rolled when a set rises: `RITUAL_OFFERS` = 8, the deferred ones first. Gear at
+  `gearItemLevel() + 2` (magic or rare, `gearRollBase`, so only what this hero can use) or a chest
+  pick (rare / epic / legendary → `queuePick('chest', rar)`), priced `RITUAL_COST` × `mobRankMul()`
+  ± 12%. `ritualBuy`, `ritualDefer` (×1.2, at most 6, never twice), `ritualReroll` (60 ×
+  `mobRankMul()` × 1.5^n, keeps carried offers). The window is `#ritualScreen`, state `'ritual'`,
+  <kbd>U</kbd> (only once an altar of the set is done); gear offers show the equipment tooltip
+  with its comparison.
+- *Drawn.* The altar (stone, horns, runes, a floating shard; the circle faint and dashed until it
+  closes) and the stains under guards and called monsters on the ground layer; marks and rings;
+  the **fog** (`drawRitualFog`, an even-odd fill of the view with the circle cut out, rolling
+  banks just outside the ring, and the ring itself) over the entities; a HUD line under the
+  strongbox line; rim diamonds for altars still guarded or ready.
+
+**Proof.** New `ritual` test: sets turn up only from wave 12, never on boss waves, with a pity,
+one at a time; three altars apart on floor with sleeping packs and eight offers; a sleeping pack
+stands still for 3s and does not hold the wave; a hit wakes only its pack, and so does walking
+near; a freed altar starts on touch, holds the wave and pauses its queue; the hero, an inside and
+an outside body stay on their sides and a monster's arrow dies at the fog while the hero's own
+flies on; the altar calls exactly its budget, all inside, paying tribute and finishing; tribute
+climbs with magic, elite and level, and guards pay none; a mark hits a hero standing in it and
+misses one who stepped out, a ring hits once; the window opens, buys gear into the bag and a chest
+onto the stash, refuses when too poor, defers at ×1.2, rerolls for tribute at a rising price, buys
+on a click, closes; a deferred offer returns first in the next set, marked, and cannot be deferred
+again; the window will not open with nothing done; a running ritual draws without throwing. And:
+body chests at 0.0017, strongbox chance 0.5 and four at once; no epic box before wave 10 and about
+6% after; an epic box has four mods, five bursts each led by an elite, and an epic chest.
+`leagues` updated for the new chance and the fourth tier. Breaks `dormantwalk`, `nowake`,
+`noclamp`, `fogleak`, `noholdwave`, `guardhold`, `queueruns`, `flattrib`, `guardpays`,
+`freedefer`, `nocarry`, `markmiss`, `ringtwice`, `outsidecall`, `epicearly`, `chestfull`,
+`epicsoft`, `ritualpoor` — all caught.
