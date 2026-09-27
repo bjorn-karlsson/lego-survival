@@ -3947,6 +3947,10 @@ waves carried something. `leagueRoll(n)` replaces all three:
 - `startWave` hands the plan out: `breachRoll(n, k)`, `abyssRoll(n, k)`, `ritualRoll(n, k)` now
   take the count and no longer roll for themselves (k defaults to 1, so a forced roll still
   forces one). `BREACH_MULTI`, `ABYSS_MULTI` and the three chances and pities are gone.
+- Moving `BREACH_FROM` to 7 would have shrunk every breach by a wave's worth of layer (40
+  bodies), since `breachLayerSize` counted from it; the layer now counts from its own
+  `BREACH_LAYER_FROM` = 6, so a breach at any wave is exactly as deep as before (`block` caught
+  this: wave 31 read 1560, not 1600).
 
 **Strongboxes, the common one.** `SBOX_CHANCE` 0.6 for the first box; each further box rolls
 `SBOX_MORE_PER_LVL` = 3% per MOB LV (to 50%), up to `SBOX_PER_WAVE` = 3, a few seconds apart.

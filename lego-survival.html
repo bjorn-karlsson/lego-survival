@@ -8223,8 +8223,11 @@ function breachAliveMax(r){ return Math.min(BREACH_ALIVE_TOP, BREACH_ALIVE_MAX +
 /* THE DEEPER YOU GO. Every breach opened this run makes the next one harder --
    tougher bodies, more magic packs -- and pays better in its hoard */
 const BREACH_DEPTH_HP = 0.12, BREACH_DEPTH_HP_MAX = 3, BREACH_DEPTH_MAGIC = 0.015, BREACH_MAGIC_MAX = 0.3;
+/* the layer's growth is counted from wave 6, where breaches used to start -- it
+   stays put now that the league roll starts them at 7 */
+const BREACH_LAYER_FROM = 6;
 function breachLayerSize(n){
-  return clamp(BREACH_LAYER_MIN + (n - BREACH_FROM)*BREACH_LAYER_STEP, BREACH_LAYER_MIN, BREACH_LAYER_MAX);
+  return clamp(BREACH_LAYER_MIN + (n - BREACH_LAYER_FROM)*BREACH_LAYER_STEP, BREACH_LAYER_MIN, BREACH_LAYER_MAX);
 }
 const BREACH_HP = 0.7, BREACH_XP = 0.6;  /* a swarm: softer, and paid in splinters, not studs */
 const BREACH_MAGIC = 0.08;
