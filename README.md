@@ -2488,9 +2488,22 @@ as that type, and the ailment lands on the part of the damage that actually *was
 | ☠️ Chaos | POISON | 0% | 0% |
 
 Every base chance is zero. Chaos used to carry a free **35%** dose, which made it the one
-damage type that never had to pay for its ailment — it pays now. What turns any of them on is
-**Afflict**: one stat, added to all five, capped at **75%**. Because it is one stat it works on
-whatever your damage has *become*, which is the whole point.
+damage type that never had to pay for its ailment — it pays now. What turns them on is **one
+brick per ailment** (this used to be *Afflict*, one chance for all five at once):
+
+| brick | ailment | per pick (common → legendary) | cap | offered when you deal |
+|---|---|---|--:|---|
+| Serrated Edge | BLEED | +3 / 5 / 8 / 11 / 15% | 50% | physical, with an attack |
+| Kindling | IGNITE | +3 / 5 / 8 / 11 / 15% | 50% | fire |
+| Numbing Cold | CHILL | +3 / 5 / 8 / 11 / 15% | 50% | cold |
+| Static Charge | SHOCK | +3 / 5 / 8 / 11 / 15% | 50% | lightning |
+| Venom Glands | POISON | +3 / 5 / 8 / 11 / 15% | 50% | chaos |
+
+Each is **only offered if you actually deal that damage** — by the same reckoning the conversion
+cards use, so a sword that has turned part of its edge into fire is offered Kindling and a pure
+sword is not. They are smaller steps than Afflict's were (it went to +32%), and each is **drawn
+half as often** as an ordinary brick. The tree's *chance to leave an ailment* nodes are still one
+pool that counts for every type (capped at 75%).
 
 **What a critical buys is the three ELEMENTS, and only those.** A fire crit always ignites, a
 cold crit always chills, a lightning crit always shocks. It does **not** open a wound and it
@@ -2503,7 +2516,7 @@ has bought physical damage still hits for physical — it just does not cut.
 
 **Three spells carry their own chance on top of the table,** the way a PoE gem does, and it
 is written on the character sheet rather than hidden in the code. **Fireball** ignites **25%**
-of the time on its own — PoE's Fireball number — and that *adds* to whatever Afflict you
+of the time on its own — PoE's Fireball number — and that *adds* to whatever Kindling you
 have bought, so ailment bricks are worth something to a staff for the first time; a fire
 critical still always ignites. It used to be 100%, which made "chance to ignite" a card a
 staff never wanted. **Block Freeze** always chills (Absolute Zero upgrades that chill into a
@@ -2520,7 +2533,7 @@ A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangl
 > the boss when I'm hitting him?"*
 
 Because the chance was **zero**. An axe swing reports as a weapon source, not as a fireball, so
-it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever Afflict you had bought (0) — nothing,
+it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever ignite chance you had bought (0) — nothing,
 at any conversion. Now that same axe ignites on every crit, on the fire half of the hit, and at
 your bought chance the rest of the time. Half the hit, half the chance.
 
@@ -2647,6 +2660,22 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### How often the leagues come
+
+**Rare, but it happens.** Strongboxes are the common one; the big three — **breach, abyss and
+ritual** — share **one roll**:
+
+- From **wave 7**, an ordinary (non-boss) wave has a **22%** chance of a league event, and a run
+  never goes **six** ordinary waves in a row without one.
+- **Which one is chance** — breach, abyss or ritual, evenly (a ritual only while no set of altars
+  is standing).
+- **More than one at once is rarer, and the monster level decides it**: every MOB LV adds 2.5% to
+  the chance of each further event, up to 45% — so at wave 8 about one event in forty comes with
+  a second, at wave 24 one in eight, and past wave 45 nearly half. At most three in a wave — two
+  abysses and a breach, say.
+- **Strongboxes** roll on their own, from wave 2: **60%** of ordinary waves leave one, and each
+  further box rolls 3% per MOB LV (to 50%), up to three a wave.
+
 ### A cleared wave waits for the leagues
 
 When the wave's last monster dies and there is **still league content untouched on the map** —
@@ -2663,8 +2692,8 @@ saying what is left:
 
 ### Breach
 
-The first league mechanic. From **wave 6**, an ordinary (non-boss) wave has a **45%** chance to
-carry a **Breach hand** — and never more than two ordinary waves go by without one. A few
+The first league mechanic. From **wave 7** a wave can carry a **Breach hand**, when the
+[league roll](#how-often-the-leagues-come) picks one. A few
 seconds into the fight a clawed fist of void bricks pushes up through the floor 380–760px away,
 with a marker on the screen's edge while it is out of sight.
 
@@ -2729,9 +2758,8 @@ stands (up to 20s) and drops the ring outright, plus fifteen splinters.
   the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
   with fourteen times the health of its kind, which holds the breach open while it stands (up to
   35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is rare** — the best a breach gives.
-- **More than one, late in a run.** From wave 25 a second breach can open in the same wave, and
-  from wave 40 a third — each of a different lord, each on its own 60% roll, their hands at least
-  600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
+- **More than one.** When the league roll hands a wave two or three breaches, each is of a
+  different lord, their hands at least 600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
 - **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
   12% tougher per breach before it (to three times), and more of its packs magic.
 
@@ -2744,9 +2772,8 @@ the Breachlord.
 
 ### Abyss
 
-From **wave 3**, on any wave that is not a boss wave, there is a **35%** chance (and never four
-ordinary waves in a row without one) that an **ABYSS** opens its **green eye** on the floor a few
-seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
+From **wave 7**, when the [league roll](#how-often-the-leagues-come) picks one, an **ABYSS**
+opens its **green eye** on the floor a few seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
 
 - **Walk onto the eye and the ground cracks** — and keeps cracking at **150px a second**, but
   **only while you follow it**: stay within 420px of its front. **Where it is going is not
@@ -2768,19 +2795,18 @@ seconds into the fight. The eye is pinned to the screen's edge like a chest unti
   rare**) and a shower of studs.
 - **An open abyss holds the wave**, the way an open breach does. An abyss you never touched simply
   closes when the wave ends.
-- **Late in a run there are more.** From wave 25 a second abyss can surface in the same wave, and
-  from wave 40 a third, each on its own 60% roll and at least 500px from the others. Each keeps
+- **More than one.** When the league roll hands a wave two or three abysses, they surface a few
+  seconds apart and at least 500px from each other. Each keeps
   its own monsters, pits and Stygian.
 
 ![An abyss: the opened crack, a pit spilling its pack](docs/abyss.png)
 
 ### Strongboxes
 
-**The chests live here now.** A body drops half the chests it used to, and the boxes come twice
-as often to make up for it. From **wave 2**, on any wave that is not a boss wave, there is a
-**50%** chance that a **locked iron strongbox** is left somewhere on the floor (another 40% roll
-from wave 12, and 45% more from wave 20 and again from wave 35; never more than four locked boxes
-lying about at once). It wears one to four **mods** written over it — the boss traits: SWIFT,
+**The chests live here now, and this is the common league.** A body drops half the chests it
+used to, and the boxes make up for it. From **wave 2**, **60%** of ordinary waves leave a **locked
+iron strongbox** somewhere on the floor, and a second and third come with the monster level (3%
+per MOB LV each, to 50%); never more than four locked boxes lying about at once. It wears one to four **mods** written over it — the boss traits: SWIFT,
 IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
 
 | box | mods | bursts of guardians | each burst | leads each burst | the chest inside |
@@ -2805,9 +2831,9 @@ six to eight, each led by an elite — and an epic chest when the lock gives.
 
 ### Ritual
 
-PoE's Ritual. From **wave 12**, an ordinary (non-boss) wave has a **30%** chance to raise a
-**set of three altars** a few seconds into the fight — and never more than three waves go by
-without one while no set is standing. They rise at least 820px apart, on open floor, with a
+PoE's Ritual. From **wave 7**, when the [league roll](#how-often-the-leagues-come) picks one (and
+no set is already standing), a wave raises a **set of three altars** a few seconds into the
+fight. They rise at least 820px apart, on open floor, with a
 diamond on the screen's rim for each one that still has something to give.
 
 - **Each altar is guarded, and the guards are asleep.** A pack of five to seven (one of them
@@ -2838,11 +2864,16 @@ before you shop buys the most:
 
 | offer | costs (×1.11 per MOB LV) | what you get |
 |---|--:|---|
-| magic gear | ~60 | a piece for your hero, **item level +2** over the floor's |
-| rare gear | ~150 | the same, rare |
-| rare chest | ~90 | a rare brick, waiting on <kbd>R</kbd> |
-| epic chest | ~220 | an epic brick |
-| legendary chest | ~520 | a legendary brick |
+| magic gear | ~90 | a piece for your hero, **item level +2** over the floor's |
+| rare gear | ~260 | the same, rare |
+| rare chest | ~200 | a rare brick, waiting on <kbd>R</kbd> |
+| epic chest | ~600 | an epic brick |
+| legendary chest | ~2000 | a legendary brick |
+
+**A legendary is not one set's worth.** Three altars pay about 550–750 tribute at the level they
+are fought at, and a legendary chest costs three to five sets of that. Getting one is what
+**DEFER** is for: put it off, keep your tribute, and each later set — deeper, so it pays more —
+brings it back at ×1.2. Expect to defer it three to six times.
 
 - **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
 - **DEFER** takes an offer off this set and puts it **first in the next set's offer**, at ×1.2 its

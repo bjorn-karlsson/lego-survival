@@ -3925,3 +3925,60 @@ an unopened breach hand and an idle abyss hold it and survive the hold, and are 
 ritual set holds while guarded and while ready, and not once done; F does nothing mid-fight, and a
 repeating F does not skip the next breather. Breaks `noholdleague`, `nof`, `handsinks`,
 `eyecloses`, `noauto`, `frepeat`, `readyleft` caught.
+
+## Sixty-third pass — one league roll, strongboxes the common one, a legendary you save for, and Afflict in five
+
+> *"it rare to get legaue events in general, but its not uncommon, it happends. Now to get multiple
+> League mechanics at one wave is rarer, but possible, this depends on mob level ... Strongboxes:
+> Most common ... Abyss: Same chance as Breach and Ritual, it's rare, it can spawn multiple,
+> introduced at wave 7 ... It's possible to get legendary from Ritual, but just complete 3/3 wont
+> get you enough coins ... maybe around 3-6 defers ... make ailment chance more rare ... sepeare
+> it into respective ailments ... BUT only give it if you actually do that ailment damage."*
+
+**One league roll.** Breach (45% from wave 6, pity 3, late extras), abyss (35% from wave 3, pity
+4, late extras) and ritual (30% from wave 12, pity 4) each rolled on their own, so most ordinary
+waves carried something. `leagueRoll(n)` replaces all three:
+- `LEAGUE_FROM` = 7, never on a boss wave; `LEAGUE_CHANCE` = 0.22 with `LEAGUE_PITY` = 6
+  (`leagueMiss`, reset per run).
+- One event, then each further one on `leagueMoreChance(n)` = 2.5% × `mobRank(n)`, capped at 45%,
+  up to `LEAGUE_MAX` = 3. Every event is breach / abyss / ritual evenly, a ritual only while
+  `ritualCanRise()` (no set pending or standing) and never twice, a breach only while a lord is
+  left.
+- `startWave` hands the plan out: `breachRoll(n, k)`, `abyssRoll(n, k)`, `ritualRoll(n, k)` now
+  take the count and no longer roll for themselves (k defaults to 1, so a forced roll still
+  forces one). `BREACH_MULTI`, `ABYSS_MULTI` and the three chances and pities are gone.
+
+**Strongboxes, the common one.** `SBOX_CHANCE` 0.6 for the first box; each further box rolls
+`SBOX_MORE_PER_LVL` = 3% per MOB LV (to 50%), up to `SBOX_PER_WAVE` = 3, a few seconds apart.
+(`SBOX_LATE` is gone.)
+
+**Ritual prices.** `RITUAL_COST` magic 90 / rare 260 / rare chest 200 / epic 600 / legendary
+**2000** (was 60/150/90/220/520), and legendary offers a little likelier (0.08). At wave 14 a set of
+three altars is ~760 tribute and a legendary ~2700: three and a half sets. Tribute grows with the
+level faster than a deferral's ×1.2, so a legendary put off three to six times is bought.
+
+**Afflict, in five.** The `ailchance` brick (+6–32% to all five ailments) is gone. Four new bricks
+— `ignitechance` Kindling, `chillchance` Numbing Cold, `shockchance` Static Charge,
+`poisonchance` Venom Glands — each add to one `p.ailTypeFlat[t]`, synced into `p.ailType[t]`
+capped at `AIL_TYPE_MAX` = 50%, and `ailChanceOf` adds `ailTypeChance(type)` on both its native and
+ordinary paths. Steps `AIL_TYPE_STEP` = 3/5/8/11/15%. Each is offered only when `dealtTypes()[t]`
+— the conversion cards' own reckoning of what you deal. Serrated Edge (bleed) moves to the same
+steps and cap and now also needs physical in `dealtTypes()`. All five are drawn at `AIL_CARD_W` =
+half weight in `cardWeight`. The tree's generic `ailChance` pool is unchanged. The Storm Brick's
+book row lists Static Charge where Afflict was.
+
+**Proof.** New `leagues2`: no league before wave 7 or on a boss wave, the chance measured at 22%
+over 6000 rolls, the pity on the sixth; the three evenly; no ritual while a set stands; more than
+one event under 6% at wave 8, over twice that at wave 24, and at wave 48 matching
+`leagueMoreChance` (~45%), never more than three and never two rituals; `startWave` hands out what
+the roll says (a pity-owed wave always gets one, wave 6 none); strongboxes on ~60% of waves with
+two or more rare at wave 7 and common at wave 41; a legendary at three to five and a half sets of
+tribute; the ailment bricks — Afflict gone, a sword offered only bleed, a half-fire sword ignite
+too, a staff no bleed; Static Charge raises shock by its step and nothing else, stops at 50% and
+leaves the pool, drawn at half weight. `breach`, `abyss`, `leagues`, `ritual` updated for the
+count-taking rolls; `t2` gives Static Charge. And a flake fixed that was already there: `breach`'s
+four-kills-a-second check failed whenever the perfect clear before it happened to pay the Xoph ring
+up to rank III+, letting the Breachlord in with its 35s hold (64.9s); the ring is now reset before
+that run. Breaks `nopity`, `common`, `nomulti`, `flatmulti`, `ritualtwice`, `breachonly`,
+`unwired`, `early`, `boxrare`, `boxnolevel`, `cheaplegend`, `afflictback`, `ailall`, `ailnocap`,
+`ailbig`, `ailweight` caught.
