@@ -1492,7 +1492,7 @@ off it, and that is the actual mechanic.
   every few seconds its lid lifts a crack and there are teeth under it. Open it and it wakes —
   hops at you and lunges with its lid wide. Kill it and it pays the chest it was, **a tier better**
   (never past epic).
-- **The Banner-bearer** joins the roster (from wave 10 or so). It walks in, stops, and **plants a
+- **The Banner-bearer** joins the roster (from wave 11 or so). It walks in, stops, and **plants a
   war banner**: everything within **280px** of it hits **30% harder**, moves **20% faster** and
   attacks faster, for as long as the banner stands. Break the banner (it has a little life) and
   the buff is gone; the bearer plants another ten seconds later.
