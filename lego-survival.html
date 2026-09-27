@@ -1434,7 +1434,7 @@ function syncStats(){
   p.ailChance   = clamp(p.ailChanceFlat||0, 0, AIL_CHANCE_MAX);
   p.ailType = {};
   for(const k of AIL_TYPE_KEYS) p.ailType[k] = clamp((p.ailTypeFlat && p.ailTypeFlat[k]) || 0, 0, AIL_TYPE_MAX);
-  p.exposeChance = clamp(p.exposeChanceFlat||0, 0, EXPOSE_CHANCE_MAX);
+  p.exposeChance = EXPOSE_ON ? clamp(p.exposeChanceFlat||0, 0, EXPOSE_CHANCE_MAX) : 0;
   /* THE SHIELD'S CEILING, rebuilt like every other pool -- and what is standing
      in it is kept, clamped, rather than refilled: a rebuild mid-fight must not
      be a free heal. A shield that has just GROWN keeps what it had. */
@@ -2393,6 +2393,12 @@ function enemyRes(e, el){
 const EXPOSE_STEP  = 0.22;   /* resistance taken off while the mark holds */
 const EXPOSE_T     = 6;      /* seconds; a fresh mark refreshes it */
 const EXPOSE_CHANCE_MAX = 1.0;
+/* EXPOSURE IS SWITCHED OFF, as something a player can get. The mechanic is all
+   still here -- the marks, the icons, the maths -- but no brick offers it, the
+   chance pool reads zero, and the four tree nodes that used to sell it sell a
+   little elemental damage instead (see META_STATS.exposeChance). Flip this to
+   bring it back exactly as it was. */
+let EXPOSE_ON = false;
 const EXPOSE_ELEMS = ['fire', 'frost', 'shock', 'chaos'];
 const EXPOSE_COL   = { fire:'#ff6a2a', frost:'#7fb9e0', shock:'#e0a81a', chaos:'#b46aff' };
 const EXPOSE_NAME  = { fire:'SCORCHED', frost:'BRITTLE', shock:'SAPPED', chaos:'WITHERED' };
@@ -11049,7 +11055,7 @@ const UPGRADES = [
      ceiling with it — which is what makes it worth a card to a build that has
      already bought everything there is to buy. ---- */
   { id:'expose', name:'Solvent', icon:'prismdn', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>player.exposeChance < EXPOSE_CHANCE_MAX && (canDeal('fire') || canDeal('frost')
+    req:()=>EXPOSE_ON && player.exposeChance < EXPOSE_CHANCE_MAX && (canDeal('fire') || canDeal('frost')
             || canDeal('shock') || canDeal('chaos')),
     calc:m=>({v: byRar(m, [0.10, 0.16, 0.24, 0.34, 0.48])}),
     desc:c=>`+${Math.round(c.v*100)}% chance for a hit to EXPOSE the element it arrived as: `+
@@ -11235,8 +11241,12 @@ const META_STATS = {
   chargeAll:  { n:'of every charge, by every means',
                 w:(p,v)=>{ p.chargeKill += v; p.chargeCrit += v; p.chargeHurt += v; } },
   /* ---- EXPOSURE, and how hard an ailment lands ---- */
-  exposeChance:{ n:'chance to EXPOSE what a hit arrived as', pct:1,
-                w:(p,v)=>{ p.exposeChanceFlat += v; } },
+  /* while Exposure is switched off (EXPOSE_ON), a node that sold it sells
+     elemental damage instead, at `scale` of its number -- the Etching's 10%
+     chance is 4% increased elemental damage -- and says so */
+  exposeChance: EXPOSE_ON
+    ? { n:'chance to EXPOSE what a hit arrived as', pct:1, w:(p,v)=>{ p.exposeChanceFlat += v; } }
+    : { n:'increased elemental damage', pct:1, scale:0.4, w:(p,v)=>{ p.inc.elem += v*0.4; } },
   ailMag:     { n:'increased CHILL and SHOCK magnitude', pct:1,
                 w:(p,v)=>{ p.ailMagInc += v; } },
   /* elements */
@@ -11373,7 +11383,8 @@ const META_STATS = {
 function metaModText(m){
   const st = META_STATS[m[0]];
   if(!st) return '';
-  const v = m[1];
+  /* a stat standing in for another prints its own number (see exposeChance) */
+  const v = (typeof m[1] === 'number' && st.scale) ? m[1]*st.scale : m[1];
   if(m[0] === 'grant') return 'START THE RUN WITH '+(SPELL_NAME[v] || v).toUpperCase();
   if(v === undefined || v === null) return st.n;
   /* A STAT NAMED FOR ITS COST ("LESS damage over time") prints the way PoE
@@ -14586,8 +14597,19 @@ function comboPreview(favId){
     }
     let body = '';
     try { body = u.desc(u.calc(RARITY.rare.mult), 0); } catch(e){ body = ''; }
-    return { name:u.name, icon:u.icon, body, open, blocked: !open && elsewhere };
+    return { id, name:u.name, icon:u.icon, body, open, blocked: !open && elsewhere };
   }).filter(Boolean);
+  /* THE SIX GOLEMS ARE ONE LINE here: six long cards would bury the rest of the
+     list, and the choice they share is the thing to say */
+  { const gi = out.bricks.findIndex(b=>/^golem/.test(b.id));
+    if(gi >= 0){
+      const gs = out.bricks.filter(b=>/^golem/.test(b.id));
+      const one = { id:'golems', name:'Golems — '+gs.map(b=>b.name.replace(' Golem', '')).join(', '), icon:gs[0].icon,
+        body:`Keep ${GOLEM_BASE_CAP} (a third from the tree), never two alike. Each grants you something while it stands `+
+             `and fights with its own element.`, open:gs.some(b=>b.open), blocked:gs.every(b=>b.blocked) };
+      out.bricks = out.bricks.filter(b=>!/^golem/.test(b.id));
+      out.bricks.splice(gi, 0, one);
+    } }
   player = keepP; favourite = keepF; weapon = keepW;
   if(player) syncStats();
   return out;

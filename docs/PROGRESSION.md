@@ -4041,3 +4041,27 @@ time and hits 30% harder; all six golems draw. `combat` now takes three kinds wi
 golem's buff depends on whether it has risen yet, which a stat snapshot should not). Breaks
 `nocap`, `twins`, `nobuff`, `stickybuff`, `lateoff`, `plainsrc`, `noshot`, `notaunt`, `tauntall`,
 `nocarrion`, `flatcarrion`, `nofoundry`, `smallaura`, `weakaura` caught.
+
+## Sixty-fifth pass — Exposure switched off, and the golems fit the favourite panel
+
+> *"Exposure is too overpowered, please remove it from the game. keep it in the code, but i dont
+> want it right now. And i mean as a player upgrade."*
+
+- `EXPOSE_ON = false` (a `let`, so a test can flip it). While it is off: the **Solvent** brick's
+  `req` is false; `syncStats` sets `p.exposeChance` to 0 whatever `exposeChanceFlat` holds, so
+  nothing any route bought can expose; and `META_STATS.exposeChance` is swapped for a stand-in
+  that writes **increased elemental damage at `scale` 0.4** of the node's number. `metaModText`
+  prints a stat with a `scale` at its scaled value, so the four nodes that sold exposure (Etching
+  10%, Sapper 25%, Corroding 8%, Corrosive 20%) read and give +4 / +10 / +3.2 / +8% elemental
+  damage. No node moves or changes id: the tree's templates are untouched, only what the stat does.
+  Everything else — `exposeEnemy`, the marks, the boss icons, the sheet row — is still there.
+- **The favourite panel.** Six golem cards in THE LEGION's brick list made the scepter/necro panel
+  taller than its box (`combo` caught it: 1532px into 876). `comboPreview` now folds every
+  `golem*` card into one line — *Golems — Flame, Lightning, Ice, Stone, Chaos, Carrion* — that
+  says what they share.
+
+**Proof.** New `expoff`: the switch is off and Solvent is not offered; a hero with
+`exposeChanceFlat` 1 has a zero chance and thirty fire hits mark nothing; Sapper reads "+10%
+increased elemental damage" and gives exactly 0.4 × 25% + its own 6%; flipped on, the same hits
+expose again. `poe4`, which measures the exposure mechanic itself, flips the switch on for its run.
+`combo` passes again.

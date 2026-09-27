@@ -2292,6 +2292,12 @@ ceiling, it changes how fast you reach it — the mace's road, and the slow-heav
 
 ### Exposure — *resistance taken off*
 
+> **Switched off for now.** Exposure proved too strong, so no brick offers it and the chance reads
+> zero whatever was bought. The four tree nodes that sold it (*Etching*, *Sapper*, *Corroding*,
+> *Corrosive*) give **increased elemental damage at 0.4× their number** instead — Sapper's 25% is
+> 10% — and say so. The mechanic below is all still in the game behind one switch
+> (`EXPOSE_ON`), exactly as described, for when it comes back.
+
 **Not an ailment, and the difference is the whole point.** An ailment is damage or a debuff the
 body carries. **EXPOSURE is resistance taken OFF**, which means it sits *outside* your own
 increased-damage pool and outside the MORE ceiling with it. A build that has already bought
