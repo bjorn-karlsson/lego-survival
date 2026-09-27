@@ -5695,7 +5695,7 @@ const GOBLIN_LIFE = 14, GOBLIN_PORTAL_T = 2.2, GOBLIN_CALM = 520;
 const GOBLIN_STUDS = [30, 10];         /* 30 + 10 a wave, x your stud multiplier */
 let goblinPending = null;
 function goblinRoll(n){
-  goblinPending = (n >= GOBLIN_FROM && Math.random() < GOBLIN_CHANCE) ? { delay:rnd(6, 20) } : null;
+  goblinPending = (n >= GOBLIN_FROM && Math.random() < goblinChanceNow()) ? { delay:rnd(6, 20) } : null;
   return !!goblinPending;
 }
 function goblinSpawn(x, y){
@@ -6802,7 +6802,7 @@ function killEnemy(e, source){
   sfxAt(e.x).brick(e.type==='boss'?10:6);
   addShake(e.type==='boss'?0.55:0.16);
   let amount = irnd(e.studs.a, e.studs.b);
-  amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort);
+  amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort * studMoreMul());
   /* BANK WHAT YOU COLLECTED, NOT WHAT YOU ARE HOLDING. player.studs is spent on
      rerolls; banking that would charge you twice for rerolling. */
   player.studsTotal += amount;
@@ -8890,7 +8890,7 @@ function leagueMoreChance(n){ return Math.min(LEAGUE_MORE_MAX, LEAGUE_MORE_PER_L
 function leagueRoll(n){
   const plan = { breach:0, abyss:0, ritual:0, legion:0 };
   if(sandbox || n < LEAGUE_FROM || n % 5 === 0) return plan;
-  if(leagueMiss < LEAGUE_PITY - 1 && Math.random() >= LEAGUE_CHANCE){ leagueMiss++; return plan; }
+  if(leagueMiss < LEAGUE_PITY - 1 && Math.random() >= leagueChanceNow()){ leagueMiss++; return plan; }
   leagueMiss = 0;
   let k = 1;
   const more = leagueMoreChance(n);
@@ -8899,7 +8899,11 @@ function leagueRoll(n){
     const ok = LEAGUE_KINDS.filter(t=>t === 'ritual' ? !plan.ritual && ritualCanRise()
                                     : t === 'legion' ? !plan.legion && !legionActiveNow()
                                     : t === 'breach' ? plan.breach < BREACH_LORD_KEYS.length : true);
-    plan[ok[(Math.random()*ok.length)|0]]++;
+    /* weighted by the league tree; even weights are the plain uniform pick */
+    const ws = ok.map(leagueKindWeight), tot = ws.reduce((a, w)=>a + w, 0);
+    let r = Math.random()*tot, pick = ok[ok.length-1];
+    for(let j=0;j<ok.length;j++){ r -= ws[j]; if(r < 0){ pick = ok[j]; break; } }
+    plan[pick]++;
   }
   return plan;
 }
@@ -9104,6 +9108,9 @@ function breachNear(B){
 function breachify(e, lord){
   const L = BREACH_LORDS[lord];
   e.breach = lord; e.breachB = breach;
+  /* the league tree can drive a breach's monsters deeper */
+  const lvUp = leagueStat('breachMobLvl');
+  if(lvUp > 0){ const k = mobRankMul((e.mlvl || 0) + lvUp) / mobRankMul(e.mlvl || 0); e.mlvl = (e.mlvl || 0) + lvUp; e.maxHp *= k; e.hp = e.maxHp; e.dmg *= k; }
   const deep = Math.min(BREACH_DEPTH_HP_MAX, 1 + BREACH_DEPTH_HP * ((breach && breach.depth) || 0));
   e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP * deep));
   e.xp *= BREACH_XP; e.studs = { a:0, b:0 };
@@ -9567,7 +9574,7 @@ function abyssBuild(A){
   /* THE FORKS, decided now and hidden like the rest: each a branch off the main
      line that wakes when the main front passes the fork, and ends in a pit */
   A.branches = [];
-  const forks = (Math.random() < ABYSS_FORK ? 1 : 0) + (wave.n >= ABYSS_FORK2_FROM && Math.random() < ABYSS_FORK2 ? 1 : 0);
+  const forks = (Math.random() < abyssForkChance() ? 1 : 0) + (wave.n >= ABYSS_FORK2_FROM && Math.random() < ABYSS_FORK2 ? 1 : 0);
   for(let i=0;i<forks;i++){
     /* a fork that runs straight into a wall is tried again somewhere else along
        the line, and off the other side -- a few times, then given up */
@@ -9884,7 +9891,7 @@ let sboxPending = [];
 function sboxRoll(n){
   sboxPending = [];
   if(sandbox || n < SBOX_FROM || n % 5 === 0) return;
-  if(Math.random() >= SBOX_CHANCE) return;
+  if(Math.random() >= sboxChanceNow()) return;
   const more = Math.min(SBOX_MORE_MAX, SBOX_MORE_PER_LVL * mobRank(n));
   let k = 1; while(k < SBOX_PER_WAVE && Math.random() < more) k++;
   for(let i=0;i<k;i++) sboxPending.push({ delay:rnd(SBOX_DELAY[0], SBOX_DELAY[1]) + i*rnd(2, 5) });
@@ -10168,7 +10175,7 @@ function ritualSpot(taken){
 }
 function ritualPlaceSet(){
   const taken = [];
-  for(let i=0;i<RITUAL_N;i++){ const at = ritualSpot(taken); if(at) taken.push(at); }
+  for(let i=0;i<ritualAltarCount();i++){ const at = ritualSpot(taken); if(at) taken.push(at); }
   if(!taken.length) return false;
   ritualS.set++;
   ritualS.altars = taken.map(at=>({ x:at.x, y:at.y, state:'guarded', guards:0, woke:false, seed:rnd(1000),
@@ -10668,7 +10675,7 @@ function legionPlace(at){
 function legionStart(){
   const L = legionEv, n = wave.n;
   const fk = Math.random() < 0.5 ? 'empire' : 'horde', FAC = LEGION_FACTIONS[fk];
-  L.faction = fk; L.state = 'frozen'; L.t = LEGION_T; L.kills = 0;
+  L.faction = fk; L.state = 'frozen'; L.t = L.T0 = legionTimeNow(); L.kills = 0;
   const put = (type, elite, magic, rr0, rr1)=>{
     for(let tries=0; tries<30; tries++){
       const a = rnd(TAU), rr = rnd(rr0, rr1);
@@ -10693,7 +10700,7 @@ function legionStart(){
     if(g){ g.legionGeneral = true; g.maxHp *= 2.5; g.hp = g.maxHp; g.scale *= 1.3; g.r *= 1.3; }
   }
   addRing(L.x, L.y, 12, 700, LEGION_R, LEGION_COL, 8, 0.7); addShake(0.3);
-  showBanner(FAC.name, 'FROZEN IN TIME — '+LEGION_T+'s', LEGION_COL, 2.0, 42);
+  showBanner(FAC.name, 'FROZEN IN TIME — '+L.T0+'s', LEGION_COL, 2.0, 42);
   logEvent('   LEGION — '+FAC.name+' stands frozen; every kill buys time', LEGION_COL);
   try { SFX.freeze(); } catch(err){}
 }
@@ -10716,7 +10723,7 @@ function legionOnKill(e){
   const L = e.legion;
   if(!L) return;
   if(e.legionFrozen && L.state === 'frozen'){
-    L.kills++; L.t = Math.min(LEGION_T_MAX, L.t + LEGION_KILL_T);
+    L.kills++; L.t = Math.min(LEGION_T_MAX + leagueStat('legionTime'), L.t + LEGION_KILL_T);
     addSparks(e.x, e.y - 18, 10, '#dff2ff');
   }
   if(e.legionChest)
@@ -10758,7 +10765,7 @@ function drawLegion(){
     c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke();
     /* the time left, as the ring itself running out */
     c.strokeStyle = '#ffffff'; c.lineWidth = 6;
-    c.beginPath(); c.arc(L.x, L.y, LEGION_R, -Math.PI/2, -Math.PI/2 + TAU*clamp(L.t/LEGION_T, 0, 1)); c.stroke();
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, -Math.PI/2, -Math.PI/2 + TAU*clamp(L.t/(L.T0 || LEGION_T), 0, 1)); c.stroke();
   } else if(L.state === 'idle'){
     c.setLineDash([14,12]); c.strokeStyle = 'rgba(159,212,255,0.28)'; c.lineWidth = 3;
     c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke(); c.setLineDash([]);
@@ -10801,6 +10808,101 @@ function drawLegionHud(){
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = LEGION_COL; ctx.fillText(head, cw/2, by);
 }
+/* ============================ THE LEAGUE TREE (pre-built) ============================
+   A second tree, for the leagues: spend points on HOW OFTEN each league turns up
+   and WHAT IT IS LIKE when it does -- more breaches, a fourth ritual altar, an
+   abyss that forks, deeper breach monsters, a longer frozen legion, more studs.
+   NOT LIVE YET: there is no screen and no way to earn a point. What is here is
+   everything the rest of the game has to read -- the nodes, the rule for taking
+   one, the save -- and every hook wired into the league code through
+   leagueStat(), which answers 0 while LEAGUE_TREE_ON is off, so nothing changes
+   until the tree is switched on. */
+let LEAGUE_TREE_ON = false;
+/* what each stat means, and how it reads on a node */
+const LT_STATS = {
+  leagueChance: { txt:v=>'+'+Math.round(v*100)+'% chance a wave carries a league' },
+  breachWeight: { txt:v=>'Breach '+Math.round(v*100)+'% more likely to be the league' },
+  abyssWeight:  { txt:v=>'Abyss '+Math.round(v*100)+'% more likely to be the league' },
+  ritualWeight: { txt:v=>'Ritual '+Math.round(v*100)+'% more likely to be the league' },
+  legionWeight: { txt:v=>'Legion '+Math.round(v*100)+'% more likely to be the league' },
+  breachMobLvl: { txt:v=>'+'+v+' monster level for breach monsters' },
+  ritualExtra:  { txt:v=>'+'+v+' altar in every ritual set' },
+  abyssFork:    { txt:v=>'+'+Math.round(v*100)+'% chance an abyss forks' },
+  legionTime:   { txt:v=>'+'+v+'s frozen in a legion' },
+  sboxChance:   { txt:v=>Math.round(v*100)+'% more strongboxes' },
+  goblinChance: { txt:v=>Math.round(v*100)+'% more treasure goblins' },
+  studMore:     { txt:v=>Math.round(v*100)+'% more studs from monsters' },
+};
+const LEAGUE_TREE = [
+  { id:'lt_root', name:'THE ATLAS', hub:true, stats:{}, links:[] },
+  /* breach */
+  { id:'lt_br1', league:'breach', name:'Thinning Veil',  stats:{ breachWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_br2', league:'breach', name:'Deeper Hands',   stats:{ breachMobLvl:1 },    links:['lt_br1'] },
+  { id:'lt_br3', league:'breach', name:'Through the Tear', stats:{ breachWeight:0.5, breachMobLvl:1 }, links:['lt_br2'], notable:true },
+  /* abyss */
+  { id:'lt_ab1', league:'abyss',  name:'Cracked Earth',  stats:{ abyssWeight:0.5 },   links:['lt_root'] },
+  { id:'lt_ab2', league:'abyss',  name:'Branching Rift', stats:{ abyssFork:0.15 },    links:['lt_ab1'] },
+  { id:'lt_ab3', league:'abyss',  name:'The Deep Split', stats:{ abyssWeight:0.5, abyssFork:0.20 }, links:['lt_ab2'], notable:true },
+  /* ritual */
+  { id:'lt_ri1', league:'ritual', name:'Blood Calling',  stats:{ ritualWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_ri2', league:'ritual', name:'A Fourth Altar', stats:{ ritualExtra:1 },     links:['lt_ri1'], notable:true },
+  /* legion */
+  { id:'lt_lg1', league:'legion', name:'Stopped Clocks', stats:{ legionWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_lg2', league:'legion', name:'Longer Moment',  stats:{ legionTime:2 },      links:['lt_lg1'] },
+  { id:'lt_lg3', league:'legion', name:'Eternal Stand',  stats:{ legionWeight:0.5, legionTime:2 }, links:['lt_lg2'], notable:true },
+  /* the loot roads */
+  { id:'lt_lo1', league:'loot',   name:'League Veteran', stats:{ leagueChance:0.25 }, links:['lt_root'] },
+  { id:'lt_lo2', league:'loot',   name:'Heavy Pockets',  stats:{ studMore:0.15 },     links:['lt_lo1'] },
+  { id:'lt_lo3', league:'loot',   name:'Locksmith',      stats:{ sboxChance:0.30 },   links:['lt_lo1'] },
+  { id:'lt_lo4', league:'loot',   name:'Goblin Bait',    stats:{ goblinChance:1.0 },  links:['lt_lo2'], notable:true },
+];
+const LEAGUE_TREE_BY_ID = Object.fromEntries(LEAGUE_TREE.map(n=>[n.id, n]));
+let LTREE = { pts:0, nodes:['lt_root'] };
+let ltreeCache = {};
+function ltreeRebuild(){
+  ltreeCache = {};
+  for(const id of LTREE.nodes){ const n = LEAGUE_TREE_BY_ID[id]; if(!n) continue;
+    for(const k in n.stats) ltreeCache[k] = (ltreeCache[k] || 0) + n.stats[k]; }
+}
+function ltreeLoad(){
+  try { const o = JSON.parse(localStorage.getItem('bb_ltree') || 'null');
+    if(o && Array.isArray(o.nodes)) LTREE = { pts:Math.max(0, o.pts|0), nodes:['lt_root', ...o.nodes.filter(id=>id !== 'lt_root' && LEAGUE_TREE_BY_ID[id])] };
+  } catch(e){}
+  ltreeRebuild();
+}
+function ltreeSave(){ try { localStorage.setItem('bb_ltree', JSON.stringify(LTREE)); } catch(e){} }
+/* a node is taken next to one you have, for a point */
+function ltreeCanTake(id){
+  const n = LEAGUE_TREE_BY_ID[id];
+  if(!n || LTREE.nodes.includes(id) || LTREE.pts < 1) return false;
+  return n.links.some(l=>LTREE.nodes.includes(l));
+}
+function ltreeTake(id){
+  if(!ltreeCanTake(id)) return false;
+  LTREE.nodes.push(id); LTREE.pts--; ltreeRebuild(); ltreeSave();
+  return true;
+}
+/* ...and given back only from the end of a road, so nothing is left hanging */
+function ltreeCanRefund(id){
+  if(id === 'lt_root' || !LTREE.nodes.includes(id)) return false;
+  return !LTREE.nodes.some(o=>o !== id && (LEAGUE_TREE_BY_ID[o] || {links:[]}).links.includes(id));
+}
+function ltreeRefund(id){
+  if(!ltreeCanRefund(id)) return false;
+  LTREE.nodes = LTREE.nodes.filter(o=>o !== id); LTREE.pts++; ltreeRebuild(); ltreeSave();
+  return true;
+}
+function leagueStat(k){ return LEAGUE_TREE_ON ? (ltreeCache[k] || 0) : 0; }
+/* THE HOOKS, one per knob, so the code that reads them says what it reads */
+function leagueChanceNow(){ return LEAGUE_CHANCE*(1 + leagueStat('leagueChance')); }
+function leagueKindWeight(t){ return 1 + leagueStat(t+'Weight'); }
+function ritualAltarCount(){ return RITUAL_N + leagueStat('ritualExtra'); }
+function abyssForkChance(){ return ABYSS_FORK + leagueStat('abyssFork'); }
+function legionTimeNow(){ return LEGION_T + leagueStat('legionTime'); }
+function sboxChanceNow(){ return SBOX_CHANCE*(1 + leagueStat('sboxChance')); }
+function goblinChanceNow(){ return GOBLIN_CHANCE*(1 + leagueStat('goblinChance')); }
+function studMoreMul(){ return 1 + leagueStat('studMore'); }
+ltreeLoad();
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
   common:   { name:'COMMON',   col:'#9ba19d', mult:1.0 },
