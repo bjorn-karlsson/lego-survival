@@ -723,9 +723,12 @@ default none of them throws a card screen at you in the middle of a fight**. The
 reward in the order they will open (a chest in its rarity's colour, a level-up gold, a boss
 orange, a wave green).
 
-- **One press of R opens them all**, oldest first: the next card screen opens a quarter-second
-  after you pick from the last, until the stash is empty. Four rewards are four screens in a row,
-  not four presses. (Holding R does the same.)
+- **One press of R opens them all**, oldest first: the next card screen is there **the instant**
+  you pick from the last (or take the studs) — not a frame of the fight in between — until the
+  stash is empty. Four rewards are four screens in a row, not four presses. (Holding R does the
+  same; a held 1, 2 or 3 never picks on the screen that follows.)
+- **The waves do not wait for you.** A cleared wave's reward goes on the stash like any other, and
+  a second later the next wave's breather begins — open it whenever you like.
 - **R on a card screen still rerolls** — but only a fresh press made there. A held R that
   started on the field never rerolls anything.
 

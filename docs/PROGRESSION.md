@@ -3656,3 +3656,25 @@ the window scrolls and shows twelve rows; scrolled to row 60, a ring dragged fro
 window's top-left lands at row 60; a drag held at the window's bottom edge scrolls it. Breaks
 `onebyone`, `smallstash`, `colmajor`, `noscroll`, `noautoscroll`: 5 caught.
 
+## Fifty-sixth pass — no gap between rewards, and waves that do not wait
+
+> *"remove the delay between opening rewards "R" i want it to be instant, i don't want to return
+> into combat for a split second, just the next reward ... if the wave is over, it doesnt have to
+> wait for me to open the wave reward chest, it just carries on."*
+
+- **No gap.** `chooseUpgrade` and `rejectReward` end with `lootNext()`: if an R started a chain (or
+  AUTO-LOOT is on) and the stash is not empty, the next screen opens in the same call, so the state
+  never returns to `play` in between. `LOOT_HOLD_GAP` is 0. The number keys and X ignore key
+  repeats, so a held key cannot pick on the screen that opens under it.
+- **Waves carry on.** Picking the wave reward used to be what started the next wave. Now
+  `updateWave` holds a cleared wave for `WAVE_CLEAR_HOLD` (1s — the banner, and the frame an
+  untouched breach, abyss or strongbox needs to see the wave end) and then calls `startWave`
+  itself; the wave's reward waits on the stash with the rest, and picking it starts nothing.
+
+**Proof.** `loot` adds: a chain of level, boss and chest is `upgrade` → `upgrade` (boss) →
+`upgrade` (chest, after an X) → `play` with nothing left, all read synchronously after each pick;
+with no chain a pick returns to play; a held Digit1 (three repeats) leaves the second screen open;
+a cleared wave stashes its reward, is `ready` for the next wave 1s later with the reward still
+waiting, and picking it afterwards leaves the wave number alone. Breaks `gap`, `waitwave`,
+`repeatpick`.
+

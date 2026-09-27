@@ -3500,10 +3500,11 @@ window.addEventListener('keydown', e=>{
   else if(e.code==='KeyT' && (state==='play' || state==='tree')) toggleTree();
   if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
-  if(state==='upgrade' && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
+  /* a HELD number key must not pick on the screen that opens straight after */
+  if(state==='upgrade' && !e.repeat && ['Digit1','Digit2','Digit3','Digit4'].includes(e.code)) chooseUpgrade(+e.code.slice(5)-1);
   if(state==='upgrade' && e.code==='KeyR' && !e.repeat && !lootHeld) doReroll();
   if(state==='play' && e.code==='KeyR' && !e.repeat && !OPT.autoLoot && pendingPicks.length){ lootHeld = true; lootChain = true; lootNow(); }
-  if(state==='upgrade' && e.code==='KeyX') rejectReward();
+  if(state==='upgrade' && e.code==='KeyX' && !e.repeat) rejectReward();
 });
 window.addEventListener('keyup', e=>{ keys[e.code]=false; if(e.code === 'KeyR') lootHeld = false; });
 window.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
@@ -3808,7 +3809,9 @@ function queuePick(mode, rar){ pendingPicks.push({mode, rar}); }
    keeps going until the pile is empty. The reroll key on the card screen is
    also R, so a hold that STARTED on the field never rerolls -- only a fresh
    press made on the card screen does. */
-const LOOT_HOLD_GAP = 0.25;            /* seconds between one screen and the next on a held R */
+/* NO GAP. A chain used to hand you back to the fight for a quarter of a second
+   between screens; the next screen now opens the instant you pick (lootNext). */
+const LOOT_HOLD_GAP = 0;
 let lootHeld = false, lootGapT = 0;
 /* ONE PRESS OPENS THE LOT: an R on the field starts a chain that opens the next
    reward the moment you have picked from the last, until the stash is empty --
@@ -3820,6 +3823,14 @@ function lootNow(){
   openUpgrades(q.mode, q.rar);
   lootGapT = LOOT_HOLD_GAP;
   return true;
+}
+/* THE NEXT ONE, NOW: called the moment a card is picked or turned down. If an
+   R started a chain (or AUTO-LOOT is on) and more rewards are waiting, the next
+   screen opens in the same instant -- not one frame of the fight in between. */
+function lootNext(){
+  if(!pendingPicks.length){ lootChain = false; return false; }
+  if(!(lootChain || lootHeld || OPT.autoLoot)) return false;
+  return lootNow();
 }
 function addShake(a){ cam.shake = Math.min(0.55, cam.shake + a*0.5); }
 function showBanner(text, sub, color='#ffb900', dur=1.7, size=54){ banner = {text, sub, color, dur, size, t:0}; }
@@ -7873,12 +7884,21 @@ function updateCall(dt){
     }
   } else wave.callT = Math.max(0, (wave.callT||0) - dt*2.2);
 }
+const WAVE_CLEAR_HOLD = 1.0;     /* seconds a cleared wave lingers before the next breather */
 function updateWave(dt){
   /* in the sandbox the clock simply does not run: no timer, no queue, no next
      wave, and whatever you spawned stays the only thing on the field */
   if(sandbox) return;
   wave.t += dt;
   updateCall(dt);
+  /* A CLEARED WAVE DOES NOT WAIT FOR ITS REWARD. The reward goes on the stash
+     like any other and the run carries on: a moment for the banner (and for an
+     untouched breach, abyss or strongbox to see the wave is over), then the next
+     wave's breather begins -- opened or not. */
+  if(wave.state==='cleared'){
+    if(wave.t >= WAVE_CLEAR_HOLD) startWave(wave.n + 1);
+    return;
+  }
   if(wave.state==='ready'){
     wave.readyT -= dt;
     if(wave.readyT <= 0) beginFight();
@@ -7966,8 +7986,8 @@ function updateWave(dt){
         '+'+bonus+' stud bonus'+(folded?' · '+(folded+1)+' rewards':''), '#a5e06e', 1.6, 44);
       spawnStuds(player.x, player.y-20, bonus);
       SFX.levelup();
-      /* every wave folded in is paid for — the extras first, then the one that
-         closes the screen and starts the next fight */
+      /* every wave folded in is paid for — the extras first, then the wave's
+         own. None of them holds up the next wave any more. */
       for(let i=0;i<folded;i++) queuePick('bonus');
       queuePick('wave');
       wave.merged = 0; wave.owed = 0;
@@ -16743,7 +16763,7 @@ function chooseUpgrade(i){
   state = 'play'; cv.style.cursor='none';
   try{ window.focus(); }catch(err){}
   addRing(player.x, player.y, 10, 400, 130, RARITY[card.rar].col, 6, 0.5);
-  if(upgradeMode==='wave') startWave(wave.n+1);
+  lootNext();
 }
 /* Turning a reward down. You are paid for the best thing you walked away from,
    so refusing a legendary is worth real money and refusing three commons is not. */
@@ -16764,7 +16784,7 @@ function rejectReward(){
   addDmg(player.x, player.y-56, '+'+paid+' STUDS', '#ffd166', 20);
   addRing(player.x, player.y, 10, 380, 120, '#ffd166', 6, 0.45);
   spawnStuds(player.x, player.y, 6);
-  if(upgradeMode==='wave') startWave(wave.n+1);
+  lootNext();
 }
 document.getElementById('rejectBtn').addEventListener('click', ()=>{ SFX.click(); rejectReward(); });
 document.getElementById('rerollBtn').addEventListener('click', doReroll);
