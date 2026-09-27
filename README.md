@@ -112,7 +112,9 @@ at all, it slams; the staff casts. A combo is a row in a table, and **Blademaste
 is offered only to a weapon whose combo has a spin in it to hold down**, which is read off that
 table rather than off a list of weapon names. Each of its two ranks also makes you a better
 swordsman whirling or not — **+10% move speed, +10 reach and +10% attack speed** at rank one,
-**+10% / +12 / +12%** more at rank two. And **reach shows**: the sword or axe you are drawn
+**+10% / +12 / +12%** more at rank two. The whirl reaches **half as far again as a swing**, and
+it is drawn as a cyclone: a churned floor, three bands of wind streaking round at different
+speeds, the blade smeared round in after-images, and dust and chips flung off the rim. And **reach shows**: the sword or axe you are drawn
 holding grows with the reach you have bought, up to 1.6× its size at the reach cap, and a mace
 grows the same way with its slam's range. The axe has its own rhythm and its own legendary
 to go with it.
@@ -1594,9 +1596,11 @@ back out the way you came. A cluster on the rim keeps one way in; there is no fu
 
 **Attributes are the highway's, and nothing else's.** Step off the road and every point you
 spend buys the thing you left it for: a slip road runs straight from the highway into a group,
-however long it is, with no small attribute nodes on it. The highway itself has **junctions** —
-the node where roads meet — drawn bigger and paying **three times** a lane node's attribute for the
-same single point, PoE's way, so the road has places worth walking to and not just a toll.
+however long it is, with no small attribute nodes on it. The highway pays **+1** a node,
+junctions included. Beside every other junction of the middle rings, where there is room, stand
+**two big attribute nodes**, PoE's balancing break: **+5 of each attribute the ground you are on
+does not pay** — in the red, +5 DEXTERITY or +5 INTELLIGENCE — for one point, off the road and
+back, so a build born in one country can pay for what another asks of it without walking there.
 
 **The empty ground is filled.** Every quad between the roads that used to stand bare now holds a
 group, and a quad with room to spare beside its own group takes a second, smaller one — 193

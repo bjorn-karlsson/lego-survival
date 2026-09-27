@@ -1179,6 +1179,15 @@ const WHIRL_MUL = 0.5;                    /* each tick lands for half a swing */
 const WHIRL_SLOW = [1, 1.0, 1.5];
 /* and the blade bats things out of the air, some of the time */
 const WHIRL_DEFLECT = [0, 0.35, 0.55];
+/* THE WHIRL REACHES FURTHER THAN A SWING. Held out at arm's length and turned,
+   the blade covers half as much again as it does on a stroke -- PoE's cyclone
+   is a wide thing, and a whirl no bigger than a swing read as standing still. */
+const WHIRL_REACH_MUL = 1.5;
+function whirlReach(){
+  const p = player;
+  if(!p || !weapon) return 0;
+  return (weapon.reach * (1 + stackMod('reach')) + p.reach) * WHIRL_REACH_MUL;
+}
 /* AND EACH RANK MAKES YOU A BETTER SWORDSMAN, whirling or not: faster on your
    feet, longer in the arm, quicker with the blade. Per rank, into the ordinary
    pools, so every ceiling still binds them. */
@@ -10947,10 +10956,13 @@ const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next 
    does to your actual damage.) */
 const META_MIN_FLAT = 0.2;
 const LANE_STEP = 560;
-/* THE JUNCTIONS ARE WORTH STOPPING AT. PoE draws the node where roads meet
-   bigger and pays three times the attribute for the same one point, so the
-   highway has places worth walking to and not just a toll between them. */
-const HUB_MUL = 3, HUB_R = 29;
+/* THE BALANCING BREAK. Beside some junctions of the highway stand two big
+   single nodes, PoE's way: a large dose of each attribute the ground you are
+   on does NOT pay -- in the red, five DEXTERITY or five INTELLIGENCE -- for one
+   point, off the road and back. It is how a build born in one country pays
+   for what another asks of it without walking there. */
+const ATTR_BREAK_N = 5, ATTR_BREAK_R = 31, ATTR_BREAK_D = 150;
+const ATTR_COL = { str:'#ff5a4a', dex:'#6ee06e', int:'#5aa8ff' };
 const LANE_VARY = 0.46;   /* and how much that wanders, per lane */
 /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
@@ -11590,7 +11602,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       const sec = metaSectorOf(deg), use = META_TRAVEL[sec] || META_TRAVEL.core;
       hubs.push({ ring:ri, j, deg:((deg%360)+360)%360, r:rad, x, y, sec,
         node: push({ id:'h'+ri+'_'+j, kind:'travel', spoke:sec, cl:null, road:'hub',
-          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]*HUB_MUL]], req:[] }) });
+          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] }) });
     }
   });
   const ringHubs = ri=> hubs.filter(h=>h.ring === ri);
@@ -12271,7 +12283,7 @@ const RING_AT = [0, 5, 12, 22, 34];
       const sec = metaSectorAt(n.x, n.y);
       if(n.spoke === sec) continue;
       const use = META_TRAVEL[sec] || META_TRAVEL.core;
-      n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]*(n.road === 'hub' ? HUB_MUL : 1)]];
+      n.spoke = sec; n.name = use[0]; n.mods = [[use[1], use[2]]];
     }
   })();
 
@@ -12385,6 +12397,56 @@ const RING_AT = [0, 5, 12, 22, 34];
       }
       c.ways = picked.length;
       for(const o of picked) add(o.ln.id, o.n.id);
+    }
+  }
+
+  /* ---- 8b. THE BALANCING BREAKS. On every other junction of the middle
+     rings, where there is room, two big single nodes stand off the road: a
+     large dose of each attribute this ground does NOT pay (ATTR_BREAK_N for one
+     point). Laid last, in the clearest direction round the junction that
+     crosses no road and crowds no node -- and nothing already on the map is
+     moved or renumbered to make room. */
+  {
+    const ATTR_NAME = { str:'Strength', dex:'Dexterity', int:'Intelligence' };
+    const RR = n=> META_NODE_R[n.kind] || 14;
+    const segs = [];
+    for(const e of edges){ const A = META_BY_ID[e[0]], B = META_BY_ID[e[1]]; if(A && B) segs.push([A, B]); }
+    const crossesSeg = (ax, ay, bx, by, A, B)=>{
+      const d = (B.y-A.y)*(bx-ax) - (B.x-A.x)*(by-ay);
+      if(Math.abs(d) < 1e-9) return false;
+      const ua = ((B.x-A.x)*(ay-A.y) - (B.y-A.y)*(ax-A.x))/d, ub = ((bx-ax)*(ay-A.y) - (by-ay)*(ax-A.x))/d;
+      return ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999;
+    };
+    for(const h of hubs){
+      if(h.ring < 1 || h.ring > 3 || h.j % 2) continue;
+      const hn = h.node, own = META_TRAVEL[hn.spoke] ? META_TRAVEL[hn.spoke][1] : 'str';
+      const others = ['str','dex','int'].filter(k=>k !== own);
+      const nearN = META_NODES.filter(n=>n !== hn && Math.hypot(n.x-hn.x, n.y-hn.y) < ATTR_BREAK_D + 260);
+      const nearS = segs.filter(([A, B])=>segDist(A.x, A.y, B.x, B.y, hn.x, hn.y) < ATTR_BREAK_D + 260);
+      let best = null, bc = -Infinity;
+      for(let k=0;k<36;k++){
+        const a = k/36*TAU, pts = [a - 0.42, a + 0.42].map(b=>({ x:Math.round(hn.x + Math.cos(b)*ATTR_BREAK_D), y:Math.round(hn.y + Math.sin(b)*ATTR_BREAK_D) }));
+        let cl = Infinity;
+        for(const q of pts){
+          for(const n of nearN){
+            cl = Math.min(cl, Math.hypot(n.x-q.x, n.y-q.y) - RR(n) - ATTR_BREAK_R);
+            cl = Math.min(cl, segDist(hn.x, hn.y, q.x, q.y, n.x, n.y) - RR(n) - 8);
+          }
+          for(const [A, B] of nearS){
+            if(A !== hn && B !== hn && crossesSeg(hn.x, hn.y, q.x, q.y, A, B)){ cl = -Infinity; break; }
+            cl = Math.min(cl, segDist(A.x, A.y, B.x, B.y, q.x, q.y) - ATTR_BREAK_R - 6);
+          }
+          if(cl === -Infinity) break;
+        }
+        if(cl > bc){ bc = cl; best = pts; }
+      }
+      if(!best || bc < 10) continue;
+      best.forEach((q, i)=>{
+        const at = others[i];
+        const n = push({ id:'ab_'+hn.id+'_'+at, kind:'travel', road:'attr', spoke:hn.spoke, cl:null,
+          name:ATTR_NAME[at], x:q.x, y:q.y, at:0, cost:1, mods:[[at, ATTR_BREAK_N]], req:[] });
+        add(hn.id, n.id);
+      });
     }
   }
 
@@ -13046,14 +13108,14 @@ function metaSpokeCol(id){
   const sp = META_SPOKES.find(x=>x.id===id);
   return sp ? sp.col : '#9fb0bd';
 }
-function metaNodeRadius(n){ return n.road === 'hub' ? HUB_R : (META_NODE_R[n.kind] || 14); }
+function metaNodeRadius(n){ return n.road === 'attr' ? ATTR_BREAK_R : (META_NODE_R[n.kind] || 14); }
 function metaKindName(n){
   return (n.kind === 'start' && n.soon) ? 'NOT BUILT YET'
        : n.kind === 'start' ? 'STARTING POINT'
        : n.kind === 'legend' ? 'LEGENDARY'
        : n.kind === 'keystone' ? 'KEYSTONE'
        : n.kind === 'notable' ? 'NOTABLE'
-       : n.kind === 'travel' ? (n.road === 'hub' ? 'JUNCTION' : 'PATH') : 'MINOR';
+       : n.kind === 'travel' ? (n.road === 'attr' ? 'ATTRIBUTE' : 'PATH') : 'MINOR';
 }
 /* the card that follows the cursor — name, what it gives, what it costs */
 function metaTipHtml(n, m){
@@ -13187,10 +13249,10 @@ function renderTree(){
        flame in the tree and a flame on a card are the same flame.
        Rank is the frame: a keystone gets a broken ring round it, a legendary a
        whole second one. */
-    const pz = n.road === 'hub' ? 12 : 8;
+    const big = n.road === 'attr', pz = big ? 13 : 8;
     const glyph = n.kind === 'travel'
       ? `<path d="M${n.x-pz} ${n.y} h${pz*2} M${n.x} ${n.y-pz} v${pz*2}" fill="none" `+
-        `stroke="${has?'#0d1218':col}" stroke-width="${n.road === 'hub' ? 6.5 : 5}" stroke-linecap="round" `+
+        `stroke="${has?'#0d1218':(big ? ATTR_COL[n.mods[0][0]] : col)}" stroke-width="${big ? 7 : 5}" stroke-linecap="round" `+
         `opacity="${has?1:0.9}" pointer-events="none"/>`
       : isStart
         ? `<text x="${n.x}" y="${n.y+10}" text-anchor="middle" font-size="30" `+
@@ -15804,7 +15866,7 @@ function renderCharSheet(){
       `hold to whirl · ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% move speed · `+
       `${Math.round(WHIRL_DEFLECT[p.blademaster]*100)}% deflect · no roll`,
       `Holding the swing button spins you up instead of swinging. Everything inside `+
-      `${Math.round(56+p.reach)} reach takes ${Math.round(WHIRL_MUL*100)}% of a light swing `+
+      `${Math.round(whirlReach())} reach (half as much again as a swing) takes ${Math.round(WHIRL_MUL*100)}% of a light swing `+
       `every ${WHIRL_TICK.toFixed(2)}s — that is ${(swordDamage([WHIRL_MUL])/WHIRL_TICK).toFixed(1)} `+
       `per second, held.\n\nYou move at ${Math.round(WHIRL_SLOW[p.blademaster]*100)}% speed while `+
       `it is up and cannot roll out of anything. The blade turns aside `+
@@ -17107,7 +17169,7 @@ function updatePlayer(dt){
     p.swing = null;                       /* the whirl and a swing are exclusive */
     /* the whirl READS momentum's reach but never builds it: a spin that fed
        the ramp it benefits from would sit at six stacks for ever */
-    const reach = weapon.reach * (1 + stackMod('reach')) + p.reach;
+    const reach = whirlReach();
     const dmg = swordDamage([WHIRL_MUL]);
     for(const en of enemiesNear(p.x, p.y, reach + 80)){
       if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
@@ -17151,11 +17213,24 @@ function updatePlayer(dt){
         }
       }
     }
-    for(let i=0;i<2;i++){
-      const a2 = p.whirlAng + i*Math.PI;
-      if(Math.random()<0.5)
-        particles.push({kind:'spark', x:p.x+Math.cos(a2)*reach*0.9, y:p.y-14+Math.sin(a2)*reach*0.6,
-          vx:rnd(-30,30), vy:rnd(-40,10), life:0.18, max:0.18, color:'#e8eef2'});
+    /* WHAT A CYCLONE THROWS OFF: dust and chips of floor flung out of the rim
+       SIDEWAYS -- along the turn, not away from it -- which is what makes a spin
+       read as a spin rather than as a ring that happens to be there */
+    for(let i=0;i<3;i++){
+      const a2 = p.whirlAng + i*TAU/3 + rnd(-0.3, 0.3), rr = reach*rnd(0.75, 1.0);
+      const tx = -Math.sin(a2), ty = Math.cos(a2), sp = rnd(160, 320);
+      if(Math.random() < 0.55)
+        particles.push({kind:'spark', x:p.x+Math.cos(a2)*rr, y:p.y-10+Math.sin(a2)*rr,
+          vx:tx*sp + Math.cos(a2)*60, vy:ty*sp + Math.sin(a2)*60, life:0.28, max:0.28, color:i ? '#e8eef2' : '#c9b99a'});
+      if(Math.random() < 0.25)
+        particles.push({kind:'dust', x:p.x+Math.cos(a2)*rr*0.9, y:p.y+Math.sin(a2)*rr*0.9,
+          vx:tx*rnd(60, 140), vy:ty*rnd(60, 140) - 10, life:0.5, max:0.5, r:rnd(4, 8), col:'rgba(210,200,180,'});
+    }
+    if(Math.random() < 0.35 && debris.length < 220){
+      const a2 = p.whirlAng + rnd(TAU), tx = -Math.sin(a2), ty = Math.cos(a2);
+      debris.push({ x:p.x+Math.cos(a2)*reach*0.9, y:p.y+Math.sin(a2)*reach*0.9, z:6,
+        vx:tx*rnd(180, 300), vy:ty*rnd(180, 300), vz:rnd(80, 200), rot:rnd(TAU), vr:rnd(-12, 12),
+        w:rnd(4, 7), h:rnd(3, 5), color:pick(['#8a8f96','#b9a88a','#6e7378']), life:rnd(0.4, 0.7), max:0.7 });
     }
   } else p.whirlAng = 0;
   const spdMul = chillMul() * (p.whirl ? (WHIRL_SLOW[p.blademaster] || 1) : 1);
@@ -23318,6 +23393,48 @@ function drawSpear(c, s){
   c.fillStyle = '#583927';
   c.fillRect(-1.8*s,-3*s,3.6*s,7*s);
 }
+/* THE CYCLONE. PoE's cyclone is a storm with a man in it: a floor of churned
+   dust, wind torn into streaks that run faster the further out they are, the
+   blade smeared round in after-images, and grit flung off the rim. Every one
+   of those is drawn here, on a TRUE circle -- the hit test is a circle, so a
+   flattened drawing would strike a foot above and below what you can see. */
+function drawCyclone(c, p){
+  const R = whirlReach(), a = p.whirlAng, x = p.x, y = p.y;
+  c.save();
+  /* the churned floor: dark at the heart, a pale lip at the reach */
+  const g = c.createRadialGradient(x, y, R*0.15, x, y, R);
+  g.addColorStop(0, 'rgba(60,64,70,0.16)'); g.addColorStop(0.7, 'rgba(200,204,208,0.07)'); g.addColorStop(1, 'rgba(232,238,242,0.16)');
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, TAU); c.fill();
+  c.strokeStyle = 'rgba(232,238,242,0.30)'; c.lineWidth = 2.5;
+  c.beginPath(); c.arc(x, y, R, 0, TAU); c.stroke();
+  /* THE WIND, in three bands turning at three speeds, each streak a comet --
+     bright at its head, thinning to nothing along the turn behind it */
+  const bands = [ { r:0.45, n:2, sp:0.8, w:3 }, { r:0.72, n:3, sp:1.0, w:4.5 }, { r:0.97, n:4, sp:1.25, w:6 } ];
+  c.lineCap = 'round';
+  for(const B of bands){
+    for(let k=0;k<B.n;k++){
+      const head = a*B.sp + k*TAU/B.n + B.r*3;
+      for(let s=0;s<7;s++){
+        const t0 = head - s*0.13, t1 = t0 - 0.16, al = (0.55 - s*0.075) * (0.6 + 0.4*B.r);
+        if(al <= 0) break;
+        c.strokeStyle = `rgba(236,241,245,${al.toFixed(3)})`;
+        c.lineWidth = B.w * (1 - s*0.11);
+        c.beginPath(); c.arc(x, y, R*B.r, t1, t0); c.stroke();
+      }
+    }
+  }
+  /* THE BLADE, smeared: after-images trailing the real one round the turn */
+  const s = heroWeaponScale() * 1.1;
+  for(let k=1;k<=4;k++){
+    const ba = a - k*0.34;
+    c.globalAlpha = 0.34 - k*0.07;
+    c.save(); c.translate(x + Math.cos(ba)*14, y - 18 + Math.sin(ba)*10); c.rotate(ba);
+    drawWeaponArt(c, s, true, heldArt());
+    c.restore();
+  }
+  c.globalAlpha = 1;
+  c.restore();
+}
 function drawPlayerWeapon(c){
   const p = player, s = heroWeaponScale();
   if(!p.swing) return;
@@ -24565,24 +24682,7 @@ function render(){
   /* Blademaster whirl — the trailing arc. It is drawn as a TRUE CIRCLE, not a
      squashed one: the hit test is a circle, so a flattened drawing meant the
      blade struck a foot above and below the ring you could see. */
-  if(player && player.whirl && !player.dead){
-    const reach = weapon.reach + player.reach;
-    ctx.save();
-    /* the floor the whirl actually covers */
-    ctx.fillStyle = 'rgba(232,238,242,0.07)';
-    ctx.beginPath(); ctx.arc(player.x, player.y, reach, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(232,238,242,0.22)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(player.x, player.y, reach, 0, TAU); ctx.stroke();
-    for(let i=0;i<4;i++){
-      const a0 = player.whirlAng - i*0.42;
-      ctx.strokeStyle = `rgba(232,238,242,${0.42 - i*0.10})`;
-      ctx.lineWidth = 6 - i*1.2;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, reach, a0-0.55, a0+0.18);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
+  if(player && player.whirl && !player.dead) drawCyclone(ctx, player);
   /* blade vortex — 3 rows of spinning blades */
   if(player && player.vortex.n>0 && player.vortex.t>0 && !player.dead){
     const v = player.vortex;

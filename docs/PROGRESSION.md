@@ -3760,3 +3760,35 @@ every lane node 1, and a junction is drawn bigger than a lane node at the same c
 `tree42` node keeps its id, name and place (junctions matched without their stats, as in `zombie`).
 `shapes` now recognises a junction's wider plus. Breaks `hub1`, `hubsmall` caught.
 
+## Fifty-ninth pass — the balancing break, and a cyclone
+
+> *"make the max range 1.5x bigger for blademaster ... fix the animation, right now it looks kind
+> of boring. Draw inspiration from PoE cyclone builds ... you did the junction wrong, no, i want the
+> normal highway to be +1 and then i want ... a simple break of so in the strenght area you can
+> choose a large +5 dex or +5 int for balancing"*
+
+- **Junctions are +1 again**, drawn as any road node, and the power budget lines are back where
+  they were (x3.95 / x2.65).
+- **The balancing break.** On every other junction of rings 1–3, two single nodes (`road:'attr'`,
+  ids `ab_<hub>_<attr>`) stand `ATTR_BREAK_D` = 150 off the road: `ATTR_BREAK_N` = 5 of each attribute
+  the junction's ground does not pay, one point each, joined to the junction and nothing else, drawn
+  at `ATTR_BREAK_R` = 31 with a plus in the attribute's own colour (`ATTR_COL`). Each pair takes the
+  clearest of 36 directions round its junction — clear of every node, every road, and crossing none
+  — and a junction with no such room gets none. Laid after everything else, so nothing moves. 36
+  pairs.
+- **Blademaster's reach**: `whirlReach()` = (the swing's reach) x `WHIRL_REACH_MUL` = 1.5, read by
+  the hit, the missile deflection, the scenery and the drawing.
+- **The cyclone** (`drawCyclone`): a radial-gradient floor of churned dust with a pale lip; three
+  bands of wind at 45%, 72% and 97% of the reach turning at 0.8x, 1x and 1.25x the spin, each streak
+  drawn as seven tapering segments so it reads as a comet; four after-images of the blade trailing
+  the turn; and dust, sparks and brick chips flung off the rim along the turn rather than away from
+  it.
+
+**Proof.** `r56` restated: the highway is +1 everywhere; at least 40 balancing nodes, every one +5,
+one point, joined only to its junction, never the junction's own attribute, drawn bigger than it,
+and each junction's pair is two different attributes; a sword's whirl reaches 84 where its swing
+reaches 56, hits an imp standing at 1.3x the swing's reach, and the cyclone draws. `shapes` accepts
+a break's attribute-coloured plus. (The reroll section now declines its rewards rather than taking
+one, so a random Blademaster can no longer land before the Blademaster section.) Breaks
+`nobreaks`, `ownbreak`, `smallbreak`, `whirl1x`, `whirlold` caught.
+
