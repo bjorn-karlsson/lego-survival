@@ -586,6 +586,12 @@
   .gstashhead{display:flex;align-items:center;gap:10px;font-family:'Titan One',cursive;font-size:13px;letter-spacing:2px;color:#ffd76e}
   .gstashhead #gearStashCount{flex:1;font-family:'Fredoka',sans-serif;font-size:11.5px;letter-spacing:0;color:#8e9aa4}
   .gtmod i.top{color:#ffd76e}
+  .geartabs{display:flex;gap:4px;justify-content:center;margin-top:6px;width:calc(var(--gc)*12)}
+  .gtab{flex:1;font-family:'Titan One',cursive;font-size:10px;letter-spacing:1px;padding:5px 2px;border-radius:7px;cursor:pointer;
+    border:2px solid rgba(255,255,255,.14);background:rgba(0,0,0,.3);color:#c9d2ce}
+  .gtab i{font-style:normal;font-family:'Fredoka',sans-serif;font-size:10px;margin-left:4px;opacity:.7}
+  .gtab.on{border-color:var(--hc);background:var(--hc);color:#12181d}
+  .gtab:disabled{opacity:.35;cursor:default}
   .gtlvl b{color:#fff}
   .gearinv{position:relative;width:calc(var(--gc)*12);height:calc(var(--gc)*5);border:2px solid rgba(255,255,255,.14);
     box-sizing:content-box;border-radius:4px;background-color:rgba(0,0,0,.38);
@@ -760,6 +766,7 @@
         <div id="gearStashView" class="gstashview"><div id="gearStash" class="gearinv stash"></div></div>
       </div>
       <div class="gearleft">
+        <div id="gearTabs" class="geartabs"></div>
         <div id="gearDoll" class="geardoll"></div>
         <div id="gearInv" class="gearinv"></div>
         <div class="gearbar">
@@ -1172,6 +1179,12 @@ const WHIRL_MUL = 0.5;                    /* each tick lands for half a swing */
 const WHIRL_SLOW = [1, 1.0, 1.5];
 /* and the blade bats things out of the air, some of the time */
 const WHIRL_DEFLECT = [0, 0.35, 0.55];
+/* AND EACH RANK MAKES YOU A BETTER SWORDSMAN, whirling or not: faster on your
+   feet, longer in the arm, quicker with the blade. Per rank, into the ordinary
+   pools, so every ceiling still binds them. */
+const BM_SPEED = [0, 0.10, 0.10];         /* increased move speed */
+const BM_REACH = [0, 10, 12];             /* flat melee reach */
+const BM_ATK   = [0, 0.10, 0.12];         /* increased attack speed */
 const TOTEM_MAX = 2;                      /* ranks of Lingering Vortex */
 const TOTEM_EVERY = [0, 6, 3];            /* seconds between totems, by rank */
 const TOTEM_LIFE  = [0, 9, 12];
@@ -1937,6 +1950,8 @@ let weapon = WEAPONS.sword;
 function setWeapon(id){
   weapon = WEAPONS[id] || WEAPONS.sword;
   try{ localStorage.setItem('bb_weapon', weapon.id); }catch(e){}
+  /* every hero wears its own gear: the equipment screen follows the weapon */
+  if(typeof gearBindClass === 'function' && GEAR){ gearBindClass(); if(gearOn) renderGear(); }
   if(player) syncStats();
   /* the favourite list is weapon-dependent: rebuild it, and drop a favourite
      this weapon cannot use rather than leaving it silently selected */
@@ -6591,7 +6606,24 @@ function gearWrite(p, stat, v){ const S = gearWriter(stat); if(S && S.w) try { S
    moves -- a pickup, an equip, a drop in the bin -- so there is no "save on
    exit" to miss, and dying is just another moment. */
 let GEAR = null;
-function gearBlank(){ const eq = {}; for(const s of GEAR_SLOTS) eq[s] = null; return { v:2, eq, inv:[], stash:[], uid:1 }; }
+/* ONE SET OF GEAR PER WEAPON, ONE STASH FOR ALL. Each of the six heroes wears
+   its own things (`eqBy`); the bag and the stash are shared. `eq` is never saved:
+   it is the set of whichever weapon is chosen right now, re-pointed whenever the
+   weapon changes (gearBindClass), so everything that reads GEAR.eq reads the
+   hero actually being played. */
+function gearBlankEq(){ const eq = {}; for(const s of GEAR_SLOTS) eq[s] = null; return eq; }
+function gearBlank(){
+  const eqBy = {}; for(const k of WEAPON_KEYS) eqBy[k] = gearBlankEq();
+  const G = { v:3, eqBy, eq:null, inv:[], stash:[], uid:1 };
+  G.eq = eqBy[(weapon && weapon.id) || 'sword'];
+  return G;
+}
+function gearBindClass(){
+  if(!GEAR) return;
+  const k = (weapon && WEAPONS[weapon.id]) ? weapon.id : 'sword';
+  if(!GEAR.eqBy[k]) GEAR.eqBy[k] = gearBlankEq();
+  GEAR.eq = GEAR.eqBy[k];
+}
 function gearValid(it){
   if(!it || typeof it !== 'object' || !GEAR_BASE_BY_ID[it.b]) return null;
   const B = GEAR_BASE_BY_ID[it.b];
@@ -6609,7 +6641,17 @@ function gearLoad(){
     const o = raw ? JSON.parse(raw) : null;
     if(o && typeof o === 'object'){
       let maxU = 0;
-      for(const s of GEAR_SLOTS){ const it = gearValid(o.eq && o.eq[s]); if(it && gearFitsSlot(it, s)){ G.eq[s] = it; maxU = Math.max(maxU, it.u); } }
+      const readSet = (src, into)=>{ for(const s of GEAR_SLOTS){ const it = gearValid(src && src[s]); if(it && gearFitsSlot(it, s)){ into[s] = it; maxU = Math.max(maxU, it.u); } } };
+      if(o.eqBy && typeof o.eqBy === 'object'){ for(const k of WEAPON_KEYS) readSet(o.eqBy[k], G.eqBy[k]); }
+      else if(o.eq){
+        /* A SAVE FROM BEFORE THE SPLIT had one set: it becomes the set of the
+           weapon it was wielding, or of the hero last played */
+        let k = null;
+        const w = gearValid(o.eq.weapon), C = w && GEAR_CLS[GEAR_BASE_BY_ID[w.b].cls];
+        if(C && C.weap) k = C.weap;
+        if(!k){ try { const bw = localStorage.getItem('bb_weapon'); if(WEAPONS[bw]) k = bw; } catch(e){} }
+        readSet(o.eq, G.eqBy[k || 'sword']);
+      }
       for(const k of ['inv','stash']) for(const e of Array.isArray(o[k]) ? o[k] : []){
         const it = gearValid(e && e.it); if(!it) continue;
         const list = G[k], dim = k === 'stash' ? GEAR_DIM.stash : GEAR_DIM.inv;
@@ -6621,12 +6663,14 @@ function gearLoad(){
     }
   } catch(e){}
   GEAR = G;
+  gearBindClass();
   return G;
 }
 function gearSave(){
   if(!GEAR) return;
   GEAR.uid = gearUid;
-  try { localStorage.setItem(GEAR_KEY, JSON.stringify(GEAR)); } catch(e){}
+  const { eq, ...keep } = GEAR; void eq;
+  try { localStorage.setItem(GEAR_KEY, JSON.stringify(keep)); } catch(e){}
 }
 /* ---- THE BAG ---- */
 function gearSize(it){ const B = GEAR_BASE_BY_ID[it.b], C = B && GEAR_CLS[B.cls]; return C ? { w:C.w, h:C.h } : { w:1, h:1 }; }
@@ -10191,14 +10235,23 @@ const UPGRADES = [
     req:()=>isMelee() && !isSlammer() && comboSteps().indexOf('spin') >= 0
             && player.blademaster < WHIRL_MAX,
     calc:m=>({n:1}),
-    desc:c=> player.blademaster===0
+    desc:c=> (player.blademaster===0
       ? `HOLD the swing button and you whirl without stopping, cutting everything in `+
         `reach for ${Math.round(WHIRL_MUL*100)}% of a swing every ${WHIRL_TICK.toFixed(2)}s. `+
         `You walk at full speed while it is up and the blade turns aside `+
         `${Math.round(WHIRL_DEFLECT[1]*100)}% of what is thrown at you — but you cannot roll.`
       : `The whirl carries you: ${Math.round(WHIRL_SLOW[2]*100)}% move speed while spinning, `+
-        `and ${Math.round(WHIRL_DEFLECT[2]*100)}% of incoming missiles are batted away. Still no rolling.`,
-    apply:c=>{ player.blademaster = Math.min(WHIRL_MAX, player.blademaster + 1); } },
+        `and ${Math.round(WHIRL_DEFLECT[2]*100)}% of incoming missiles are batted away. Still no rolling.`)
+      + ((r=>` And always: +${Math.round(BM_SPEED[r]*100)}% move speed, +${BM_REACH[r]} reach `+
+        `and +${Math.round(BM_ATK[r]*100)}% attack speed — your blade grows with the reach`)(Math.min(WHIRL_MAX, player.blademaster+1))),
+    apply:c=>{
+      const p = player;
+      if(p.blademaster >= WHIRL_MAX) return;
+      p.blademaster++;
+      const r = p.blademaster;
+      p.inc.speed += BM_SPEED[r]; p.reachFlat += BM_REACH[r]; p.inc.atk += BM_ATK[r];
+      syncStats();
+    } },
   /* RAGE, AND THE BRICK THAT TURNS IT ON. Nothing generates rage by default —
      the ceiling is thirty and the generation is nothing — so this is the card
      that makes it a build at all, and the tree deepens it afterwards. */
@@ -11104,6 +11157,32 @@ for(const wk of WEAPON_KEYS){
     home: META_HOME[wk] || 'str', d:[0,3], shape:'fan', only:wk, must:true,
     minors:[['Grip','inc_'+wk, 0.075],['Practice','inc_'+wk, 0.04],['Drill','inc_'+wk, 0.03]] });
 }
+/* ---- THE NEW GROUND'S OWN GROUPS ---------------------------------------
+   Only ever placed on the ground the map used to leave bare (lateOnly), so they
+   never take a site from anything that was there first. Blue had one group of
+   filler to its name, WARDING, and the filled map read as WARDING WARDING
+   WARDING; these are PoE's in-between wheels -- shield, mind, spell defence,
+   the legion's own bones, study, cold -- and a couple for green and red. */
+META_GROUPS.push(
+  { id:'l_sanct',  name:'SANCTUM',     sp:'arc',  home:'int', d:[1,4], shape:'ring', lateOnly:true,
+    minors:[['Sanctum','es',3],['Hallowed','incEs',0.06],['Sanctified','es',3]] },
+  { id:'l_clar',   name:'CLARITY',     sp:'arc',  home:'int', d:[1,4], shape:'arc', lateOnly:true,
+    minors:[['Clarity','int',5],['Calm Mind','incRegen',0.10],['Lucid','int',5]] },
+  { id:'l_sward',  name:'SPELLWARD',   sp:'elem', home:'int', d:[1,4], shape:'diamond', lateOnly:true,
+    minors:[['Spellward','suppress',0.03],['Counterspell','allRes',0.03],['Nullify','suppress',0.03]] },
+  { id:'l_soul',   name:'SOULBOUND',   sp:'arc',  home:'int', d:[1,4], shape:'hook', lateOnly:true,
+    minors:[['Soulbound','minionLife',0.06],['Tethered','minionLife',0.05],['Grave Sense','es',3]] },
+  { id:'l_arch',   name:'THE ARCHIVE', sp:'arc',  home:'int', d:[1,4], shape:'line', lateOnly:true,
+    minors:[['Archive','xp',0.04],['Index','int',5],['Marginalia','magnet',0.08]] },
+  { id:'l_cold',   name:'COLD HEART',  sp:'elem', home:'int', d:[1,4], shape:'cresc', lateOnly:true,
+    minors:[['Cold Heart','frostRes',0.05],['Numb','chaosRes',0.04],['Rimeward','frostRes',0.05]] },
+  { id:'l_blur',   name:'THE BLUR',    sp:'swift',home:'dex', d:[1,4], shape:'arc', lateOnly:true,
+    minors:[['Blur','eva',40],['Phase','incEva',0.08],['Afterimage','eva',40]] },
+  { id:'l_wind',   name:'WINDRUNNER',  sp:'swift',home:'dex', d:[1,4], shape:'line', lateOnly:true,
+    minors:[['Windrunner','speed',0.03],['Tumble','roll',0.08],['Tailwind','speed',0.03]] },
+  { id:'l_iron',   name:'IRON WILL',   sp:'arm',  home:'str', d:[1,4], shape:'ring', lateOnly:true,
+    minors:[['Iron Will','armour',4],['Hardy','incHp',0.03],['Bulwark','armour',4]] },
+);
 /* ---- THE NOTABLES. One of each, ever, and each one sits in the middle of a
    cluster of its own kind. Deeper `d` means further out and dearer to reach. */
 /* LATE ARRIVALS. A notable added after trees were already being saved goes on a
@@ -11473,6 +11552,15 @@ const META_NODES = [];
 const META_BY_ID = {};
 const META_CLUSTER_BY_ID = {};
 const META_CLUSTERS = [];
+let META_SITES = [];
+/* how much clear ground a quad needs, beside its own group, to take a second:
+   this far from every road, and this far from the middle of every group */
+const SAT_WALL = 160, SAT_GAP = 330;
+/* a slip road longer than this carries a node per step of it (two at most) */
+const BRIDGE_STEP = 330;
+const META_BRIDGES = [];
+/* how far round from its first way in a cluster's second one has to be */
+const THROUGH_ANGLE = 110*Math.PI/180;
 const META_NODE_R = { start:46, legend:44, keystone:40, notable:34, minor:25, travel:19 };
 /* what a ring costs to be standing on, and what the cluster sizes are there */
 const RING_AT = [0, 5, 12, 22, 34];
@@ -11605,7 +11693,7 @@ const RING_AT = [0, 5, 12, 22, 34];
   for(const s of sites){
     if(s.site) continue;
     if(hash(s.ring*31 + s.j*17 + 5) % 100 >= 62) continue;   /* the quad stays empty */
-    let fits = META_GROUPS.filter(g=>g.home === s.sec && s.ring >= g.d[0] && s.ring <= g.d[1]);
+    let fits = META_GROUPS.filter(g=>!g.lateOnly && g.home === s.sec && s.ring >= g.d[0] && s.ring <= g.d[1]);
     if(!fits.length) continue;
     /* NOT THE ONE NEXT DOOR. Picked purely by hash, the same three fire nodes
        turned up four times in one corner and the country read as a copy-paste. */
@@ -11613,6 +11701,29 @@ const RING_AT = [0, 5, 12, 22, 34];
       && Math.hypot(o.x-s.x, o.y-s.y) < 1500));
     if(near.length) fits = near;
     s.site = fits[(hash(s.ring*911 + s.j*131 + (gi++)) % fits.length)];
+  }
+  /* WHAT THE NEW GROUND MAY HOLD. Filling the map with more of the same would
+     have made damage cheaper everywhere -- a stay-at-home red build crept over
+     its declared budget the moment the empty quads filled with WHETSTONE. So the
+     new ground is PoE's filler: defence, life, resistances, attributes,
+     ailments, minions, utility. A group that is mostly raw damage stays where it
+     already was. */
+  const DMG_STAT = /^(incMelee|incSpell|incAll|moreAll|flatPhys|flatElem|incElem|incFire|incFrost|incShock|incChaos|incAtk|incCast|incCrit|critMult|incCritMult|dmg_|inc_|slamDmg|arrowFlat|stormDmg|orbitDmg|chainDmg|vortexDmg|bombDmg|baneDmg)/;
+  const lateOk = g=>!g.must && g.minors.filter(m=>DMG_STAT.test(m[1])).length * 2 < g.minors.length;
+  /* THE EMPTY QUADS, FILLED. About a third of the quads were left bare on
+     purpose and the map read as holes between roads. Each one now takes a group
+     from its own country -- but LATE: it is sized, drawn and numbered after every
+     other cluster on the map, so nothing that was already there moves, changes
+     shape or is renumbered, and every tree already saved still reads the same. */
+  for(const s of sites){
+    if(s.site) continue;
+    let fits = META_GROUPS.filter(g=>g.home === s.sec && lateOk(g) && s.ring >= g.d[0] && s.ring <= g.d[1]);
+    if(!fits.length) fits = META_GROUPS.filter(g=>g.home === s.sec && lateOk(g));
+    if(!fits.length) continue;
+    const near = fits.filter(g=>!sites.some(o=>o.site && o.site.id === g.id && Math.hypot(o.x-s.x, o.y-s.y) < 1500));
+    if(near.length) fits = near;
+    s.site = fits[hash(s.ring*577 + s.j*9173 + 3) % fits.length];
+    s.late = true;
   }
   /* THE LATE ARRIVALS, on a site of their own. Every quad is spoken for, so a
      late template brings its own ground -- a spot picked where nothing stands --
@@ -11702,7 +11813,7 @@ const RING_AT = [0, 5, 12, 22, 34];
      them on neighbouring rim sites grew into each other: an edge of one ran
      clean through a node of the other. So a cluster is never drawn wider than
      the gap to the nearest occupied site beside it. */
-  const taken = sites.filter(o=>o.site);
+  const taken = sites.filter(o=>o.site && !o.late);
   /* HOW FAR THE ROAD IS. Every edge laid so far is lane, and a cluster grown
      wide enough to touch one has its own lines crossing it — which is what
      thirty-five crossed lines on the map turned out to be. The quad's middle is
@@ -11744,10 +11855,66 @@ const RING_AT = [0, 5, 12, 22, 34];
     s.gap = isFinite(g) ? g : 900;
     s.wall = wallAt(s.x, s.y).d;
   }
+  /* the filled quads find their room the same way, against everything */
+  const fillers = sites.filter(o=>o.late);
+  for(const s of fillers){
+    const sx = s.x, sy = s.y;
+    for(let k=0;k<11;k++){
+      const w = wallAt(s.x, s.y);
+      if(w.d > 300) break;
+      const dx = s.x-w.x, dy = s.y-w.y, d = Math.hypot(dx, dy) || 1;
+      const nx = Math.round(s.x + dx/d*34), ny = Math.round(s.y + dy/d*34);
+      if(Math.hypot(nx-sx, ny-sy) > 270) break;
+      if(wallAt(nx, ny).d <= w.d) break;
+      s.x = nx; s.y = ny;
+    }
+  }
+  /* AND THE ROOM LEFT INSIDE A QUAD. A quad is a thousand feet on a side and
+     the one group in the middle of it is two hundred across -- PoE fills that
+     kind of ground, and so does this now: every quad between the inner and the
+     outer ring is tried at four points (either way round the ring, nearer and
+     further out), and the roomiest of them, if it is roomy enough, takes a
+     smaller group of its own. Late, like the rest, so nothing moves. */
+  /* clear ground: this far from any road, and this far from any group's middle */
+  const clearOf = (x, y, list)=>{
+    let d = wallAt(x, y).d - SAT_WALL;
+    for(const o of list) d = Math.min(d, Math.hypot(o.x-x, o.y-y) - SAT_GAP);
+    return d;
+  };
+  const baseSites = sites.filter(o=>o.j < 1000);
+  for(const q of baseSites){
+    if(q.ring < 1 || q.rim) continue;
+    const R = META_RINGS[q.ring], out = META_RINGS[q.ring+1];
+    const step = 360 / R.n, midR = (R.r + out.r)/2, depth = out.r - R.r;
+    const cands = [];
+    for(const fa of [-0.34, -0.17, 0, 0.17, 0.34]) for(const fr of [-0.30, -0.15, 0, 0.15, 0.30])
+      cands.push([q.deg + step*fa, midR + depth*fr]);
+    const occupied = sites.filter(o=>o.site);
+    let best = null, bc = -Infinity;
+    for(const [dg, rr] of cands){
+      const a = dg*Math.PI/180, x = Math.round(CX + Math.cos(a)*rr), y = Math.round(CY + Math.sin(a)*rr);
+      const cl = clearOf(x, y, occupied);
+      if(cl > bc){ bc = cl; best = { x, y, deg:((dg%360)+360)%360 }; }
+    }
+    if(!best || bc < 0) continue;
+    const sec = metaSectorAt(best.x, best.y);
+    let fits = META_GROUPS.filter(g=>g.home === sec && lateOk(g) && q.ring >= g.d[0] && q.ring <= g.d[1]);
+    if(!fits.length) continue;
+    const near = fits.filter(g=>!sites.some(o=>o.site && o.site.id === g.id && Math.hypot(o.x-best.x, o.y-best.y) < 1500));
+    if(near.length) fits = near;
+    sites.push({ ring:q.ring, j:2000 + sites.length, deg:best.deg, rim:false, x:best.x, y:best.y, sec,
+                 site:fits[hash(q.ring*887 + q.j*6151 + 17) % fits.length], late:true, sat:true });
+  }
+  fillers.push(...sites.filter(o=>o.sat));
+  for(const s of fillers){
+    let g = Infinity;
+    for(const o of taken.concat(fillers)) if(o !== s) g = Math.min(g, Math.hypot(o.x-s.x, o.y-s.y));
+    s.gap = isFinite(g) ? g : 900;
+    s.wall = wallAt(s.x, s.y).d;
+  }
   let cn = 0;
   const drawn = [];
-  for(const s of sites){
-    if(!s.site) continue;
+  const drawSite = (s)=>{
     const t = s.site, uniq = !!(t.notable || t.keystone || t.legend);
     const mid = t.legend || t.keystone || t.notable;
     const base = t.r || (s.ring <= 1 ? 84 : s.ring === 2 ? 94 : 106);
@@ -11864,7 +12031,11 @@ const RING_AT = [0, 5, 12, 22, 34];
       c.centre = n.id;
       for(const i of G.toHub) if(c.nodes[i]) add(c.nodes[i], n.id);
     }
-  }
+  };
+  for(const s of sites) if(s.site && !s.late) drawSite(s);
+  /* the filled quads last, so their numbers follow everything already known */
+  for(const s of sites) if(s.late){ drawSite(s); s.cluster.late = true; }
+  META_SITES = sites;
 
   const byHome = {};
   for(const d of META_DOORS) (byHome[d.home] = byHome[d.home] || []).push(d);
@@ -12149,6 +12320,27 @@ const RING_AT = [0, 5, 12, 22, 34];
       }
       return false;
     };
+    /* A LONG WAY IN IS A ROAD, NOT A LEAP. A slip road four hundred feet long
+       with nothing on it read as a wire rather than a path; PoE puts a small
+       node or two on anything that long. Every connector past BRIDGE_STEP gets
+       one per step (two at most), paying the ground it crosses like any lane.
+       Recorded, so a tree saved when the road was one leap can be healed. */
+    let bn = 0;
+    const bridge = (a, b)=>{
+      const d = Math.hypot(b.x-a.x, b.y-a.y), k = Math.min(2, Math.floor(d / BRIDGE_STEP));
+      if(k <= 0){ add(a.id, b.id); return; }
+      const mids = [];
+      let prev = a;
+      for(let i=1;i<=k;i++){
+        const t = i/(k+1), x = Math.round(a.x + (b.x-a.x)*t), y = Math.round(a.y + (b.y-a.y)*t);
+        const sec = metaSectorAt(x, y), use = META_TRAVEL[sec] || META_TRAVEL.core;
+        const n = push({ id:'br'+(bn++), kind:'travel', spoke:sec, cl:null, road:'bridge',
+          name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
+        add(prev.id, n.id); prev = n; mids.push(n.id);
+      }
+      add(prev.id, b.id);
+      META_BRIDGES.push({ a:a.id, b:b.id, mids });
+    };
     for(const c of META_CLUSTERS){
       const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
       const mine = c.nodes.map(id=>META_BY_ID[id]).filter(Boolean);
@@ -12157,17 +12349,37 @@ const RING_AT = [0, 5, 12, 22, 34];
       const pairs = [];
       for(const ln of lanePool){
         const dc = Math.hypot(ln.x-c.x, ln.y-c.y);
-        if(dc > 950) continue;
-        for(const n of mine) pairs.push({ ln:ln, n:n, d:Math.hypot(n.x-ln.x, n.y-ln.y) });
+        if(dc > 1300) continue;
+        for(const n of mine) pairs.push({ ln:ln, n:n, d:Math.hypot(n.x-ln.x, n.y-ln.y),
+          bear:Math.atan2(ln.y - c.y, ln.x - c.x) });
       }
       pairs.sort((a, b)=>a.d - b.d);
       const picked = [];
+      /* A CLUSTER IS A PLACE YOU WALK THROUGH, PoE's way: its second way in
+         comes from the OTHER side of it, so you leave one road, cross the group
+         and come out on another -- not two slip roads off the same stretch, which
+         is a pocket with two doors. Asked of the bearing from the cluster's
+         middle, strictly first, then less so, and only then not at all. */
+      const apartBy = (o, lim)=> picked.every(p2=>Math.abs(((o.bear - p2.bear + Math.PI*3) % (Math.PI*2)) - Math.PI) >= lim);
+      for(const lim of [THROUGH_ANGLE, THROUGH_ANGLE*0.64]){
+        if(c.rim || picked.length >= 2) break;
+        for(const o of pairs){
+          if(picked.length >= 2) break;
+          if(o.d > 950 && !picked.length) continue;
+          if(picked.some(p2=>p2.ln === o.ln)) continue;
+          if(picked.length && !apartBy(o, lim)) continue;
+          if(grazes(o.ln, o.n) || crosses(o.ln, o.n)) continue;
+          picked.push(o);
+          seg.push([o.ln, o.n]);
+        }
+      }
       /* THREE SWEEPS, EACH WORSE THAN THE LAST, and a cluster takes the best it
          can get rather than being left with no way in. Crossing another line is
          untidy; being drawn through a node that has nothing to do with either
          end is the thing this whole pass exists to stop, so it is given up
          last. */
       for(const pass of [0, 1, 2]){
+        if(picked.length >= want) break;
         /* and an untidy way in is only ever worth it to get a cluster to TWO.
            A third one that has to be drawn across a lane buys nothing: two is
            already the difference between a pocket and somewhere you pass
@@ -12178,6 +12390,7 @@ const RING_AT = [0, 5, 12, 22, 34];
           /* a second connector off the same few feet of road is not a second way in */
           if(picked.some(p2=>Math.hypot(p2.ln.x-o.ln.x, p2.ln.y-o.ln.y) < 420)) continue;
           if(picked.some(p2=>p2.ln === o.ln)) continue;
+          if(Math.hypot(o.ln.x-c.x, o.ln.y-c.y) > 950) continue;
           if(pass < 2 && grazes(o.ln, o.n)) continue;
           if(pass < 1 && crosses(o.ln, o.n)) continue;
           picked.push(o);
@@ -12186,7 +12399,7 @@ const RING_AT = [0, 5, 12, 22, 34];
         if(picked.length >= cap) break;
       }
       c.ways = picked.length;
-      for(const o of picked) add(o.ln.id, o.n.id);
+      for(const o of picked) bridge(o.ln, o.n);
     }
   }
 
@@ -12541,9 +12754,20 @@ function metaPresetCost(pr){
 function metaToggle(){ if(!META) metaLoad(); META.on = !META.on; metaSave(); return META.on; }
 /* A COST RISE CAN LEAVE A SAVE OVERSPENT, and a layout change can leave it
    disconnected. Refund the newest nodes until both hold. */
+/* A ROAD THAT GREW NODES. A tree saved when a slip road was one leap holds
+   both of its ends and nothing between them; those nodes are placed for it
+   (and paid for -- if the points are not there, the trim below takes back the
+   last things bought, as it always has). */
+function metaHealBridges(m){
+  for(const br of META_BRIDGES){
+    if(m.nodes.indexOf(br.a) < 0 || m.nodes.indexOf(br.b) < 0) continue;
+    for(const id of br.mids) if(m.nodes.indexOf(id) < 0) m.nodes.push(id);
+  }
+}
 function metaTrim(){
   for(const d of Object.keys(DIFFS)) for(const w of WEAPON_KEYS){
     const m = META[d][w];
+    metaHealBridges(m);
     let guard = 0;
     while(m.nodes.length && guard++ < 500){
       if(metaPointsSpent(m) > metaPointsEarned(m)){ m.nodes.pop(); continue; }
@@ -15366,7 +15590,7 @@ function renderCards(){
   if(chest) return;   /* no reroll UI on chest rewards — the single card is the pick */
   const btn = document.getElementById('rerollBtn');
   const cost = rerollCost();
-  const left = player.noReroll ? 0 : (2 + (player.rerollBonus||0)) - screenRerolls;
+  const left = rerollsLeft();
   btn.disabled = player.studs < cost || left <= 0;
   document.getElementById('rerollCost').textContent =
     left <= 0 ? 'no rerolls left for this reward'
@@ -16257,7 +16481,7 @@ function gearFit(){
   const el = document.getElementById('gearScreen');
   if(!el) return;
   const vw = window.innerWidth || 1300, vh = window.innerHeight || 850;
-  const gc = Math.floor(clamp(Math.min((vw - 400) / 24.5, (vh - 190) / 13.6), 22, 40));
+  const gc = Math.floor(clamp(Math.min((vw - 400) / 24.5, (vh - 230) / 13.6), 22, 40));
   el.style.setProperty('--gc', gc + 'px');
 }
 function toggleGear(){
@@ -16297,15 +16521,10 @@ function refreshGearBtn(){
   if(b) b.textContent = GEAR.inv.length;
 }
 /* ---- WHAT A CHANGE DOES ----
-   Mid-run, the hero wears it now. On the title screen there is no hero yet --
-   but putting on a weapon there picks that weapon, the way the weapon row does:
-   what you hold is what you play. */
+   Mid-run, the hero wears it now. */
 function gearChanged(it){
   gearSave();
-  if(gearFrom === 'title' && it){
-    const C = GEAR_CLS[GEAR_BASE_BY_ID[it.b].cls];
-    if(C.weap && C.weap !== weapon.id) setWeapon(C.weap);
-  }
+  void it;
   if((gearFrom === 'play' || gearFrom === 'pause') && player && !player.dead) gearApply(player, false);
   renderGear();
 }
@@ -16323,6 +16542,14 @@ function gearList(k){ return k === 'stash' ? GEAR.stash : GEAR.inv; }
 function gearEquip(entry, slot){
   if(gearLinked()){ gearLockNote(); return false; }
   const it = entry.it, list = gearListOf(entry);
+  /* ANOTHER HERO'S WEAPON. Between runs, putting it on switches to that hero
+     (and its own set of gear) the way the weapon row does; mid-run the hero you
+     are playing cannot pick up a different trade. */
+  const C = GEAR_CLS[GEAR_BASE_BY_ID[it.b].cls];
+  if(C.weap && C.weap !== weapon.id){
+    if(gearFrom !== 'title'){ gearNote('A '+weapon.name+' HERO CANNOT WIELD A '+C.weap.toUpperCase()+' \u2014 switch hero on the title screen', true); return false; }
+    setWeapon(C.weap);
+  }
   slot = slot || gearPickSlot(it);
   if(!gearFitsSlot(it, slot)){ gearNote('THAT DOES NOT GO THERE', true); return false; }
   const old = GEAR.eq[slot], idx = list.indexOf(entry);
@@ -16423,7 +16650,7 @@ function renderGear(){
   const linked = gearLinked();
   const sub = document.getElementById('gearSub');
   if(sub) sub.textContent = linked ? 'A RUN LINK WEARS THE GEAR IT WAS COPIED WITH — your own bag and stash are below'
-    : 'Everything here is saved as it changes — dying keeps it all. Bosses drop gear; walk over it to pick it up.';
+    : 'Each hero wears its own gear; the bag and stash are shared. Saved as it changes — dying keeps it all.';
   let h = '';
   for(const s of GEAR_SLOTS){
     const D = GEAR_DOLL[s], it = eq[s];
@@ -16433,6 +16660,15 @@ function renderGear(){
           : `<div class="glbl">${GEAR_SLOT_NAME[s]}</div>`)+'</div>';
   }
   doll.innerHTML = h;
+  /* THE SIX HEROES, each with its own set: switchable between runs, fixed mid-run */
+  const tabs = document.getElementById('gearTabs');
+  if(tabs){
+    const free = gearFrom === 'title' && !linked;
+    tabs.innerHTML = WEAPON_KEYS.map(k=>{ const W = WEAPONS[k], on = k === weapon.id;
+      const n = GEAR_SLOTS.filter(s=>GEAR.eqBy[k] && GEAR.eqBy[k][s]).length;
+      return `<button class="gtab${on ? ' on' : ''}" data-hero="${k}" ${!on && !free ? 'disabled' : ''} `+
+        `style="--hc:${W.col}" title="${free || on ? W.name+' \u2014 '+n+' worn' : 'switch hero on the title screen'}">${W.name}<i>${n}</i></button>`; }).join('');
+  }
   inv.innerHTML = gearGridHtml(GEAR.inv, 'inv');
   if(st) st.innerHTML = gearGridHtml(GEAR.stash, 'stash');
   const sc = document.getElementById('gearStashCount');
@@ -16633,6 +16869,14 @@ function gearWire(){
   on('gearSortBtn', ()=>{ gearSort('inv'); renderGear(); });
   on('gearStashSortBtn', ()=>{ gearSort('stash'); renderGear(); });
   on('gearStashAllBtn', ()=>{ gearStashAll(); });
+  const tabs = document.getElementById('gearTabs');
+  if(tabs) tabs.addEventListener('click', e=>{
+    const b = e.target.closest && e.target.closest('.gtab');
+    if(!b || b.disabled || b.dataset.hero === weapon.id) return;
+    if(gearFrom !== 'title' || gearLinked()) return;
+    setWeapon(b.dataset.hero); renderGear();
+    try { SFX.click(); } catch(err){}
+  });
 }
 /* TIDY: biggest first, packed column by column */
 function gearSort(key){
@@ -16740,9 +16984,16 @@ function openUpgrades(mode='wave', forceRar){
   document.getElementById('upgradeScreen').classList.remove('hidden');
   state = 'upgrade'; cv.style.cursor='default';
 }
+/* HOW MANY REROLLS THIS SCREEN HAS LEFT -- one rule, read by the button AND by
+   the key. The key used to count only the plain two a screen, so Scavenger's
+   "no rerolls, ever" greyed the button out while R went on rerolling. */
+function rerollsLeft(){
+  if(!player || player.noReroll) return 0;
+  return Math.max(0, (2 + (player.rerollBonus||0)) - screenRerolls);
+}
 function doReroll(){
   if(state!=='upgrade' || upgradeMode==='chest') return;   /* chests offer one brick, no reroll */
-  if(screenRerolls >= 2) return;
+  if(rerollsLeft() <= 0) return;
   const cost = rerollCost();
   if(player.studs < cost) return;
   player.studs -= cost;
@@ -22551,7 +22802,7 @@ function drawFigure(c, o){
     c.save(); c.translate(handR2.x,handR2.y);
     /* dead-on the turn angle: the blade sticks out radially and stays there */
     c.rotate(heldAng !== null ? heldAng : aR+0.6);
-    drawBlade(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
+    drawBlade(c, s*(o.whirlA !== undefined ? 1.1 : 0.9)*(o.wScale || 1), o.whirlA !== undefined);
     c.restore();
   }
   /* the hero's own axe and staff — gated on bladeAng like the sword, so the
@@ -22562,7 +22813,7 @@ function drawFigure(c, o){
        minifig's head and the axe reads as single-bitted; shouldered on a lean
        it clears the skull and both edges show. */
     c.rotate(heldAng !== null ? heldAng + (heldAng===IDLE_UP ? AXE_LEAN : 0) : aR+0.6);
-    drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9), o.whirlA !== undefined);
+    drawAxe(c, s*(o.whirlA !== undefined ? 1.1 : 0.9)*(o.wScale || 1), o.whirlA !== undefined);
     c.restore();
   }
   if(o.weapon==='scepter' && o.bladeAng===undefined){
@@ -22603,7 +22854,7 @@ function drawFigure(c, o){
     /* overhead at -2.0, through the arc, into the floor at +1.1 */
     c.rotate(o.slam !== undefined ? (-2.0 + clamp(o.slam,0,1)*3.1)
       : heldAng !== null ? heldAng : carryX);
-    drawMace(c, s*((o.whirlA !== undefined || o.slam !== undefined) ? 1.15 : 1));
+    drawMace(c, s*((o.whirlA !== undefined || o.slam !== undefined) ? 1.15 : 1)*(o.wScale || 1));
     c.restore();
   }
   if(o.weapon==='greatsword'){
@@ -23053,6 +23304,20 @@ function reaveAir(){
 function reaveAirMax(){ return (player && player.reave >= 2) ? REAVE_AIR_R2 : REAVE_AIR; }
 function reaveOut(){ return reaveAir() > 0; }
 function heldArt(){   return (weapon && weapon.hold) || 'sword'; }
+/* A LONGER ARM IS A LONGER BLADE. Reach you have bought grows the sword or axe
+   you are drawn holding -- the whole of the reach ceiling is a blade 1.6 times
+   the size -- and a mace grows with the slam's range the same way, so what
+   you see in your hands is what it can reach. */
+const WEAPON_GROW_MAX = 0.6;
+function heroWeaponScale(){
+  const p = player;
+  if(!p || !weapon) return 1;
+  if(weapon.id === 'mace')
+    return 1 + WEAPON_GROW_MAX * clamp(((p.slamRange || SLAM_RANGE_BASE) - SLAM_RANGE_BASE) / (SLAM_RANGE_MAX - SLAM_RANGE_BASE), 0, 1);
+  if(weapon.id === 'sword' || weapon.id === 'axe')
+    return 1 + WEAPON_GROW_MAX * clamp((p.reach || 0) / REACH_MAX, 0, 1);
+  return 1;
+}
 function thrownArt(){ return (weapon && weapon.throw) || 'blade'; }
 function drawMace(c, s){
   c.strokeStyle = 'rgba(20,30,40,0.5)'; c.lineWidth=2;
@@ -23079,7 +23344,7 @@ function drawSpear(c, s){
   c.fillRect(-1.8*s,-3*s,3.6*s,7*s);
 }
 function drawPlayerWeapon(c){
-  const p = player, s = 1;
+  const p = player, s = heroWeaponScale();
   if(!p.swing) return;
   const sw = p.swing;
   const x = clamp(sw.t/sw.dur,0,1);
@@ -24923,7 +25188,7 @@ function drawHero(c){
     walk:p.walk, moving:p.moving, slam,
     flash:p.flash, blink:p.blink, colors:HERO_COLORS, style:'hero',
     hero:true, weapon: heldArt(), bladeAng: (wh===undefined && sw) ? sw.cur : undefined,
-    whirlA: wh, elite:false, phase:0 });
+    whirlA: wh, elite:false, phase:0, wScale:heroWeaponScale() });
   c.globalAlpha = 1;
   drawPlayerWeapon(c);
   if(p.esMax > 0) drawShieldBubble(c, p, p.es/p.esMax, p.esFlash);

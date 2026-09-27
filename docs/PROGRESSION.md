@@ -3678,3 +3678,59 @@ a cleared wave stashes its reward, is `ready` for the next wave 1s later with th
 waiting, and picking it afterwards leaves the wave number alone. Breaks `gap`, `waitwave`,
 `repeatpick`.
 
+## Fifty-seventh pass — one stash for all, a set per hero, Blademaster's legs, Scavenger's key, and a denser tree
+
+> *"make the stash global, but the equipment bound to what class (weapon) you choose ... when you
+> get blademaster on sword build, make sure the first upgrade and second upgrade increases your
+> movement speed, and range, and attack speed ... whenever range increases, make sure the sword
+> gets a little bigger/longer ... a passive node called Scavenger ... i can still reroll all the
+> other rewards, the button is just disabled ... go over the skilltree again ... draw
+> inspiration from [PoE], especially the structure"* — with three marked-up screenshots: empty
+> ground circled, a road with nodes drawn to and past THE AXE'S OATH, and HEFT re-routed with its
+> lower-right slip road crossed out.
+
+- **Gear per hero.** `GEAR.eqBy[weapon]` holds six sets; `GEAR.eq` is re-pointed to the current
+  weapon's by `gearBindClass` (in `gearLoad` and `setWeapon`), so everything that reads it reads
+  the hero being played, and it is never saved. The bag and the stash stay shared. A save from
+  before the split gives its one set to the weapon it was wielding (or the last hero played). The
+  screen gets six hero tabs: switchable between runs, the others shut mid-run. Putting another
+  hero's weapon on between runs switches to that hero; mid-run it is refused.
+- **Blademaster** writes `BM_SPEED`, `BM_REACH` and `BM_ATK` into the ordinary pools on each rank
+  (and nothing past the second). **Reach shows**: `heroWeaponScale()` grows the drawn sword or axe
+  with bought reach (to 1 + `WEAPON_GROW_MAX` = 1.6 at `REACH_MAX`), the mace with slam range; the
+  figure and the swing both draw at it.
+- **Scavenger.** `doReroll` counted only the plain two rerolls a screen, so "no rerolls, ever" greyed
+  the button while R went on rerolling. `rerollsLeft()` is now the one rule both read, bonus rerolls
+  from the tree included.
+- **The tree.**
+  - *Through, not into.* A cluster's first way in is the nearest clean slip road; the second must be
+    `THROUGH_ANGLE` (110°) round it, then 70°, and may reach 1300px for it. Every one of the 157
+    clusters off the rim now has two ways in at least 70° apart (on `main`, 15 were pockets); HEFT by
+    the sword's door lost the lower-right slip road and gained one on the far side.
+  - *Bridges.* `bridge(a, b)` lays `floor(d / BRIDGE_STEP)` travel nodes (two at most) along any slip
+    road longer than 330px, IDs `br*`, recorded in `META_BRIDGES`; `metaHealBridges` places them in a
+    loaded tree that owns both ends. 233 bridges; the longest slip road is 330px.
+  - *Filled ground.* Every bare quad takes a group (`late`), and each quad between rings 1 and 4 is
+    tried at 25 points for room beside its own group (`SAT_WALL` 160 from any road, `SAT_GAP` 330 from
+    any group) — the roomiest, if roomy enough, takes a satellite. 81 new clusters, 193 in all. They
+    are sized, drawn and numbered after everything else and never counted in an old cluster's room,
+    so every node in `tree42.ids` keeps its id, name, stats and exact position.
+  - *What goes there.* `lateOk` refuses a group that is mostly raw damage — with WHETSTONE on the new
+    ground a stay-at-home red build reached x4.01 against the declared x3.95 — and nine `lateOnly`
+    groups (never considered for an old site, so they cannot reshuffle one) give the new ground its
+    own variety.
+
+**Proof.** New `r56`: Scavenger rerolls 0 times by key or call (and the button is disabled), a plain
+screen 2, a +1 tree 3; Blademaster rank 1 and 2 add exactly their speed, reach and attack speed and
+a third pick does nothing; the weapon scale is 1 at no reach, 1.6 at the cap, 1.6 for a long-range
+mace, 1 for a staff; blade-steel pixels round the hero go from 4 to 142; no `tree42` node moved;
+no bare quad; 81 late clusters, 72 satellites, none mostly damage, no `lateOnly` group on an old
+site; no pocket off the rim; the Axe's Oath's ways in 167° apart; HEFT off its old hub; no slip road
+over 470px; a save owning both ends of a bridge is healed. `gear` adds: a sword helmet is not on
+the axe, the axe's gloves not on the sword, the stash and bag unchanged across heroes, the save
+holds `eqBy` and no `eq`; an axe put on between runs switches hero into the axe's set; a tab
+switches hero; mid-run another hero's weapon is refused and five tabs are shut; a pre-split save's
+set goes to the mace it was wielding. `meta` (power budget) and `nodes` pass on the new map. Breaks
+`rerollkey`, `bmnopool`, `noscale`, `nodrawscale`, `nofill`, `nosat`, `nothrough`, `nobridge`,
+`lateany`, `noheal`, `lateonbase`, `oneset`, `midrunswap`: 13 caught.
+

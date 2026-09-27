@@ -110,7 +110,11 @@ comparison against the sword.
 The sword sweeps twice and spins; the **axe chops and then backswings**; the mace does not swing
 at all, it slams; the staff casts. A combo is a row in a table, and **Blademaster — the whirl —
 is offered only to a weapon whose combo has a spin in it to hold down**, which is read off that
-table rather than off a list of weapon names. The axe has its own rhythm and its own legendary
+table rather than off a list of weapon names. Each of its two ranks also makes you a better
+swordsman whirling or not — **+10% move speed, +10 reach and +10% attack speed** at rank one,
+**+10% / +12 / +12%** more at rank two. And **reach shows**: the sword or axe you are drawn
+holding grows with the reach you have bought, up to 1.6× its size at the reach cap, and a mace
+grows the same way with its slam's range. The axe has its own rhythm and its own legendary
 to go with it.
 
 Each swinging weapon also has its own opening hand: **Sword & Steel** for the sword (flat
@@ -738,7 +742,9 @@ Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you 
 
 **The one thing a death leaves you.** Bosses drop gear; walk over a piece and it goes in your
 bag; the bag, the stash and whatever you are wearing are saved the moment anything changes, so the
-next run starts wearing it. <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
+next run starts wearing it. **Each hero wears its own gear** — six sets, one per weapon — while
+the bag and the stash are shared by all of them; the equipment screen has a tab per hero, which
+you can switch between runs (putting another hero's weapon on there switches to that hero). <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
 **EQUIPMENT** button on the title screen and in the pause menu opens it between runs.
 
 It is Path of Exile's item model, kept small — no uniques, no crafting, no currency:
@@ -1578,6 +1584,27 @@ The doors you did not choose are drawn dimmed, so you can see where the axe begi
 hangs off it without being able to start there.
 
 ### A lattice, not a wheel
+
+### Clusters you walk through, and the ground between
+
+**Every cluster off the rim is somewhere you pass through**, PoE's way: its two ways in come from
+opposite sides (at least 110° apart round it, where the roads allow — never less than 70°), so you
+leave one road, cross the group and come out on another, instead of stepping into a pocket and
+back out the way you came. A cluster on the rim keeps one way in; there is no further on.
+
+**A long way in is a road, not a leap.** A slip road longer than 330px carries an attribute node
+per step of it (two at most), paying the ground it crosses like any lane — so the jump into a
+group is a short walk, and no slip road on the map is longer than a lane's own step. A tree saved
+before a road grew its nodes is **healed** when it loads: if you owned both ends, the nodes between
+are placed for you (and if that would overspend, the newest nodes are handed back as always).
+
+**The empty ground is filled.** Every quad between the roads that used to stand bare now holds a
+group, and a quad with room to spare beside its own group takes a second, smaller one — 193
+clusters where there were 112. The new ground is PoE's filler, never raw damage: defence, life,
+resistances, attributes, ailments, minions and utility, with its own groups (SANCTUM, CLARITY,
+SPELLWARD, SOULBOUND, THE ARCHIVE, COLD HEART in blue; THE BLUR and WINDRUNNER in green; IRON
+WILL in red). All of it is placed *after* everything that was there before, so **no node anybody
+already owns moved, was renamed or renumbered**.
 
 ### The highway
 
