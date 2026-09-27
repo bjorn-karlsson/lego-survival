@@ -3986,3 +3986,58 @@ up to rank III+, letting the Breachlord in with its 35s hold (64.9s); the ring i
 that run. Breaks `nopity`, `common`, `nomulti`, `flatmulti`, `ritualtwice`, `breachonly`,
 `unwired`, `early`, `boxrare`, `boxnolevel`, `cheaplegend`, `afflictback`, `ailall`, `ailnocap`,
 `ailbig`, `ailweight` caught.
+
+## Sixty-fourth pass — PoE's golems, and an Overseer that reaches the fight
+
+> *"Im unsure if the Overseer minion actually buffs my minions at all, can you check? Also, i want
+> golems to be like PoE Golems ... Flame ... Lightning ... Ice ... Stone ... Chaos ... Carrion ...
+> You can only have 2 golems (+1 more from skilltree), not all of them, choose wisely."*
+
+**The Overseer did work** — `updateMinions` marks `m.buffed` for every minion within `OVERSEER_R`
+of it, and `minionDamage`/`minionRate` read that for every blow, shot and golem slam: 30% MORE,
+25% faster, measured. But it sits at your shoulder and the aura was **320px**, while the legion
+fights out to `MINION_LEASH` = 560: over eight seconds of a real fight only **49%** of the
+skeletons were inside it at any moment. And nothing on the sheet ever showed it, because the sheet
+asks `minionDamage` with no minion. Now `OVERSEER_R` = **520** (100% of the same fight), and the
+sheet has a row, *...in the Overseer's aura*, with the buffed hit and the faster rate.
+
+**Golems.** The Bone Golem card (+1 golem, five times) is gone. `GOLEM_TYPES` holds six kinds, each
+a rare card (`golemflame` … `golemcarrion`), each taken once, kept in `p.minions.golemTypes`:
+- **How many**: `golemCap()` = `GOLEM_BASE_CAP` 2 + `p.minions.golemCap` (the new `golemCap` tree
+  stat), at most `GOLEM_CAP_MAX` 3. A golem card is offered only while you have room and not that
+  kind. `golemMax()` is how many of your kinds may stand; `raiseGolem(gt)` raises the kind owed a
+  body (`golemOwed`); a fallen one comes back after `GOLEM_BACK` as before.
+- **What each grants**: `buff`, a list of tree stat writers. `golemBuffSync()` (top and bottom of
+  `updateMinions`) compares the kinds standing with `p.golemBuffKey`, writes `+v` for a kind that
+  has risen and `-v` for one that has fallen, and calls `syncStats` — the same delta idea gear
+  uses, so a golem's buff is exactly there while it stands and exactly gone the frame it falls.
+  Flame: incAll 0.20, boltR/bombR/baneR 0.15. Lightning: incAtk 0.12, incCast 0.12, minionSpd 0.10
+  (no mana in the game). Ice: incCrit 0.30, incAcc 0.25. Stone: regen 0.12, incRegen 0.20,
+  incArmour 0.25, incEva 0.25. Chaos: chaosRes 0.15, incDot 0.25. Carrion: none on you.
+- **How each fights**: `golemK(gt)` lays the kind's `k` over the plain golem's numbers and
+  `minionK(m)` hands that to the AI, the blow and the damage. Flame and Lightning have a `range`,
+  so they take the back-line branch and `minionShoot` throws one `mbolt` of their element; Ice and
+  Chaos slam with `mfrost` / `mchaos` (a new minion source, chaos); Stone and Carrion slam
+  physically. **Stone taunts**: `enemyTarget` sends anything within `STONE_TAUNT_R` 360 of a
+  standing stone golem at it. **Carrion**: while one stands, every non-golem minion hit adds
+  `CARRION_FLAT` 35% of the scepter's base as flat; its own hit is × (1 + 6% for each non-golem
+  minion within 320px), to double.
+- **Seen**: each kind wears its own skin — fire, storm, ice, stone, and two new ones, chaos (void
+  and green) and carrion (meat and bone) — inside the ally's violet ring.
+- **THE FOUNDRY**: a `META_LATE` cluster in blue at ring 2, 4500 out at 246°, the next clear
+  ground after The Graveyard, its notable *Golem Commander* (+1 golem, 6% increased minion
+  damage). Appended after every other site, so no existing node moves.
+
+**Proof.** New `golem`: the Bone Golem card is gone, the six are rare and offered only to a
+scepter; one kind taken leaves five on offer and not itself, two leave none, the tree's +1 makes
+it three (four still on offer), never more; each kind grants exactly its buff while it stands,
+drops it the frame it falls and gets it back when it rises again; the sources are fire, lightning,
+cold, chaos, and physical for stone and carrion, the flame and lightning golems throw bolts of
+their element and the ice golem's slam lands; the stone golem pulls a body standing on you, and
+not one far away; the carrion golem adds 35% to a skeleton's hit and grows 6% a neighbour; THE
+FOUNDRY is on the tree with `golemCap`; with the Overseer the fighting legion is in its aura all the
+time and hits 30% harder; all six golems draw. `combat` now takes three kinds with the tree's +1,
+`legion2` raises two kinds, `runlink` rebuilds a hero with Raise Zombie in place of a golem (a
+golem's buff depends on whether it has risen yet, which a stat snapshot should not). Breaks
+`nocap`, `twins`, `nobuff`, `stickybuff`, `lateoff`, `plainsrc`, `noshot`, `notaunt`, `tauntall`,
+`nocarrion`, `flatcarrion`, `nofoundry`, `smallaura`, `weakaura` caught.

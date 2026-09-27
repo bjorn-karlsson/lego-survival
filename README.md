@@ -2974,13 +2974,28 @@ water and rocks the way you do.
   and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
-- **Three epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
-  your side — 3.5× a skeleton's life, 2.75× the scepter's hit, and every blow a slam that lands on
-  everything in front of it. **Golems are their own pool**: they take no place in the legion, so a
-  full summoner stands **5 golems and 15 skeletons**. A golem that falls rises again 10s later. **Bone Overseer** (once): a staff-bearing lord
-  rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
-  damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
-  **Raise Zombie** (once): see [the graveyard](#raise-zombie--the-graveyard) below.
+- **Golems, PoE's six.** Each is a **rare** card, one per kind; you may keep **two** (a third from
+  **THE FOUNDRY**, the *Golem Commander* notable out in blue), never two alike — so the pair you
+  raise is a choice about the whole build. **While a golem stands it grants you its buff**; the
+  moment it falls the buff goes with it, and it rises again 10s later. Golems are their own pool:
+  they take no place in the legion.
+
+  | golem | while it stands you have | it fights |
+  |---|---|---|
+  | 🔥 **Flame** | 20% increased damage (yours and the legion's), 15% increased area — fireball, bomb and Brickbane radius | fire bolts from the back line |
+  | ⚡ **Lightning** | 12% increased attack and cast speed, and 10% faster minions (there is no mana to regenerate — the legion takes its share) | quick lightning bolts |
+  | ❄️ **Ice** | 30% increased critical strike chance, 25% increased accuracy | a cold slam |
+  | 🪨 **Stone** | 0.12 hearts a second regenerated, 20% increased regeneration, 25% increased armour and evasion | **taunts** — anything within 360px goes for it instead of you — and slams |
+  | ☠️ **Chaos** | 15% chaos resistance, 25% increased damage over time | a chaos slam |
+  | 🥩 **Carrion** | every minion that is not a golem hits for **35% of the scepter's base more, as added physical** | 6% more for each skeleton or zombie within 320px of it, up to double |
+
+  ![The six golems](docs/golems.png)
+- **Bone Overseer** (epic, once): a staff-bearing lord rises at your shoulder and does not fight;
+  every minion within **520px** of it — as far as the legion ever fights from you — deals **30%
+  MORE** damage and attacks 25% faster, and wears a gold ring at its feet while it does. The
+  character sheet shows the hit it gets there (*...in the Overseer's aura*). It is not one of the
+  legion and rises again 15s after it falls.
+- **Raise Zombie** (epic, once): see [the graveyard](#raise-zombie--the-graveyard) below.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
   × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
   it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
@@ -2994,7 +3009,7 @@ water and rocks the way you do.
   a raising at rare, +2 at epic, up to **five a raising**), Bone Volley (+1 to +3 projectiles).
 - **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
   (**LEGION 5/7**), its ring filling as the legion does, with a second badge for the golems
-  (**GOLEMS 2/3**); the buff list spells it out: how many spears, swords, archers, golems, and
+  (**GOLEMS 1/2**); the buff list spells it out: how many spears, swords, archers, golems, and
   whether the overseer is up.
 - **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
   reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%

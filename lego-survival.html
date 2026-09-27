@@ -2356,7 +2356,7 @@ const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
                          resistance on top — one rule for all three. */
                       slamfire:'fire', slamfrost:'frost', slamshock:'shock',
                       /* a skeleton mage's bolt is its element; a bursting skeleton is fire */
-                      mfire:'fire', mfrost:'frost', mshock:'shock', mburst:'fire' };
+                      mfire:'fire', mfrost:'frost', mshock:'shock', mburst:'fire', mchaos:'chaos' };
 /* a monster's resistance to one element, 0 when it has none. Capped below 1 for
    everything except an IMMUNE marker, so "max resistance" is a wall and not a
    divide-by-zero — you can still grind a fire golem down with fire, it is simply
@@ -4037,7 +4037,7 @@ function newPlayer(){
        OWN pools -- a minion's damage is not yours, and nothing you buy for your
        own hits reaches it unless something says so (Mirrored Legion does). */
     minions:{ max:MINION_MAX_BASE, perCast:1, flat:0, inc:0, life:0, spd:0, more:1,
-              mages:false, mirror:false, instab:false, golems:0, golemCd:0, overseer:false, overseerCd:0,
+              mages:false, mirror:false, instab:false, golemTypes:[], golemCap:0, golemCd:0, overseer:false, overseerCd:0,
               proj:0, projMore:1, volleys:0, gmp:false, zombies:false },
     /* BREACH: splinters of each lord, and the rank of each lord's ring */
     splinters:{ xoph:0, tul:0, esh:0, uul:0, chayula:0 }, rings:{}, breachDepth:0,
@@ -10001,6 +10001,50 @@ const ICONS = {
   pyro:'<path d="M12 22 C7.6 22 5 19 5 15.4 C5 11 9 9.4 9.6 5 C12.6 7 13.2 10 12.6 12.4 '+
        'C13.6 11.4 14.2 9.8 14.2 8.2 C17.2 10.6 19 13 19 15.6 C19 19.2 16.4 22 12 22 Z"/>'
 };
+/* =============================== GOLEMS ===============================
+   PoE's golems. A golem is not just one more body: each KIND grants you
+   something while it stands, and fights with its own element. You may keep
+   GOLEM_BASE_CAP of them (one more from THE FOUNDRY on the tree), never two of
+   the same kind -- so which you raise is a choice about your whole build.
+   `buff` is written through the tree's own stat writers, the moment one rises
+   and backed out the moment it falls (golemBuffSync), exactly as gear is.
+   `k` overrides the plain golem's numbers in MINION_KINDS. */
+const GOLEM_BASE_CAP = 2, GOLEM_CAP_MAX = 3;
+const GOLEM_TYPES = {
+  flame:     { name:'Flame Golem', skin:'fire', col:'#ff8a3c', el:'fire',
+               k:{ dmg:1.7, rate:1.05, hp:2.6, range:420, keep:200, reach:0 },
+               buff:[['incAll', 0.20], ['boltR', 0.15], ['bombR', 0.15], ['baneR', 0.15]],
+               says:'20% increased damage (yours AND the legion\'s), and 15% increased area -- fireball, bomb and Brickbane radius',
+               fights:'throws fire bolts from the back' },
+  lightning: { name:'Lightning Golem', skin:'storm', col:'#ffe95a', el:'shock',
+               k:{ dmg:1.2, rate:0.75, hp:2.6, range:460, keep:220, reach:0 },
+               buff:[['incAtk', 0.12], ['incCast', 0.12], ['minionSpd', 0.10]],
+               says:'12% increased attack speed and cast speed -- and, since there is no mana to regenerate, 10% faster minions',
+               fights:'looses quick lightning bolts' },
+  ice:       { name:'Ice Golem', skin:'ice', col:'#8fd8ff', el:'frost',
+               k:{ dmg:2.4, rate:1.2, hp:3.5 },
+               buff:[['incCrit', 0.30], ['incAcc', 0.25]],
+               says:'30% increased critical strike chance and 25% increased accuracy',
+               fights:'slams with cold, chilling what it hits' },
+  stone:     { name:'Stone Golem', skin:'stone', col:'#c9cec9', el:null, taunt:true,
+               k:{ dmg:1.6, rate:1.3, hp:6.0 },
+               buff:[['regen', 0.12], ['incRegen', 0.20], ['incArmour', 0.25], ['incEva', 0.25]],
+               says:'0.12 hearts a second of regeneration, 20% increased regeneration, and 25% increased armour and evasion',
+               fights:'TAUNTS -- anything near it comes for it instead of you -- and slams' },
+  chaos:     { name:'Chaos Golem', skin:'chaos', col:'#b45cff', el:'chaos',
+               k:{ dmg:2.4, rate:1.2, hp:3.5 },
+               buff:[['chaosRes', 0.15], ['incDot', 0.25]],
+               says:'15% chaos resistance and 25% increased damage over time',
+               fights:'slams with chaos, which poisons' },
+  carrion:   { name:'Carrion Golem', skin:'carrion', col:'#d25a5a', el:null, carrion:true,
+               k:{ dmg:2.0, rate:1.1, hp:3.0 },
+               buff:[],
+               says:'35% of the scepter\'s base as ADDED PHYSICAL damage to every minion that is not a golem',
+               fights:'hits harder the more of your skeletons and zombies fight beside it: 6% more for each within 320px, up to double' },
+};
+const GOLEM_KEYS = Object.keys(GOLEM_TYPES);
+const CARRION_FLAT = 0.35, CARRION_R = 320, CARRION_PER = 0.06, CARRION_MAX = 1.0;
+const STONE_TAUNT_R = 360;
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     req:()=>!isCaster() && !isSummoner(),
@@ -10699,16 +10743,16 @@ const UPGRADES = [
     desc:c=>{ const to = Math.min(MINION_PERCAST_MAX, player.minions.perCast + c.n);
       return `Each raising stands up ${to} skeletons (${player.minions.perCast} → ${to}, cap ${MINION_PERCAST_MAX})`; },
     apply:c=>{ player.minions.perCast = Math.min(MINION_PERCAST_MAX, player.minions.perCast + c.n); } },
-  /* TWO EPICS, and only ever epic: the bone golem (twice) and the overseer */
-  { id:'bonegolem', name:'Bone Golem', icon:'skull', cls:'OFFENSE', minRar:'epic',
-    req:()=>isSummoner() && (player.minions.golems || 0) < BONE_GOLEM_MAX,
+  /* SIX GOLEMS, each once, and only as many as you may keep */
+  ...GOLEM_KEYS.map(gt=>({ id:'golem'+gt, name:GOLEM_TYPES[gt].name, icon:'skull', cls:'OFFENSE', minRar:'rare', golemType:gt,
+    req:()=>isSummoner() && !golemTypesOwned().includes(gt) && golemTypesOwned().length < golemCap(),
     calc:m=>({n:1}),
-    desc:c=>`One more BONE GOLEM rises at your side (${golemMax()} \u2192 `+
-      `${Math.min(BONE_GOLEM_MAX, golemMax() + 1)}, up to ${BONE_GOLEM_MAX}): ${kindOf('golem').hp}\u00d7 a skeleton's life, `+
-      `${kindOf('golem').dmg}\u00d7 the scepter's hit, and every blow a slam that lands on everything in front of it. `+
-      `Golems are their own pool -- they take no place in your legion -- and one that falls rises again ${GOLEM_BACK}s later`,
-    apply:c=>{ player.minions.golems = Math.min(BONE_GOLEM_MAX, (player.minions.golems || 0) + 1);
-      if(golems().length < golemMax()) raiseGolem(); } },
+    desc:c=>{ const T = GOLEM_TYPES[gt];
+      return `A ${T.name.toUpperCase()} rises at your side and stays. While it stands you have `+
+        `${T.says}. It ${T.fights}. You may keep ${golemCap()} golems, never two alike `+
+        `(${golemTypesOwned().length}/${golemCap()} now) — choose; one that falls rises again ${GOLEM_BACK}s later`; },
+    apply:c=>{ player.minions.golemTypes.push(gt); if(golems().length < golemMax()) raiseGolem(gt); } })),
+  /* the overseer, only ever epic */
   { id:'raisezombie', name:'Raise Zombie', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && !player.minions.zombies,
     calc:m=>({n:1}),
@@ -11292,6 +11336,7 @@ const META_STATS = {
   minionZombies:{ n:'your summon aura raises ZOMBIES from corpses, up to twelve',
                 w:(p)=>{ p.minions.zombies = true; }, only:['scepter'] },
   minionProj: { n:'projectile for your skeleton archers and mages', w:(p,v)=>{ p.minions.proj += v; }, only:['scepter'] },
+  golemCap:   { n:'golem you may keep',     w:(p,v)=>{ p.minions.golemCap = (p.minions.golemCap || 0) + v; }, only:['scepter'] },
   minionMax:  { n:'skeleton in your legion', w:(p,v)=>{ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + v); }, only:['scepter'] },
   minionLess: { n:'LESS minion damage', pct:1, w:(p,v)=>{ p.minions.more *= (1 - v); }, only:['scepter'] },
   minionMirror:{ n:'your minions gain three quarters of your increased damage, and your conversions',
@@ -11454,7 +11499,7 @@ const META_ICON_EXACT = {
   chargeMax:'force', chargeAll:'force',
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
-  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', minionProj:'split', minionZombies:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
+  minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', golemCap:'skull', minionProj:'split', minionZombies:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
   prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
@@ -11828,6 +11873,11 @@ const META_LATE = [
     spot:{ ring:2, rad:4050, deg:262 },        /* the widest clear ground left in blue */
     minors:[['Grave Soil','minionLife',0.08],['Rot','minionDmg',0.06],['Shamble','minionSpd',0.04]],
     notable:{ name:'Raise Zombie', mods:[['minionZombies',null],['minionLife',0.08]] } },
+  /* one more golem: the third kind, for a summoner who walks out to it */
+  { id:'n_foundry', name:'THE FOUNDRY', sp:'arc', home:'int', d:[2,3], shape:'arc',
+    spot:{ ring:2, rad:4500, deg:246 },        /* the next clear ground in blue */
+    minors:[['Clay','minionLife',0.08],['Kiln','minionDmg',0.06],['Mould','minionLife',0.06]],
+    notable:{ name:'Golem Commander', mods:[['golemCap',1],['minionDmg',0.06]] } },
 ];
 const META_NOTABLES = [
   /* red */
@@ -14236,7 +14286,7 @@ const FAVOURITES = [
   /* the bow's own opening hand -- the archer's Sword & Steel */
   /* the scepter's own opening hand */
   { id:'necro',   name:'Necromancer',  icon:'skull', summon:true,
-    ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages','bonegolem','boneoverseer','castspd'] },
+    ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','skelmages','golemflame','golemlightning','golemice','golemstone','golemchaos','golemcarrion','boneoverseer','castspd'] },
   { id:'arrow',   name:'Deadeye',      icon:'bow', bow:true,
     ids:['arrowmulti','arrowpierce','arrowflat','aspd','crit','critpow','acc','bladem','moredmg'] },
   { id:'elem',    name:'Elemental Arts',icon:'ember',cast:true,
@@ -14917,7 +14967,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
-  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','bonegolem','boneoverseer','raisezombie','bonevolley','bonegmp','skelmages'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','golemflame','golemlightning','golemice','golemstone','golemchaos','golemcarrion','boneoverseer','raisezombie','bonevolley','bonegmp','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -15643,10 +15693,15 @@ const STAT_PROBES = [
   /* THE LEGION. Zero on every weapon but the scepter */
   { g:'MINIONS', k:'Minion hit', basic:'OFFENCE', get:()=> isSummoner() ? minionDamage(player.minions.mages) : 0, fmt:v=>fmtHp(v), zero:true,
     why:'one skeleton hit: (scepter base + minion flat) x (1 + the level pool + the minion pool) x the minion more. A mage throws 80% of it' },
+  /* THE OVERSEER'S SHARE, where you can see it: the same hit, standing in its aura */
+  { g:'MINIONS', k:'...in the Overseer\'s aura', get:()=> isSummoner() && player.minions.overseer ? minionDamage(player.minions.mages)*OVERSEER_MORE : 0,
+    fmt:v=>fmtHp(v)+' · '+Math.round((OVERSEER_SPD - 1)*100)+'% faster', zero:true,
+    why:'a minion inside the Bone Overseer\'s aura (520px round it) deals 30% MORE damage and attacks 25% faster; a gold ring round its feet shows which are' },
   { g:'MINIONS', k:'Legion', basic:'OFFENCE', get:()=> isSummoner() ? minionMax() : 0, fmt:v=>Math.round(v)+' skeletons', zero:true,
     why:'how many skeletons may stand at once (cap 15). At a full legion a raising replaces the oldest' },
-  { g:'MINIONS', k:'Bone golems', get:()=> isSummoner() ? golemMax() : 0, fmt:v=>Math.round(v)+' golems', zero:true,
-    why:'their own pool, on top of the legion: one for every Bone Golem taken, up to five. One that falls rises again after 10s' },
+  { g:'MINIONS', k:'Golems', get:()=> isSummoner() ? golemMax() : 0, fmt:v=>Math.round(v)+' of '+golemCap()+' · '+
+      (golemTypesOwned().map(t=>GOLEM_TYPES[t].name.replace(' Golem', '')).join(', ') || 'none'), zero:true,
+    why:'their own pool, on top of the legion: one of each kind you have raised, two at most (three with The Foundry). Each grants you something while it stands. One that falls rises again after 10s' },
   { g:'MINIONS', k:'Minion life', get:()=> isSummoner() ? minionMaxHp() : 0, fmt:v=>Math.round(v)+'', zero:true,
     why:'what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool' },
   { g:'MINIONS', k:'Minion projectiles', get:()=> isSummoner() ? minionProj() : 0, fmt:v=>Math.round(v)+' a shot', zero:true,
@@ -18596,7 +18651,7 @@ const MAGE_RANGE = 820, MAGE_KEEP = 300, MAGE_RATE = 0.75, MAGE_SHARE = 0.8, MAG
    is brought anywhere else. Its bolts fly far, fast and wide. */
 const MAGE_BOLT_FLY = 1.3, MAGE_FAN = 0.24, MAGE_FAN_MAX = 2.8;
 const MAGE_ELEMS = ['fire', 'frost', 'shock'];
-const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a' };
+const MAGE_COL = { fire:'#ff8a3c', frost:'#8fd8ff', shock:'#ffe95a', chaos:'#b45cff' };
 const MIRROR_SHARE = 0.75;
 const INSTAB_SHARE = 0.30, INSTAB_R = 110;
 /* WHAT RISES. A plain raising stands up one of three skeletons, for variety and
@@ -18619,7 +18674,7 @@ const MINION_MIX = [['spear', 1/3], ['sword', 1/3], ['bow', 1/3]];
    the legion: five golems AND fifteen skeletons. Each Bone Golem is one more
    golem; they rise at your side on their own, and one that falls is back
    GOLEM_BACK seconds later. */
-const BONE_GOLEM_MAX = 5;                 /* the golem epic, up to five times */
+/* (the plain Bone Golem card is gone: the golems are the six kinds above) */
 /* RAISE ZOMBIE. With the tree's notable or the epic, the summon aura also raises
    ZOMBIES -- a pool of their own, up to twelve -- out of the corpses zombies
    leave behind: the corpse nearest your cursor, within ZOMBIE_REACH of you,
@@ -18634,15 +18689,17 @@ const GOLEM_BACK = 10;
    stand in the middle of it takes several. */
 const MINION_PROJ_CAP = 14, MINION_VOLLEY_MAX = 8, MINION_GMP_N = 4, MINION_GMP_LESS = 0.25;
 const MINION_PROJ_HIT = 0.4;              /* the share of a fan the sheet counts as landing on one body */
-const OVERSEER_R = 320, OVERSEER_MORE = 1.30, OVERSEER_SPD = 1.25, OVERSEER_BACK = 15;
-const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst']);
+/* the aura reaches as far as the legion fights from you (MINION_LEASH): at 320
+   it covered half of a fighting legion at any moment */
+const OVERSEER_R = 520, OVERSEER_MORE = 1.30, OVERSEER_SPD = 1.25, OVERSEER_BACK = 15;
+const MINION_SOURCES = new Set(['minion', 'mfire', 'mfrost', 'mshock', 'mburst', 'mchaos']);
 const MINION_COLORS = { head:'#ede8ff', torso:'#5b4a8f', legs:'#3a2f5e', hands:'#ede8ff', hair:'#7d6ab8' };
 const OVERSEER_COLORS = { head:'#ede8ff', torso:'#3a2f5e', legs:'#2a2140', hands:'#ffd76e', hair:'#b7a6ff' };
 function minionMax(){ return Math.min(MINION_MAX_CAP, (player && player.minions.max) || MINION_MAX_BASE); }
 function kindOf(k){ return MINION_KINDS[k] || MINION_KINDS.spear; }
-function minionMaxHp(kind){
+function minionMaxHp(kind, gt){
   const p = player, M = p.minions;
-  return MINION_HP_BASE * (1 + MINION_HP_LVL*(p.level - 1)) * (1 + (M.life || 0)) * kindOf(kind || 'spear').hp;
+  return MINION_HP_BASE * (1 + MINION_HP_LVL*(p.level - 1)) * (1 + (M.life || 0)) * (gt ? golemK(gt) : kindOf(kind || 'spear')).hp;
 }
 /* WHAT A MINION HIT IS WORTH: (the scepter's base + the minion flat) x (1 + the
    level pool + the minion pool [+ 3/4 of yours, mirrored]) x the minion MORE x
@@ -18657,12 +18714,16 @@ function minionInc(){
    and false for a plain skeleton */
 function minionKindArg(k){ return typeof k === 'string' ? k : (k ? 'mage' : 'spear'); }
 function minionDamage(k, m){
-  const M = player.minions, K = kindOf(minionKindArg(k));
+  const M = player.minions, kind = m ? m.kind : minionKindArg(k), K = m ? minionK(m) : kindOf(kind);
+  const golem = kind === 'golem';
+  /* the Carrion Golem's added physical, for everything that is not a golem */
+  const carrion = !golem && carrionOn() ? weapon.dmg * CARRION_FLAT : 0;
   /* RAGE is yours and theirs: a raging summoner's legion hits harder too */
-  return (weapon.dmg + (M.flat || 0)) * (1 + minionInc()) * (M.more || 1) * K.dmg * (m && m.buffed ? OVERSEER_MORE : 1) * rageMul();
+  return (weapon.dmg + (M.flat || 0) + carrion) * (1 + minionInc()) * (M.more || 1) * K.dmg
+    * (m && m.buffed ? OVERSEER_MORE : 1) * (golem && m && m.gt === 'carrion' ? carrionMul(m) : 1) * rageMul();
 }
 function minionRate(k, m){
-  return kindOf(minionKindArg(k)).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
+  return (m ? minionK(m) : kindOf(minionKindArg(k))).rate / (1 + (player.minions.spd || 0)) / (m && m.buffed ? OVERSEER_SPD : 1);
 }
 /* everything a full raising stands up: the golems (their own pool), then the
    skeletons -- mages, or the mix */
@@ -18673,7 +18734,37 @@ function legionPlan(){
   for(let i=0;i<zombieMinions().length;i++) out.push('zombie');
   return out;
 }
-function golemMax(){ return clamp((player && player.minions.golems) || 0, 0, BONE_GOLEM_MAX); }
+function golemCap(){ return clamp(GOLEM_BASE_CAP + ((player && player.minions.golemCap) || 0), 0, GOLEM_CAP_MAX); }
+function golemTypesOwned(){ return (player && player.minions.golemTypes) || []; }
+function golemMax(){ return Math.min(golemTypesOwned().length, golemCap()); }
+/* a golem's numbers: the plain golem's, with its kind's on top */
+function golemK(gt){ const T = GOLEM_TYPES[gt]; return T ? Object.assign({}, MINION_KINDS.golem, T.k) : MINION_KINDS.golem; }
+function minionK(m){ return m && m.kind === 'golem' ? golemK(m.gt) : kindOf(m ? m.kind : 'spear'); }
+/* the kind owed a body: the first one you keep that has none standing */
+function golemOwed(){ const have = golems().map(g=>g.gt); return golemTypesOwned().slice(0, golemCap()).find(t=>!have.includes(t)); }
+function golemSrc(m){ const el = GOLEM_TYPES[m.gt] && GOLEM_TYPES[m.gt].el; return el ? 'm'+el : 'minion'; }
+/* THE CARRION GOLEM: added physical for everything that is not a golem, and it
+   feeds on the company it keeps */
+function carrionOn(){ return minions.some(g=>!g.gone && g.kind === 'golem' && g.gt === 'carrion' && g.rise >= 1); }
+function carrionMul(m){
+  let n = 0;
+  for(const q of minions) if(!q.gone && q.rise >= 1 && q.kind !== 'golem' && q.kind !== 'overseer' && Math.hypot(q.x - m.x, q.y - m.y) < CARRION_R) n++;
+  return 1 + Math.min(CARRION_MAX, n * CARRION_PER);
+}
+/* WHAT THE GOLEMS GRANT, while they stand: written through the tree's own stat
+   writers and backed out when one falls, then the sheet rebuilt */
+function golemBuffSync(){
+  const p = player;
+  if(!p) return;
+  const on = new Set(golems().filter(g=>g.rise >= 1 && GOLEM_TYPES[g.gt]).map(g=>g.gt));
+  const key = [...on].sort().join();
+  if(key === (p.golemBuffKey || '')) return;
+  const was = new Set((p.golemBuffKey || '').split(',').filter(Boolean));
+  for(const t of was) if(!on.has(t)) for(const [k, v] of GOLEM_TYPES[t].buff) META_STATS[k].w(p, -v);
+  for(const t of on) if(!was.has(t)) for(const [k, v] of GOLEM_TYPES[t].buff) META_STATS[k].w(p, v);
+  p.golemBuffKey = key;
+  syncStats();
+}
 function golems(){ return minions.filter(m=>!m.gone && m.kind === 'golem'); }
 /* how many an archer or a mage looses at once */
 function minionProj(){ return 1 + clamp(Math.round((player && player.minions.proj) || 0), 0, MINION_PROJ_CAP); }
@@ -18809,13 +18900,14 @@ function convoTick(dt){
   }
 }
 let minionBorn = 0;
-function raiseAt(x, y, kind){
-  const k = kind || nextKind(), K = kindOf(k), hp = minionMaxHp(k);
+function raiseAt(x, y, kind, gt){
+  const k = kind || nextKind(), K = gt ? golemK(gt) : kindOf(k), hp = minionMaxHp(k, gt);
   /* never out of a lake or a boulder: the nearest floor you could stand on */
   const at = k === 'mage' ? mageSpot(x, y, K.r, null) : floorAt(x, y, K.r + 4); x = at.x; y = at.y;
   const m = { x, y, r:K.r, kind:k, hp, maxHp:hp, rise:0, atkCd:rnd(0.1, 0.4), face:{x:0,y:1}, walk:rnd(TAU),
               moving:false, flash:0, phase:rnd(TAU), slot:minionSlot(), castT:0, strikeT:0, drawT:0,
               born:++minionBorn, scale:k === 'golem' ? 0.62 : 0.82 };
+  if(gt) m.gt = gt;
   m.mage = k === 'mage';
   m.el = m.mage ? MAGE_ELEMS[m.slot % MAGE_ELEMS.length] : null;
   minions.push(m);
@@ -18854,11 +18946,13 @@ function minionsToMages(){
   }
 }
 /* BONE GOLEMS: one rises at your side for every golem owed and not standing */
-function raiseGolem(){
+function raiseGolem(gt){
   const h = heroObj || player;
   if(!h || h.dead) return null;
-  const a = rnd(TAU), g = raiseAt(h.x + Math.cos(a)*70, h.y + Math.sin(a)*70, 'golem');
-  addRing(g.x, g.y, 8, 260, 80, '#b7a6ff', 6, 0.5);
+  gt = gt || golemOwed();
+  if(!gt || !GOLEM_TYPES[gt]) return null;
+  const a = rnd(TAU), g = raiseAt(h.x + Math.cos(a)*70, h.y + Math.sin(a)*70, 'golem', gt);
+  addRing(g.x, g.y, 8, 260, 80, GOLEM_TYPES[gt].col, 6, 0.5);
   return g;
 }
 const _minBuf = [];
@@ -18921,15 +19015,17 @@ function minionStep(m, tx, ty, dt, spd){
 }
 /* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
 function minionBlow(m){
-  const K = kindOf(m.kind), t = m.strikeTgt;
+  const K = minionK(m), t = m.strikeTgt;
   const cx = m.x + Math.cos(m.strikeA)*(K.reach*0.8), cy = m.y + Math.sin(m.strikeA)*(K.reach*0.8);
   slashFx(m.x, m.y - 14*(m.kind === 'golem' ? 1.4 : 1), m.strikeA, (K.reach + 6), '#c9b8ff');
   if(m.kind === 'golem'){
-    addRing(cx, cy, 6, 300, K.aoe, '#b7a6ff', 5, 0.35); addShake(0.08);
+    const T = GOLEM_TYPES[m.gt];
+    addRing(cx, cy, 6, 300, K.aoe, T ? T.col : '#b7a6ff', 5, 0.35); addShake(0.08);
+    const src = golemSrc(m), dmg = minionDamage('golem', m);
     for(const e of enemiesNear(cx, cy, K.aoe + 30, _minBuf).slice()){
       if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
       if(Math.hypot(e.x - cx, e.y - cy) > K.aoe + (e.r || 12)) continue;
-      hitEnemy(e, minionDamage('golem', m), Math.atan2(e.y - m.y, e.x - m.x), 160, 'minion', {});
+      hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 160, src, {});
     }
     if(t && t.type && !t.dead && t.hp !== undefined && props.includes(t)) knockProp(t);
     return;
@@ -18942,6 +19038,14 @@ function minionBlow(m){
 function minionShoot(m, tx, ty){
   const sx = m.x + (m.face.x||0)*10, sy = m.y - 18;
   const ta = Math.atan2(ty - 14 - sy, tx - sx);
+  /* a golem that throws: one bolt of its own element, at its own weight */
+  if(m.kind === 'golem'){
+    const T = GOLEM_TYPES[m.gt], el = (T && T.el) || 'fire';
+    projectiles.push({ kind:'mbolt', owner:'player', x:sx, y:sy - 8, px:sx, py:sy - 8,
+      vx:Math.cos(ta)*MAGE_BOLT_SPD, vy:Math.sin(ta)*MAGE_BOLT_SPD, life:minionK(m).range*1.15/MAGE_BOLT_SPD,
+      dmg:minionDamage('golem', m), el, src:'m'+el, big:true });
+    return;
+  }
   const n = minionProj(), mage = m.kind === 'mage';
   const arc = n > 1 ? (mage ? Math.min(MAGE_FAN_MAX, MAGE_FAN*(n - 1)) : Math.min(1.5, 0.11*(n - 1))) : 0;
   const more = player.minions.projMore || 1;
@@ -18968,7 +19072,9 @@ function updateMinions(dt){
     M.overseerCd = Math.max(0, (M.overseerCd || 0) - dt);
     if(M.overseerCd <= 0 && !h.dead){ raiseAt(h.x - 50, h.y + 20, 'overseer'); }
   }
-  /* THE GOLEMS: one short, and the next is back on its clock */
+  /* THE GOLEMS: one short, and the next is back on its clock -- and what they
+     grant follows who is standing */
+  golemBuffSync();
   if(golems().length < golemMax()){
     M.golemCd = Math.max(0, (M.golemCd || 0) - dt);
     if(M.golemCd <= 0 && !h.dead){ raiseGolem(); if(golems().length < golemMax()) M.golemCd = 0.6; }
@@ -18988,7 +19094,7 @@ function updateMinions(dt){
       const a = rnd(TAU), at = floorAt(h.x + Math.cos(a)*60, h.y + Math.sin(a)*60, m.r + 4);
       m.x = at.x; m.y = at.y; m.rise = 0.4;
     }
-    const K = kindOf(m.kind), spd = MINION_SPD * K.spd;
+    const K = minionK(m), spd = MINION_SPD * K.spd;
     if(m.kind === 'overseer'){
       /* it keeps to your shoulder and keeps the legion's blood up */
       const fx = h.x - 55, fy = h.y + 25;
@@ -19103,6 +19209,8 @@ function updateMinions(dt){
   }
   for(const m of minions) if(m.hp <= 0 && !m.gone) minionDies(m);
   minions = minions.filter(m=>!m.gone);
+  /* a golem that just fell takes what it granted with it, this frame */
+  golemBuffSync();
 }
 /* which minions keep room from each other: every skeleton (spear, sword, bow,
    mage) is one tribe; golems, zombies and the overseer are each their own */
@@ -19195,7 +19303,7 @@ function drawMinion(c, m){
   if(m.buffed){ c.strokeStyle = 'rgba(255,215,110,0.55)'; c.lineWidth = 1.5;
     c.beginPath(); c.ellipse(m.x, m.y + 2, m.r*1.6, m.r*0.68, 0, 0, TAU); c.stroke(); }
   if(m.kind === 'golem'){
-    const g = m.gfx || (m.gfx = { golem:'bone', type:'minion' });
+    const g = m.gfx || (m.gfx = { golem:(GOLEM_TYPES[m.gt] && GOLEM_TYPES[m.gt].skin) || 'bone', type:'minion' });
     Object.assign(g, { x:m.x, y:m.y, scale:m.scale, moving:m.moving, walk:m.walk, phase:m.phase,
       face:m.face, flash:m.flash, mode:m.strikeT > 0 ? 'stompWind' : 'chase', hp:m.hp, maxHp:m.maxHp, r:m.r });
     drawGolem(c, g);
@@ -19959,6 +20067,12 @@ function slashFx(x, y, a, r, col){
 }
 function enemyTarget(e){
   if(!minions.length || e.type === 'boss' || e.docile || !heroObj) return null;
+  /* THE STONE GOLEM TAUNTS: anything near it comes for it, not for you */
+  for(const g of minions){
+    if(g.kind !== 'golem' || g.gt !== 'stone' || g.gone || g.rise < 1) continue;
+    if(Math.hypot(e.x - g.x, e.y - g.y) < STONE_TAUNT_R){ e.tgtM = g; e.taunted = true; return g; }
+  }
+  e.taunted = false;
   const dP = heroObj.dead ? 1e9 : Math.hypot(e.x - heroObj.x, e.y - heroObj.y);
   let best = null, bd = TARGET_MAX;
   for(const m of minions){
@@ -23143,7 +23257,14 @@ const GOLEM_SKIN = {
           vein:'rgba(183,166,255,0.8)', grit:'rgba(90,70,140,0.35)' },
   storm:{ rock:['#4a4636','#38352a','#5e5940','#2a2820','#6e6848'], dark:'#221f18',
           edge:'rgba(20,18,10,0.85)', eye:'#fff3a0', eyeGlow:'255,233,90',
-          vein:'rgba(255,233,90,0.95)', grit:'rgba(255,243,160,0.4)' }
+          vein:'rgba(255,233,90,0.95)', grit:'rgba(255,243,160,0.4)' },
+  /* the two the scepter's golems brought: void and meat */
+  chaos:{ rock:['#3a2350','#2a1840','#4d2f6a','#1c1030','#5e3a80'], dark:'#140a22',
+          edge:'rgba(12,6,20,0.85)', eye:'#d6a6ff', eyeGlow:'180,92,255',
+          vein:'rgba(180,92,255,0.9)', grit:'rgba(140,255,120,0.3)' },
+  carrion:{ rock:['#8a4a44','#6e3a36','#a35a52','#e4d6c8','#5a2e2a'], dark:'#3a1c1a',
+          edge:'rgba(30,10,8,0.85)', eye:'#ffe0a0', eyeGlow:'255,200,120',
+          vein:'rgba(210,90,90,0.8)', grit:'rgba(230,214,200,0.4)' }
 };
 /* Every chunk of one monster, rolled once from its seed and kept for life, so a
    rock monster has its own lumps instead of shimmering new ones every frame. */
@@ -26773,7 +26894,7 @@ function clogTabAt(x, y){
    own, because a spell is not a damage type. */
 const DPS_COLS = {
   sword:CONV_COL.phys, slam:CONV_COL.phys, storm:'#9fe8ff', vortex:'#b98cff',
-  orbit:'#ffd166', arrow:'#e8f0c8', minion:'#c9b8ff', mfire:'#ff9a5a', mfrost:'#9fdcff', mshock:'#fff07a', mburst:'#ffb070', bomb:'#ffb04a', whirl:'#e6e6e6',
+  orbit:'#ffd166', arrow:'#e8f0c8', minion:'#c9b8ff', mfire:'#ff9a5a', mfrost:'#9fdcff', mshock:'#fff07a', mburst:'#ffb070', mchaos:'#c98bff', bomb:'#ffb04a', whirl:'#e6e6e6',
   chain:CONV_COL.shock, fire:CONV_COL.fire, frost:CONV_COL.frost, bane:DOT_COL.bane,
   burn:DOT_COL.burn, bleed:DOT_COL.bleed, poison:DOT_COL.bane, ember:'#ffb02e',
   slamfire:CONV_COL.fire, slamfrost:CONV_COL.frost, slamshock:CONV_COL.shock
