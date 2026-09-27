@@ -32,7 +32,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 **Reference** — [Every buff and debuff](#every-buff-and-debuff) · [Every cap](#every-cap) · [Under the hood](#under-the-hood)
 
-**Between runs** — [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
+**Between runs** — [Equipment](#equipment) · [The skill tree](#the-skill-tree) · [design notes](docs/PROGRESSION.md)
 
 ---
 
@@ -110,7 +110,13 @@ comparison against the sword.
 The sword sweeps twice and spins; the **axe chops and then backswings**; the mace does not swing
 at all, it slams; the staff casts. A combo is a row in a table, and **Blademaster — the whirl —
 is offered only to a weapon whose combo has a spin in it to hold down**, which is read off that
-table rather than off a list of weapon names. The axe has its own rhythm and its own legendary
+table rather than off a list of weapon names. Each of its two ranks also makes you a better
+swordsman whirling or not — **+10% move speed, +10 reach and +10% attack speed** at rank one,
+**+10% / +12 / +12%** more at rank two. The whirl reaches **half as far again as a swing**, and
+it is drawn as a cyclone: a churned floor, three bands of wind streaking round at different
+speeds, the blade smeared round in after-images, and dust and chips flung off the rim. And **reach shows**: the sword or axe you are drawn
+holding grows with the reach you have bought, up to 1.6× its size at the reach cap, and a mace
+grows the same way with its slam's range. The axe has its own rhythm and its own legendary
 to go with it.
 
 Each swinging weapon also has its own opening hand: **Sword & Steel** for the sword (flat
@@ -166,6 +172,26 @@ In a hurry? **Hold F mid-fight** to call the next wave down early and fight both
 ![The MEGA BONE BARON](docs/boss.jpg)
 
 ---
+
+## Life, shield and mana
+
+**Three pools, PoE's way, as globes.** Bottom left, the **life globe**: red, with your hearts in
+it (*4.5 / 7*). Your **energy shield** is a pale-blue layer poured over it and a ring round its
+rim that empties as the shield does. Bottom right, the **mana globe**. The ability row sits beside
+the life globe and the dash and buffs beside the mana globe; the level bar keeps the top left.
+When you are on low life the life globe's rim throbs red.
+
+![The life globe with its shield, the ability row, and the mana globe](docs/globes.png)
+
+**Mana is here, and nothing spends it yet.** It fills, it is shown, the tree and gear can raise
+it — and every automatic spell is still free. It is the pool that ACTIVE skills on keys will cost
+when they come.
+
+| | |
+|---|---|
+| maximum | **40**, +**4** a level, +**1 for every 2 INTELLIGENCE**, + flat, × (1 + increased) |
+| regeneration | **1.75% of the maximum a second** + flat, × (1 + increased regeneration) |
+| a new run | starts full |
 
 ## Weapons
 
@@ -308,6 +334,11 @@ crits would otherwise feed. So the payoff for critting *is* the mechanic.
 > through up to **3** more bodies within 320px, each for **70%** of the critical that threw it
 > and each able to crit on its own. **You keep swinging**, and up to **4** can be in the air at
 > once — **6** at rank two.
+
+**Every crit throws, however few are left.** With nobody else in reach — the last monster of a
+wave, a lone boss — the axe leaves your hand for the body you just crit and reaps it again; and if
+that crit already killed it, the axe still flies its arc out past where it stood and comes home,
+taking anybody who walks into it on the way.
 
 **You keep the axe.** The first cut of this left the hero standing there empty-handed until the
 blade came home, which read as a punishment for critting on a build whose whole idea is
@@ -723,13 +754,85 @@ default none of them throws a card screen at you in the middle of a fight**. The
 reward in the order they will open (a chest in its rarity's colour, a level-up gold, a boss
 orange, a wave green).
 
-- **One press of R opens them all**, oldest first: the next card screen opens a quarter-second
-  after you pick from the last, until the stash is empty. Four rewards are four screens in a row,
-  not four presses. (Holding R does the same.)
+- **One press of R opens them all**, oldest first: the next card screen is there **the instant**
+  you pick from the last (or take the studs) — not a frame of the fight in between — until the
+  stash is empty. Four rewards are four screens in a row, not four presses. (Holding R does the
+  same; a held 1, 2 or 3 never picks on the screen that follows.)
+- **The waves do not wait for you.** A cleared wave's reward goes on the stash like any other, and
+  a second later the next wave's breather begins — open it whenever you like.
 - **R on a card screen still rerolls** — but only a fresh press made there. A held R that
   started on the field never rerolls anything.
 
 Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you earn it.
+
+## Equipment
+
+**The one thing a death leaves you.** Bosses drop gear; walk over a piece and it goes in your
+bag; the bag, the stash and whatever you are wearing are saved the moment anything changes, so the
+next run starts wearing it. **Each hero wears its own gear** — six sets, one per weapon — while
+the bag and the stash are shared by all of them; the equipment screen has a tab per hero, which
+you can switch between runs (putting another hero's weapon on there switches to that hero). <kbd>I</kbd> opens the equipment screen mid-run (the run waits), and the
+**EQUIPMENT** button on the title screen and in the pause menu opens it between runs.
+
+It is Path of Exile's item model, kept small — no uniques, no crafting, no currency:
+
+| Slot | What goes there |
+|---|---|
+| **Weapon** | Sword · Axe · Mace · Sceptre · Staff · Bow — five bases each, the damage they add climbing with the level |
+| **Off hand** | Shield (armour, evasion or energy-shield bases) — or a Quiver, for a bow |
+| **Helmet · Body armour · Gloves · Boots** | armour, evasion or energy-shield bases, four tiers each |
+| **Amulet · two Rings · Belt** | each base carries its own implicit — Ruby Ring fire resistance, Gold Amulet studs, Leather Belt a heart |
+
+- **A base** sets the slot, the footprint in the bag (a ring is one cell, a body armour two by
+  three, a staff two by four), the defence it carries or the damage a weapon adds, and its
+  **implicit** — the one line every item of that base has.
+- **Rarity** sets how many **affixes** roll on top: none on a normal item, one or two
+  on a **magic** one (a prefix, a suffix, or one of each — *Healthy Iron Hat of the Drake*), three
+  to six on a **rare** (at most three of each, and a two-word name — *Doom Crown*).
+- **Tiers, T1 to T10.** Most affixes have ten tiers — **T1 the best, T10 the worst** — and a
+  tier can only roll on an item whose **item level** reaches it. The item level is the **monster
+  level** (the MOB LV beside the wave number), never below 1:
+
+  | Tier | T10 | T9 | T8 | T7 | T6 | T5 | T4 | T3 | T2 | T1 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Item level | 1 | 3 | 6 | 10 | 15 | 21 | 28 | 36 | 45 | 55 |
+
+  MOB LV is about 3 at wave 15, 12 at wave 40, 22 at wave 50 and 32 at wave 60 — so a run past
+  wave 50 starts finding T5 lines. Among the tiers an item may roll, each better one is a fifth less
+  likely than the one below it, so a T1 is rare even where it is allowed. A few affixes have fewer
+  tiers and start higher up the ladder (chaos resistance begins at T6, item level 15). The tooltip
+  shows the item level and every line's tier (`P · T3` is a tier-3 prefix; T1 and T2 are gold).
+- **Local lines grow the item, not you** — "40% increased Armour" on a helmet grows that helmet's
+  armour: (base + flat) × (1 + increased), PoE's order, and the same for a weapon's added damage.
+- Every other line is a stat the skill tree already writes — the same pool a card or a node
+  feeds, so every cap in the game binds it.
+- **Only in a hand that can use it.** A weapon works for the weapon you picked on the title
+  screen (put a different one on *there* and it picks that weapon for you); a staff and a bow take
+  both hands, so a shield does nothing for them; a quiver only works with a bow. An item that
+  does nothing is greyed and says why — nothing is ever taken off behind your back.
+- **Only bosses drop gear.** Every boss leaves one piece; a super boss (every tenth wave) leaves
+  two, the second at least magic. About half of it is magic, one piece in five is rare, the rest
+  normal.
+- **Only what you can use.** A weapon drops only of the kind you are carrying — a sceptre hero
+  finds sceptres, never bows or maces — and an off hand only if your hand is free for it: a
+  shield beside a one-handed weapon, a quiver beside a bow, nothing at all beside a staff.
+- A rare throws a beam of light and gets a marker on the screen edge; a plain normal item only
+  shows its name when you are close. A full bag leaves the item on the floor and says
+  **INVENTORY FULL**.
+- **The screen.** The **stash** is on the left — 12 wide and **256 deep**, twelve rows at a time
+  in a scrolling window, filling from the top so whatever you just sent is in view (drag an item
+  to the window's top or bottom edge and it scrolls) — then the paper doll and the 12 × 5 bag. Click an item in the bag to wear it
+  (what it replaces goes where it was), click a worn one to take it off. **Ctrl-click** sends an
+  item between the bag and the stash (a click on a stash item brings it to the bag, and a
+  Ctrl-click on a worn one takes it off straight into the stash); **STASH ALL** empties the whole
+  bag into the stash. Drag anything anywhere it fits — either grid, a slot, or the bin, which
+  destroys it. **TIDY** repacks the bag or the stash. Hovering a bag item shows it,
+  **what changes if you equip it** (green up, red down), and what you are wearing now. The panel
+  on the right adds up everything your gear gives.
+- **Swapping mid-run keeps your hearts' share**, so taking a hearts ring off and on is never a
+  free heal. At the start of a run the hearts gear adds arrive full.
+- **A run link carries the gear it was copied with**, the way it carries the tree — the linked
+  run wears it, and your own bag is left alone.
 
 ## Rarity
 
@@ -836,7 +939,7 @@ An **elite rolls every line eight times over**.
 | ❤️ Heart | 1.00% | 8.0% | ×1.5 regeneration for 30s — **stacks five deep** |
 | 🧲 Magnet | 0.34% | 2.7% | hoovers up every **stud** on the field for 30s |
 | 🍀 Fortune | 0.34% | 2.7% | ×2 studs and XP, and up to +25% rarity find |
-| 📦 Chest | 0.34% | 2.7% | a reward roll on the chest table |
+| 📦 Chest | 0.17% | 1.36% | a reward roll on the chest table — half what it was: the rest are in [strongboxes](#strongboxes) |
 | 💢 Rage | 0.08% | 0.64% | ×2 damage, a MORE multiplier, for 30s |
 | 🛡️ Ward | 0.08% | 0.64% | +40 armour and +12% all resistance per stack, to ×2 |
 | 💛 Golden heart | 0.11% | 0.88% | **+3 maximum hearts, permanently** |
@@ -904,7 +1007,10 @@ rolled, boss spoils included:
 | 🛡️ Ward | 0.06 | 0.10 | 0.09 | 0.15 | **0.10** |
 
 Across the whole forty waves that is roughly **45 hearts, 21 chests, 20 magnets, 14
-fortunes, 6 golden hearts, and four each of rage and ward.** The two doubling bricks are
+fortunes, 6 golden hearts, and four each of rage and ward.** (The chest line was measured before
+a body's chest chance was halved: bodies now leave about half of those chests, and the
+difference comes out of [strongboxes](#strongboxes) — twice as common, with a fourth, epic tier —
+and the [Ritual](#ritual)'s offer.) The two doubling bricks are
 things that happen to a run, not things it runs on.
 
 A magnet pulls **studs only**. Every prize in that table is something you walk to — and
@@ -1000,7 +1106,7 @@ Maximum hearts come from three rungs: `Sturdy Plates` adds them flat, **`Reinfor
 is an epic **+40% increased** (+60% at legendary), and `Titanium Chassis` is a legendary
 **100% MORE**, twice over.
 
-**Low life is 10% of your maximum.** The screen pulses red and your first row of hearts throbs
+**Low life is 10% of your maximum.** The screen pulses red and the rim of your life globe throbs
 when your life is at or below a tenth of what it can be — energy shield does not count, so a
 1-heart shield build only sees it when the one heart is nearly gone.
 
@@ -1508,6 +1614,29 @@ The doors you did not choose are drawn dimmed, so you can see where the axe begi
 hangs off it without being able to start there.
 
 ### A lattice, not a wheel
+
+### Clusters you walk through, and the ground between
+
+**Every cluster off the rim is somewhere you pass through**, PoE's way: its two ways in come from
+opposite sides (at least 110° apart round it, where the roads allow — never less than 70°), so you
+leave one road, cross the group and come out on another, instead of stepping into a pocket and
+back out the way you came. A cluster on the rim keeps one way in; there is no further on.
+
+**Attributes are the highway's, and nothing else's.** Step off the road and every point you
+spend buys the thing you left it for: a slip road runs straight from the highway into a group,
+however long it is, with no small attribute nodes on it. The highway pays **+1** a node,
+junctions included. Beside every other junction of the middle rings, where there is room, stand
+**two big attribute nodes**, PoE's balancing break: **+5 of each attribute the ground you are on
+does not pay** — in the red, +5 DEXTERITY or +5 INTELLIGENCE — for one point, off the road and
+back, so a build born in one country can pay for what another asks of it without walking there.
+
+**The empty ground is filled.** Every quad between the roads that used to stand bare now holds a
+group, and a quad with room to spare beside its own group takes a second, smaller one — 193
+clusters where there were 112. The new ground is PoE's filler, never raw damage: defence, life,
+resistances, attributes, ailments, minions and utility, with its own groups (SANCTUM, CLARITY,
+SPELLWARD, SOULBOUND, THE ARCHIVE, COLD HEART in blue; THE BLUR and WINDRUNNER in green; IRON
+WILL in red). All of it is placed *after* everything that was there before, so **no node anybody
+already owns moved, was renamed or renumbered**.
 
 ### The highway
 
@@ -2183,6 +2312,12 @@ ceiling, it changes how fast you reach it — the mace's road, and the slow-heav
 
 ### Exposure — *resistance taken off*
 
+> **Switched off for now.** Exposure proved too strong, so no brick offers it and the chance reads
+> zero whatever was bought. The four tree nodes that sold it (*Etching*, *Sapper*, *Corroding*,
+> *Corrosive*) give **increased elemental damage at 0.4× their number** instead — Sapper's 25% is
+> 10% — and say so. The mechanic below is all still in the game behind one switch
+> (`EXPOSE_ON`), exactly as described, for when it comes back.
+
 **Not an ailment, and the difference is the whole point.** An ailment is damage or a debuff the
 body carries. **EXPOSURE is resistance taken OFF**, which means it sits *outside* your own
 increased-damage pool and outside the MORE ceiling with it. A build that has already bought
@@ -2335,15 +2470,15 @@ does not also un-pause the run. Every switch is written to disk the moment you c
 |---|---|
 | **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
 | **SOUND** | every hit, pickup, cast and smash |
-| **DAMAGE NUMBERS** | the figures that float off a monster when you hit it |
+| **DAMAGE NUMBERS** | every number and word that floats off a hit — yours, the ones you take, your minions' |
 | **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
 | **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
 
-**DAMAGE NUMBERS turns off the numbers and nothing else.** Everything else that floats off a
-body is an *event* worth reading — `FROZEN SOLID`, a curse landing, `LEVEL UP!` — and a player
-who wanted a quieter screen in a wave of sixty did not ask to stop being told those. So the
-switch sits on the one call the outgoing damage figures make, not on the floater system. The
-combat log still counts every point either way.
+**DAMAGE NUMBERS off is a quiet fight.** No figure off a monster, off you (a burn or a leech) or
+off your minions, and none of the combat words either: `MISS`, `BLOCKED`, `EVADED`, `PERFECT!`,
+`DEFLECT!`, `SUPPRESSED`, `SCORCHED!`, `FROZEN SOLID`, `CHILLED ×3` and the rest. What is not combat
+text still floats — loot, `LEVEL UP!`, a pickup, a boss calling its attack, a league appearing,
+ritual tribute. The combat log still counts every point either way.
 
 **RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
 best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
@@ -2379,9 +2514,22 @@ as that type, and the ailment lands on the part of the damage that actually *was
 | ☠️ Chaos | POISON | 0% | 0% |
 
 Every base chance is zero. Chaos used to carry a free **35%** dose, which made it the one
-damage type that never had to pay for its ailment — it pays now. What turns any of them on is
-**Afflict**: one stat, added to all five, capped at **75%**. Because it is one stat it works on
-whatever your damage has *become*, which is the whole point.
+damage type that never had to pay for its ailment — it pays now. What turns them on is **one
+brick per ailment** (this used to be *Afflict*, one chance for all five at once):
+
+| brick | ailment | per pick (common → legendary) | cap | offered when you deal |
+|---|---|---|--:|---|
+| Serrated Edge | BLEED | +3 / 5 / 8 / 11 / 15% | 50% | physical, with an attack |
+| Kindling | IGNITE | +3 / 5 / 8 / 11 / 15% | 50% | fire |
+| Numbing Cold | CHILL | +3 / 5 / 8 / 11 / 15% | 50% | cold |
+| Static Charge | SHOCK | +3 / 5 / 8 / 11 / 15% | 50% | lightning |
+| Venom Glands | POISON | +3 / 5 / 8 / 11 / 15% | 50% | chaos |
+
+Each is **only offered if you actually deal that damage** — by the same reckoning the conversion
+cards use, so a sword that has turned part of its edge into fire is offered Kindling and a pure
+sword is not. They are smaller steps than Afflict's were (it went to +32%), and each is **drawn
+half as often** as an ordinary brick. The tree's *chance to leave an ailment* nodes are still one
+pool that counts for every type (capped at 75%).
 
 **What a critical buys is the three ELEMENTS, and only those.** A fire crit always ignites, a
 cold crit always chills, a lightning crit always shocks. It does **not** open a wound and it
@@ -2394,7 +2542,7 @@ has bought physical damage still hits for physical — it just does not cut.
 
 **Three spells carry their own chance on top of the table,** the way a PoE gem does, and it
 is written on the character sheet rather than hidden in the code. **Fireball** ignites **25%**
-of the time on its own — PoE's Fireball number — and that *adds* to whatever Afflict you
+of the time on its own — PoE's Fireball number — and that *adds* to whatever Kindling you
 have bought, so ailment bricks are worth something to a staff for the first time; a fire
 critical still always ignites. It used to be 100%, which made "chance to ignite" a card a
 staff never wanted. **Block Freeze** always chills (Absolute Zero upgrades that chill into a
@@ -2411,7 +2559,7 @@ A weapon still bleeds like itself: an axe cuts clean at **×0.45**, a mace mangl
 > the boss when I'm hitting him?"*
 
 Because the chance was **zero**. An axe swing reports as a weapon source, not as a fireball, so
-it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever Afflict you had bought (0) — nothing,
+it got `AIL_BASE.fire` (0) + `AIL_CRIT.fire` (0) + whatever ignite chance you had bought (0) — nothing,
 at any conversion. Now that same axe ignites on every crit, on the fire half of the hit, and at
 your bought chance the rest of the time. Half the hit, half the chance.
 
@@ -2538,10 +2686,40 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### How often the leagues come
+
+**Rare, but it happens.** Strongboxes are the common one; the big three — **breach, abyss and
+ritual** — share **one roll**:
+
+- From **wave 7**, an ordinary (non-boss) wave has a **22%** chance of a league event, and a run
+  never goes **six** ordinary waves in a row without one.
+- **Which one is chance** — breach, abyss or ritual, evenly (a ritual only while no set of altars
+  is standing).
+- **More than one at once is rarer, and the monster level decides it**: every MOB LV adds 2.5% to
+  the chance of each further event, up to 45% — so at wave 8 about one event in forty comes with
+  a second, at wave 24 one in eight, and past wave 45 nearly half. At most three in a wave — two
+  abysses and a breach, say.
+- **Strongboxes** roll on their own, from wave 2: **60%** of ordinary waves leave one, and each
+  further box rolls 3% per MOB LV (to 50%), up to three a wave.
+
+### A cleared wave waits for the leagues
+
+When the wave's last monster dies and there is **still league content untouched on the map** —
+an unopened breach hand, an abyss nobody has stepped into, a locked strongbox, a ritual altar
+still guarded or not yet begun — the next wave **does not start**. A prompt sits top middle
+saying what is left:
+
+![WAVE CLEARED — 2 strongboxes · 3 ritual altars left · F CONTINUE](docs/wave-hold.png)
+
+- **Do it all** and the run carries on by itself the moment the last of it is done.
+- **Press <kbd>F</kbd>** to leave it: the breach hand sinks and the abyss closes, as they always
+  did at the end of a wave; a strongbox or a ritual altar stays where it is for later.
+- A ritual altar counts until its ritual is complete — guarded, freed but not begun, or both.
+
 ### Breach
 
-The first league mechanic. From **wave 6**, an ordinary (non-boss) wave has a **45%** chance to
-carry a **Breach hand** — and never more than two ordinary waves go by without one. A few
+The first league mechanic. From **wave 7** a wave can carry a **Breach hand**, when the
+[league roll](#how-often-the-leagues-come) picks one. A few
 seconds into the fight a clawed fist of void bricks pushes up through the floor 380–760px away,
 with a marker on the screen's edge while it is out of sight.
 
@@ -2606,9 +2784,8 @@ stands (up to 20s) and drops the ring outright, plus fifteen splinters.
   the Hand to **110 kills** calls **the lord itself** through: a giant revenant in its colours
   with fourteen times the health of its kind, which holds the breach open while it stands (up to
   35s). It pays forty splinters and a rank of its ring, and **its breach's hoard is rare** — the best a breach gives.
-- **More than one, late in a run.** From wave 25 a second breach can open in the same wave, and
-  from wave 40 a third — each of a different lord, each on its own 60% roll, their hands at least
-  600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
+- **More than one.** When the league roll hands a wave two or three breaches, each is of a
+  different lord, their hands at least 600px apart. Every breach keeps its own circle, clock, bodies, kills, Hand and hoard.
 - **Deeper every time.** Every breach opened in a run makes the next one harder: its bodies
   12% tougher per breach before it (to three times), and more of its packs magic.
 
@@ -2621,9 +2798,8 @@ the Breachlord.
 
 ### Abyss
 
-From **wave 3**, on any wave that is not a boss wave, there is a **35%** chance (and never four
-ordinary waves in a row without one) that an **ABYSS** opens its **green eye** on the floor a few
-seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
+From **wave 7**, when the [league roll](#how-often-the-leagues-come) picks one, an **ABYSS**
+opens its **green eye** on the floor a few seconds into the fight. The eye is pinned to the screen's edge like a chest until you find it.
 
 - **Walk onto the eye and the ground cracks** — and keeps cracking at **150px a second**, but
   **only while you follow it**: stay within 420px of its front. **Where it is going is not
@@ -2645,24 +2821,29 @@ seconds into the fight. The eye is pinned to the screen's edge like a chest unti
   rare**) and a shower of studs.
 - **An open abyss holds the wave**, the way an open breach does. An abyss you never touched simply
   closes when the wave ends.
-- **Late in a run there are more.** From wave 25 a second abyss can surface in the same wave, and
-  from wave 40 a third, each on its own 60% roll and at least 500px from the others. Each keeps
+- **More than one.** When the league roll hands a wave two or three abysses, they surface a few
+  seconds apart and at least 500px from each other. Each keeps
   its own monsters, pits and Stygian.
 
 ![An abyss: the opened crack, a pit spilling its pack](docs/abyss.png)
 
 ### Strongboxes
 
-From **wave 2**, on any wave that is not a boss wave, there is a **30%** chance that a **locked
-iron strongbox** is left somewhere on the floor (another 35% roll from wave 20 and again from wave
-35; never more than three locked boxes lying about at once). It wears one to three **mods**
-written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
+**The chests live here now, and this is the common league.** A body drops half the chests it
+used to, and the boxes make up for it. From **wave 2**, **60%** of ordinary waves leave a **locked
+iron strongbox** somewhere on the floor, and a second and third come with the monster level (3%
+per MOB LV each, to 50%); never more than four locked boxes lying about at once. It wears one to four **mods** written over it — the boss traits: SWIFT,
+IRONCLAD, BRUTAL, VITAL, WARDED, VENOMOUS, THORNED.
 
-| box | mods | bursts of guardians | the chest inside |
-|---|---|---|---|
-| Strongbox (60%) | 1 | 2 | common |
-| Magic strongbox (30%) | 2 | 3 | uncommon |
-| Rare strongbox (10%) | 3 | 4 | rare |
+| box | mods | bursts of guardians | each burst | leads each burst | the chest inside |
+|---|---|---|---|---|---|
+| Strongbox (52%) | 1 | 2 | 3–5 | — | common |
+| Magic strongbox (30%) | 2 | 3 | 3–5 | a magic one | uncommon |
+| Rare strongbox (12%) | 3 | 4 | 4–6 | a magic one | rare |
+| **Epic strongbox** (6%, from wave 10) | 4 | 5 | 6–8 | **an elite** | **epic** |
+
+The **epic strongbox** is the hard one: four of the seven mods on every guardian, five bursts of
+six to eight, each led by an elite — and an epic chest when the lock gives.
 
 - **It waits for you.** A box nobody touches stays where it is, locked, across waves.
 - **Walk onto it and it springs.** Its **guardians** come out of the ground round it, a burst of
@@ -2673,6 +2854,70 @@ written over it — the boss traits: SWIFT, IRONCLAD, BRUTAL, VITAL, WARDED, VEN
   A sprung box holds the wave until its guardians are dead.
 
 ![A rare strongbox sprung, its guardians coming](docs/strongbox.png)
+
+### Ritual
+
+PoE's Ritual. From **wave 7**, when the [league roll](#how-often-the-leagues-come) picks one (and
+no set is already standing), a wave raises a **set of three altars** a few seconds into the
+fight. They rise at least 820px apart, on open floor, with a
+diamond on the screen's rim for each one that still has something to give.
+
+- **Each altar is guarded, and the guards are asleep.** A pack of five to seven (one of them
+  magic) stands round it and **does nothing** — it does not come for you, it does not hold the
+  wave, and your minions leave it alone. **Hit one, or walk within 210px of the altar or of any of
+  them, and the whole pack wakes at once.** Kill it and the altar is free: *STEP IN TO BEGIN*.
+- **Step onto a free altar and the circle closes.** A **450px** ring of red runes; **you cannot walk
+  out of it until the ritual is done**, and neither can your legion. What was inside when it
+  closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in.
+  **The ring is a wall for every missile, both ways**: nothing shot from outside comes in, and
+  nothing you (or your minions) shoot from inside gets out. The wave's own bodies wait until it is
+  over, and a running ritual holds the wave.
+- **The altar calls a horde** into the circle: a pulse of six to nine every 1.6s (never more
+  than twenty-six standing), **24 + the wave** of them in all — 14% magic, 6% elite. A ritual
+  begun after the wave's last monster died still holds the next wave until its own last one falls.
+- **The altar strikes at you itself**, every 3–5s: a **MARK** burns under your feet and bursts
+  1.15s later (fire — step out of it; two marks from wave 20, three from 30), or a **RING** gathers
+  on the altar and rolls out across the whole circle (chaos — dodge through it). Each hits like
+  one of the wave's monsters, a little harder.
+- **Kill everything it calls and the ritual is complete.**
+
+**Tribute.** Every monster the altar calls pays **tribute** when it dies: **10** for a plain one,
+×2 magic, ×4 elite — and **×1.11 for every MOB LV it carries**, so a deeper monster pays more.
+Guards pay nothing. There are far more of them now, so each pays a smaller share (**4** for a plain one at MOB LV 0): a wave-14 altar is still worth about 200.
+
+**The offer (<kbd>U</kbd>).** Once an altar of the set is done, <kbd>U</kbd> opens the
+**RITUAL** window (the run waits while it is open). It offers **eight** things, and **the same
+eight for every altar of the set** — so what you do not spend is kept, and finishing all three
+before you shop buys the most:
+
+| offer | costs (×1.11 per MOB LV) | what you get |
+|---|--:|---|
+| magic gear | ~90 | a piece for your hero, **item level +2** over the floor's |
+| rare gear | ~260 | the same, rare |
+| rare chest | ~200 | a rare brick, waiting on <kbd>R</kbd> |
+| epic chest | ~600 | an epic brick |
+| legendary chest | ~2800 | a legendary brick |
+
+**A legendary is not one set's worth.** Three altars pay about 550–750 tribute at the level they
+are fought at, and a legendary chest costs three to five sets of that. Getting one is what
+**DEFER** is for: put it off, keep your tribute, and each later set — deeper, so it pays more —
+brings it back **10% cheaper**. Expect to defer it three to six times.
+
+- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
+- **DEFER** takes an offer off this set and puts it **first in the next set's offer**, **10%
+  cheaper** — for the thing you want and cannot afford yet. It comes back as an ordinary offer
+  (marked RETURNED); defer it again and it is another 10% off. Six at most at once.
+- **DONE** closes the window, and once every altar of the set is finished it ends the set's offer
+  (deferred offers and tribute are kept). With nothing left to do — nothing on offer, or nothing
+  affordable with no room to defer and no tribute to reroll — the window closes on its own.
+- **REROLL** replaces everything on offer except what you deferred into it, for ~60 tribute,
+  ×1.5 each time within a set.
+- Tribute carries on to the next set; what a set offered and you did not buy or defer goes when
+  the next set rises.
+
+![A ritual running: the circle, the fog, a mark and the altar's ring](docs/ritual.png)
+
+![The ritual's offer](docs/ritual-offer.png)
 
 ### A run, as a link
 
@@ -2719,8 +2964,10 @@ the legion is full — four to begin with — and whenever one falls, the aura s
 walk to whatever is near you and cut it down.
 
 **Left click is CONVOCATION** — PoE's gem, built in: every minion you own (skeletons, golems and
-zombies) is called back to your side **one by one, nearest first, 0.14s apart** — you watch the
-legion answer — and each **regenerates 25% of its life a second for 3s** as it lands. A 3s
+zombies) is called back to your side **nearest first, in beats 0.14s apart** — you watch the
+legion answer. There are never more than six beats: six minions or fewer come one by one, a
+bigger legion comes in groups that grow with it (twelve two at a time, thirty five at a time), so
+every legion is home in under a second. Each **regenerates 25% of its life a second for 3s** as it lands. A 3s
 cooldown; the ability row shows it as **CALL**, the ring filling as it comes back. A raising always lands on floor: point into a lake or at a boulder
 and the skeleton climbs out of the nearest ground you could stand on, and skeletons walk round
 water and rocks the way you do.
@@ -2758,13 +3005,28 @@ water and rocks the way you do.
   and shockwaves, the boss's yellow ring and its mace sweep, spikes, fire, venom and storm pools,
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
-- **Three epics, and only epics.** **Bone Golem** (up to **five** times): one more golem rises at
-  your side — 3.5× a skeleton's life, 2.75× the scepter's hit, and every blow a slam that lands on
-  everything in front of it. **Golems are their own pool**: they take no place in the legion, so a
-  full summoner stands **5 golems and 15 skeletons**. A golem that falls rises again 10s later. **Bone Overseer** (once): a staff-bearing lord
-  rises at your shoulder and does not fight; every minion within 320px of it deals **30% MORE**
-  damage and attacks 25% faster. It is not one of the legion and rises again 15s after it falls.
-  **Raise Zombie** (once): see [the graveyard](#raise-zombie--the-graveyard) below.
+- **Golems, PoE's six.** Each is a **rare** card, one per kind; you may keep **two** (a third from
+  **THE FOUNDRY**, the *Golem Commander* notable out in blue), never two alike — so the pair you
+  raise is a choice about the whole build. **While a golem stands it grants you its buff**; the
+  moment it falls the buff goes with it, and it rises again 10s later. Golems are their own pool:
+  they take no place in the legion.
+
+  | golem | while it stands you have | it fights |
+  |---|---|---|
+  | 🔥 **Flame** | 20% increased damage (yours and the legion's), 15% increased area — fireball, bomb and Brickbane radius | fire bolts from the back line |
+  | ⚡ **Lightning** | 12% increased attack and cast speed, and 10% faster minions (there is no mana to regenerate — the legion takes its share) | quick lightning bolts |
+  | ❄️ **Ice** | 30% increased critical strike chance, 25% increased accuracy | a cold slam |
+  | 🪨 **Stone** | 0.12 hearts a second regenerated, 20% increased regeneration, 25% increased armour and evasion | **taunts** — anything within 360px goes for it instead of you — and slams |
+  | ☠️ **Chaos** | 15% chaos resistance, 25% increased damage over time | a chaos slam |
+  | 🥩 **Carrion** | every minion that is not a golem hits for **35% of the scepter's base more, as added physical** | 6% more for each skeleton or zombie within 320px of it, up to double |
+
+  ![The six golems](docs/golems.png)
+- **Bone Overseer** (epic, once): a staff-bearing lord rises at your shoulder and does not fight;
+  every minion within **520px** of it — as far as the legion ever fights from you — deals **30%
+  MORE** damage and attacks 25% faster, and wears a gold ring at its feet while it does. The
+  character sheet shows the hit it gets there (*...in the Overseer's aura*). It is not one of the
+  legion and rises again 15s after it falls.
+- **Raise Zombie** (epic, once): see [the graveyard](#raise-zombie--the-graveyard) below.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
   × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
   it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
@@ -2778,7 +3040,7 @@ water and rocks the way you do.
   a raising at rare, +2 at epic, up to **five a raising**), Bone Volley (+1 to +3 projectiles).
 - **The legion, counted.** A skull badge in the ability row shows how many stand of how many may
   (**LEGION 5/7**), its ring filling as the legion does, with a second badge for the golems
-  (**GOLEMS 2/3**); the buff list spells it out: how many spears, swords, archers, golems, and
+  (**GOLEMS 1/2**); the buff list spells it out: how many spears, swords, archers, golems, and
   whether the overseer is up.
 - **Skeleton Mages**, the legendary: every skeleton becomes a caster that stands off out of
   reach and throws fast bolts, a third of the legion each in **fire, cold and lightning**, for 80%
@@ -2964,6 +3226,13 @@ roll. It is **`Elemental Core`** now and says what it feeds.
 ---
 
 ## Sound
+
+**Every effect is LAYERED now** — picked by ear in the Sound Lab against the old versions and the
+ZzFX library. A sound is built the way a real one is heard: a **click**, a **body** (a thud, a
+sweep of air, a burst of noise) and a **ring**. Plastic and metal ring at the uneven, inharmonic
+overtones struck objects have, so a brick sounds like a brick and a shield like metal. Every
+voice varies a little in pitch each time, **hits and brick bursts sit left or right where they
+happen on screen**, and everything sends a little into a short room. No library, no sound files.
 
 **Music and sound are separate switches, both on the menu, both remembered.** `M` still
 takes everything down at once — which is what you want when somebody walks into the room,
@@ -3196,8 +3465,11 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
+| <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
+| <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |
+| <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |

@@ -3514,3 +3514,627 @@ and boss in turn. `lzwPack`/`lzwUnpack` were also round-tripped on 300 random ar
 200–300KB ones (past the 64k-entry dictionary). Breaks `noshockedicon`, `nobrittleicon`,
 `noexpose`, `noslow`, `breachchest`, `plainlink`, `nolegacy`, `badwidth`, `hstack`, `chipsback`,
 `nochain`: 11 caught.
+
+## Fifty-third pass — equipment (the `Equipment` branch)
+
+> *"A player now can have diffrent gear equiped, like in PoE ... Armour: Helmet, Body armour,
+> Boots, Gloves, Shields · Jewellry: Rings, Amulet, belt · Weapons: Axe, Bow, Mace, Scepter,
+> Staves, Sword · Offhand: Shields and Quivers ... equipment can roll with diffrent stats called
+> affixes, which are implicts, suffixes and prefixes ... Gear can drop from monsters and you pick
+> them up. When you die you get to bring your gear with you to the next run ... We can start
+> basic here, we dont have to create UNIQUEs"*
+
+The first thing in the game that survives a run besides the tree, so it is built the same way the
+tree is: **gear only ever writes pools.**
+
+- **Bases** (`GEAR_BASES`, 113 of them): four tiers of armour, evasion and energy-shield
+  helmets, body armours, gloves and boots; three tiers of shields; four quivers, six belts, six
+  amulets, ten rings; five bases for each of the six weapons. A weapon's `dmg` is flat damage
+  it ADDS — physical for the four that hit, elemental for the staff, the legion's (`minions.flat`)
+  for the sceptre. The late body armours carry PoE's own implicits (Astral Plate's resistances,
+  Assassin's Garb's move speed); bucklers suppress spells, spirit shields feed them.
+- **Affixes** (`GEAR_AFFIXES`, 16 prefixes and 20 suffixes) each name a `META_STATS` key — the
+  tree's own writers — or one of two new ones (`minionFlat`, `allAttr`), or a **local** stat
+  (`locArmour`, `locArmourInc`, `locDmg`, `locDmgInc` and the evasion and shield pairs) that
+  `gearMods` folds into the item's own number, (base + flat) × (1 + increased), before anything
+  reaches a pool. Tiers carry a level; `gearRollAffix` only picks among the tiers the item level
+  allows, all equally likely, so the top one is always the rarest.
+- **Rarity**: normal none, magic one or two (at most one prefix and one suffix), rare three to six
+  (at most three of each). Names: the base; prefix + base + suffix; two words from PoE's lists,
+  the second chosen by item class.
+- **Applying it** (`gearApply`): take the lines applied last time off, put the current ones on,
+  `syncStats`. Every writer is additive, so this is exact (to floating-point dust), the same trick
+  the mid-run tree uses. Called in `resetRun` after the tree and the favourite, in
+  `rebuildWithout`, and after every change made mid-run. `fill` at the start of a run tops the
+  bar up by what the gear added; anywhere else the bar keeps its share, so a swap is not a heal.
+- **Hands** (`gearActiveWhy`): a weapon works only for the matching hero weapon; a shield needs a
+  one-handed weapon; a quiver needs a bow. An inactive item stays worn and says why. On the title
+  screen, putting on a weapon calls `setWeapon` for it.
+- **Drops**: `gearSpoils` at the end of `mobSpoils`, `GEAR_DROP` = 1/80 times the same multiplier
+  the chest roll uses (×8 elite, ×1/12 breach); `gearBossSpoils` always leaves two, the first
+  magic-or-rare, the second rare. Item level = `mobLevel()`. Items on the floor live in
+  `gearDrops`, apart from pickups — nothing magnets, merges or floor-caps them — and are bagged by
+  walking within reach. Rares get a light beam and an edge marker; name plates are drawn over
+  the world, normal ones only within 260px.
+- **The bag** is PoE's: 12 × 5 cells, items by footprint, filled column by column (`gearFreeSpot`).
+  A full bag leaves the item where it lies.
+- **The save** (`bb_gear`): `{ eq, inv:[{it,x,y}], uid }`, written on every pickup, equip, move and
+  destroy. `gearLoad` validates every item (unknown bases, affixes and stats are dropped; an item
+  that no longer fits its spot is re-placed), so a save from a later version cannot break an
+  earlier one.
+- **The run link** gains `g` — the worn items, packed — only when something is worn, so a bare
+  run's link is unchanged. A linked run wears the link's gear (`gearEqNow`), and the screen shows it
+  read-only above your own bag.
+- **The screen** (`#gearScreen`, state `gear`, key <kbd>I</kbd>, title and pause buttons): paper
+  doll, bag, bin, TIDY, a summary of everything worn, and PoE-style tooltips with a
+  what-changes panel and the item currently worn. One pointer handler: a press that moves more
+  than five pixels is a drag, anything else a click.
+
+**Proof.** New `gear`: the tables (113 unique bases, all fifteen classes, every affix stat has a
+writer, tiers ascending); 3,000 rolls obey the count limits, never roll a base or tier deeper than
+the item, never repeat a line, and stay inside their tier's range; magic and rare names; local
+armour and weapon damage fold correctly, the staff adds elemental and the sceptre minion damage;
+worn gear moves armour, resistance, flat damage and hearts and comes off exactly; a sword item on
+an axe hero does nothing and says why; shields and quivers only work in the right hands; a
+hearts swap keeps the bar's share; drops (plain in, breach out, a miss, an elite, ~1/80 over 4,000
+rolls, a boss's two with the second rare, the item level); walking over an item bags and saves it,
+a full bag of body armours leaves one on the floor; the floor draws the name plate; the run link
+carries the gear and a bare one carries none; a helmet survives a death (game-over screen and
+all), the next run, and a page reload, and the title button counts the bag; and through the real
+screen with the mouse: I opens it over a held run, hovering shows the tooltip with the comparison,
+a click wears a ring (resistance up) and a click takes it off, a drag moves the cap to the far
+corner and another drag wears it, a drag into the bin destroys a ring (saved), Esc closes back
+into the run.
+
+## Fifty-fourth pass — bosses only, ten tiers on the monster level, your own weapon, and a stash
+
+> *"make it so that bosses only drop gear, and make gear a little more rare:er ... i want a
+> stashtab to the left also that cointains many slots ... a button for that in the equipment tab so
+> you can simply transfer all items from inventory to stashtab ... T1 bieng the highest, and lowest
+> is T10. The item level is based on which mob level you are on. Also when you play scepter, you
+> shouldnt be rewarded with bows, maces, only the weapon type you carry"*
+
+- **Bosses only.** `gearSpoils` is gone from `mobSpoils`; `gearBossSpoils` drops one piece, and a
+  second (floored at magic) off a super boss (`e.super`). Rarity: 20% rare, 50% magic, 30% normal
+  (`GEAR_RARE_W` / `GEAR_MAGIC_W`; the super boss's second is 35% rare).
+- **Item level is the monster level.** `gearItemLevel()` = `max(1, mobRank())` — the MOB LV on the
+  HUD — rather than wave + difficulty. The bases were written on the wave scale and are scaled onto
+  it by `GEAR_BASE_LVL_K` = 0.6 (a level-48 Astral Plate is now item level 29).
+- **Ten tiers.** An affix is defined by its T10 floor and T1 ceiling and cut into `n` (default 10)
+  equal bands, which take the top `n` rungs of `GEAR_TIER_LVL` = 1, 3, 6, 10, 15, 21, 28, 36, 45,
+  55. Tier names come from each affix's five-to-six PoE names, spread across the bands. The roll
+  among allowed tiers is weighted by `GEAR_TIER_DECAY`^k (0.8), so better tiers are progressively
+  rarer. `gearTierNo` names a tier (T1 best). A saved line keeps its tier while its value still
+  fits it; otherwise `gearTierFix` re-reads the tier from the value, so every item saved under the
+  five-tier ladder loads with an honest tier and its number unchanged.
+- **Your own weapon.** `gearCanDrop(cls)` gates `gearRollBase`: weapons only of `weapon.id`, a
+  shield only beside a one-handed weapon, a quiver only beside a bow, no off hand for a staff.
+- **The stash.** `GEAR.stash`, 12 × 12, saved with the rest (save version 2; a version-1 save
+  simply has no stash yet). The grid functions take the grid's size (`GEAR_DIM`, `gearDimOf`).
+  `gearTransfer` (Ctrl-click, or any click on a stash item), `gearStashAll` (the STASH ALL
+  button, biggest first), `gearEquip` from either grid (what it replaces goes to its spot, the
+  bag, or the stash), `gearUnequip` into either, `gearMove` across grids, TIDY for each. The
+  Ctrl-click-twice destroy is gone — Ctrl-click is PoE's transfer; the bin still destroys. The cell
+  size is fitted to the window (`gearFit`) so all three panels sit side by side.
+
+**Proof.** `gear` restated: an imp and an elite killed on a zero roll drop nothing; a wave-15 boss
+drops one piece at item level `mobRank()` = 3; a wave-20 super boss drops two, the second not
+normal; 2,000 boss rarity rolls are 12–28% rare; wave 2 is item level 1; for each of the six
+weapons 1,500 base rolls at item level 60 find only that weapon, rings always, shields only for the
+four one-handers, quivers only for the bow, and nothing in the off hand for a staff. New: hearts
+has ten tiers and chaos resistance six starting at the T6 rung; 3,000 deep rares see every tier
+T1–T10 with T10 more than three times as common as T1; nothing above item level 4 rolls on an
+item-level-4 item; the tooltip shows T1 and the item level; an old five-tier line (hearts 5 at
+index 4) loads as T2. Through the real screen: Ctrl-click moves a bag item to the stash and a click
+brings it back, Ctrl-click on the worn helmet puts it in the stash, STASH ALL empties the bag
+(saved), a drag from the stash onto the helmet slot wears it, and the stash survives a reload item
+for item. Breaks `mobdrop`, `anyweapon`, `anyoff`, `nosuper`, `flattier`, `nogate`, `ilvlwave`,
+`fivetiers`, `nomigr`, `noctrl`, `nostashall`, `stashlost`, plus the sixteen from the last pass
+still standing: 28 caught.
+
+## Fifty-fifth pass — a legion comes home in groups, and a stash that scrolls
+
+> *"depending on how many minions i have, convocation now brings more minions, instead of just 1
+> by 1 ... make the stash tab like 12x256 or something, make it scrollable"*
+
+- **Convocation in beats.** Arrivals were one every `CONVO_STEP` (0.14s), so thirty skeletons took
+  4.2s to land — longer than the 3s cooldown. Each beat now brings `convoBatch(n)` =
+  ceil(n / `CONVO_BEATS`) (6): a legion of six or fewer still comes one by one, twelve two at a
+  time, thirty five at a time, and nothing takes more than six beats (0.7s).
+- **The stash is 12 × 256**, in a scrolling window twelve rows tall (`#gearStashView`). It fills
+  **row by row** from the top (`GEAR_DIM.stash.rowMajor`) — the bag keeps PoE's column-by-column
+  fill — so whatever you just sent is in view. `gearFreeSpot` builds an occupancy map and scans it
+  once, so a deep stash with hundreds of items is searched in well under a millisecond. Dragging to
+  the window's top or bottom edge scrolls it (`gearAutoScroll`), and a drop only counts in the rows
+  that are actually on screen. The header counts the rows in use.
+
+**Proof.** `zombie` restated: five minions arrive in five single beats, eight in four pairs,
+twenty-four in six groups of four, all home by 0.72s, every beat 0.13–0.15s apart, and
+`convoBatch` for 1, 6, 7, 12, 13 and 30 is 1, 1, 2, 2, 3, 5. `gear` adds: a hundred body armours
+fill the stash's first 51 rows, the next ring lands in the gap at row 48, a search takes under 5ms,
+the window scrolls and shows twelve rows; scrolled to row 60, a ring dragged from the bag into the
+window's top-left lands at row 60; a drag held at the window's bottom edge scrolls it. Breaks
+`onebyone`, `smallstash`, `colmajor`, `noscroll`, `noautoscroll`: 5 caught.
+
+## Fifty-sixth pass — no gap between rewards, and waves that do not wait
+
+> *"remove the delay between opening rewards "R" i want it to be instant, i don't want to return
+> into combat for a split second, just the next reward ... if the wave is over, it doesnt have to
+> wait for me to open the wave reward chest, it just carries on."*
+
+- **No gap.** `chooseUpgrade` and `rejectReward` end with `lootNext()`: if an R started a chain (or
+  AUTO-LOOT is on) and the stash is not empty, the next screen opens in the same call, so the state
+  never returns to `play` in between. `LOOT_HOLD_GAP` is 0. The number keys and X ignore key
+  repeats, so a held key cannot pick on the screen that opens under it.
+- **Waves carry on.** Picking the wave reward used to be what started the next wave. Now
+  `updateWave` holds a cleared wave for `WAVE_CLEAR_HOLD` (1s — the banner, and the frame an
+  untouched breach, abyss or strongbox needs to see the wave end) and then calls `startWave`
+  itself; the wave's reward waits on the stash with the rest, and picking it starts nothing.
+
+**Proof.** `loot` adds: a chain of level, boss and chest is `upgrade` → `upgrade` (boss) →
+`upgrade` (chest, after an X) → `play` with nothing left, all read synchronously after each pick;
+with no chain a pick returns to play; a held Digit1 (three repeats) leaves the second screen open;
+a cleared wave stashes its reward, is `ready` for the next wave 1s later with the reward still
+waiting, and picking it afterwards leaves the wave number alone. Breaks `gap`, `waitwave`,
+`repeatpick`.
+
+## Fifty-seventh pass — one stash for all, a set per hero, Blademaster's legs, Scavenger's key, and a denser tree
+
+> *"make the stash global, but the equipment bound to what class (weapon) you choose ... when you
+> get blademaster on sword build, make sure the first upgrade and second upgrade increases your
+> movement speed, and range, and attack speed ... whenever range increases, make sure the sword
+> gets a little bigger/longer ... a passive node called Scavenger ... i can still reroll all the
+> other rewards, the button is just disabled ... go over the skilltree again ... draw
+> inspiration from [PoE], especially the structure"* — with three marked-up screenshots: empty
+> ground circled, a road with nodes drawn to and past THE AXE'S OATH, and HEFT re-routed with its
+> lower-right slip road crossed out.
+
+- **Gear per hero.** `GEAR.eqBy[weapon]` holds six sets; `GEAR.eq` is re-pointed to the current
+  weapon's by `gearBindClass` (in `gearLoad` and `setWeapon`), so everything that reads it reads
+  the hero being played, and it is never saved. The bag and the stash stay shared. A save from
+  before the split gives its one set to the weapon it was wielding (or the last hero played). The
+  screen gets six hero tabs: switchable between runs, the others shut mid-run. Putting another
+  hero's weapon on between runs switches to that hero; mid-run it is refused.
+- **Blademaster** writes `BM_SPEED`, `BM_REACH` and `BM_ATK` into the ordinary pools on each rank
+  (and nothing past the second). **Reach shows**: `heroWeaponScale()` grows the drawn sword or axe
+  with bought reach (to 1 + `WEAPON_GROW_MAX` = 1.6 at `REACH_MAX`), the mace with slam range; the
+  figure and the swing both draw at it.
+- **Scavenger.** `doReroll` counted only the plain two rerolls a screen, so "no rerolls, ever" greyed
+  the button while R went on rerolling. `rerollsLeft()` is now the one rule both read, bonus rerolls
+  from the tree included.
+- **The tree.**
+  - *Through, not into.* A cluster's first way in is the nearest clean slip road; the second must be
+    `THROUGH_ANGLE` (110°) round it, then 70°, and may reach 1300px for it. Every one of the 157
+    clusters off the rim now has two ways in at least 70° apart (on `main`, 15 were pockets); HEFT by
+    the sword's door lost the lower-right slip road and gained one on the far side.
+  - *Bridges.* `bridge(a, b)` lays `floor(d / BRIDGE_STEP)` travel nodes (two at most) along any slip
+    road longer than 330px, IDs `br*`, recorded in `META_BRIDGES`; `metaHealBridges` places them in a
+    loaded tree that owns both ends. 233 bridges; the longest slip road is 330px.
+  - *Filled ground.* Every bare quad takes a group (`late`), and each quad between rings 1 and 4 is
+    tried at 25 points for room beside its own group (`SAT_WALL` 160 from any road, `SAT_GAP` 330 from
+    any group) — the roomiest, if roomy enough, takes a satellite. 81 new clusters, 193 in all. They
+    are sized, drawn and numbered after everything else and never counted in an old cluster's room,
+    so every node in `tree42.ids` keeps its id, name, stats and exact position.
+  - *What goes there.* `lateOk` refuses a group that is mostly raw damage — with WHETSTONE on the new
+    ground a stay-at-home red build reached x4.01 against the declared x3.95 — and nine `lateOnly`
+    groups (never considered for an old site, so they cannot reshuffle one) give the new ground its
+    own variety.
+
+**Proof.** New `r56`: Scavenger rerolls 0 times by key or call (and the button is disabled), a plain
+screen 2, a +1 tree 3; Blademaster rank 1 and 2 add exactly their speed, reach and attack speed and
+a third pick does nothing; the weapon scale is 1 at no reach, 1.6 at the cap, 1.6 for a long-range
+mace, 1 for a staff; blade-steel pixels round the hero go from 4 to 142; no `tree42` node moved;
+no bare quad; 81 late clusters, 72 satellites, none mostly damage, no `lateOnly` group on an old
+site; no pocket off the rim; the Axe's Oath's ways in 167° apart; HEFT off its old hub; no slip road
+over 470px; a save owning both ends of a bridge is healed. `gear` adds: a sword helmet is not on
+the axe, the axe's gloves not on the sword, the stash and bag unchanged across heroes, the save
+holds `eqBy` and no `eq`; an axe put on between runs switches hero into the axe's set; a tab
+switches hero; mid-run another hero's weapon is refused and five tabs are shut; a pre-split save's
+set goes to the mace it was wielding. `meta` (power budget) and `nodes` pass on the new map. Breaks
+`rerollkey`, `bmnopool`, `noscale`, `nodrawscale`, `nofill`, `nosat`, `nothrough`, `nobridge`,
+`lateany`, `noheal`, `lateonbase`, `oneset`, `midrunswap`: 13 caught.
+
+## Fifty-eighth pass — attributes only on the highway, and junctions worth stopping at
+
+> *"now you introduced to many attribute nodes again ... only keep the attribute nodes as the
+> "highways" ... sometimes there are joined attribute nodes that are a little bigger, they give 3x
+> the amount for the same cost ... when going off the highway you dont put points into small
+> attributes, but to those specific rewards"* — with PoE's highway lit and the branches off it
+> going straight into notables.
+
+- **The bridges are gone.** Last pass put one or two attribute nodes on every slip road over 330px;
+  that was the highway leaking into the groups. A way off the highway is a straight line into what
+  it leads to again, however long (`META_BRIDGES`, `BRIDGE_STEP` and the save healing that came
+  with them are removed; a save that held a `br*` node simply loses that id when it loads). The
+  through-rule and the filled ground from last pass stay.
+- **Junctions.** Every hub (`road:'hub'`) pays `HUB_MUL` = 3 times the attribute of a lane node for
+  one point and is drawn at `HUB_R` = 29 with a bigger plus (`metaNodeRadius` and the glyph only —
+  the layout radius is untouched, so no node moves). Tooltip kind: JUNCTION.
+- **The budget, restated.** With `HUB_MUL` at 1 every power line in `meta` passes as it stood; at 3
+  the stay-at-home walk is x4.27 and the straight walk x3.21, and the attributes are the whole of the
+  difference. The declared lines move to x4.40 and x3.30, with the same few percent of slack: a
+  deliberate change, not creep.
+
+**Proof.** `r56` restated: no travel node off the highway and no `br*` id; every junction pays 3,
+every lane node 1, and a junction is drawn bigger than a lane node at the same cost of 1; every
+`tree42` node keeps its id, name and place (junctions matched without their stats, as in `zombie`).
+`shapes` now recognises a junction's wider plus. Breaks `hub1`, `hubsmall` caught.
+
+## Fifty-ninth pass — the balancing break, and a cyclone
+
+> *"make the max range 1.5x bigger for blademaster ... fix the animation, right now it looks kind
+> of boring. Draw inspiration from PoE cyclone builds ... you did the junction wrong, no, i want the
+> normal highway to be +1 and then i want ... a simple break of so in the strenght area you can
+> choose a large +5 dex or +5 int for balancing"*
+
+- **Junctions are +1 again**, drawn as any road node, and the power budget lines are back where
+  they were (x3.95 / x2.65).
+- **The balancing break.** On every other junction of rings 1–3, two single nodes (`road:'attr'`,
+  ids `ab_<hub>_<attr>`) stand `ATTR_BREAK_D` = 150 off the road: `ATTR_BREAK_N` = 5 of each attribute
+  the junction's ground does not pay, one point each, joined to the junction and nothing else, drawn
+  at `ATTR_BREAK_R` = 31 with a plus in the attribute's own colour (`ATTR_COL`). Each pair takes the
+  clearest of 36 directions round its junction — clear of every node, every road, and crossing none
+  — and a junction with no such room gets none. Laid after everything else, so nothing moves. 36
+  pairs.
+- **Blademaster's reach**: `whirlReach()` = (the swing's reach) x `WHIRL_REACH_MUL` = 1.5, read by
+  the hit, the missile deflection, the scenery and the drawing.
+- **The cyclone** (`drawCyclone`): a radial-gradient floor of churned dust with a pale lip; three
+  bands of wind at 45%, 72% and 97% of the reach turning at 0.8x, 1x and 1.25x the spin, each streak
+  drawn as seven tapering segments so it reads as a comet; four after-images of the blade trailing
+  the turn; and dust, sparks and brick chips flung off the rim along the turn rather than away from
+  it.
+
+**Proof.** `r56` restated: the highway is +1 everywhere; at least 40 balancing nodes, every one +5,
+one point, joined only to its junction, never the junction's own attribute, drawn bigger than it,
+and each junction's pair is two different attributes; a sword's whirl reaches 84 where its swing
+reaches 56, hits an imp standing at 1.3x the swing's reach, and the cyclone draws. `shapes` accepts
+a break's attribute-coloured plus. (The reroll section now declines its rewards rather than taking
+one, so a random Blademaster can no longer land before the Blademaster section.) Breaks
+`nobreaks`, `ownbreak`, `smallbreak`, `whirl1x`, `whirlold` caught.
+
+## Sixtieth pass — the reaving axe flies at the last one too
+
+> *"for the Reaving axe, right now it cannot launch against 1 target, make it so, i want to throw
+> that axe whenever it crits, regardless of how many monsters are alive."*
+
+- `throwReave` refused to throw when `reaveTarget` found nobody but the body just struck — the one
+  the crit came from is excluded, so with one monster left there was never a target. Now a crit
+  with nobody else in reach throws a **solo** blade: it leaves the hero's hand for the struck body
+  (with a fresh hit list, so it reaps it again), carrying a turning point `REAVE_SOLO_PAST` = 150
+  beyond it. If the crit has already killed that body, the blade flies on to the turning point,
+  looks there for anyone new, and otherwise comes home. The air ceiling, the cooldown and "a
+  bounce never throws another" are untouched; with others about, it still leaps from the struck
+  body exactly as before.
+
+**Proof.** New `reave2` (crit roll pinned, since crit chance is capped below certain): one monster,
+a crit — a solo blade leaves the hero's hand, hits it again and comes home; a crit that kills the
+last monster still throws, and the blade flies out past 100 and back; a monster standing at the
+turning point is reaped; with a second monster about, the blade still leaps from the struck body
+to it. `reave` unchanged. Breaks `nosolo`, `noturn` caught.
+
+
+## Sixty-first pass — fewer chests on the floor, more in strongboxes, and the Ritual
+
+> *"decrees the amount of normal chests that drop, and increase the strongbox chests instead, also
+> include epic strongboxes, they are a little harder. Now, i feel that we can include another
+> League mechanic from PoE, and that is ritual ... three rituals on the map ... first you have to
+> kill the surrounding pack in order to open it (now these packs dont auto-aggro/target the
+> player, they stay in place until you attack or move towards them) ... a circle that you cannot
+> walk past ... Outside the circle is Fog, monsters outside stay outside, and mosnters inside stay
+> inside ... the ritual thing in the middle sometimes does abilities that damage the player ...
+> When killing monsters you gain ritual points ... higher level monsters reward more ... open a
+> ritual tab and do buy gear or upgrade with these points. You can also wait until you do all 3
+> encounters to max out the reward. And you can also defeer items"*
+
+**Chests into strongboxes.**
+- `DROP.chest` 0.0034 → **0.0017**: a body leaves half the chests it did.
+- `SBOX_CHANCE` 0.3 → **0.5**, and the late rolls grow to `[[12, 0.4], [20, 0.45], [35, 0.45]]`;
+  `SBOX_MAX_LIVE` 3 → 4. Across a run that is roughly twice the boxes, and each is a chest.
+- A fourth tier, **EPIC STRONGBOX** (`#b05aff`): 4 mods, 5 bursts, `extra: 3` bodies in every
+  burst (the rare's +1 moved into the same `extra` field), each burst **led by an elite** instead
+  of a magic body, and an **epic** chest (`SBOX_CHEST_MAX` → 'epic'). Weights 0.52 / 0.30 / 0.12
+  / 0.06, with the epic filtered out below `SBOX_EPIC_FROM` = 10 (`sboxTierRoll(n)` renormalises
+  over what is allowed).
+
+**Ritual.** One module after the strongboxes, one run-state object `ritualS` (reset in
+`resetRun`).
+- *When.* `ritualRoll(n)` in `startWave`: from `RITUAL_FROM` = 12, not on boss waves, only while
+  no set is standing or pending; 30% with a pity at 4. The set rises `RITUAL_DELAY` 4–10s into
+  the fight: up to `RITUAL_N` = 3 altars 520–1700px from the hero, `RITUAL_GAP` = 820 apart, on
+  floor with six of eight points at 0.6R also floor, clear of strongboxes.
+- *Sleeping guards.* `ritualGuards` spawns 5–7 of one type (the first magic) round each altar
+  with `e.dormant` and `e.ritualGuard`. In `updateEnemyCore`, after the stun block, a dormant
+  body runs `ritualDormantTick` and returns: it only collides with the world. It wakes — with its
+  whole pack, `ritualWake(A)` — when the hero comes within `RITUAL_WAKE_R` = 210 of it or of the
+  altar, or when anything lands a hit (`hitEnemy`, before evasion/block). `minionTarget` skips
+  dormant bodies. The wave-clear test became `!enemies.some(e=>!e.dead && !e.dormant)`, and the
+  alive count, the bodies-left HUD and the few-left edge markers ignore them too — a sleeping pack
+  waits across waves and never holds one.
+- *The circle.* A freed altar (`guarded` → `ready` when its guards are dead) starts on touch
+  (`ritualStart`): every enemy is stamped `ritualSide` ±1 by where it stands; the legion is
+  pulled inside. `ritualClamp()`, run after every update in the main loop, keeps the hero, the
+  minions and the +1 side inside `RITUAL_R` = 300 and the −1 side outside it (anything new is
+  stamped by position on first sight), and kills any hostile projectile (`RITUAL_FOG_KINDS`) that
+  crosses the ring inward. `ritualActiveNow()` holds the wave's clear and pauses its queue.
+- *The encounter.* `ritualBudget(n)` = 10 + n/3 monsters, called by `ritualPulse` 3–5 at a time
+  every 2s while fewer than 12 stand, inside the circle and at least 110px from the hero; 14%
+  magic, 6% elite. Every 3.2–4.8s `ritualCast`: a **mark** (72px, bursts after 1.15s, fire; 2 of
+  them from wave 20 and 3 from 30) or a **ring** (gathers 0.7s, rolls out at 250px/s, chaos,
+  hits once). Damage `ritualHit(k)` is an ordinary monster's blow at this wave and level
+  (the `dmgB` curve from `spawnEnemy`), k = 1.6 and 1.1. Done when the budget is spent and none
+  is standing.
+- *Tribute.* `ritualTribute(e)` = 10 × `mobRankMul(e.mlvl)` × (4 elite / 2 magic / 1). Guards
+  pay none.
+- *The offer.* Rolled when a set rises: `RITUAL_OFFERS` = 8, the deferred ones first. Gear at
+  `gearItemLevel() + 2` (magic or rare, `gearRollBase`, so only what this hero can use) or a chest
+  pick (rare / epic / legendary → `queuePick('chest', rar)`), priced `RITUAL_COST` × `mobRankMul()`
+  ± 12%. `ritualBuy`, `ritualDefer` (×1.2, at most 6, never twice), `ritualReroll` (60 ×
+  `mobRankMul()` × 1.5^n, keeps carried offers). The window is `#ritualScreen`, state `'ritual'`,
+  <kbd>U</kbd> (only once an altar of the set is done); gear offers show the equipment tooltip
+  with its comparison.
+- *Drawn.* The altar (stone, horns, runes, a floating shard; the circle faint and dashed until it
+  closes) and the stains under guards and called monsters on the ground layer; marks and rings;
+  the **fog** (`drawRitualFog`, an even-odd fill of the view with the circle cut out, rolling
+  banks just outside the ring, and the ring itself) over the entities; a HUD line under the
+  strongbox line; rim diamonds for altars still guarded or ready.
+
+**Proof.** New `ritual` test: sets turn up only from wave 12, never on boss waves, with a pity,
+one at a time; three altars apart on floor with sleeping packs and eight offers; a sleeping pack
+stands still for 3s and does not hold the wave; a hit wakes only its pack, and so does walking
+near; a freed altar starts on touch, holds the wave and pauses its queue; the hero, an inside and
+an outside body stay on their sides and a monster's arrow dies at the fog while the hero's own
+flies on; the altar calls exactly its budget, all inside, paying tribute and finishing; tribute
+climbs with magic, elite and level, and guards pay none; a mark hits a hero standing in it and
+misses one who stepped out, a ring hits once; the window opens, buys gear into the bag and a chest
+onto the stash, refuses when too poor, defers at ×1.2, rerolls for tribute at a rising price, buys
+on a click, closes; a deferred offer returns first in the next set, marked, and cannot be deferred
+again; the window will not open with nothing done; a running ritual draws without throwing. And:
+body chests at 0.0017, strongbox chance 0.5 and four at once; no epic box before wave 10 and about
+6% after; an epic box has four mods, five bursts each led by an elite, and an epic chest.
+`leagues` updated for the new chance and the fourth tier. Breaks `dormantwalk`, `nowake`,
+`noclamp`, `fogleak`, `noholdwave`, `guardhold`, `queueruns`, `flattrib`, `guardpays`,
+`freedefer`, `nocarry`, `markmiss`, `ringtwice`, `outsidecall`, `epicearly`, `chestfull`,
+`epicsoft`, `ritualpoor` — all caught.
+
+## Sixty-second pass — a cleared wave waits for the leagues
+
+> *"if all the wave monsters are dead and there are unfinished leauge mechanics left, you dont get
+> sent to the next wave, you get a prompt top middle, continue press f, or you do all the content
+> and it will continue."*
+
+- `leagueLeft()` lists what is still untouched: breach hands (`state 'hand'`), idle abysses,
+  locked (unsprung) strongboxes, and ritual altars `guarded` or `ready`. Anything already running
+  holds the wave's clear by itself, as before.
+- On the clear, `wave.hold = leagueLeft().length > 0`. The cleared branch of `updateWave` only
+  starts the next wave when `!wave.hold`, and drops the hold by itself the frame nothing is left —
+  so doing the content carries on. <kbd>F</kbd> on a held wave (`waveGoOn`, keydown only, never a
+  repeat) drops the hold.
+- The breach and the abyss used to throw away an untouched hand/eye the moment the wave cleared.
+  They now keep it while the wave is held; after F the next wave's `breachRoll`/`abyssRoll`
+  replaces them as before. Strongboxes and altars persist, as they always did.
+- The prompt (`drawWaveHold`) sits in the wave block: `hudWaveBottom()` grows by `WAVE_HOLD_H` =
+  40 while held (`hudWaveBase()` is the old value), so the breach/abyss/strongbox/ritual lines
+  move down under it. "WAVE CLEARED — 2 strongboxes · 3 ritual altars left · [F] CONTINUE".
+- Holding F from the held prompt no longer skips the next wave's breather: the break skip now
+  ignores key repeats too.
+
+**Proof.** New `hold` test: with nothing left the wave carries on by itself; a locked strongbox
+holds it for six seconds with the prompt pushing the HUD down 40px and naming "a strongbox", F
+lets it go and the box stays; springing the box and killing its guardians lets it go by itself;
+an unopened breach hand and an idle abyss hold it and survive the hold, and are gone after F; a
+ritual set holds while guarded and while ready, and not once done; F does nothing mid-fight, and a
+repeating F does not skip the next breather. Breaks `noholdleague`, `nof`, `handsinks`,
+`eyecloses`, `noauto`, `frepeat`, `readyleft` caught.
+
+## Sixty-third pass — one league roll, strongboxes the common one, a legendary you save for, and Afflict in five
+
+> *"it rare to get legaue events in general, but its not uncommon, it happends. Now to get multiple
+> League mechanics at one wave is rarer, but possible, this depends on mob level ... Strongboxes:
+> Most common ... Abyss: Same chance as Breach and Ritual, it's rare, it can spawn multiple,
+> introduced at wave 7 ... It's possible to get legendary from Ritual, but just complete 3/3 wont
+> get you enough coins ... maybe around 3-6 defers ... make ailment chance more rare ... sepeare
+> it into respective ailments ... BUT only give it if you actually do that ailment damage."*
+
+**One league roll.** Breach (45% from wave 6, pity 3, late extras), abyss (35% from wave 3, pity
+4, late extras) and ritual (30% from wave 12, pity 4) each rolled on their own, so most ordinary
+waves carried something. `leagueRoll(n)` replaces all three:
+- `LEAGUE_FROM` = 7, never on a boss wave; `LEAGUE_CHANCE` = 0.22 with `LEAGUE_PITY` = 6
+  (`leagueMiss`, reset per run).
+- One event, then each further one on `leagueMoreChance(n)` = 2.5% × `mobRank(n)`, capped at 45%,
+  up to `LEAGUE_MAX` = 3. Every event is breach / abyss / ritual evenly, a ritual only while
+  `ritualCanRise()` (no set pending or standing) and never twice, a breach only while a lord is
+  left.
+- `startWave` hands the plan out: `breachRoll(n, k)`, `abyssRoll(n, k)`, `ritualRoll(n, k)` now
+  take the count and no longer roll for themselves (k defaults to 1, so a forced roll still
+  forces one). `BREACH_MULTI`, `ABYSS_MULTI` and the three chances and pities are gone.
+- Moving `BREACH_FROM` to 7 would have shrunk every breach by a wave's worth of layer (40
+  bodies), since `breachLayerSize` counted from it; the layer now counts from its own
+  `BREACH_LAYER_FROM` = 6, so a breach at any wave is exactly as deep as before (`block` caught
+  this: wave 31 read 1560, not 1600).
+
+**Strongboxes, the common one.** `SBOX_CHANCE` 0.6 for the first box; each further box rolls
+`SBOX_MORE_PER_LVL` = 3% per MOB LV (to 50%), up to `SBOX_PER_WAVE` = 3, a few seconds apart.
+(`SBOX_LATE` is gone.)
+
+**Ritual prices.** `RITUAL_COST` magic 90 / rare 260 / rare chest 200 / epic 600 / legendary
+**2000** (was 60/150/90/220/520), and legendary offers a little likelier (0.08). At wave 14 a set of
+three altars is ~760 tribute and a legendary ~2700: three and a half sets. Tribute grows with the
+level faster than a deferral's ×1.2, so a legendary put off three to six times is bought.
+
+**Afflict, in five.** The `ailchance` brick (+6–32% to all five ailments) is gone. Four new bricks
+— `ignitechance` Kindling, `chillchance` Numbing Cold, `shockchance` Static Charge,
+`poisonchance` Venom Glands — each add to one `p.ailTypeFlat[t]`, synced into `p.ailType[t]`
+capped at `AIL_TYPE_MAX` = 50%, and `ailChanceOf` adds `ailTypeChance(type)` on both its native and
+ordinary paths. Steps `AIL_TYPE_STEP` = 3/5/8/11/15%. Each is offered only when `dealtTypes()[t]`
+— the conversion cards' own reckoning of what you deal. Serrated Edge (bleed) moves to the same
+steps and cap and now also needs physical in `dealtTypes()`. All five are drawn at `AIL_CARD_W` =
+half weight in `cardWeight`. The tree's generic `ailChance` pool is unchanged. The Storm Brick's
+book row lists Static Charge where Afflict was.
+
+**Proof.** New `leagues2`: no league before wave 7 or on a boss wave, the chance measured at 22%
+over 6000 rolls, the pity on the sixth; the three evenly; no ritual while a set stands; more than
+one event under 6% at wave 8, over twice that at wave 24, and at wave 48 matching
+`leagueMoreChance` (~45%), never more than three and never two rituals; `startWave` hands out what
+the roll says (a pity-owed wave always gets one, wave 6 none); strongboxes on ~60% of waves with
+two or more rare at wave 7 and common at wave 41; a legendary at three to five and a half sets of
+tribute; the ailment bricks — Afflict gone, a sword offered only bleed, a half-fire sword ignite
+too, a staff no bleed; Static Charge raises shock by its step and nothing else, stops at 50% and
+leaves the pool, drawn at half weight. `breach`, `abyss`, `leagues`, `ritual` updated for the
+count-taking rolls; `t2` gives Static Charge. And a flake fixed that was already there: `breach`'s
+four-kills-a-second check failed whenever the perfect clear before it happened to pay the Xoph ring
+up to rank III+, letting the Breachlord in with its 35s hold (64.9s); the ring is now reset before
+that run. Breaks `nopity`, `common`, `nomulti`, `flatmulti`, `ritualtwice`, `breachonly`,
+`unwired`, `early`, `boxrare`, `boxnolevel`, `cheaplegend`, `afflictback`, `ailall`, `ailnocap`,
+`ailbig`, `ailweight` caught.
+
+## Sixty-fourth pass — PoE's golems, and an Overseer that reaches the fight
+
+> *"Im unsure if the Overseer minion actually buffs my minions at all, can you check? Also, i want
+> golems to be like PoE Golems ... Flame ... Lightning ... Ice ... Stone ... Chaos ... Carrion ...
+> You can only have 2 golems (+1 more from skilltree), not all of them, choose wisely."*
+
+**The Overseer did work** — `updateMinions` marks `m.buffed` for every minion within `OVERSEER_R`
+of it, and `minionDamage`/`minionRate` read that for every blow, shot and golem slam: 30% MORE,
+25% faster, measured. But it sits at your shoulder and the aura was **320px**, while the legion
+fights out to `MINION_LEASH` = 560: over eight seconds of a real fight only **49%** of the
+skeletons were inside it at any moment. And nothing on the sheet ever showed it, because the sheet
+asks `minionDamage` with no minion. Now `OVERSEER_R` = **520** (100% of the same fight), and the
+sheet has a row, *...in the Overseer's aura*, with the buffed hit and the faster rate.
+
+**Golems.** The Bone Golem card (+1 golem, five times) is gone. `GOLEM_TYPES` holds six kinds, each
+a rare card (`golemflame` … `golemcarrion`), each taken once, kept in `p.minions.golemTypes`:
+- **How many**: `golemCap()` = `GOLEM_BASE_CAP` 2 + `p.minions.golemCap` (the new `golemCap` tree
+  stat), at most `GOLEM_CAP_MAX` 3. A golem card is offered only while you have room and not that
+  kind. `golemMax()` is how many of your kinds may stand; `raiseGolem(gt)` raises the kind owed a
+  body (`golemOwed`); a fallen one comes back after `GOLEM_BACK` as before.
+- **What each grants**: `buff`, a list of tree stat writers. `golemBuffSync()` (top and bottom of
+  `updateMinions`) compares the kinds standing with `p.golemBuffKey`, writes `+v` for a kind that
+  has risen and `-v` for one that has fallen, and calls `syncStats` — the same delta idea gear
+  uses, so a golem's buff is exactly there while it stands and exactly gone the frame it falls.
+  Flame: incAll 0.20, boltR/bombR/baneR 0.15. Lightning: incAtk 0.12, incCast 0.12, minionSpd 0.10
+  (no mana in the game). Ice: incCrit 0.30, incAcc 0.25. Stone: regen 0.12, incRegen 0.20,
+  incArmour 0.25, incEva 0.25. Chaos: chaosRes 0.15, incDot 0.25. Carrion: none on you.
+- **How each fights**: `golemK(gt)` lays the kind's `k` over the plain golem's numbers and
+  `minionK(m)` hands that to the AI, the blow and the damage. Flame and Lightning have a `range`,
+  so they take the back-line branch and `minionShoot` throws one `mbolt` of their element; Ice and
+  Chaos slam with `mfrost` / `mchaos` (a new minion source, chaos); Stone and Carrion slam
+  physically. **Stone taunts**: `enemyTarget` sends anything within `STONE_TAUNT_R` 360 of a
+  standing stone golem at it. **Carrion**: while one stands, every non-golem minion hit adds
+  `CARRION_FLAT` 35% of the scepter's base as flat; its own hit is × (1 + 6% for each non-golem
+  minion within 320px), to double.
+- **Seen**: each kind wears its own skin — fire, storm, ice, stone, and two new ones, chaos (void
+  and green) and carrion (meat and bone) — inside the ally's violet ring.
+- **THE FOUNDRY**: a `META_LATE` cluster in blue at ring 2, 4500 out at 246°, the next clear
+  ground after The Graveyard, its notable *Golem Commander* (+1 golem, 6% increased minion
+  damage). Appended after every other site, so no existing node moves.
+
+**Proof.** New `golem`: the Bone Golem card is gone, the six are rare and offered only to a
+scepter; one kind taken leaves five on offer and not itself, two leave none, the tree's +1 makes
+it three (four still on offer), never more; each kind grants exactly its buff while it stands,
+drops it the frame it falls and gets it back when it rises again; the sources are fire, lightning,
+cold, chaos, and physical for stone and carrion, the flame and lightning golems throw bolts of
+their element and the ice golem's slam lands; the stone golem pulls a body standing on you, and
+not one far away; the carrion golem adds 35% to a skeleton's hit and grows 6% a neighbour; THE
+FOUNDRY is on the tree with `golemCap`; with the Overseer the fighting legion is in its aura all the
+time and hits 30% harder; all six golems draw. `combat` now takes three kinds with the tree's +1,
+`legion2` raises two kinds, `runlink` rebuilds a hero with Raise Zombie in place of a golem (a
+golem's buff depends on whether it has risen yet, which a stat snapshot should not). Breaks
+`nocap`, `twins`, `nobuff`, `stickybuff`, `lateoff`, `plainsrc`, `noshot`, `notaunt`, `tauntall`,
+`nocarrion`, `flatcarrion`, `nofoundry`, `smallaura`, `weakaura` caught.
+
+## Sixty-fifth pass — Exposure switched off, and the golems fit the favourite panel
+
+> *"Exposure is too overpowered, please remove it from the game. keep it in the code, but i dont
+> want it right now. And i mean as a player upgrade."*
+
+- `EXPOSE_ON = false` (a `let`, so a test can flip it). While it is off: the **Solvent** brick's
+  `req` is false; `syncStats` sets `p.exposeChance` to 0 whatever `exposeChanceFlat` holds, so
+  nothing any route bought can expose; and `META_STATS.exposeChance` is swapped for a stand-in
+  that writes **increased elemental damage at `scale` 0.4** of the node's number. `metaModText`
+  prints a stat with a `scale` at its scaled value, so the four nodes that sold exposure (Etching
+  10%, Sapper 25%, Corroding 8%, Corrosive 20%) read and give +4 / +10 / +3.2 / +8% elemental
+  damage. No node moves or changes id: the tree's templates are untouched, only what the stat does.
+  Everything else — `exposeEnemy`, the marks, the boss icons, the sheet row — is still there.
+- **The favourite panel.** Six golem cards in THE LEGION's brick list made the scepter/necro panel
+  taller than its box (`combo` caught it: 1532px into 876). `comboPreview` now folds every
+  `golem*` card into one line — *Golems — Flame, Lightning, Ice, Stone, Chaos, Carrion* — that
+  says what they share.
+
+**Proof.** New `expoff`: the switch is off and Solvent is not offered; a hero with
+`exposeChanceFlat` 1 has a zero chance and thirty fire hits mark nothing; Sapper reads "+10%
+increased elemental damage" and gives exactly 0.4 × 25% + its own 6%; flipped on, the same hits
+expose again. `poe4`, which measures the exposure mechanic itself, flips the switch on for its run.
+`combo` passes again.
+
+## Sixty-sixth pass — a horde in a wider ring, deferrals that come back cheaper, mana, the globes, and the layered sound
+
+> *"Make the ritual ring bigger, and make them summon much more monsters inside of their waves.
+> Also projectiles cannot fly into the ring nor can any projectile escape the ring. Also when i've
+> chosen something to be deffered ... it shoulndt be deffered again, i should have to click deferr
+> again if i wish, lowering the price again. ... the layered sound was perfect. For mana, yes it
+> should be option 2 ... for now mana does nothing. But make it implemented. ... moove the health,
+> energy shield and mana into their own pools like in PoE"* — and, mid-way: *"when i toggle of
+> damage numbers, this also means incoming damage for both me and minions ... Block, Perfect,
+> dodge, miss, Schorched ... ritual should close when i cannot do anything in it, or if i press
+> Done ... the game thinks the wave is completed whenever i have 0 monsters left and i open a
+> ritual, then it thinks the new wave should start"*
+
+**Ritual.**
+- `RITUAL_R` 300 → **450**, `RITUAL_GAP` 820 → 1100. `ritualBudget(n)` 10 + n/3 → **24 + n**, pulses
+  of 6–9 every 1.6s, up to 26 standing. `RITUAL_TRIB` 10 → 4, so an altar still pays about the same.
+- **The ring is a wall both ways**: `ritualClamp` kills any projectile whose step crosses `RITUAL_R`
+  in either direction (`(was >= R) !== (now >= R)`) — every kind, the hero's and the minions' too,
+  except what stands still where it was put (`RITUAL_FOG_STILL`: a vortex totem, a brickbane cloud).
+- **Deferring lowers the price**: `RITUAL_DEFER_MUL` 1.2 → **0.9**. A deferred offer returns in the
+  next set as an ordinary offer (a RETURNED tag, no longer "DEFERRED"), and can be deferred again for
+  another 10% (`o.defers` counts). Legendary chest 2000 → **2800** so three to six deferrals, not
+  one or two, get you there.
+- **DONE** (`ritualFinish`) closes the window and, once every altar is done, ends the set's offer
+  (`S.closed`; deferred offers and tribute kept; U has nothing to open, the HUD line goes).
+  `ritualStuck()` — nothing on offer, or nothing affordable with no room to defer and no tribute
+  for a reroll — closes it on its own after an action.
+- **The wave bug**: a cleared wave held for an untouched altar let go the moment the ritual BEGAN
+  (the altar was no longer "left"), so the next wave started under it. `leagueRunning()` (an open
+  breach or abyss, a sprung box, a ritual under way) now also holds a cleared wave, and a ritual
+  pauses the breather's clock.
+
+**Mana** (option 2, nothing spends it yet). `maxMana` = (40 + 4 a level + INT/2 + `manaFlat`) ×
+(1 + `inc.mana`), `manaRegen` = (1.75% of it + `manaRegenFlat`) × (1 + `inc.manaRegen`), rebuilt in
+`syncStats` keeping what is in the pool, ticked in `updatePlayer`, full at the start of a run.
+`spendMana(n)` is the door the active skills will use. Tree/gear writers `mana`, `incMana`,
+`manaRegen`, `incManaRegen`; sheet rows under MANA.
+
+**The globes.** The heart row and the shield bar are gone from the top left. `drawPoolGlobes`
+draws the **life globe** bottom left (red liquid to `hp/maxHp`, the **shield** as a translucent
+pale-blue layer over it plus a rim ring that empties with it, the rim throbbing on low life) and
+the **mana globe** bottom right, each with its number over its maximum. The ability row starts at
+`GLOBE_ROW_X` beside the life globe; dash and buffs step left from the mana globe; the level bar
+moves up to the top left; the music toast sits above the life globe.
+
+**Sound.** The Sound Lab's LAYERED design is the game's sound now: `tone()`/`noiseHit()` stay for
+the music, and every one of the 26 effects is rebuilt as transient + body + ring, with modal
+(inharmonic) plastic and metal, pitch jitter, a generated-impulse room send and stereo placement.
+`sfxAt(x).hit()` places a sound by its world x against the camera — hits and brick bursts use it.
+The throttle (`every`) now only counts sounds that actually play, so a sound skipped while muted or
+before audio starts no longer silences the next real one. The effects low-pass opened 7.2k → 11k to
+keep the clicks.
+
+**Damage numbers off** now also silences incoming damage figures (burns, leech, shield), minion
+damage and every combat word — MISS, BLOCKED, EVADED, PERFECT!, DEFLECT!, SUPPRESSED, IMMUNE,
+SCORCHED!, ELECTROCUTED!, FROZEN SOLID, CHILLED/SHOCKED/BURNT ×n, curses, EMPOWERED — by routing
+those 33 calls through `addHitNum`. Loot, a level, pickups, boss shouts, league labels and tribute
+still float.
+
+**Proof.** `ritual`: a 450 ring; a monster's arrow in, the hero's arrow out and a minion's bolt in
+all stop, a totem stays, an arrow inside flies; an altar calls 38 at wave 14, all inside; a
+returned offer is not in the deferred list, defers again for 10% less; DONE ends a finished set's
+offer and a stuck window closes. `hold`: a ritual begun on a cleared wave keeps wave 14 until its
+monsters die, then 15. New `pools`: mana is 40 + 4/level + INT/2, full, regenerating 1.75%; spent,
+refused past the pool, refilled at its rate and capped; fed by the four writers and a level;
+untouched by ten seconds of spells; the HUD draws a life globe (with the shield) bottom left and
+a mana globe bottom right; all 26 sounds build voices, sit right/left by screen x, throttle, and
+stay silent muted. New `quiet`: numbers off leaves LEVEL UP! and nothing numeric or combat.
+`leagues2` still finds a legendary three to five and a half sets deep. Breaks `smallring`,
+`fewcalls`, `oneway`, `fogall`, `nodeferagain`, `deferdearer`, `manaflat`, `noregen`, `emptystart`,
+`noglobes`, `nopan`, `nothrottle`, `mutedplays`, `runningnohold`, `loudoff`, `minionloud`, `nodone`,
+`nostuck` caught.
