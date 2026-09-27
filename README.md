@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`83 bricks` · `41 monsters` · `8 bosses` · `13 builds` · `50 waves` · `1 file`
+`83 bricks` · `45 monsters` · `8 bosses` · `13 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -1148,6 +1148,11 @@ driven below zero, and at **-100% you take double**.
 | ❄️ **Chill** | -9% move speed and swing rate, floor 30% | **frozen solid for 3s** | **FROSTBITTEN** — -11% frost resistance, 22s |
 | ⚡ **Shock** | +10% chance a hit on you crits for **×1.8**, cap 95% | every hit against you crits | **CONDUCTIVE** — -11% lightning resistance, 22s |
 
+**Bleeding** (from a blood orb) is physical: each wound bleeds **35% of the hit that opened it a
+second for 4s** — no resistance stands in front of it — and **twice as fast while you are
+moving**. Five wounds at most; a deeper one pushes out the shallowest. It shows in the ailment
+list as BLEED, with the moving rate while you move.
+
 Resistance is capped at **80%** — nothing is ever fully immune — and it scales down both the
 elemental damage of a hit *and* the strength of the ailment that hit applies. Each element
 has its own **0.7s** application cooldown, so standing in a fire does not spam stacks onto
@@ -1473,6 +1478,37 @@ off it, and that is the actual mechanic.
 
 ---
 
+### New faces
+
+![The treasure goblin portalling, a mimic, a war banner and its bearer](docs/specials.png)
+
+- **The Treasure Goblin.** From wave 4, one wave in ten, a goblin with a sack of studs turns up
+  mid-fight — and **runs**. It never fights; it zigzags away from you (sauntering when you are far),
+  it leaks a handful of studs every tenth of its life, and it has **about eleven brutes' worth of
+  life** and heavy armour. After **14 seconds** it stops and opens a portal (2.2s) — kill it before
+  that, or it is gone with everything. Killed: a pile of studs (30 + 10 a wave, × your stud
+  multiplier), a heart, and **one or two boss-grade chests**. It never holds the wave.
+- **The Mimic.** From wave 5, **18% of the chests monsters drop are mimics**. A mimic breathes:
+  every few seconds its lid lifts a crack and there are teeth under it. Open it and it wakes —
+  hops at you and lunges with its lid wide. Kill it and it pays the chest it was, **a tier better**
+  (never past epic).
+- **The Banner-bearer** joins the roster (from wave 10 or so). It walks in, stops, and **plants a
+  war banner**: everything within **280px** of it hits **30% harder**, moves **20% faster** and
+  attacks faster, for as long as the banner stands. Break the banner (it has a little life) and
+  the buff is gone; the bearer plants another ten seconds later.
+- **The Witch Doctor** — a zombie caster — joins the roster around wave 16. It keeps its
+  distance and raises **three blood orbs** (or plague orbs) at a time.
+- **Blood orbs** rise beside whoever raised them and **hunt you**: they set off roughly your way,
+  turn after you and **gather speed the longer they live**. When their **4 seconds** are up — or
+  when they reach you — they **stop dead and hang for a second** over a circle on the ground, and
+  then they drop: **physical damage and a bleed**. **Plague orbs** (green) drop chaos and poison.
+  Step out of the circle before it falls. Bosses can roll **BLOOD-CALLER** or **PLAGUE-CALLER**
+  and raise two every five seconds (three for an ultra).
+- **The bloater's breath is drawn now**: from the moment it plants its feet, the cone it will
+  retch into and how far it reaches, filling as the heave builds and turning with the breath.
+
+![The bloater's breath, drawn](docs/bloater-breath.png) ![Blood and plague orbs](docs/blood-orbs.png)
+
 ### Nine buffs, not three
 
 A monster's buffs used to be **one counter capped at three**, so every aura in the game
@@ -1509,6 +1545,34 @@ down from ×1.5, ×1.3 and 30%.
 Magic-touched is **blue** now rather than purple: purple is already the epic rarity band and
 the necromancers' own colour, so a magic pack read as *something arcane* instead of as the
 pack modifier it is.
+
+### Rare modifiers
+
+**A rare reads its own danger over its head.** From **wave 6** every rare (the gold-ringed elite)
+rolls named modifiers — **one**, **two from wave 15**, **three from wave 30**, never the same
+twice — in the colour of what they do:
+
+![Rares wearing their modifiers, and a KINDRED pack two deaths in](docs/rare-mods.png)
+
+| modifier | what it does |
+|---|---|
+| **HASTED** | 30% faster, attacks faster |
+| **ARMOURED** | double armour, +25% to every elemental resistance |
+| **REGENERATING** | regenerates 2.5% of its life a second |
+| **VOLATILE** | dies into a core that bursts **1.4s** later for 2.5× its damage as fire — step out of the ring |
+| **SOUL EATER** | every monster that dies within 650px makes it 6% harder-hitting, 3% faster and bigger (12 at most) |
+| **PROXIMAL TANGIBILITY** | can only be hurt while you stand within its dashed 300px ring — *INTANGIBLE* otherwise |
+| **BERSERKER** | below half its life, hits 50% harder and moves 30% faster |
+| **UNSTOPPABLE** | cannot be knocked back, slowed, chilled, frozen or stunned |
+| **ENVENOMED** | every hit it lands poisons you |
+
+### KINDRED packs
+
+From **wave 8**, one magic pack in three is **KINDRED** — bound together, with faint blue tethers
+running between them and **KINDRED** over the pack. **Every member that dies makes the rest
+bigger, tougher and harder-hitting**: +15% life (and 15% of it healed), +20% damage, +6% speed,
++10% size, up to eight times. Pick them off one at a time and the last one is a monster; bring
+them down together and they never grow.
 
 ---
 
@@ -2714,13 +2778,13 @@ of them shows fewer.
 
 ### How often the leagues come
 
-**Rare, but it happens.** Strongboxes are the common one; the big three — **breach, abyss and
-ritual** — share **one roll**:
+**Rare, but it happens.** Strongboxes are the common one; the big four — **breach, abyss, ritual
+and legion** — share **one roll**:
 
 - From **wave 7**, an ordinary (non-boss) wave has a **22%** chance of a league event, and a run
   never goes **six** ordinary waves in a row without one.
-- **Which one is chance** — breach, abyss or ritual, evenly (a ritual only while no set of altars
-  is standing).
+- **Which one is chance** — breach, abyss, ritual or legion, evenly (a ritual only while no set of
+  altars is standing, a legion only while none is running).
 - **More than one at once is rarer, and the monster level decides it**: every MOB LV adds 2.5% to
   the chance of each further event, up to 45% — so at wave 8 about one event in forty comes with
   a second, at wave 24 one in eight, and past wave 45 nearly half. At most three in a wave — two
@@ -2732,14 +2796,18 @@ ritual** — share **one roll**:
 
 When the wave's last monster dies and there is **still league content untouched on the map** —
 an unopened breach hand, an abyss nobody has stepped into, a locked strongbox, a ritual altar
-still guarded or not yet begun — the next wave **does not start**. A prompt sits top middle
+still guarded or not yet begun, a legion monolith nobody has touched — the next wave **does not
+start**. A prompt sits top middle
 saying what is left:
 
 ![WAVE CLEARED — 2 strongboxes · 3 ritual altars left · F CONTINUE](docs/wave-hold.png)
 
 - **Do it all** and the run carries on by itself the moment the last of it is done.
 - **Press <kbd>F</kbd>** to leave it: the breach hand sinks and the abyss closes, as they always
-  did at the end of a wave; a strongbox or a ritual altar stays where it is for later.
+  did at the end of a wave; a strongbox or a ritual altar stays where it is for later; a legion
+  monolith goes when the next wave rolls its own leagues.
+- A ritual or a legion **begun after the wave was cleared** holds the next wave until its last
+  monster falls.
 - A ritual altar counts until its ritual is complete — guarded, freed but not begun, or both.
 
 ### Breach
@@ -2896,8 +2964,11 @@ diamond on the screen's rim for each one that still has something to give.
   out of it until the ritual is done**, and neither can your legion. What was inside when it
   closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in.
   **The ring is a wall for every missile, both ways**: nothing shot from outside comes in, and
-  nothing you (or your minions) shoot from inside gets out. The wave's own bodies wait until it is
-  over, and a running ritual holds the wave.
+  nothing you (or your minions) shoot from inside gets out. **And it is a wall for all harm**: a
+  monster outside cannot hurt you or your minions by any means — a swing across the line, a blast
+  whose edge reaches in, a patch of ground — and nothing of yours inside, not a swing, a burn or a
+  minion, can hurt anything outside. The wave's own bodies wait until it is over, and a running
+  ritual holds the wave.
 - **The altar calls a horde** into the circle: a pulse of six to nine every 1.6s (never more
   than twenty-six standing), **24 + the wave** of them in all — 14% magic, 6% elite. A ritual
   begun after the wave's last monster died still holds the next wave until its own last one falls.
@@ -2956,6 +3027,37 @@ you have since capped out of reads *YOU CAN NO LONGER TAKE IT* and cannot be bou
 ![A ritual running: the circle, the fog, a mark and the altar's ring](docs/ritual.png)
 
 ![The ritual's offer](docs/ritual-offer.png)
+
+### Legion
+
+PoE's Legion. A **monolith** rises somewhere off to one side (with a marker on the screen's rim).
+**Touch it** and a battle stopped in time comes into being around it: an army — **the Eternal
+Empire** (knights, lancers, archers, skeletons; bastion sergeants) or **the Karui Horde** (brutes,
+stalkers, imps, superimps; zombie-hulk sergeants) — standing in its ranks, **frozen**, in a
+480px ring about the stone: 22 + the wave of them (60 at most), 15% magic.
+
+- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt and
+  killed, but they do not walk, swing or shoot, and they cannot be shoved. **Every kill buys
+  0.35s**, up to 14s. The ring round the stone runs down as the time does, and the HUD counts
+  the time, the fallen and the standing.
+- **Then time starts again**, and what is left wakes up and fights.
+- **Sergeants** (two, three from wave 20, four from 35 — elites, with rare modifiers) each drop a
+  **war chest**: rare, epic 37% of the time, legendary 5%.
+- **From wave 15 a general** leads them — an elite with 2.5× the life, bigger — and pays an **epic
+  chest, or a legendary one in four**.
+- A running legion **holds the wave**, including one begun after the wave was cleared.
+
+![A legion frozen in time round its monolith](docs/legion.png)
+
+### The league tree — *coming*
+
+A second tree, for the leagues: points spent on **how often each league turns up and what it is
+like** — more breaches, a fourth ritual altar, an abyss that forks more, deeper breach monsters,
+longer frozen legions, more strongboxes, more goblins, more studs. **It is pre-built, not
+playable**: the sixteen nodes on five roads (breach, abyss, ritual, legion, loot), the rule for
+taking one (next to one you have, for a point; given back from the end of a road), the save, and
+every hook in the league code are in, reading zero until it is switched on. The screen and the
+way to earn points come next.
 
 ### A run, as a link
 

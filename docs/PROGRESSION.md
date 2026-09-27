@@ -4190,3 +4190,68 @@ and lets a stuck window close; a deferred card comes back once, 10% cheaper, and
 not offer it again meanwhile; the tile shows the card and TAKE works from the window; an RPG
 offer has gear and no cards. `modes` counts cards with chests. Breaks `nocards`, `cheapcard`,
 `twice`, `anycard`, `nomaxcheck`, `noapply`, `stuckmaxed`, `nodesc`, `rpgcards` caught.
+
+## Sixty-ninth pass — Legion, a goblin, a mimic, a banner, blood orbs, rare modifiers, KINDRED packs, a wall round the ritual, and the league tree pre-built
+
+**The ritual's ring walls off harm, not just missiles.** `ritualOutside(o)` says whether something
+stands beyond a running ritual's ring (a monster by the side the clamp fixed it on, anything else by
+distance). Three gates ask it about the other party: `hitEnemy` (which burns, bleeds and poison
+ticks go through too) refuses a monster outside; `playerDamage` and `minionHurt` refuse a hit whose
+source is outside — every monster-side `minionHurt` call now passes its source. Everything of yours
+is inside, so that is the whole rule.
+
+**The bloater's breath is drawn**: the cone (±0.55 rad, 150px — the one that poisons) from the
+moment it plants its feet, filling outwards through the 0.55s heave, then turning with the breath.
+
+**Rare modifiers.** `RARE_MODS`, rolled in `spawnEnemy` for every elite from wave 6 — one, two from
+15, three from 30, distinct — and drawn over its head by `drawMonsterMods`: HASTED (×1.3 speed),
+ARMOURED (×2 armour, +25% elemental res), REGENERATING (2.5%/s), VOLATILE (`rmCores`: a core that
+bursts 1.4s after death for 2.5× its damage, fire, 120px), SOUL EATER (+6% damage, +3% speed, bigger
+per death within 650px, 12 at most), PROXIMAL TANGIBILITY (hurt only with the hero within 300px),
+BERSERKER (below half life ×1.5 damage, ×1.3 speed), UNSTOPPABLE (no knockback, slow, chill, freeze
+or stun), ENVENOMED (its hits poison). **KINDRED**: `spawnMagicPack` binds one magic pack in three
+from wave 8; each member's death grows the rest (+15% life and 15% healed, +20% damage, +6% speed,
++10% size, eight times at most), with tethers and a KINDRED ×n label.
+
+**The specials.** The TREASURE GOBLIN (`goblinRoll` in `startWave`, 10% from wave 4, 6–20s in):
+flees, leaks studs every tenth of its life, 110 base life with ×3 armour and 30% resistances (about
+eleven brutes), portals out after 14s + 2.2s; killed, 30 + 10/wave studs × stud multiplier, a heart
+and one or two boss-grade chests. It is ignored by the wave-clear check. The MIMIC: 18% of monster
+chests from wave 5 (`mimic` on the prop), a lid-and-teeth tell every 4.5s, `breakProp` wakes it,
+it hops and lunges, and pays its chest a tier up (to epic). The BANNER-BEARER joins the roster (band
+3): within 420px it plants a `warbanner` (0.9s), whose 280px aura (`updateBanners`, applied and
+removed as a delta) gives ×1.3 damage, ×1.2 speed, ×0.85 attack time; replants 10s after it falls.
+
+**Blood orbs.** `orbSpawn`/`updateBloodOrbs`: they set off roughly at the hero, turn at 2.4 rad/s and
+accelerate (45 → 330 px/s); after 4s, or within 24px of the hero, they hold for 1s over a 58px
+circle and drop — physical and `bleedPlayer`, or chaos and poison for the plague kind. The ritual's
+ring kills an orb that crosses it. The zombie WITCH DOCTOR joins the roster (band 4) and raises three
+every 4.2s from range; BLOOD-CALLER and PLAGUE-CALLER are new boss traits (two orbs every 5s, three
+for an ultra). **Bleeding on the hero** is new: 35% of the hit per second for 4s, physical, twice as
+fast while moving, five wounds, BLEED in the ailment list.
+
+**Legion.** A fourth kind in the league roll (evenly, one at a time). `legionPlace` raises a monolith
+520–1500px out; touching it (`legionStart`) stands 22 + wave soldiers (60 max, 15% magic) of the
+Eternal Empire or the Karui Horde in a 480px ring, plus sergeants (2/3/4) carrying war chests
+(rare/epic 37%/legendary 5%) and, from wave 15, a general (×2.5 life) worth an epic or legendary
+chest. Frozen soldiers are pinned (`legionFrozen`, skipped by `bodySpace`) but take damage; each
+kill buys 0.35s (9s, 14s max); `legionRelease` wakes the rest. `legionActiveNow` feeds
+`leagueRunning` and the wave-clear check, so a legion begun on a cleared wave holds the next one.
+
+**The league tree, pre-built.** `LEAGUE_TREE` (16 nodes, 5 roads), `LTREE` saved as `bb_ltree`,
+`ltreeTake`/`ltreeRefund` (adjacent, for a point; leaves only), and `leagueStat(k)` read through one
+hook per knob — `leagueChanceNow`, `leagueKindWeight`, `ritualAltarCount`, `abyssForkChance`,
+`legionTimeNow`, `sboxChanceNow`, `goblinChanceNow`, `studMoreMul`, and a breach monster-level bump
+in `breachify` — all 0 while `LEAGUE_TREE_ON` is false. The weighted kind pick uses the same one
+random number as the old uniform pick, so with even weights nothing moves.
+
+**Proof.** New `ritwall`, `puke`, `monmods`, `specials`, `orbs`, `legionlg`, `ltree`. Breaks
+`wallhit`, `wallhero`, `wallmin`, `nopuke`, `pukeshort`, `modsnone`, `modscount`, `regennone`,
+`unstopkb`, `proxall`, `soulall`, `coresoon`, `venomnone`, `kinall`, `kinnone`, `kinearly`,
+`nomodtext`, `berserkany`, `gobtoward`, `gobholds`, `gobstays`, `gobfree`, `gobsoft`, `gobnoleak`,
+`gobearly`, `mimicnone`, `mimicsame`, `mimicnever`, `mimictame`, `bannernone`, `bannerleak`,
+`bannerwide`, `bannerlazy`, `orbnohome`, `orbflat`, `orbnohold`, `orbforever`, `orbnobleed`,
+`orbwide`, `bleedflat`, `wdnocast`, `bossnoorb`, `orbnowall`, `chaosbleed`, `lgnofreeze`,
+`lgnotime`, `lgnocap`, `lgnochest`, `lgnogen`, `lgnorun`, `lgnoroll`, `lgstays`, `lgnowake`,
+`lgnoleft`, `ltalwayson`, `ltskip`, `ltfree`, `ltmidref`, `ltnosave`, `ltnochance`, `ltnoalt`,
+`ltnolvl`, `ltnolgt`, `ltnostud` caught.
