@@ -6720,6 +6720,7 @@ function killEnemy(e, source){
   if(e.ritual || e.ritualGuard) ritualOnKill(e);
   rareModOnKill(e);
   specialOnKill(e);
+  if(e.legion) legionOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -8623,7 +8624,7 @@ function shuffleArr(a){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n); wave.hold = false;
-  { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); }
+  { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); legionRoll(n, L.legion); }
   sboxRoll(n);
   goblinRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
@@ -8679,16 +8680,18 @@ function leagueLeft(){
   for(const A of allAbysses()) if(A && A.state === 'idle') out.push('abyss');
   for(const b of sboxLive()) if(!b.sprung) out.push('strongbox');
   for(const A of ritualS.altars) if(A.state === 'guarded' || A.state === 'ready') out.push('ritual');
+  if(legionEv && legionEv.state === 'idle') out.push('legion');
   return out;
 }
 /* league content that is RUNNING right now: an open breach or abyss, a sprung
    strongbox, a ritual under way */
-function leagueRunning(){ return breachOpenNow() || abyssOpenNow() || sboxActiveNow() || ritualActiveNow(); }
+function leagueRunning(){ return breachOpenNow() || abyssOpenNow() || sboxActiveNow() || ritualActiveNow() || legionActiveNow(); }
 function leagueLeftText(){
   const L = leagueLeft(), n = k=>L.filter(x=>x === k).length, out = [];
   const say = (k, one, many)=>{ const c = n(k); if(c) out.push(c === 1 ? one : c+' '+many); };
   say('breach', 'a breach', 'breaches'); say('abyss', 'an abyss', 'abysses');
   say('strongbox', 'a strongbox', 'strongboxes'); say('ritual', 'a ritual altar', 'ritual altars');
+  say('legion', 'a legion monolith', 'legion monoliths');
   return out.join(' · ');
 }
 /* F ON A HELD WAVE: leave what is left. The breach hand and the unopened abyss
@@ -8842,7 +8845,7 @@ function updateWave(dt){
       }
     }
     /* a sleeping ritual pack is not the wave's: it waits for you across waves */
-    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin') && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
+    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin') && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow() && !legionActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
       wave.hold = leagueLeft().length > 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
@@ -8881,11 +8884,11 @@ const LEAGUE_FROM = 7;
 const LEAGUE_CHANCE = 0.22;
 const LEAGUE_PITY = 6;                /* the sixth ordinary wave in a row without one always has one */
 const LEAGUE_MORE_PER_LVL = 0.025, LEAGUE_MORE_MAX = 0.45, LEAGUE_MAX = 3;
-const LEAGUE_KINDS = ['breach', 'abyss', 'ritual'];
+const LEAGUE_KINDS = ['breach', 'abyss', 'ritual', 'legion'];
 let leagueMiss = 0;
 function leagueMoreChance(n){ return Math.min(LEAGUE_MORE_MAX, LEAGUE_MORE_PER_LVL * mobRank(n)); }
 function leagueRoll(n){
-  const plan = { breach:0, abyss:0, ritual:0 };
+  const plan = { breach:0, abyss:0, ritual:0, legion:0 };
   if(sandbox || n < LEAGUE_FROM || n % 5 === 0) return plan;
   if(leagueMiss < LEAGUE_PITY - 1 && Math.random() >= LEAGUE_CHANCE){ leagueMiss++; return plan; }
   leagueMiss = 0;
@@ -8894,6 +8897,7 @@ function leagueRoll(n){
   while(k < LEAGUE_MAX && Math.random() < more) k++;
   for(let i=0;i<k;i++){
     const ok = LEAGUE_KINDS.filter(t=>t === 'ritual' ? !plan.ritual && ritualCanRise()
+                                    : t === 'legion' ? !plan.legion && !legionActiveNow()
                                     : t === 'breach' ? plan.breach < BREACH_LORD_KEYS.length : true);
     plan[ok[(Math.random()*ok.length)|0]]++;
   }
@@ -10613,6 +10617,189 @@ function drawRitualHud(){
   ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = RITUAL_COL; ctx.fillText(head, cw/2, by);
+}
+/* ================================== LEGION ==================================
+   PoE's Legion. A MONOLITH rises somewhere off to one side. Touch it and a
+   battle that was stopped in time comes into being around it: an army standing
+   in its ranks, frozen mid-stride, in a ring about the stone. For a few seconds
+   NOTHING MOVES -- hit as many of them as you can; every one you bring down
+   buys a little more time. Then time starts again, and what is left of the
+   army wakes up and fights. SERGEANTS carry war chests; from wave 15 a GENERAL
+   leads them, and it carries a better one. A running legion holds the wave. */
+const LEGION_R = 480, LEGION_TOUCH = 50, LEGION_T = 9, LEGION_KILL_T = 0.35, LEGION_T_MAX = 14;
+const LEGION_DELAY = [3, 8], LEGION_GENERAL_FROM = 15;
+const LEGION_COL = '#9fd4ff';
+const LEGION_FACTIONS = {
+  empire:{ name:'THE ETERNAL EMPIRE', col:'#ffd76e', ranks:['knight','lancer','archer','skeleton'], sergeant:'bastion', general:'jugg' },
+  horde: { name:'THE KARUI HORDE',    col:'#ff8a3c', ranks:['brute','stalker','imp','superimp'],     sergeant:'zhulk',   general:'jugg' },
+};
+let legionEv = null;
+function legionSize(n){ return Math.min(60, 22 + n); }
+function legionSergeants(n){ return 2 + (n >= 20 ? 1 : 0) + (n >= 35 ? 1 : 0); }
+function legionActiveNow(){ return !!legionEv && (legionEv.state === 'frozen' || legionEv.state === 'fighting'); }
+function legionRoll(n, k){
+  if(legionEv && legionEv.state === 'idle' && !k) legionEv = null;      /* an untouched monolith goes with its wave */
+  if(!k || legionActiveNow()) return false;
+  legionEv = { state:'pending', delay:rnd(LEGION_DELAY[0], LEGION_DELAY[1]), n, t:0, seed:rnd(1000) };
+  return true;
+}
+function legionSpot(){
+  const pad = LEGION_R*0.55 + 40;
+  for(let i=0;i<160;i++){
+    const a = rnd(TAU), rr = rnd(520, 1500);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(!abyssFloorOk(x, y, pad)) continue;
+    let ok = 0;
+    for(let k=0;k<8;k++) if(breachFloorOk(x + Math.cos(k/8*TAU)*LEGION_R*0.6, y + Math.sin(k/8*TAU)*LEGION_R*0.6)) ok++;
+    if(ok >= 6) return { x, y };
+  }
+  return null;
+}
+function legionPlace(at){
+  at = at || legionSpot();
+  if(!at){ legionEv = null; return false; }
+  Object.assign(legionEv, { state:'idle', x:at.x, y:at.y });
+  showBanner('LEGION', 'A MONOLITH HAS RISEN — TOUCH IT', LEGION_COL, 2.0, 44);
+  logEvent('   LEGION — a monolith has risen; touch it to stop the battle in time', LEGION_COL);
+  try { SFX.roar(); } catch(err){}
+  return true;
+}
+/* the battlefield, stopped: an army in its ranks around the stone */
+function legionStart(){
+  const L = legionEv, n = wave.n;
+  const fk = Math.random() < 0.5 ? 'empire' : 'horde', FAC = LEGION_FACTIONS[fk];
+  L.faction = fk; L.state = 'frozen'; L.t = LEGION_T; L.kills = 0;
+  const put = (type, elite, magic, rr0, rr1)=>{
+    for(let tries=0; tries<30; tries++){
+      const a = rnd(TAU), rr = rnd(rr0, rr1);
+      const x = L.x + Math.cos(a)*rr, y = L.y + Math.sin(a)*rr;
+      if(!abyssFloorOk(x, y, 40)) continue;
+      spawnEnemy(type, x, y, elite, magic);
+      const e = enemies[enemies.length-1];
+      e.state = 'active'; e.legion = L; e.legionFrozen = true; e.lgx = x; e.lgy = y;
+      e.face = { x:Math.cos(a + Math.PI), y:Math.sin(a + Math.PI) }; e.walk = rnd(TAU);
+      return e;
+    }
+    return null;
+  };
+  const N = legionSize(n);
+  for(let i=0;i<N;i++) put(FAC.ranks[(Math.random()*FAC.ranks.length)|0], false, Math.random() < 0.15, 110, LEGION_R - 30);
+  for(let i=0;i<legionSergeants(n);i++){
+    const e = put(FAC.sergeant, true, false, 150, LEGION_R - 60);
+    if(e){ e.legionChest = Math.random() < 0.05 ? 'legendary' : Math.random() < 0.37 ? 'epic' : 'rare'; }
+  }
+  if(n >= LEGION_GENERAL_FROM){
+    const g = put(FAC.general, true, false, 60, 120);
+    if(g){ g.legionGeneral = true; g.maxHp *= 2.5; g.hp = g.maxHp; g.scale *= 1.3; g.r *= 1.3; }
+  }
+  addRing(L.x, L.y, 12, 700, LEGION_R, LEGION_COL, 8, 0.7); addShake(0.3);
+  showBanner(FAC.name, 'FROZEN IN TIME — '+LEGION_T+'s', LEGION_COL, 2.0, 42);
+  logEvent('   LEGION — '+FAC.name+' stands frozen; every kill buys time', LEGION_COL);
+  try { SFX.freeze(); } catch(err){}
+}
+function legionRelease(){
+  const L = legionEv;
+  L.state = 'fighting';
+  for(const e of enemies) if(e.legion === L && !e.dead){ e.legionFrozen = false; e.mode = 'chase'; e.atkCd = rnd(0.2, 1.0); }
+  showBanner('TIME STARTS AGAIN', 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
+  addRing(L.x, L.y, 12, 700, LEGION_R, '#ffffff', 6, 0.5);
+  try { SFX.roar(); } catch(err){}
+}
+function legionDone(){
+  const L = legionEv;
+  L.state = 'done';
+  showBanner('LEGION DEFEATED', L.kills+' OF THEM FELL IN TIME', LEGION_COL, 1.8, 40);
+  logEvent('   LEGION defeated — '+L.kills+' killed while frozen', LEGION_COL);
+  legionEv = null;
+}
+function legionOnKill(e){
+  const L = e.legion;
+  if(!L) return;
+  if(e.legionFrozen && L.state === 'frozen'){
+    L.kills++; L.t = Math.min(LEGION_T_MAX, L.t + LEGION_KILL_T);
+    addSparks(e.x, e.y - 18, 10, '#dff2ff');
+  }
+  if(e.legionChest)
+    props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:e.legionChest, war:true }, 20));
+  if(e.legionGeneral){
+    queuePick('chest', Math.random() < 0.25 ? 'legendary' : 'epic');
+    showBanner('THE GENERAL FALLS', 'ITS WAR CHEST IS YOURS · ON R', LEGION_FACTIONS[L.faction].col, 1.8, 40);
+  }
+}
+function updateLegion(dt){
+  if(!legionEv || !player) return;
+  const L = legionEv, h = heroObj || player;
+  if(L.state === 'pending'){
+    if(wave.state !== 'fight') return;
+    L.delay -= dt;
+    if(L.delay <= 0) legionPlace();
+    return;
+  }
+  if(L.state === 'idle'){
+    if(h && !h.dead && Math.hypot(h.x - L.x, h.y - L.y) < LEGION_TOUCH + (h.r || 12)) legionStart();
+    return;
+  }
+  const left = enemies.filter(e=>e.legion === L && !e.dead);
+  if(L.state === 'frozen'){
+    L.t -= dt;
+    if(L.t <= 0 || !left.length){ if(left.length) legionRelease(); else { L.state = 'fighting'; } }
+    return;
+  }
+  if(L.state === 'fighting' && !left.length) legionDone();
+}
+/* ---- DRAWN ---- */
+function drawLegion(){
+  const L = legionEv;
+  if(!L || L.state === 'pending') return;
+  const c = ctx;
+  if(L.state === 'frozen'){
+    c.fillStyle = 'rgba(190,225,255,0.07)'; c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(159,212,255,${0.45 + 0.25*Math.sin(vtime*6)})`; c.lineWidth = 4;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke();
+    /* the time left, as the ring itself running out */
+    c.strokeStyle = '#ffffff'; c.lineWidth = 6;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, -Math.PI/2, -Math.PI/2 + TAU*clamp(L.t/LEGION_T, 0, 1)); c.stroke();
+  } else if(L.state === 'idle'){
+    c.setLineDash([14,12]); c.strokeStyle = 'rgba(159,212,255,0.28)'; c.lineWidth = 3;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke(); c.setLineDash([]);
+  }
+  /* the monolith */
+  const glow = 0.5 + 0.5*Math.sin(vtime*2.5 + L.seed);
+  c.save(); c.translate(L.x, L.y);
+  c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(0, 4, 26, 9, 0, 0, TAU); c.fill();
+  c.fillStyle = '#4a5058'; c.strokeStyle = 'rgba(15,20,25,0.8)'; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(-16, 2); c.lineTo(-11, -96); c.lineTo(0, -110); c.lineTo(11, -96); c.lineTo(16, 2); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = `rgba(159,212,255,${L.state === 'idle' ? 0.45 + 0.5*glow : 0.25})`;
+  for(let i=0;i<4;i++){ c.fillRect(-4, -86 + i*20, 8, 10); }
+  drawStudG(c, 0, -108, 3.5, '#6d747c');
+  c.restore();
+}
+/* frozen soldiers wear a shell of ice -- drawn over them */
+function drawLegionIce(){
+  const L = legionEv, c = ctx;
+  if(L && L.state === 'frozen'){
+    for(const e of enemies){
+      if(e.dead || e.legion !== L || !e.legionFrozen || !onScreen(e, 80)) continue;
+      const s = e.scale || 1;
+      c.fillStyle = 'rgba(210,235,255,0.32)'; c.strokeStyle = 'rgba(223,242,255,0.75)'; c.lineWidth = 1.5;
+      c.beginPath(); c.ellipse(e.x, e.y - 26*s, 17*s, 32*s, 0, 0, TAU); c.fill(); c.stroke();
+    }
+  }
+}
+function drawLegionHud(){
+  const L = legionEv;
+  if(!L || !player) return;
+  if(L.state === 'idle')
+    edgeMarker(L.x, L.y, LEGION_COL, (x,y)=>{ ctx.fillStyle = '#4a5058'; ctx.strokeStyle = LEGION_COL; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 5, y + 8); ctx.lineTo(x - 3, y - 8); ctx.lineTo(x, y - 11); ctx.lineTo(x + 3, y - 8); ctx.lineTo(x + 5, y + 8); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
+  if(!legionActiveNow()) return;
+  const left = enemies.filter(e=>e.legion === L && !e.dead).length;
+  const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0) + (abyssOpenNow() ? 30 : 0) + (sboxActiveNow() ? 20 : 0) + (ritualActiveNow() ? 20 : 0);
+  const head = L.state === 'frozen' ? 'LEGION · FROZEN '+L.t.toFixed(1)+'s · '+L.kills+' fallen · '+left+' standing'
+                                    : 'LEGION · '+left+' still fighting';
+  ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+  ctx.strokeText(head, cw/2, by); ctx.fillStyle = LEGION_COL; ctx.fillText(head, cw/2, by);
 }
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
@@ -21011,7 +21198,7 @@ function updateEnemy(e, dt){
    edge instead of walking into your middle; one that has reached a skeleton
    shares the shove with it. */
 function bodySpace(e){
-  if(e.dead || e.state !== 'active' || e.docile) return;
+  if(e.dead || e.state !== 'active' || e.docile || e.legionFrozen) return;
   const h = heroObj;
   if(h && !h.dead && player === h){
     const dx = e.x - h.x, dy = e.y - h.y, d = Math.hypot(dx, dy), min = (e.r||12) + (h.r||12);
@@ -21113,6 +21300,8 @@ function updateEnemyCore(e, dt){
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
+  /* FROZEN IN TIME: it takes its wounds, and nothing else happens to it */
+  if(e.legionFrozen){ e.x = e.lgx; e.y = e.lgy; e.kx = 0; e.ky = 0; e.moving = false; e.strikeT = 0; return; }
   e.hitCd -= dt; e.atkCd -= dt;
   e.x += e.kx*dt; e.y += e.ky*dt;
   e.kx *= Math.max(0,1-7*dt); e.ky *= Math.max(0,1-7*dt);
@@ -25879,6 +26068,7 @@ function render(){
   drawAbyss();
   drawSboxGuards();
   drawRitual();
+  drawLegion();
   drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
@@ -26918,6 +27108,7 @@ function render(){
     ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y);
     ctx.globalAlpha = 1;
   }
+  drawLegionIce();
   drawBloodOrbs();
   drawMonsterMods();
   drawGearLabels();
@@ -28609,6 +28800,7 @@ function renderHUD(){
   drawAbyssHud();
   drawSboxHud();
   drawRitualHud();
+  drawLegionHud();
   drawWaveHold();
   drawLootStash();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
@@ -29052,7 +29244,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachExtra = []; abyss = null; abyssExtra = []; leagueMiss = 0; sboxPending = [];
-  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null; bloodOrbs = [];
+  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null; bloodOrbs = []; legionEv = null;
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -29374,6 +29566,7 @@ function update(dt, raw){
     updateRareMods(dt);
     updateSpecials(dt);
     updateBloodOrbs(dt);
+    updateLegion(dt);
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
