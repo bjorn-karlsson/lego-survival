@@ -1782,6 +1782,28 @@ function psnList(){ return (player.psn && player.psn.list) || []; }
 function psnStacks(){ return psnList().length; }
 function psnDps(){ let d=0; for(const f of psnList()) d += f.dps; return d; }
 function psnTime(){ let t=0; for(const f of psnList()) t = Math.max(t, f.t); return t; }
+/* BLEEDING, on you. A wound bleeds a share of the hit that opened it for four
+   seconds -- physical, so no resistance stands in front of it -- and it bleeds
+   TWICE as fast while you are moving. Five wounds at most; a deeper one pushes
+   the shallowest out. */
+const PBLEED_T = 4, PBLEED_SHARE = 0.35, PBLEED_MOVE = 2, PBLEED_MAX = 5;
+function pbleedList(){ return (player.pbleed && player.pbleed.list) || []; }
+function pbleedStacks(){ return pbleedList().length; }
+function pbleedDps(){ let d=0; for(const f of pbleedList()) d += f.dps; return d; }
+function pbleedTime(){ let t=0; for(const f of pbleedList()) t = Math.max(t, f.t); return t; }
+function bleedPlayer(hit){
+  const p = player;
+  if(!p || p.dead || !(hit > 0)) return;
+  if(!p.pbleed) p.pbleed = { list:[], acc:0 };
+  const dps = hit*PBLEED_SHARE;
+  if(p.pbleed.list.length >= PBLEED_MAX){
+    let w = 0;
+    for(let i=1;i<p.pbleed.list.length;i++) if(p.pbleed.list[i].dps < p.pbleed.list[w].dps) w = i;
+    if(dps <= p.pbleed.list[w].dps) return;
+    p.pbleed.list.splice(w, 1);
+  }
+  p.pbleed.list.push({ dps, t:PBLEED_T });
+}
 const PSN_MAX_STACKS = 8;
 function poisonPlayer(dps, dur){
   const p = player;
@@ -5218,6 +5240,10 @@ const EDEF = {
              col:{head:'#9dbb62', torso:'#7e6b4a', legs:'#4a4d3a', hands:'#9dbb62', hair:'#4d6630'}, style:'zombie' },
   zrunner: { hp:6,  speed:116, r:12, scale:0.84, dmg:1, xp:5, studs:[3,6], zombie:1,
              col:{head:'#7aa65a', torso:'#8a2f2a', legs:'#2e3440', hands:'#7aa65a', hair:'#2b3a22'}, style:'zombie' },
+  /* the zombie WITCH DOCTOR: it keeps its distance and raises blood orbs (or
+     plague orbs) that hunt you down */
+  witchdoctor:{ hp:7, speed:52, r:13, scale:1.02, dmg:2, xp:12, studs:[6,10], zombie:1,
+             col:{head:'#8fa874', torso:'#5a2e4a', legs:'#3b2030', hands:'#8fa874', hair:'#2b1a22'}, style:'zombie' },
   zhulk:   { hp:26, speed:56,  r:16, scale:1.25, dmg:3, xp:13, studs:[8,13], zombie:1, armourMul:1.3,
              col:{head:'#6f9a4c', torso:'#3d4a5c', legs:'#2b2f38', hands:'#6f9a4c', hair:'#243020'}, style:'zombie' },
   bigcrawler:{ hp:11, speed:40, r:14, scale:1.2, dmg:2, xp:3, studs:[2,4], zombie:1, crawl:1,
@@ -5478,7 +5504,11 @@ const BOSS_TRAITS = [
   { id:'legion',   name:'LEGION',   col:'#c9b8e8', tip:'brings more of its court',
     apply(b){ b.trLegion = true; } },
   { id:'thorned',  name:'THORNED',  col:'#ffb066', tip:'hurts to stand next to',
-    apply(b){ b.thorns = true; } }
+    apply(b){ b.thorns = true; } },
+  { id:'bloodcall', name:'BLOOD-CALLER',  col:'#e0203a', tip:'blood orbs rise around it and hunt you',
+    apply(b){ b.orbAura = 'blood'; } },
+  { id:'plaguecall', name:'PLAGUE-CALLER', col:'#8ede4a', tip:'plague orbs rise around it and hunt you',
+    apply(b){ b.orbAura = 'chaos'; } }
 ];
 function rollBossTraits(b){
   /* one trait always, a second from wave ten on, and never the same one twice */
@@ -5847,6 +5877,96 @@ function drawSpecialExtras(c, e){
     c.fillStyle = '#7b5132'; c.fillRect(e.x + 9*s, e.y - 80*s, 3*s, 70*s);
     c.fillStyle = '#a8201a'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 1.5;
     roundRect(c, e.x + 6*s, e.y - 78*s, 9*s, 30*s, 3); c.fill(); c.stroke();
+  }
+}
+/* ============================== BLOOD ORBS ==============================
+   A red ball rises beside the caster and HUNTS you: slow at first, then faster
+   and faster, turning after you all the while. When its time is up -- or when it
+   reaches you -- it stops dead and hangs there for a second over a circle on the
+   ground, and then it drops: physical damage, and you bleed. The CHAOS kind is
+   green, and the drop is chaos and poison instead. Stop moving and let it
+   catch up in the open, or keep moving and drag it off the pack -- and do not
+   be standing in the circle when it falls. */
+const WD_CAST_T = 0.7, WD_ORBS = 3, WD_CD = 4.2;
+const ORB_TTL = 4.0, ORB_SPD0 = 45, ORB_ACC = 60, ORB_SPD_MAX = 330, ORB_TURN = 2.4;
+const ORB_HOLD_T = 1.0, ORB_R = 58, ORB_TOUCH = 24, ORB_CAP = 48;
+const ORB_AURA_T = 5, ORB_AURA_N = 2, ORB_DMG_MUL = 0.9;
+const ORB_KINDS = { blood:{ col:'#e0203a', rgb:'224,32,58', elem:undefined, name:'blood orb' },
+                    chaos:{ col:'#8ede4a', rgb:'142,222,74', elem:'chaos',   name:'plague orb' } };
+let bloodOrbs = [];
+function orbDmg(e){ return Math.max(1, (e && e.dmg || 1)*ORB_DMG_MUL); }
+function orbSpawn(x, y, kind, dmg, src){
+  if(bloodOrbs.length >= ORB_CAP) return null;
+  const h = heroObj || player;
+  const a = (h ? Math.atan2(h.y - y, h.x - x) : 0) + rnd(-1, 1), K = ORB_KINDS[kind] || ORB_KINDS.blood;   /* it sets off roughly your way */
+  const o = { x, y, px:x, py:y, vx:Math.cos(a)*ORB_SPD0, vy:Math.sin(a)*ORB_SPD0, t:0, hold:0,
+    kind:ORB_KINDS[kind] ? kind : 'blood', dmg, state:'fly', phase:rnd(TAU),
+    type:K.name, bname:(src && (src.bname || src.type)) ? (src.bname || src.type)+"'s "+K.name : 'a '+K.name };
+  bloodOrbs.push(o);
+  return o;
+}
+function orbDrop(o){
+  const K = ORB_KINDS[o.kind], h = heroObj || player;
+  addRing(o.x, o.y, 8, 420, ORB_R, K.col, 6, 0.35);
+  addSparks(o.x, o.y - 4, 10, K.col);
+  try { sfxAt(o.x).hit(); } catch(err){}
+  if(h && !h.dead && Math.hypot(h.x - o.x, h.y - o.y) < ORB_R + (h.r || 12)){
+    const keep = player; player = h;
+    try {
+      const can = !h.dead && h.invuln <= 0 && h.dash.t <= 0 && !ritualOutside(o) && !godMode;
+      playerDamage(o.dmg, o, K.elem, true);
+      if(can){ if(o.kind === 'chaos') poisonPlayer(Math.max(0.2, o.dmg*0.4), PSN_DUR); else bleedPlayer(o.dmg); }
+    } finally { player = keep; }
+  }
+  minionsIn(o.x, o.y, ORB_R, m=>minionHurt(m, o.dmg, K.elem, o));
+}
+function updateBloodOrbs(dt){
+  /* the casters that carry them as an aura: a boss that calls blood */
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || !e.orbAura) continue;
+    e.orbAuraT = (e.orbAuraT ?? 2) - dt;
+    if(e.orbAuraT <= 0){
+      e.orbAuraT = ORB_AURA_T;
+      for(let i=0;i<ORB_AURA_N + (e.super ? 1 : 0);i++) orbSpawn(e.x + rnd(-70,70), e.y - 20 + rnd(-50,50), e.orbAura, orbDmg(e), e);
+    }
+  }
+  if(!bloodOrbs.length) return;
+  const h = heroObj || player;
+  for(const o of bloodOrbs){
+    o.px = o.x; o.py = o.y;
+    if(o.state === 'fly'){
+      o.t += dt;
+      /* it gathers speed the longer it lives */
+      const sp = Math.min(ORB_SPD_MAX, ORB_SPD0 + ORB_ACC*o.t*(1 + 0.6*o.t));
+      const want = Math.atan2(h.y - o.y, h.x - o.x), cur = Math.atan2(o.vy, o.vx);
+      const na = cur + clamp(angDiff(want, cur), -ORB_TURN*dt, ORB_TURN*dt);
+      o.vx = Math.cos(na)*sp; o.vy = Math.sin(na)*sp;
+      o.x += o.vx*dt; o.y += o.vy*dt;
+      if(o.t >= ORB_TTL || Math.hypot(h.x - o.x, h.y - o.y) < ORB_TOUCH){ o.state = 'hold'; o.hold = ORB_HOLD_T; }
+    } else if(o.state === 'hold'){
+      o.hold -= dt;
+      if(o.hold <= 0){ orbDrop(o); o.dead = true; }
+    }
+  }
+  bloodOrbs = bloodOrbs.filter(o=>!o.dead);
+}
+function drawBloodOrbs(){
+  const c = ctx;
+  for(const o of bloodOrbs){
+    if(!onScreen(o, 120)) continue;
+    const K = ORB_KINDS[o.kind];
+    if(o.state === 'hold'){
+      const f = 1 - clamp(o.hold/ORB_HOLD_T, 0, 1);
+      c.fillStyle = `rgba(${K.rgb},${0.10 + 0.18*f})`; c.beginPath(); c.arc(o.x, o.y, ORB_R, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(${K.rgb},${0.55 + 0.35*Math.sin(vtime*22)})`; c.lineWidth = 3;
+      c.beginPath(); c.arc(o.x, o.y, ORB_R, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2; c.beginPath(); c.arc(o.x, o.y, 6 + (ORB_R - 6)*(1 - f), 0, TAU); c.stroke();
+    }
+    const z = o.state === 'hold' ? 34 : 26 + Math.sin(vtime*6 + o.phase)*4;
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(o.x, o.y + 2, 8, 3, 0, 0, TAU); c.fill();
+    c.fillStyle = `rgba(${K.rgb},0.28)`; c.beginPath(); c.arc(o.x, o.y - z, 15, 0, TAU); c.fill();
+    c.fillStyle = K.col; c.beginPath(); c.arc(o.x, o.y - z, 8.5, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.75)'; c.beginPath(); c.arc(o.x - 2.5, o.y - z - 3, 2.6, 0, TAU); c.fill();
   }
 }
 function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
@@ -8037,6 +8157,20 @@ function updateAilments(dt){
         vx:rnd(-12,12), vy:rnd(-60,-20), life:0.45, max:0.45,
         color: Math.random()<0.5 ? '#8ac24a' : '#5f9a2e'});
   } else p.psn.acc = 0;
+  if(!p.pbleed) p.pbleed = { list:[], acc:0 };
+  if(p.pbleed.list.length){
+    let deal = 0;
+    const mv = p.moving ? PBLEED_MOVE : 1;
+    for(const f of p.pbleed.list){ deal += f.dps * Math.min(f.t, dt) * mv; f.t -= dt; }
+    p.pbleed.list = p.pbleed.list.filter(f=>f.t > 0);
+    p.pbleed.acc += deal;
+    const show = p.pbleed.acc >= 1;
+    if(show) p.pbleed.acc -= 1;
+    if(deal > 0) ailmentDamage(deal, !show, 'phys');
+    if(show) addHitNum(p.x, p.y-44, '-1', '#ff5a5a', 16);
+    if(Math.random() < 0.3*mv)
+      particles.push({kind:'spark', x:p.x+rnd(-10,10), y:p.y-rnd(10,34), vx:rnd(-10,10), vy:rnd(10,50), life:0.45, max:0.45, color:'#c0182a'});
+  } else p.pbleed.acc = 0;
   if(p.chill.stacks > 0){
     p.chill.t -= dt;
     if(p.chill.t <= 0){ p.chill.stacks = Math.max(0, p.chill.stacks - 1); p.chill.t = p.chill.stacks>0 ? 2.2 : 0; }
@@ -8209,6 +8343,7 @@ const ROSTER = [
   { k:'hexer',       at:14, cost:12, flavour:0.8 },
   { k:'revenant',    at:16, cost:14, flavour:1 },
   { k:'lobber',      at:17, cost:15, flavour:0.9 },
+  { k:'witchdoctor', at:16, cost:13, flavour:0.85 },
   { k:'blightspitter', at:12, cost:11, flavour:0.85 },
   { k:'pyromancer',  at:19, cost:16, flavour:0.9 },
   { k:'frostmage',   at:21, cost:16, flavour:0.9 },
@@ -8247,7 +8382,7 @@ const ROSTER_BANDS = [
   ['imp','boneling','archer','spitter','skeleton'],
   ['shade','cryptbat','brute','knight','bloater'],
   ['stalker','lancer','superimp','hexer','bomber','zrunner','bannerman'],
-  ['revenant','lobber','pyromancer','frostmage','zhulk'],
+  ['revenant','lobber','pyromancer','frostmage','zhulk','witchdoctor'],
   ['necromancer','stormcaller','jugg','marksman','greenwarden'],
   ['bastion','direbat','pumpkinlord','impmaster'],
   ['shadestorm','pyrolord','frostlord','stormlord','necrolord','overseer']
@@ -10211,6 +10346,10 @@ function ritualClamp(){
     if(e.ritualSide === undefined) e.ritualSide = e.ritual === A || Math.hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
     if(e.ritualSide > 0) inside(e, (e.r || 12)); else outside(e, (e.r || 12));
   }
+  for(const o of bloodOrbs){
+    if((Math.hypot(o.px - A.x, o.py - A.y) >= RITUAL_R) !== (Math.hypot(o.x - A.x, o.y - A.y) >= RITUAL_R)){ o.dead = true; addDust(o.x, o.y, 3, 'rgba(120,40,50,'); }
+  }
+  bloodOrbs = bloodOrbs.filter(o=>!o.dead);
   for(const pr of projectiles){
     if(pr.dead || RITUAL_FOG_STILL.indexOf(pr.kind) >= 0 || pr.px === undefined) continue;
     const was = Math.hypot(pr.px - A.x, pr.py - A.y), now = Math.hypot(pr.x - A.x, pr.y - A.y);
@@ -21003,6 +21142,20 @@ function updateEnemyCore(e, dt){
     if(dist(e,{x:e.wx,y:e.wy})>20){ vx = Math.cos(a)*40; vy=Math.sin(a)*40; }
   }
   else if(e.type==='goblin'){ const v = goblinTick(e, dt, toP, dP); vx = v.x; vy = v.y; if(e.dead) return; }
+  else if(e.type==='witchdoctor'){
+    if(!e.orbKind) e.orbKind = Math.random() < 0.5 ? 'blood' : 'chaos';
+    if(e.mode === 'cast'){
+      e.modeT += dt; e.face = { x:Math.cos(toP), y:Math.sin(toP) };
+      if(e.modeT >= WD_CAST_T){
+        for(let i=0;i<WD_ORBS;i++) orbSpawn(e.x + rnd(-34,34), e.y - 10 + rnd(-20,20), e.orbKind, orbDmg(e), e);
+        e.mode = 'kite'; e.atkCd = WD_CD*e.atkS;
+      }
+    } else {
+      e.mode = 'kite';
+      const mv = enemyCasterMove(e, dt, toP, dP, 420, 280); vx = mv.x; vy = mv.y;
+      if(e.atkCd <= 0 && dP < 700 && !e.docile){ e.mode = 'cast'; e.modeT = 0; }
+    }
+  }
   else if(e.type==='warbanner'){ e.mode = 'planted'; e.kx = 0; e.ky = 0; }
   else if(e.type==='bannerman'){
     const live = e.banner && !e.banner.dead;
@@ -26765,6 +26918,7 @@ function render(){
     ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y);
     ctx.globalAlpha = 1;
   }
+  drawBloodOrbs();
   drawMonsterMods();
   drawGearLabels();
   ctx.restore();
@@ -27400,6 +27554,8 @@ function drawEnemy(c, e){
   if(e.type==='overseer'){ o.weapon='staff'; o.orbCol='#ffe95a'; o.hoodCol='#5e4a12'; o.lord=true; if(e.mode==='buffWind'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='impmaster'){ o.weapon='staff'; o.orbCol='#ff5a4a'; o.hoodCol='#3a0c16'; o.horns=true; o.lord=true;
     if(e.mode==='summon'||e.mode==='hex'){ o.armsUp=true; o.castGlow=true; } }
+  if(e.type==='witchdoctor'){ o.weapon='staff'; o.orbCol = e.orbKind==='chaos' ? '#8ede4a' : '#e0203a'; o.hoodCol='#3b2030';
+    if(e.mode==='cast'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necromancer'){ o.weapon='staff'; o.orbCol='#c9b8e8'; o.hoodCol='#271b3a'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necrolord'){ o.weapon='staff'; o.orbCol='#dccdf5'; o.hoodCol='#31204d'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='greenwarden'){ o.weapon='staff'; o.orbCol='#8ede4a'; o.hoodCol='#1d4523'; o.lord=true;
@@ -28571,6 +28727,7 @@ function renderHUD(){
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
   if(psnStacks()>0)   ails.push({c:'#8ac24a', t:'POISON ×'+psnStacks()+' · '+psnDps().toFixed(1)+'/s · '+Math.ceil(psnTime())+'s'});
+  if(pbleedStacks()>0) ails.push({c:'#ff5a5a', t:'BLEED ×'+pbleedStacks()+' · '+(pbleedDps()*(p.moving ? PBLEED_MOVE : 1)).toFixed(1)+'/s'+(p.moving ? ' (moving ×2)' : '')+' · '+Math.ceil(pbleedTime())+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
   for(const el of ELEMENTS)
@@ -28895,7 +29052,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachExtra = []; abyss = null; abyssExtra = []; leagueMiss = 0; sboxPending = [];
-  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null;
+  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null; bloodOrbs = [];
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -29216,6 +29373,7 @@ function update(dt, raw){
     ritualClamp();
     updateRareMods(dt);
     updateSpecials(dt);
+    updateBloodOrbs(dt);
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
