@@ -4632,6 +4632,7 @@ function addProp(type,x,y,rng){
 }
 function breakProp(p){
   if(p.indestructible) return;
+  if(p.type==='chest' && p.mimic){ mimicReveal(p); return; }
   if(p.type==='chest'){
     p.dead = true;
     /* the mystery chest rolls what is inside at the moment it comes apart */
@@ -5232,6 +5233,19 @@ const EDEF = {
      health bar IS the fight, and at 30 he popped before the aura ever mattered.
      He costs the wave budget nearly twice what he did, so a wave still cannot
      be all wardens, and he pays out like the priority target he is. */
+  /* THE TREASURE GOBLIN: it does not fight, it runs -- with a sack of your
+     studs -- and it is very, very hard to bring down before it portals out */
+  goblin:  { hp:110, speed:150, r:13, scale:0.9, dmg:0, xp:40, studs:[0,0], armourMul:3,
+             res:{fire:0.3, frost:0.3, shock:0.3},
+             col:{head:'#7ac943', torso:'#7a4f2a', legs:'#3b2a1a', hands:'#7ac943', hair:'#3b2a1a'}, style:'goblin' },
+  /* a chest with teeth: it waits among the real ones and bites when opened */
+  mimic:   { hp:22, speed:118, r:16, scale:1.0, dmg:3, xp:24, studs:[10,18], armourMul:1.8,
+             col:{head:'#9c6a45', torso:'#7b5132', legs:'#583927', hands:'#9c6a45', hair:'#583927'}, style:'brute' },
+  /* the banner-bearer plants a war banner, and everything near it fights harder */
+  bannerman:{ hp:7, speed:64, r:14, scale:1.1, dmg:2, xp:12, studs:[6,10],
+             col:{head:'#e8e4d8', torso:'#a8201a', legs:'#5a1410', hands:'#e8e4d8', hair:'#5a1410'}, style:'knight' },
+  warbanner:{ hp:14, speed:0, r:12, scale:1.0, dmg:0, xp:6, studs:[3,6], armourMul:1.2,
+             col:{head:'#a8201a', torso:'#a8201a', legs:'#6d6e68', hands:'#a8201a', hair:'#a8201a'}, style:'knight' },
   greenwarden:{ hp:95, speed:46, r:15, scale:1.45, dmg:1, xp:52, studs:[36,58], armourMul:1.6,
              col:{head:'#eef0ee', torso:'#2f6b33', legs:'#1d4523', hands:'#bdf0a8', hair:'#1d4523'}, style:'hexer' },
   necrolord:{ hp:34, speed:44, r:16, scale:1.35, dmg:1, xp:30, studs:[22,38],
@@ -5640,6 +5654,199 @@ function drawMonsterMods(){
     c.font = '700 12px Fredoka';
     c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3; c.strokeText(t, cx, top - 6);
     c.fillStyle = MAGIC_COL; c.fillText(t, cx, top - 6);
+  }
+}
+/* ============================== THE SPECIALS ==============================
+   Three monsters that are not about hitting you: a goblin that runs off with a
+   fortune, a chest that is not a chest, and a banner that makes a fight worse. */
+/* ---- THE TREASURE GOBLIN ---- */
+const GOBLIN_FROM = 4, GOBLIN_CHANCE = 0.10;
+const GOBLIN_LIFE = 14, GOBLIN_PORTAL_T = 2.2, GOBLIN_CALM = 520;
+const GOBLIN_STUDS = [30, 10];         /* 30 + 10 a wave, x your stud multiplier */
+let goblinPending = null;
+function goblinRoll(n){
+  goblinPending = (n >= GOBLIN_FROM && Math.random() < GOBLIN_CHANCE) ? { delay:rnd(6, 20) } : null;
+  return !!goblinPending;
+}
+function goblinSpawn(x, y){
+  if(x === undefined){ const sp = randomSpawnPos(); x = sp.x; y = sp.y; }
+  spawnEnemy('goblin', x, y);
+  const e = enemies[enemies.length-1];
+  e.state = 'active'; e.mode = 'flee'; e.gobT = 0; e.gobDrop = 0.9;
+  showBanner('A TREASURE GOBLIN!', 'CATCH IT BEFORE IT PORTALS OUT', '#7ac943', 2.2, 40);
+  logEvent('   a TREASURE GOBLIN — it runs, and it portals out in '+GOBLIN_LIFE+'s', '#7ac943');
+  try { SFX.fortune(); } catch(err){}
+  return e;
+}
+function goblinTick(e, dt, toP, dP){
+  e.mode = 'flee'; e.gobT = (e.gobT || 0) + dt;
+  /* it leaks studs as it is hit: a tenth of its life, a handful */
+  while(e.hp < e.maxHp*(e.gobDrop ?? 0.9) && (e.gobDrop ?? 0.9) > 0){
+    spawnStuds(e.x, e.y, 2 + Math.round(wave.n*0.4)); e.gobDrop = (e.gobDrop ?? 0.9) - 0.1;
+  }
+  if(e.gobPortal !== undefined){
+    e.gobPortal -= dt;
+    if(Math.random() < 0.6) particles.push({ kind:'spark', x:e.x + rnd(-26,26), y:e.y - rnd(0,60), vx:rnd(-20,20), vy:rnd(-60,-20), life:0.5, max:0.5, color:'#7ac943' });
+    if(e.gobPortal <= 0) goblinEscape(e);
+    return { x:0, y:0 };
+  }
+  if(e.gobT >= GOBLIN_LIFE){
+    e.gobPortal = GOBLIN_PORTAL_T;
+    addHitNum(e.x, e.y - 60, 'OPENING A PORTAL!', '#7ac943', 17);
+    return { x:0, y:0 };
+  }
+  const h = heroObj || player;
+  let ax = e.x - h.x, ay = e.y - h.y; const d = Math.hypot(ax, ay) || 1; ax /= d; ay /= d;
+  const m = W.wall + 240;
+  if(e.x < m) ax += 1.3; else if(e.x > W.w - m) ax -= 1.3;
+  if(e.y < m) ay += 1.3; else if(e.y > W.h - m) ay -= 1.3;
+  const a = Math.atan2(ay, ax) + Math.sin(vtime*2.3 + (e.phase || 0))*0.35;
+  const sp = d < GOBLIN_CALM ? e.speed : e.speed*0.55;
+  if(Math.random() < 0.08) particles.push({ kind:'spark', x:e.x - 10, y:e.y - 26, vx:rnd(-30,30), vy:rnd(-50,-10), life:0.5, max:0.5, color:'#ffd166' });
+  return { x:Math.cos(a)*sp, y:Math.sin(a)*sp };
+}
+function goblinEscape(e){
+  e.dead = true; e.escaped = true;
+  addRing(e.x, e.y, 10, 420, 110, '#7ac943', 7, 0.5);
+  showBanner('THE GOBLIN GOT AWAY', 'AND YOUR STUDS WITH IT', '#9aa39c', 1.8, 34);
+  logEvent('   the treasure goblin portalled out', '#9aa39c');
+}
+function goblinLoot(e){
+  const n = Math.round((GOBLIN_STUDS[0] + GOBLIN_STUDS[1]*wave.n) * (player.studMul || 1));
+  spawnStuds(e.x, e.y, n);
+  pickups.push(makePickup('heart', e.x + rnd(-20,20), e.y + rnd(-20,20)));
+  const r1 = rollRarity('boss'); queuePick('chest', r1);
+  const two = Math.random() < 0.5; if(two) queuePick('chest', rollRarity('boss'));
+  showBanner('TREASURE GOBLIN SLAIN!', n+' STUDS · '+(two ? 'TWO CHESTS' : 'A CHEST')+' ON R', '#ffd166', 2.2, 42);
+  addRing(e.x, e.y, 12, 520, 160, '#ffd166', 8, 0.6); addShake(0.25);
+  return { studs:n, chests:two ? 2 : 1 };
+}
+/* ---- THE MIMIC ---- */
+const MIMIC_FROM = 5, MIMIC_CHANCE = 0.18;
+function mimicReveal(p){
+  p.dead = true;
+  spawnEnemy('mimic', p.x, p.y);
+  const e = enemies[enemies.length-1];
+  e.state = 'active'; e.mimicRar = p.wild ? 'epic' : (p.rar || 'common');
+  e.mode = 'chase'; e.atkCd = 0.25;
+  showBanner("IT'S A MIMIC!", 'KILL IT FOR WHAT IT WAS HIDING', '#ff5a4a', 1.8, 40);
+  addRing(p.x, p.y, 8, 360, 90, '#ff5a4a', 6, 0.45); addShake(0.2);
+  try { SFX.roar(); } catch(err){}
+  return e;
+}
+function mimicLoot(e){
+  /* what it swallowed, a tier better for the trouble -- never past epic */
+  const rk = Math.min(rarRank(e.mimicRar || 'common') + 1, rarRank('epic'));
+  const rar = RAR_ORDER[rk];
+  queuePick('chest', rar);
+  spawnStuds(e.x, e.y, 10 + wave.n*3);
+  showBanner("THE MIMIC'S HOARD", (RARITY[rar] || RARITY.common).name+' BRICK · ON R', (RARITY[rar] || RARITY.common).col, 1.8, 38);
+  return rar;
+}
+/* ---- THE BANNER-BEARER ---- */
+const BANNER_R = 280, BANNER_PLANT_D = 420, BANNER_PLANT_T = 0.9, BANNER_REPLANT = 10;
+const BANNER_DMG = 1.30, BANNER_SPD = 1.20, BANNER_ATK = 0.85;
+function plantBanner(e){
+  const fx = e.face ? e.face.x : 0, fy = e.face ? e.face.y : 1, fl = Math.hypot(fx, fy) || 1;
+  spawnEnemy('warbanner', clamp(e.x + fx/fl*18, W.wall+40, W.w-W.wall-40), clamp(e.y + fy/fl*18, W.wall+40, W.h-W.wall-40));
+  const b = enemies[enemies.length-1];
+  b.state = 'active'; b.mode = 'planted'; b.bearer = e;
+  e.banner = b; e.plantCd = BANNER_REPLANT;
+  addRing(b.x, b.y, 8, 360, BANNER_R, '#ff5a4a', 5, 0.5);
+  try { SFX.clank(); } catch(err){}
+  return b;
+}
+function bannerSet(e, on){
+  if(!!e.bannered === on) return;
+  e.bannered = on;
+  if(on){ e.dmg *= BANNER_DMG; e.speed *= BANNER_SPD; e.atkS *= BANNER_ATK; }
+  else  { e.dmg /= BANNER_DMG; e.speed /= BANNER_SPD; e.atkS /= BANNER_ATK; }
+}
+function updateBanners(){
+  const bs = enemies.filter(b=>b.type === 'warbanner' && !b.dead && b.state === 'active');
+  for(const e of enemies){
+    if(e.dead || e.type === 'warbanner') continue;
+    bannerSet(e, bs.length > 0 && bs.some(b=>Math.hypot(b.x - e.x, b.y - e.y) < BANNER_R));
+  }
+}
+/* the part of all three the main loop runs */
+function updateSpecials(dt){
+  if(goblinPending && wave.state === 'fight'){
+    goblinPending.delay -= dt;
+    if(goblinPending.delay <= 0){ goblinPending = null; goblinSpawn(); }
+  }
+  updateBanners();
+}
+function specialOnKill(e){
+  if(e.type === 'goblin') goblinLoot(e);
+  else if(e.type === 'mimic') mimicLoot(e);
+  else if(e.type === 'warbanner' && e.bearer && e.bearer.banner === e) e.bearer.banner = null;
+}
+/* ---- DRAWN ---- */
+function drawMimic(c, e){
+  const rc = (RARITY[e.mimicRar] || RARITY.common).col, s = (e.scale || 1)*1.25;
+  const biting = e.mode === 'lunge' || e.strikeT > 0;
+  const chomp = biting ? 1 : 0.3 + 0.3*Math.abs(Math.sin(vtime*7 + (e.phase || 0)));
+  const hop = (e.moving ? Math.abs(Math.sin((e.walk || 0)*0.6))*7 : 0);
+  c.save(); c.translate(e.x, e.y);
+  c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(0, 2, 18*s, 6*s, 0, 0, TAU); c.fill();
+  c.translate(0, -hop); c.scale(s, s);
+  c.strokeStyle = 'rgba(20,30,40,0.7)'; c.lineWidth = 2;
+  const lp = Math.sin(e.walk || 0)*3;
+  c.fillStyle = sh(rc, -0.55); c.fillRect(-13, -3 + lp*0.3, 6, 7); c.fillRect(7, -3 - lp*0.3, 6, 7);
+  c.fillStyle = sh(rc, -0.42); roundRect(c, -16, -16, 32, 16, 3); c.fill(); c.stroke();
+  const gap = 3 + chomp*13;
+  c.fillStyle = '#3a0c16'; roundRect(c, -15, -16 - gap, 30, gap + 2, 2); c.fill();
+  c.fillStyle = '#e0457a'; c.beginPath(); c.ellipse(4, -16 - gap*0.35, 6, 3, 0.2, 0, TAU); c.fill();
+  c.fillStyle = '#fff';
+  for(let i=0;i<5;i++){ const x = -15 + i*6; c.beginPath(); c.moveTo(x, -16); c.lineTo(x + 3, -21); c.lineTo(x + 6, -16); c.fill(); }
+  c.save(); c.translate(-16, -16 - gap);
+  c.fillStyle = sh(rc, -0.22); roundRect(c, 0, -10, 32, 10, 3); c.fill(); c.stroke();
+  c.fillStyle = '#fff';
+  for(let i=0;i<5;i++){ const x = 1 + i*6; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 3, 5); c.lineTo(x + 6, 0); c.fill(); }
+  c.fillStyle = '#ffe95a'; c.beginPath(); c.arc(16, -5, 3.4, 0, TAU); c.fill();
+  c.fillStyle = '#1b1f23'; c.fillRect(15.2, -7.5, 1.6, 5);
+  c.restore();
+  c.fillStyle = rc; roundRect(c, -3, -16, 6, 16, 2); c.fill(); c.stroke();
+  c.restore();
+}
+function drawWarBanner(c, e){
+  const pulse = 0.5 + 0.5*Math.sin(vtime*3 + (e.phase || 0));
+  c.fillStyle = `rgba(255,90,74,${0.05 + 0.03*pulse})`;
+  c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.fill();
+  c.setLineDash([12,10]); c.strokeStyle = `rgba(255,110,90,${0.35 + 0.25*pulse})`; c.lineWidth = 3;
+  c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.stroke(); c.setLineDash([]);
+  c.save(); c.translate(e.x, e.y);
+  c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(0, 2, 12, 5, 0, 0, TAU); c.fill();
+  c.fillStyle = '#6d6e68'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 2;
+  roundRect(c, -8, -6, 16, 8, 2); c.fill(); c.stroke();
+  c.fillStyle = '#7b5132'; c.fillRect(-2, -84, 4, 80); c.strokeRect(-2, -84, 4, 80);
+  drawStudG(c, 0, -86, 3.5, PAL.gold);
+  const wv = Math.sin(vtime*4 + (e.phase || 0))*3;
+  c.fillStyle = e.flash > 0 ? '#ffffff' : '#a8201a';
+  c.beginPath(); c.moveTo(2, -80); c.quadraticCurveTo(18, -80 + wv, 34, -78); c.lineTo(34, -50);
+  c.quadraticCurveTo(18, -52 - wv, 2, -48); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = PAL.gold; c.beginPath(); c.moveTo(18, -72); c.lineTo(24, -64); c.lineTo(18, -56); c.lineTo(12, -64); c.closePath(); c.fill();
+  c.restore();
+}
+function drawSpecialExtras(c, e){
+  if(e.type === 'goblin'){
+    /* the sack, and a few of your studs spilling out of it */
+    const bob = Math.sin((e.walk || 0)*0.8)*2, s = e.scale || 1;
+    c.fillStyle = '#b0835a'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(e.x - 14*s, e.y - 34*s + bob, 13*s, 15*s, -0.2, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = '#7a4f2a'; c.fillRect(e.x - 17*s, e.y - 50*s + bob, 7*s, 4*s);
+    for(const [dx, dy] of [[-18,-44],[-10,-45],[-14,-47]]){ drawStudG(c, e.x + dx*s, e.y + dy*s + bob, 2.6*s, PAL.gold); }
+    if(e.gobPortal !== undefined){
+      const k = 1 - clamp(e.gobPortal/GOBLIN_PORTAL_T, 0, 1);
+      c.strokeStyle = `rgba(122,201,67,${0.5 + 0.4*Math.sin(vtime*20)})`; c.lineWidth = 5;
+      c.beginPath(); c.ellipse(e.x, e.y - 30, 26 + 20*k, 40 + 26*k, 0, 0, TAU); c.stroke();
+    }
+  } else if(e.type === 'bannerman' && !(e.banner && !e.banner.dead)){
+    const s = e.scale || 1;
+    c.fillStyle = '#7b5132'; c.fillRect(e.x + 9*s, e.y - 80*s, 3*s, 70*s);
+    c.fillStyle = '#a8201a'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 1.5;
+    roundRect(c, e.x + 6*s, e.y - 78*s, 9*s, 30*s, 3); c.fill(); c.stroke();
   }
 }
 function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
@@ -6392,6 +6599,7 @@ function killEnemy(e, source){
   if(e.sbox) sboxOnKill(e);
   if(e.ritual || e.ritualGuard) ritualOnKill(e);
   rareModOnKill(e);
+  specialOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -6569,7 +6777,8 @@ function mobSpoils(e){
     pickups.push(makePickup('ward', at(26,26).x, at(26,26).y));
   if(Math.random() < DROP.chest * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000),
-      dead:false, hp:3, r:16, rar: rollRarity('chest') }, 20));
+      dead:false, hp:3, r:16, rar: rollRarity('chest'),
+      mimic: wave.n >= MIMIC_FROM && Math.random() < MIMIC_CHANCE }, 20));
   if(Math.random() < DROP.wild * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
@@ -7995,6 +8204,7 @@ const ROSTER = [
   { k:'knight',      at:9,  cost:8,  flavour:1 },
   { k:'stalker',     at:11, cost:9,  flavour:1 },
   { k:'lancer',      at:12, cost:10, flavour:1 },
+  { k:'bannerman',   at:10, cost:9,  flavour:0.8 },
   { k:'superimp',    at:15, cost:11, flavour:1 },
   { k:'hexer',       at:14, cost:12, flavour:0.8 },
   { k:'revenant',    at:16, cost:14, flavour:1 },
@@ -8036,7 +8246,7 @@ MONSTER_COST.firegolem = 34;  MONSTER_COST.stormgolem = 36;
 const ROSTER_BANDS = [
   ['imp','boneling','archer','spitter','skeleton'],
   ['shade','cryptbat','brute','knight','bloater'],
-  ['stalker','lancer','superimp','hexer','bomber','zrunner'],
+  ['stalker','lancer','superimp','hexer','bomber','zrunner','bannerman'],
   ['revenant','lobber','pyromancer','frostmage','zhulk'],
   ['necromancer','stormcaller','jugg','marksman','greenwarden'],
   ['bastion','direbat','pumpkinlord','impmaster'],
@@ -8280,6 +8490,7 @@ function startWave(n){
   wave.n = n; wave.queue = composeWave(n); wave.hold = false;
   { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); }
   sboxRoll(n);
+  goblinRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
      the numbers on your sheet have already changed when you read the banner. */
@@ -8496,7 +8707,7 @@ function updateWave(dt){
       }
     }
     /* a sleeping ritual pack is not the wave's: it waits for you across waves */
-    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant) && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
+    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin') && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
       wave.hold = leagueLeft().length > 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
@@ -20791,6 +21002,30 @@ function updateEnemyCore(e, dt){
     const a = angTo(e,{x:e.wx,y:e.wy});
     if(dist(e,{x:e.wx,y:e.wy})>20){ vx = Math.cos(a)*40; vy=Math.sin(a)*40; }
   }
+  else if(e.type==='goblin'){ const v = goblinTick(e, dt, toP, dP); vx = v.x; vy = v.y; if(e.dead) return; }
+  else if(e.type==='warbanner'){ e.mode = 'planted'; e.kx = 0; e.ky = 0; }
+  else if(e.type==='bannerman'){
+    const live = e.banner && !e.banner.dead;
+    if(!live){ e.banner = null; e.plantCd = Math.max(0, (e.plantCd || 0) - dt); }
+    if(e.mode === 'plant'){
+      e.modeT += dt; e.face = { x:Math.cos(toP), y:Math.sin(toP) };
+      if(e.modeT >= BANNER_PLANT_T){ plantBanner(e); e.mode = 'chase'; }
+    } else if(!live && (e.plantCd || 0) <= 0 && dP < BANNER_PLANT_D && !e.docile){ e.mode = 'plant'; e.modeT = 0; }
+    else { e.mode = 'chase'; vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed; }
+  }
+  else if(e.type==='mimic'){
+    /* it hops at you, and when it is close it lunges with its lid open */
+    if(e.mode === 'lunge'){
+      e.modeT += dt;
+      vx = Math.cos(e.lockA)*430; vy = Math.sin(e.lockA)*430;
+      if(e.modeT >= 0.22){ e.mode = 'chase'; e.atkCd = 1.3*e.atkS; }
+    } else {
+      e.mode = 'chase';
+      const hopK = 0.35 + 0.9*Math.abs(Math.sin(vtime*5 + (e.phase || 0)));
+      vx = Math.cos(toP)*e.speed*hopK; vy = Math.sin(toP)*e.speed*hopK;
+      if(e.atkCd <= 0 && dP < 170 && !e.docile){ e.mode = 'lunge'; e.modeT = 0; e.lockA = toP; try { SFX.grunt(); } catch(err){} }
+    }
+  }
   else if(e.type==='imp'){
     const wob = Math.sin(vtime*4 + e.phase)*0.5;
     const a = toP + wob*0.35;
@@ -24440,6 +24675,17 @@ function drawFigure(c, o){
     }
     c.lineWidth = 2;
   }
+  if(o.style==='goblin'){
+    /* long green ears, swept out sideways */
+    c.fillStyle = T(o.colors.head); c.strokeStyle = OL;
+    for(const side of [-1, 1]){
+      c.beginPath();
+      c.moveTo(side*hr*0.75, hy2 - 3*s);
+      c.quadraticCurveTo(side*(hr + 8*s), hy2 - 8*s, side*(hr + 14*s), hy2 - 11*s);
+      c.quadraticCurveTo(side*(hr + 6*s), hy2 + 1*s, side*hr*0.75, hy2 + 3*s);
+      c.closePath(); c.fill(); c.stroke();
+    }
+  }
   if(o.style==='imp'){
     /* the big one wears the same horns, grown: longer, swept back, and a ridge
        of spines between them. Same silhouette, read at twice the size. */
@@ -25045,6 +25291,13 @@ function drawProp(c, p){
     roundRect(c,-3,-16,6,18,2); c.fill(); c.stroke();
     c.fillRect(-16,-13,32,3); c.strokeRect(-16,-13,32,3);
     drawStudG(c,-9,-26,3,sh(rc,0.2)); drawStudG(c,9,-26,3,sh(rc,0.2));
+    /* A MIMIC BREATHES. Every few seconds the lid lifts a crack and there are
+       teeth under it -- there to be noticed, if you are looking */
+    if(p.mimic && ((vtime + p.seed) % 4.5) < 0.4){
+      c.fillStyle = '#3a0c16'; c.fillRect(-14, -16, 28, 3);
+      c.fillStyle = '#fff';
+      for(let i=0;i<5;i++){ const x = -13 + i*5.5; c.beginPath(); c.moveTo(x, -16); c.lineTo(x + 2.5, -13); c.lineTo(x + 5, -16); c.fill(); }
+    }
     if(p.wild){
       /* a question mark where the pips would be, and a slow halo turning round it */
       c.fillStyle = '#ffffff';
@@ -27112,6 +27365,15 @@ function drawEnemy(c, e){
         vx:rnd(-6,6), vy:rnd(-30,-10), life:rnd(0.5,1.0), max:1.0, color:'#bdf0a8'});
     }
   }
+  if(e.type==='mimic' || e.type==='warbanner'){
+    if(e.type==='mimic') drawMimic(c, e); else drawWarBanner(c, e);
+    const wS = 30*(e.scale || 1), yS = e.type==='mimic' ? e.y - 52*(e.scale || 1) : e.y - 96;
+    if(e.hp < e.maxHp){
+      c.fillStyle='rgba(15,20,25,0.6)'; c.fillRect(e.x-wS/2, yS, wS, 4);
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a'); c.fillRect(e.x-wS/2, yS, wS*clamp(e.hp/e.maxHp,0,1), 4);
+    }
+    return;
+  }
   drawPoisonPips(c, e);
   const o = { x:e.x, y:e.y, s:e.scale, face:e.face, walk:e.walk, moving:e.moving,
     flash:e.flash, colors:e.col, style:e.style, elite:e.elite, magic:e.magic,
@@ -27184,6 +27446,7 @@ function drawEnemy(c, e){
     if(e.bkey==='ashtyrant'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
+  drawSpecialExtras(c, e);
   /* ON TOP of the body, never under it: a gash is a mark ON the thing, and the
      dose count has to clear its head and its health bar. Anything drawn before
      drawFigure is simply painted over by the minifig. */
@@ -28632,7 +28895,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachExtra = []; abyss = null; abyssExtra = []; leagueMiss = 0; sboxPending = [];
-  ritualS = ritualBlank(); rmCores = []; kindredUid = 0;
+  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null;
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -28952,6 +29215,7 @@ function update(dt, raw){
     updateRitual(dt);
     ritualClamp();
     updateRareMods(dt);
+    updateSpecials(dt);
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
