@@ -2647,6 +2647,20 @@ sits under, and both short views — this one and the character sheet's — filt
 short view and the long one can never disagree about a number: they are the same row, and one
 of them shows fewer.
 
+### A cleared wave waits for the leagues
+
+When the wave's last monster dies and there is **still league content untouched on the map** —
+an unopened breach hand, an abyss nobody has stepped into, a locked strongbox, a ritual altar
+still guarded or not yet begun — the next wave **does not start**. A prompt sits top middle
+saying what is left:
+
+![WAVE CLEARED — 2 strongboxes · 3 ritual altars left · F CONTINUE](docs/wave-hold.png)
+
+- **Do it all** and the run carries on by itself the moment the last of it is done.
+- **Press <kbd>F</kbd>** to leave it: the breach hand sinks and the abyss closes, as they always
+  did at the end of a wave; a strongbox or a ritual altar stays where it is for later.
+- A ritual altar counts until its ritual is complete — guarded, freed but not begun, or both.
+
 ### Breach
 
 The first league mechanic. From **wave 6**, an ordinary (non-boss) wave has a **45%** chance to
@@ -3367,6 +3381,7 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
+| <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
 | <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |

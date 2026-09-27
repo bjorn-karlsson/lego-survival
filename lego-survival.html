@@ -3537,7 +3537,8 @@ window.addEventListener('keydown', e=>{
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   keys[e.code] = true;
-  if(e.code==='KeyF' && state==='play' && wave.state==='ready') waveSkip();
+  if(e.code==='KeyF' && !e.repeat && state==='play' && wave.state==='ready') waveSkip();
+  else if(e.code==='KeyF' && !e.repeat && state==='play' && wave.state==='cleared' && wave.hold) waveGoOn();
   if(e.code==='KeyM') toggleMute();
   /* P IS THE SPELLBOOK, and the spellbook does not stop the wave — the state
      machine is left on 'play' throughout, so everything keeps updating behind
@@ -7884,7 +7885,7 @@ function shuffleArr(a){
 }
 
 function startWave(n){
-  wave.n = n; wave.queue = composeWave(n);
+  wave.n = n; wave.queue = composeWave(n); wave.hold = false;
   breachRoll(n);
   abyssRoll(n);
   sboxRoll(n);
@@ -7932,6 +7933,34 @@ function startWave(n){
   if(boss) SFX.roar();
 }
 /* Take the break early. */
+/* WHAT OF THE LEAGUES IS STILL WAITING TO BE DONE on the map: an unopened
+   breach hand, an abyss nobody has stepped into, a locked strongbox, a ritual
+   altar still guarded or not yet begun. (One already running holds the wave's
+   clear by itself.) */
+function leagueLeft(){
+  const out = [];
+  for(const B of allBreaches()) if(B && B.state === 'hand') out.push('breach');
+  for(const A of allAbysses()) if(A && A.state === 'idle') out.push('abyss');
+  for(const b of sboxLive()) if(!b.sprung) out.push('strongbox');
+  for(const A of ritualS.altars) if(A.state === 'guarded' || A.state === 'ready') out.push('ritual');
+  return out;
+}
+function leagueLeftText(){
+  const L = leagueLeft(), n = k=>L.filter(x=>x === k).length, out = [];
+  const say = (k, one, many)=>{ const c = n(k); if(c) out.push(c === 1 ? one : c+' '+many); };
+  say('breach', 'a breach', 'breaches'); say('abyss', 'an abyss', 'abysses');
+  say('strongbox', 'a strongbox', 'strongboxes'); say('ritual', 'a ritual altar', 'ritual altars');
+  return out.join(' · ');
+}
+/* F ON A HELD WAVE: leave what is left. The breach hand and the unopened abyss
+   go as they always did when a wave ended without them (the next wave's own
+   roll replaces them), and a strongbox or a ritual altar stays where it is, as
+   it always did. */
+function waveGoOn(){
+  if(wave.state !== 'cleared' || !wave.hold) return;
+  wave.hold = false;
+  SFX.click();
+}
 function waveSkip(){
   if(wave.state!=='ready') return;
   wave.readyT = 0;
@@ -7988,11 +8017,15 @@ function updateWave(dt){
   wave.t += dt;
   updateCall(dt);
   /* A CLEARED WAVE DOES NOT WAIT FOR ITS REWARD. The reward goes on the stash
-     like any other and the run carries on: a moment for the banner (and for an
-     untouched breach, abyss or strongbox to see the wave is over), then the next
-     wave's breather begins -- opened or not. */
+     like any other and the run carries on: a moment for the banner, then the
+     next wave's breather begins -- opened or not.
+     IT DOES WAIT FOR THE LEAGUES. With a breach hand, an abyss, a strongbox or a
+     ritual altar still untouched on the map, the wave HOLDS (wave.hold) under a
+     prompt: do the content and it carries on by itself the moment the last of
+     it is done, or press F to leave it (see waveGoOn). */
   if(wave.state==='cleared'){
-    if(wave.t >= WAVE_CLEAR_HOLD) startWave(wave.n + 1);
+    if(wave.hold && !leagueLeft().length) wave.hold = false;
+    if(!wave.hold && wave.t >= WAVE_CLEAR_HOLD) startWave(wave.n + 1);
     return;
   }
   if(wave.state==='ready'){
@@ -8074,6 +8107,7 @@ function updateWave(dt){
     /* a sleeping ritual pack is not the wave's: it waits for you across waves */
     if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant) && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
+      wave.hold = leagueLeft().length > 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
       wave.done = Math.max(wave.done||0, wave.n);
@@ -8417,7 +8451,7 @@ function breachTickOne(dt){
   B.age += dt;
   if(B.state === 'wait' || B.state === 'hand'){
     /* a wave that ends with the hand untouched takes the hand with it */
-    if(wave.state === 'cleared'){
+    if(wave.state === 'cleared' && (B.state === 'wait' || !wave.hold)){
       if(B.state === 'hand') logEvent('   the breach hand sinks back, unopened', BREACH_LORDS[B.lord].col);
       breach = null; return;
     }
@@ -8925,7 +8959,7 @@ function abyssTick(A, dt){
     return true;
   }
   if(A.state === 'idle'){
-    if(wave.state === 'cleared'){ logEvent('   the abyss closes, untouched', ABYSS_COL); return false; }
+    if(wave.state === 'cleared' && !wave.hold){ logEvent('   the abyss closes, untouched', ABYSS_COL); return false; }
     if(!player.dead && Math.hypot(player.x - A.x, player.y - A.y) < ABYSS_TOUCH + (player.r || 12)) abyssOpen(A);
     return true;
   }
@@ -26933,8 +26967,30 @@ function renderCombatLog(){
    function, so the boss block below can stack under it instead of through it. */
 function hudWaveBottom(){
   if(wave.n <= 0) return 34;
+  return hudWaveBase() + (wave.state === 'cleared' && wave.hold ? WAVE_HOLD_H : 0);
+}
+function hudWaveBase(){
   if(waveMods.length) return wave.state === 'ready' ? 95 : 83;
   return wave.state === 'ready' ? 70 : 58;
+}
+/* THE HELD WAVE'S PROMPT, top middle, under the wave block: what is left, and F */
+const WAVE_HOLD_H = 40;
+function drawWaveHold(){
+  if(wave.state !== 'cleared' || !wave.hold || state !== 'play' || !player || player.dead) return;
+  const y = hudWaveBase() + 22;
+  const head = 'WAVE CLEARED — '+leagueLeftText()+' left', tail = 'CONTINUE';
+  ctx.font = '700 13px Fredoka';
+  const w1 = ctx.measureText(head).width, w2 = ctx.measureText(tail).width;
+  const w = 16 + w1 + 16 + 22 + 8 + w2 + 16, x0 = cw/2 - w/2;
+  const pulse = 0.5 + 0.5*Math.sin(vtime*4);
+  ctx.fillStyle = 'rgba(15,20,25,0.78)'; roundRect(ctx, x0, y - 15, w, 30, 11); ctx.fill();
+  ctx.strokeStyle = `rgba(165,224,110,${0.45 + 0.4*pulse})`; ctx.lineWidth = 2; roundRect(ctx, x0, y - 15, w, 30, 11); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e8ebe9'; ctx.fillText(head, x0 + 16, y);
+  let x = x0 + 16 + w1 + 16;
+  ctx.fillStyle = '#a5e06e'; roundRect(ctx, x, y - 11, 22, 22, 5); ctx.fill();
+  ctx.fillStyle = '#1b2a34'; ctx.textAlign = 'center'; ctx.font = '800 12px Fredoka'; ctx.fillText('F', x + 11, y + 1);
+  ctx.font = '700 13px Fredoka'; ctx.textAlign = 'left'; ctx.fillStyle = '#a5e06e'; ctx.fillText(tail, x + 30, y);
 }
 /* EVERY DEBUFF ON THE BOSS, on one line under its health bar. No names — a
    symbol and a count, left to right, because on a boss you are reading this
@@ -27372,6 +27428,7 @@ function renderHUD(){
   drawAbyssHud();
   drawSboxHud();
   drawRitualHud();
+  drawWaveHold();
   drawLootStash();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
   if(boss){

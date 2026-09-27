@@ -3895,3 +3895,33 @@ body chests at 0.0017, strongbox chance 0.5 and four at once; no epic box before
 `noclamp`, `fogleak`, `noholdwave`, `guardhold`, `queueruns`, `flattrib`, `guardpays`,
 `freedefer`, `nocarry`, `markmiss`, `ringtwice`, `outsidecall`, `epicearly`, `chestfull`,
 `epicsoft`, `ritualpoor` — all caught.
+
+## Sixty-second pass — a cleared wave waits for the leagues
+
+> *"if all the wave monsters are dead and there are unfinished leauge mechanics left, you dont get
+> sent to the next wave, you get a prompt top middle, continue press f, or you do all the content
+> and it will continue."*
+
+- `leagueLeft()` lists what is still untouched: breach hands (`state 'hand'`), idle abysses,
+  locked (unsprung) strongboxes, and ritual altars `guarded` or `ready`. Anything already running
+  holds the wave's clear by itself, as before.
+- On the clear, `wave.hold = leagueLeft().length > 0`. The cleared branch of `updateWave` only
+  starts the next wave when `!wave.hold`, and drops the hold by itself the frame nothing is left —
+  so doing the content carries on. <kbd>F</kbd> on a held wave (`waveGoOn`, keydown only, never a
+  repeat) drops the hold.
+- The breach and the abyss used to throw away an untouched hand/eye the moment the wave cleared.
+  They now keep it while the wave is held; after F the next wave's `breachRoll`/`abyssRoll`
+  replaces them as before. Strongboxes and altars persist, as they always did.
+- The prompt (`drawWaveHold`) sits in the wave block: `hudWaveBottom()` grows by `WAVE_HOLD_H` =
+  40 while held (`hudWaveBase()` is the old value), so the breach/abyss/strongbox/ritual lines
+  move down under it. "WAVE CLEARED — 2 strongboxes · 3 ritual altars left · [F] CONTINUE".
+- Holding F from the held prompt no longer skips the next wave's breather: the break skip now
+  ignores key repeats too.
+
+**Proof.** New `hold` test: with nothing left the wave carries on by itself; a locked strongbox
+holds it for six seconds with the prompt pushing the HUD down 40px and naming "a strongbox", F
+lets it go and the box stays; springing the box and killing its guardians lets it go by itself;
+an unopened breach hand and an idle abyss hold it and survive the hold, and are gone after F; a
+ritual set holds while guarded and while ready, and not once done; F does nothing mid-fight, and a
+repeating F does not skip the next breather. Breaks `noholdleague`, `nof`, `handsinks`,
+`eyecloses`, `noauto`, `frepeat`, `readyleft` caught.
