@@ -11,6 +11,18 @@
   html,body{width:100%;height:100%;overflow:hidden;background:#10151a;font-family:'Fredoka',sans-serif}
   #game{display:block;width:100vw;height:100vh;cursor:none;outline:none}
   .hidden{display:none !important}
+  /* the death screen stepping aside for the combat log */
+  #overPeekBar{display:none;position:fixed;left:50%;bottom:26px;transform:translateX(-50%);align-items:center;gap:14px;
+    background:rgba(15,20,25,0.85);border-radius:14px;padding:10px 16px;pointer-events:auto}
+  #overPeekBar span{font-size:12px;color:#c9d2ce;max-width:360px}
+  #overScreen.peek{background:transparent;pointer-events:none}
+  #overScreen.peek > .plate{display:none}
+  #overScreen.peek #overPeekBar{display:flex}
+  #respawnBtn.gold{background:#ffd76e;color:#20160a;box-shadow:0 4px 0 #b08a2a}
+  #respawnBtn:disabled{opacity:0.45;cursor:not-allowed}
+  .rekill{font-size:13px;color:#ffb0a0;margin:0 0 8px}
+  .rekill b{color:#ff8a6a}
+  .rekill i{display:block;font-style:normal;font-size:11px;color:#9fb0a4}
   .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:rgba(9,13,17,.55);backdrop-filter:blur(3px);z-index:10;color:#f2f3f2}
   /* `justify-content:center` on a column TALLER than the window pushes its top
@@ -966,11 +978,15 @@
       <div class="stat"><b id="stTime">0:00</b><span>TIME</span></div>
     </div>
     <div class="btnrow">
+      <button id="respawnBtn" class="btn gold">SECOND CHANCE</button>
       <button id="retryBtn" class="btn">TRY AGAIN</button>
       <button id="titleBtn" class="btn gray">TITLE</button>
+      <button id="overLogBtn" class="btn gray">COMBAT LOG</button>
       <button id="overLinkBtn" class="btn gray">COPY RUN LINK</button>
     </div>
   </div>
+  <div id="overPeekBar"><button id="overBackBtn" class="btn">BACK TO THE RESULTS</button>
+    <span>the combat log: TAKEN shows every blow that landed on you — click the tabs for the rest</span></div>
 </div>
 
 <script>
@@ -3393,11 +3409,12 @@ const OPT_DEFS = [
   { id:'moveMode', def:'wasd', name:'MOVEMENT', choices:['wasd','click'], names:{ wasd:'WASD', click:'POINT & CLICK' },
     note:'WASD: the keys walk and the mouse aims. POINT & CLICK: click the ground to walk there (hold to '+
          'follow the cursor), click a monster to walk into range and attack it (hold to keep attacking), '+
-         'SHIFT+click to attack where you stand. SPACE still rolls' },
+         'SHIFT+click to attack at the cursor without stopping your walk. SPACE still rolls' },
   { id:'attackBtn', def:'left', name:'ATTACK BUTTON', choices:['left','right'], names:{ left:'LEFT CLICK', right:'RIGHT CLICK' },
     note:'which mouse button uses your weapon. With POINT & CLICK on the left, the left button walks and '+
-         'attacks; on the right, the left button only ever walks, and the right attacks — a monster '+
-         'under the cursor is walked to and hit, anywhere else is attacked from where you stand' },
+         'attacks; on the right, the left button only ever walks and the right attacks at the cursor while '+
+         'you keep walking — hold both to walk and fight at once. Standing still, a right-click on a '+
+         'monster walks up to it and hits it' },
   /* a CHOICE rather than a switch: its value is one of `choices` */
   { id:'textSize', def:'normal', name:'TEXT SIZE', choices:['small','normal','large','xlarge'],
     note:'every word in the menus, the sheets, the cards and the log, and the text drawn in the '+
@@ -4067,6 +4084,7 @@ function rebuildWithout(id){
   for(const k of Object.keys(p)) delete p[k];
   Object.assign(p, blank, carry);
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
+  p.hpFlat += levelHearts(p);           /* ...nor are the arcade's level hearts */
   applyMetaTree(p);                     /* the tree is not a brick either... */
   applyFavPerks();                      /* nor is the favourite's starting kit */
   if(modeHasGear()) gearApply(p, true); /* nor is what you are wearing */
@@ -4206,7 +4224,7 @@ function runLinkCopy(btn){
    roster: every brick the tree did not already grant, the level, the rest */
 function runLinkApply(){
   const o = runLink, p = player;
-  p.level = Math.max(1, o.lv|0); p.incAll += 0.05*(p.level - 1);
+  p.level = Math.max(1, o.lv|0); p.incAll += 0.05*(p.level - 1); p.hpFlat += levelHearts(p);
   p.xp = o.xp || 0; p.xpNext = o.xn || p.xpNext;
   const pre = buildLog.length;
   for(const [id, ri] of (o.b || []).slice(pre)){
@@ -6994,7 +7012,7 @@ function killEnemy(e, source){
      rerolls; banking that would charge you twice for rerolling. */
   player.studsTotal += amount;
   spawnStuds(e.x, e.y, amount);
-  if(e.type==='boss') bossSpoils(e);
+  if(e.type==='boss'){ bossSpoils(e); respawnOnBoss(); }
   else mobSpoils(e);
   gainXp(e.xp * (e.elite?2:1) * fort * MOB_XP_SCALE, true);
   if(e.type==='boss'){
@@ -7795,6 +7813,13 @@ const STUD_XP_WAVE_DIV = 10;
    1.30 down towards 1.12, so a late level still costs more than an early one
    without running away from the whole roster. */
 function xpStep(lvl){ return 1.12 + 0.18*Math.pow(0.94, Math.max(0, lvl-1)); }
+/* IN THE ARCADE A LEVEL IS A HEART: +1 maximum heart and a full heal, every level.
+   (The RPG will earn its life from gear and the tree.) Kept as a count on the
+   hero -- levels x ARCADE_LEVEL_HEART -- so a rebuild or a replayed link puts
+   back exactly what the levels gave. */
+const ARCADE_LEVEL_HEART = 1;
+function arcadeMode(){ return GAME_MODE !== 'rpg'; }
+function levelHearts(p){ return arcadeMode() ? Math.max(0, (p.level|0) - 1) * ARCADE_LEVEL_HEART : 0; }
 function gainXp(n, fromMob){
   const p = player;
   const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : STUD_XP_WAVE_DIV);
@@ -7803,7 +7828,8 @@ function gainXp(n, fromMob){
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*xpStep(p.level)+5);
     p.incAll += 0.05;      /* additive with every other increase, PoE style */
-    if(p.hp < p.maxHp) p.hp++;
+    if(arcadeMode()){ p.hpFlat += ARCADE_LEVEL_HEART; p.lvlHeal = true; }
+    else if(p.hp < p.maxHp) p.hp++;
     addRing(p.x,p.y,10,300,110,'#ffb900',6,0.5);
     addDmg(p.x, p.y-50, 'LEVEL UP!', '#ffb900', 22);
     logEvent('LEVEL '+p.level, '#ffb900');
@@ -7813,7 +7839,8 @@ function gainXp(n, fromMob){
   }
   /* a level is worth more MANA (and anything else that reads the level), so the
      pools are rebuilt -- and a level fills the mana pool, PoE's way */
-  if(p.level !== lv0){ syncStats(); p.mana = p.maxMana; }
+  if(p.level !== lv0){ syncStats(); p.mana = p.maxMana;
+    if(p.lvlHeal){ p.lvlHeal = false; p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax; } }
 }
 /* Damage = (Base + Flat) × (1 + increased) × ∏(1 + more).
    `kind` picks which increased pool applies on top of the global one. */
@@ -8489,6 +8516,56 @@ function perfectDodge(x,y){
   spawnStuds(player.x, player.y, 3);
   player.bomb.cd = Math.max(0, player.bomb.cd - 2);
   SFX.deflect();
+}
+/* ============================ THE SECOND CHANCE ============================
+   ARCADE ONLY. A run begins with one free respawn. Die, and the death screen
+   offers it: you stand up where you fell, whole, with a moment's grace and the
+   monsters round you thrown back. Used, it comes back when you next kill a BOSS.
+   Die again before then and you may still stand up -- for a FINE in studs, which
+   multiplies with every fine already paid this run. The run is not banked to the
+   tree while a second chance is still on the table: it is banked when you leave. */
+const RESPAWN_FINE_BASE = 150, RESPAWN_FINE_WAVE = 25, RESPAWN_FINE_MUL = 3;
+const RESPAWN_GRACE = 3, RESPAWN_PUSH_R = 320;
+let respawn = { free:1, paid:0, banked:false };
+function respawnReset(){ respawn = { free:1, paid:0, banked:false }; }
+function respawnFine(){ return Math.round((RESPAWN_FINE_BASE + RESPAWN_FINE_WAVE*Math.max(1, wave.n)) * Math.pow(RESPAWN_FINE_MUL, respawn.paid)); }
+/* what the death screen may offer: null when nothing (not the arcade, a bench run) */
+function respawnOffer(){
+  if(!arcadeMode() || sandbox || !player) return null;
+  if(respawn.free > 0) return { free:true, cost:0, can:true };
+  const cost = respawnFine();
+  return { free:false, cost, can:(player.studs || 0) >= cost };
+}
+/* a boss down gives the free one back */
+function respawnOnBoss(){
+  if(!arcadeMode() || respawn.free > 0) return;
+  respawn.free = 1;
+  showBanner('SECOND CHANCE', 'READY AGAIN', '#ffd76e', 1.8, 38);
+  logEvent('second chance ready again', '#ffd76e');
+}
+function respawnNow(){
+  const o = respawnOffer();
+  if(!o || !o.can || !player || !player.dead) return false;
+  const p = player;
+  if(o.free) respawn.free = 0;
+  else { p.studs -= o.cost; respawn.paid++; }
+  document.getElementById('overScreen').classList.add('hidden', 'peek');
+  document.getElementById('overScreen').classList.remove('peek');
+  p.dead = false; p.deadT = 0; p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax;
+  p.invuln = RESPAWN_GRACE; p.stunT = 0; p.psn = null; p.pbleed = null; p.burn = null;
+  tScale = 1;
+  /* room to breathe: everything close is thrown back, every shot in the air near you goes */
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active') continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if(d < RESPAWN_PUSH_R){ const a = Math.atan2(e.y - p.y, e.x - p.x), k = 1 - d/RESPAWN_PUSH_R; e.kx = (e.kx || 0) + Math.cos(a)*700*k; e.ky = (e.ky || 0) + Math.sin(a)*700*k; }
+  }
+  for(const pr of projectiles) if(pr.owner === 'enemy' && Math.hypot(pr.x - p.x, pr.y - p.y) < RESPAWN_PUSH_R*1.5) pr.dead = true;
+  addRing(p.x, p.y, 12, 420, RESPAWN_PUSH_R, '#ffd76e', 8, 0.6); addShake(0.3);
+  showBanner('BACK ON YOUR FEET', o.free ? 'SECOND CHANCE' : 'FINE PAID · '+o.cost+' STUDS', '#ffd76e', 1.8, 40);
+  logEvent(o.free ? 'second chance taken' : 'respawned for '+o.cost+' studs', '#ffd76e');
+  state = 'play'; cv.style.cursor = clickMode() ? 'default' : 'none';
+  return true;
 }
 function playerDie(){
   closeBook();
@@ -10840,10 +10917,12 @@ function drawRitualHud(){
    battle that was stopped in time comes into being around it: an army standing
    in its ranks, frozen mid-stride, in a ring about the stone. For a few seconds
    NOTHING MOVES -- hit as many of them as you can. A soldier you break does not
-   die yet: it stands where it was, a block of cracked ice, and SHATTERS when
-   time starts again -- that is when it pays out. The freeze always runs its full
-   length (kills buy no time; the league tree's Longer Moment is what does), and
-   then the broken shatter and the rest of the army wakes up and fights.
+   die: it stands where it was, a block of cracked ice. The freeze always runs its
+   full length (kills buy no time; the league tree's Longer Moment is what does),
+   and when time starts again EVERY ONE OF THEM gets up -- the ones you broke
+   AWAKENED, bigger and harder than they were, and they only pay out when you
+   kill them for good. Breaking them in the freeze is not killing them; it is
+   choosing which of them you will fight at their worst.
    SERGEANTS carry war chests; from wave 15 a GENERAL leads them, and it carries
    a better one. A running legion holds the wave. */
 /* LEGION_R is how far out the battlefield reaches -- there is no ring drawn at
@@ -10900,18 +10979,25 @@ function legionStart(){
      weight -- squared randomness, so a couple are big and the rest are knots */
   const squads = [], nS = irnd(LEGION_SQUADS[0], LEGION_SQUADS[1]);
   for(let i=0;i<nS;i++){
-    const a = rnd(TAU), rr = rnd(170, LEGION_R - 110);
-    squads.push({ x:L.x + Math.cos(a)*rr, y:L.y + Math.sin(a)*rr, spread:rnd(70, 150),
-                  face:rnd(TAU), w:0.25 + Math.pow(Math.random(), 2)*2.5 });
+    /* a squad stands on open floor: its middle is tried a few times */
+    let x = L.x, y = L.y;
+    for(let k=0;k<12;k++){
+      const a = rnd(TAU), rr = rnd(170, LEGION_R - 110);
+      x = L.x + Math.cos(a)*rr; y = L.y + Math.sin(a)*rr;
+      if(abyssFloorOk(x, y, 60)) break;
+    }
+    squads.push({ x, y, spread:rnd(70, 150), face:rnd(TAU), w:0.25 + Math.pow(Math.random(), 2)*2.5 });
   }
   const wSum = squads.reduce((t, q)=>t + q.w, 0);
   const pickSquad = ()=>{ let r = Math.random()*wSum; for(const q of squads){ r -= q.w; if(r <= 0) return q; } return squads[0]; };
   L.squads = squads.map(q=>({ x:Math.round(q.x), y:Math.round(q.y) }));
   /* one soldier, in a squad (or, for the general, beside the stone) */
   const put = (type, elite, magic, sq)=>{
-    for(let tries=0; tries<30; tries++){
+    for(let tries=0; tries<40; tries++){
       let x, y, fa;
-      if(sq){ const a = rnd(TAU), rr = sq.spread*Math.sqrt(Math.random()); x = sq.x + Math.cos(a)*rr; y = sq.y + Math.sin(a)*rr; fa = sq.face + rnd(-0.5, 0.5); }
+      /* a squad with no room left: the soldier stands wherever on the field it can */
+      if(sq && tries >= 25){ const a = rnd(TAU), rr = rnd(80, LEGION_R - 20); x = L.x + Math.cos(a)*rr; y = L.y + Math.sin(a)*rr; fa = sq.face; }
+      else if(sq){ const a = rnd(TAU), rr = sq.spread*Math.sqrt(Math.random()); x = sq.x + Math.cos(a)*rr; y = sq.y + Math.sin(a)*rr; fa = sq.face + rnd(-0.5, 0.5); }
       else  { const a = rnd(TAU), rr = rnd(70, 130); x = L.x + Math.cos(a)*rr; y = L.y + Math.sin(a)*rr; fa = a + Math.PI; }
       if(Math.hypot(x - L.x, y - L.y) > LEGION_R || Math.hypot(x - L.x, y - L.y) < 60) continue;
       if(!abyssFloorOk(x, y, 40)) continue;
@@ -10946,7 +11032,9 @@ function legionStart(){
 }
 /* A FROZEN SOLDIER BROUGHT TO NOTHING IS HELD, NOT KILLED. It leaves the
    fight (nothing aims at it, nothing counts it as standing) and waits, as ice,
-   for the moment time starts again. Called from hitEnemy in place of the death. */
+   for the moment time starts again -- when it gets up AWAKENED. Called from
+   hitEnemy in place of the death. */
+const LEGION_WAKE_HP = 1.6, LEGION_WAKE_DMG = 1.35, LEGION_WAKE_SPD = 1.15, LEGION_WAKE_SCALE = 1.15;
 function legionHolds(e, source){
   const L = e.legion;
   if(!L || L !== legionEv || !e.legionFrozen || L.state !== 'frozen' || e.dead) return false;
@@ -10959,17 +11047,22 @@ function legionHolds(e, source){
 function legionRelease(){
   const L = legionEv;
   L.state = 'fighting';
-  /* the broken shatter first -- and only now die, with everything a death pays */
+  /* THE BROKEN GET UP, AWAKENED: the ice bursts off them and they come back
+     bigger, tougher and angrier -- and pay out only when they fall for good */
   const held = L.held || []; L.held = [];
   for(const e of held){
-    e.dead = false; e.hp = 0; e.legionFrozen = false;
+    e.dead = false; e.legionDown = false; e.legionFrozen = false; e.awakened = true;
+    e.maxHp *= LEGION_WAKE_HP; e.hp = e.maxHp; e.dmg *= LEGION_WAKE_DMG; e.speed *= LEGION_WAKE_SPD;
+    e.scale = (e.scale || 1)*LEGION_WAKE_SCALE; e.r = (e.r || 12)*1.08;
+    e.mode = 'chase'; e.atkCd = rnd(0.3, 1.0);
     addSparks(e.x, e.y - 22*(e.scale || 1), 14, '#e6dcff');
-    addRing(e.x, e.y, 4, 260, 46*(e.scale || 1), '#e6dcff', 4, 0.35);
-    killEnemy(e, e.legionSrc || 'sword');
+    addRing(e.x, e.y, 4, 260, 46*(e.scale || 1), '#c3a6ff', 4, 0.35);
+    /* back into the fight -- once: it may not have been swept out of the list yet */
+    if(!enemies.includes(e)) enemies.push(e);
   }
   for(const e of enemies) if(e.legion === L && !e.dead){ e.legionFrozen = false; e.mode = 'chase'; e.atkCd = rnd(0.2, 1.0); }
   const woke = enemies.filter(e=>e.legion === L && !e.dead).length;
-  showBanner('TIME STARTS AGAIN', held.length ? held.length+' SHATTER'+(woke ? ' · THE REST BREAK FREE' : ' · NONE LEFT STANDING')
+  showBanner('TIME STARTS AGAIN', held.length ? held.length+' RISE AWAKENED · '+woke+' IN ALL'
                                               : 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
   addSparks(L.x, L.y - 60, 30, '#ffffff');
   try { SFX.roar(); } catch(err){}
@@ -10977,8 +11070,8 @@ function legionRelease(){
 function legionDone(){
   const L = legionEv;
   L.state = 'done';
-  showBanner('LEGION DEFEATED', L.kills+' BROKEN IN TIME', LEGION_COL, 1.8, 40);
-  logEvent('   LEGION defeated — '+L.kills+' broken while frozen', LEGION_COL);
+  showBanner('LEGION DEFEATED', L.kills+' ROSE AWAKENED AND FELL', LEGION_COL, 1.8, 40);
+  logEvent('   LEGION defeated — '+L.kills+' were broken in the freeze and rose awakened', LEGION_COL);
   legionEv = null;
 }
 function legionOnKill(e){
@@ -11047,6 +11140,16 @@ function drawLegion(){
 /* frozen soldiers wear a shell of ice -- drawn over them */
 function drawLegionIce(){
   const L = legionEv, c = ctx;
+  /* the AWAKENED: a violet flame round the feet and the word over the head */
+  for(const e of enemies){
+    if(!e.awakened || e.dead || !onScreen(e, 80)) continue;
+    const s = e.scale || 1, fl = 0.5 + 0.5*Math.sin(vtime*7 + (e.phase || 0));
+    c.strokeStyle = `rgba(195,166,255,${0.55 + 0.35*fl})`; c.lineWidth = 3;
+    c.beginPath(); c.ellipse(e.x, e.y + 2, 20*s, 8*s, 0, 0, TAU); c.stroke();
+    if(Math.random() < 0.3) particles.push({ kind:'spark', x:e.x + rnd(-12, 12)*s, y:e.y - rnd(0, 30)*s, vx:rnd(-8, 8), vy:rnd(-50, -20), life:0.5, max:0.5, color:'#c3a6ff' });
+    c.font = '700 10px Fredoka'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(15,20,25,0.8)';
+    c.strokeText('AWAKENED', e.x, e.y - 62*s); c.fillStyle = '#c3a6ff'; c.fillText('AWAKENED', e.x, e.y - 62*s);
+  }
   if(L && L.state === 'frozen'){
     for(const e of enemies){
       if(e.dead || e.legion !== L || !e.legionFrozen || !onScreen(e, 80)) continue;
@@ -12127,6 +12230,14 @@ const UPGRADES = [
       `nearest your cursor, within ${ZOMBIE_REACH}px of you -- up to ${ZOMBIE_MINION_MAX}, a pool of their own `+
       `beside the legion. Tough and slow, with ${kindOf('zombie').hp}\u00d7 a skeleton's life`,
     apply:c=>{ player.minions.zombies = true; } },
+  /* THE HORDE: only for a summoner who already raises zombies */
+  { id:'zombiehorde', name:'The Horde', icon:'skull', cls:'OFFENSE', minRar:'legendary',
+    req:()=>isSummoner() && player.minions.zombies && !player.minions.horde,
+    calc:m=>({n:1}),
+    desc:c=>`Your raised dead are a HORDE: the zombie cap is ${ZOMBIE_HORDE_MUL}× (${ZOMBIE_MINION_MAX*ZOMBIE_HORDE_MUL}), and what `+
+      `rises is any of the family -- walkers, fast RUNNERS, low CRAWLERS, fat BLOATERS and heavy HULKS -- each `+
+      `fighting the way it does on the other side`,
+    apply:c=>{ player.minions.horde = true; } },
   { id:'boneoverseer', name:'Bone Overseer', icon:'skull', cls:'OFFENSE', minRar:'epic',
     req:()=>isSummoner() && !player.minions.overseer,
     calc:m=>({n:1}),
@@ -12708,7 +12819,7 @@ const META_STATS = {
   /* THE LEGION's own pools -- worth nothing to anything but a scepter */
   minionDmg:  { n:'increased minion damage', pct:1, w:(p,v)=>{ p.minions.inc += v; }, only:['scepter'] },
   minionLife: { n:'increased minion life',   pct:1, w:(p,v)=>{ p.minions.life += v; }, only:['scepter'] },
-  minionSpd:  { n:'increased minion attack and cast speed', pct:1, w:(p,v)=>{ p.minions.spd += v; }, only:['scepter'] },
+  minionSpd:  { n:'increased minion attack, cast and movement speed', pct:1, w:(p,v)=>{ p.minions.spd += v; }, only:['scepter'] },
   minionZombies:{ n:'your summon aura raises ZOMBIES from corpses, up to twelve',
                 w:(p)=>{ p.minions.zombies = true; }, only:['scepter'] },
   minionProj: { n:'projectile for your skeleton archers and mages', w:(p,v)=>{ p.minions.proj += v; }, only:['scepter'] },
@@ -16872,7 +16983,7 @@ const BENCH_SECTIONS = [
   { name:'MOVEMENT & LOOT', ids:['spd','roll','mag','greed','wisdom'] },
   { name:'GUARDIAN BRICK',  ids:['orbit','orbitpow','orbitring','orbitspd','orbitaegis','orbittwin'] },
   { name:'THE BOW',         ids:['arrowmulti','arrowpierce','arrowflat','arrowlight','arrowfire','arrowchaos'] },
-  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','golemflame','golemlightning','golemice','golemstone','golemchaos','golemcarrion','boneoverseer','raisezombie','bonevolley','bonegmp','skelmages'] },
+  { name:'THE LEGION',      ids:['minionmax','miniondmg','minionlife','minionspd','minionflat','miniontwin','golemflame','golemlightning','golemice','golemstone','golemchaos','golemcarrion','boneoverseer','raisezombie','zombiehorde','bonevolley','bonegmp','skelmages'] },
   { name:'STORM BRICK',     ids:['chain','chainbrick','chainpow','chainfork'] },
   { name:'BLADESTORM',      ids:['storm','stormpow','stormsize','stormrate','stormback'] },
   { name:'BLADE VORTEX',    ids:['vortex','vortexpow','vortexarea','vortexrate','vortextotem'] },
@@ -19904,8 +20015,12 @@ document.getElementById('rerollBtn').addEventListener('click', doReroll);
        way; held, the hero follows the cursor;
      - the attack button on a MONSTER (or anything breakable) walks into range
        and attacks it once; held, it keeps attacking that one;
-     - SHIFT with the attack button attacks where you stand, at the cursor;
-     - with the attack on the RIGHT button, the left only ever walks.
+     - SHIFT with the attack button attacks at the cursor WITHOUT stopping the
+       walk (a hero can cross the room shooting), and holding SHIFT while the
+       left button walks attacks as it goes;
+     - with the attack on the RIGHT button, the left only ever walks and the
+       right attacks at the cursor while the walk goes on -- hold both to walk
+       and fight at once.
    A press decides what a hold means, as in PoE: pressed on the ground, a held
    button walks even when the cursor passes over a monster; pressed on a monster,
    it keeps hitting that monster wherever the cursor goes. */
@@ -19913,11 +20028,11 @@ const CLICK_STOP = 10;          /* close enough to a clicked spot */
 const CLICK_PICK = 20;          /* slack round a body that still counts as clicking it */
 const CLICK_RANGE_ARROW = 520;  /* how close a bow walks before it shoots (arrows fly ~740) */
 const CLICK_RANGE_BOLT = 470;   /* ...and a staff (bolts fly ~700) */
-const CTL = { dest:null, target:null, mode:null, btn:null, fired:false, path:null, pathI:0, pathT:0, goal:null, mark:null };
+const CTL = { dest:null, target:null, mode:null, btn:null, fired:false, free:false, path:null, pathI:0, pathT:0, goal:null, mark:null };
 function clickMode(){ return OPT.moveMode === 'click'; }
 function attackOnRight(){ return OPT.attackBtn === 'right'; }
 function shiftHeld(){ return !!(keys.ShiftLeft || keys.ShiftRight); }
-function ctlReset(){ CTL.dest = null; CTL.target = null; CTL.mode = null; CTL.btn = null; CTL.fired = false; CTL.path = null; CTL.mark = null; }
+function ctlReset(){ CTL.dest = null; CTL.target = null; CTL.mode = null; CTL.btn = null; CTL.fired = false; CTL.free = false; CTL.path = null; CTL.mark = null; }
 /* how close the weapon has to be to its target: a swing's reach, a slam's
    length, a comfortable bowshot. The scepter attacks nothing itself: 0. */
 function heroAttackRange(){
@@ -19993,46 +20108,54 @@ function heroControl(p, dt){
   const lp = mouse.lpress, rp = mouse.rpress;
   mouse.lpress = mouse.rpress = false; mouse.fresh = false;
   const atkDown = right ? mouse.rdown : mouse.down, atkPress = right ? rp : lp;
-  const under = (atkPress || (atkDown && CTL.mode === 'attack' && !clickTargetLive(CTL.target))) ? clickTargetAt(mouse.wx, mouse.wy) : null;
-  /* THE ATTACK BUTTON */
+  /* TWO CHANNELS, NOT ONE. Walking and attacking are separate: a FREE ATTACK --
+     SHIFT with the left button, or the right button when the attack lives there
+     -- fires at the cursor and leaves the walk alone, so a hero can cross the
+     room shooting, or hold both buttons and walk and swing at once. Only a
+     click ON a monster (without SHIFT) turns the walk into an approach. */
+  const mark = ()=>{ CTL.mark = { x:mouse.wx, y:mouse.wy, t:0.45 }; };
   if(atkPress){
-    /* the scepter attacks nothing itself: its click walks, and SHIFT+click (or
-       the right button, bound) is its Convocation */
-    if(sh || (right && (!under || range <= 0))){ CTL.mode = 'stand'; }
+    const under = clickTargetAt(mouse.wx, mouse.wy);
+    const free = right ? !(under && range > 0 && !CTL.dest && !mouse.down) : sh;
+    if(free){ CTL.free = true; CTL.fired = false; out.press = true; }
     else if(under && range > 0){ CTL.mode = 'attack'; CTL.target = under; CTL.fired = false; CTL.dest = null; }
-    else CTL.mode = right ? 'stand' : 'move';
-    out.press = CTL.mode === 'stand';
-    if(CTL.mode === 'stand') CTL.fired = false;
+    else { CTL.mode = 'move'; CTL.target = null; CTL.dest = { x:mouse.wx, y:mouse.wy }; mark(); }
+    /* the scepter attacks nothing itself: a click walks, a free attack is Convocation */
+    if(range <= 0 && !free) out.press = false;
   }
-  /* a press on the ground sets where to walk even if the button is already up
-     again -- a quick tap goes down and up between two frames */
-  if(!right && lp && CTL.mode === 'move'){ CTL.target = null; CTL.dest = { x:mouse.wx, y:mouse.wy }; CTL.mark = { x:mouse.wx, y:mouse.wy, t:0.45 }; }
-  /* THE WALK BUTTON, when the attack is on the right: it only ever walks */
-  if(right && lp){ CTL.target = null; if(CTL.mode !== 'stand') CTL.mode = 'move'; CTL.dest = { x:mouse.wx, y:mouse.wy }; CTL.mark = { x:mouse.wx, y:mouse.wy, t:0.45 }; }
-  const walkDown = right ? mouse.down : (atkDown && CTL.mode === 'move');
+  /* THE WALK BUTTON when the attack is on the right: it only ever walks */
+  if(right && lp){ CTL.mode = 'move'; CTL.target = null; CTL.dest = { x:mouse.wx, y:mouse.wy }; mark(); }
+  /* a held walk follows the cursor -- but not while SHIFT holds the left button
+     for an attack: then the walk goes on to where it was going */
+  const walkDown = right ? mouse.down : (mouse.down && !sh && CTL.mode === 'move');
   if(walkDown) CTL.dest = { x:mouse.wx, y:mouse.wy };
-  /* STANDING AND ATTACKING: nothing moves you, the weapon points at the cursor */
-  /* (a tap too quick for a frame still gets its one attack) */
-  if(CTL.mode === 'stand'){
-    if(atkDown || !CTL.fired){ CTL.dest = null; CTL.target = null; out.attack = true; out.held = atkDown || !CTL.fired; out.stand = true; out.aim = out.face = mouseA; }
-    else CTL.mode = null;
-  }
   /* HOLDING ON A MONSTER: a dead target hands the hold to whatever is under the cursor */
-  if(CTL.mode === 'attack' && atkDown && !clickTargetLive(CTL.target)){
+  const engageDown = CTL.mode === 'attack' && atkDown && !(right ? false : sh);
+  if(engageDown && !clickTargetLive(CTL.target)){
+    const under = clickTargetAt(mouse.wx, mouse.wy);
     if(under){ CTL.target = under; CTL.fired = false; } else { CTL.mode = 'move'; CTL.target = null; }
+  }
+  /* THE FREE ATTACK: while its button is held (SHIFT held with the left, or the
+     right button), and once for a tap too quick to be held for a frame */
+  const freeDown = right ? (mouse.rdown && CTL.mode !== 'attack') : (mouse.down && sh);
+  if(freeDown && !CTL.free){ CTL.free = true; CTL.fired = false; }
+  if(CTL.free){
+    if(freeDown || !CTL.fired){ out.attack = true; out.held = freeDown || !CTL.fired; out.stand = true; out.aim = out.face = mouseA; }
+    else CTL.free = false;
   }
   /* ENGAGING: into range, then the weapon -- once, or for as long as it is held */
   let steer = null;
   if(CTL.target){
     const t = CTL.target;
-    if(!clickTargetLive(t) || (CTL.fired && !(atkDown && CTL.mode === 'attack'))){ CTL.target = null; if(CTL.mode === 'attack' && !atkDown) CTL.mode = null; }
+    if(!clickTargetLive(t) || (CTL.fired && !engageDown && !CTL.free)){ CTL.target = null; if(CTL.mode === 'attack' && !atkDown) CTL.mode = null; }
     else {
       const gap = Math.hypot(t.x - p.x, t.y - p.y) - clickTargetR(t);
-      out.aim = out.face = Math.atan2(t.y - p.y, t.x - p.x);
+      if(!out.attack) out.aim = out.face = Math.atan2(t.y - p.y, t.x - p.x);
       if(gap > range) steer = heroSteer(p, t.x, t.y, dt);
-      else { out.attack = true; out.held = atkDown || !CTL.fired; out.engaged = true; }
+      else if(!out.attack){ out.attack = true; out.held = engageDown || !CTL.fired; out.engaged = true; }
     }
-  } else if(CTL.dest){
+  }
+  if(!CTL.target && CTL.dest){
     if(Math.hypot(CTL.dest.x - p.x, CTL.dest.y - p.y) <= CLICK_STOP){ if(!walkDown) CTL.dest = null; }
     else steer = heroSteer(p, CTL.dest.x, CTL.dest.y, dt);
   }
@@ -20258,7 +20381,7 @@ function updatePlayer(dt){
     if(!p.dead && p.stunT <= 0 && p.raiseCd <= 0 && legion().length < minionMax()) raiseMinion(aimA, false);
     /* ...and, with Raise Zombie, the dead that were zombies: their own pool, their own clock */
     p.zombieCd = (p.zombieCd || 0) - dt;
-    if(p.minions.zombies && !p.dead && p.stunT <= 0 && p.zombieCd <= 0 && zombieMinions().length < ZOMBIE_MINION_MAX){
+    if(p.minions.zombies && !p.dead && p.stunT <= 0 && p.zombieCd <= 0 && zombieMinions().length < zombieCap()){
       if(raiseZombie()) p.zombieCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
     }
   }
@@ -20860,7 +20983,7 @@ const INSTAB_SHARE = 0.30, INSTAB_R = 110;
    `hp` its life. */
 const MINION_KINDS = {
   spear:    { name:'Skeleton Spearman', dmg:1.25, rate:0.85, reach:34, range:0,   hp:1.0, spd:1.00, r:11 },
-  sword:    { name:'Skeleton Swordsman',dmg:1.35, rate:0.72, reach:26, range:0,   hp:1.1, spd:1.05, r:11 },
+  sword:    { name:'Skeleton Swordsman',dmg:1.35, rate:0.72, reach:26, range:0,   hp:1.1, spd:1.25, r:11 },
   bow:      { name:'Skeleton Archer',   dmg:0.90, rate:1.00, reach:0,  range:480, keep:240, hp:0.8, spd:1.0, r:11 },
   mage:     { name:'Skeleton Mage',     dmg:MAGE_SHARE, rate:MAGE_RATE, reach:0, range:MAGE_RANGE, keep:MAGE_KEEP, hp:0.8, spd:1.0, r:11 },
   golem:    { name:'Bone Golem',        dmg:2.75, rate:1.25, reach:42, range:0,   hp:3.5, spd:0.80, r:17, aoe:62 },
@@ -20878,6 +21001,42 @@ const MINION_MIX = [['spear', 1/3], ['sword', 1/3], ['bow', 1/3]];
    leave behind: the corpse nearest your cursor, within ZOMBIE_REACH of you,
    stands up for you, on the same clock the skeletons rise on. */
 const ZOMBIE_MINION_MAX = 12, ZOMBIE_REACH = 700;
+/* THE ZOMBIE HORDE (a legendary, on top of Raise Zombie): the cap doubles and
+   what rises is any of the family, not only the plain walker -- each with its
+   own numbers against the Raised Zombie's */
+const ZOMBIE_HORDE_MUL = 2;
+const ZOMBIE_HORDE_KINDS = {
+  zombie:  { name:'Raised Zombie',  w:3, k:{},                                          s:0.84 },
+  runner:  { name:'Raised Runner',  w:2, k:{ spd:1.45, hp:0.75, dmg:0.9, rate:0.8 },    s:0.84 },
+  crawler: { name:'Raised Crawler', w:2, k:{ spd:1.1,  hp:0.55, dmg:0.8, rate:0.7, r:11 }, s:0.84, crawl:true },
+  bloater: { name:'Raised Bloater', w:1, k:{ spd:0.6,  hp:2.2,  dmg:0.9, r:17 },         s:1.1, fat:true },
+  hulk:    { name:'Raised Hulk',    w:1, k:{ spd:0.75, hp:1.8,  dmg:1.8, rate:1.15, r:16 }, s:1.2 },
+};
+function zombieCap(){ return ZOMBIE_MINION_MAX * ((player && player.minions.horde) ? ZOMBIE_HORDE_MUL : 1); }
+function zombieHordeKind(){
+  let t = 0; for(const k in ZOMBIE_HORDE_KINDS) t += ZOMBIE_HORDE_KINDS[k].w;
+  let r = Math.random()*t;
+  for(const k in ZOMBIE_HORDE_KINDS){ r -= ZOMBIE_HORDE_KINDS[k].w; if(r <= 0) return k; }
+  return 'zombie';
+}
+/* A SPEARMAN'S THRUST GOES THROUGH: everything on the line of the spear, not one
+   body and not a circle -- and some carry a PIKE, half again as long */
+const SPEAR_PIKE_CHANCE = 0.4, SPEAR_PIKE_REACH = 58, SPEAR_LINE_W = 16;
+/* A SWORDSMAN CHARGES, sometimes: from a little way off it runs the last of the
+   ground at CHARGE_SPD times its pace and strikes on arrival */
+const SWORD_CHARGE_MIN = 90, SWORD_CHARGE_MAX = 280, SWORD_CHARGE_SPD = 2.6, SWORD_CHARGE_T = 0.45, SWORD_CHARGE_CD = [3, 6], SWORD_CHARGE_CHANCE = 0.5;
+/* A MELEE GOLEM LEAPS onto what it is after, when it is a few strides off: up,
+   across, and down on it -- a slam where it lands */
+const GOLEM_LEAP_MIN = 120, GOLEM_LEAP_MAX = 340, GOLEM_LEAP_T = 0.5, GOLEM_LEAP_CD = 6, GOLEM_LEAP_H = 70;
+/* MINIONS MOVE FASTER TOO: the minion speed stat speeds their feet as well as
+   their hands, and half of your own increased movement speed is theirs, so a
+   quick hero is not a hero with no legion */
+function minionMoveMul(){
+  const p = player;
+  if(!p) return 1;
+  const own = Math.max(0, (p.speed || SPEED_BASE)/SPEED_BASE - 1);
+  return (1 + (p.minions.spd || 0)) * (1 + 0.5*own);
+}
 const ZOMBIE_MINION_COLORS = { head:'#86b25e', torso:'#4a3d6a', legs:'#2e2744', hands:'#86b25e', hair:'#3d5230' };
 const GOLEM_BACK = 10;
 /* GREATER MULTIPLE PROJECTILES, for the legion. An archer's arrow and a mage's
@@ -20937,7 +21096,12 @@ function golemTypesOwned(){ return (player && player.minions.golemTypes) || []; 
 function golemMax(){ return Math.min(golemTypesOwned().length, golemCap()); }
 /* a golem's numbers: the plain golem's, with its kind's on top */
 function golemK(gt){ const T = GOLEM_TYPES[gt]; return T ? Object.assign({}, MINION_KINDS.golem, T.k) : MINION_KINDS.golem; }
-function minionK(m){ return m && m.kind === 'golem' ? golemK(m.gt) : kindOf(m ? m.kind : 'spear'); }
+function minionK(m){
+  if(m && m.kind === 'golem') return golemK(m.gt);
+  if(m && m.kind === 'zombie' && m.zk && ZOMBIE_HORDE_KINDS[m.zk]) return Object.assign({}, MINION_KINDS.zombie, ZOMBIE_HORDE_KINDS[m.zk].k);
+  if(m && m.kind === 'spear' && m.pike) return Object.assign({}, MINION_KINDS.spear, { reach:SPEAR_PIKE_REACH });
+  return kindOf(m ? m.kind : 'spear');
+}
 /* the kind owed a body: the first one you keep that has none standing */
 function golemOwed(){ const have = golems().map(g=>g.gt); return golemTypesOwned().slice(0, golemCap()).find(t=>!have.includes(t)); }
 function golemSrc(m){ const el = GOLEM_TYPES[m.gt] && GOLEM_TYPES[m.gt].el; return el ? 'm'+el : 'minion'; }
@@ -21001,6 +21165,11 @@ function raiseZombie(){
   if(!k) return null;
   corpses = corpses.filter(x=>x !== k);
   const z = raiseAt(k.x, k.y, 'zombie');
+  /* the horde: any of the family */
+  if(player.minions.horde){
+    z.zk = zombieHordeKind();
+    const K = minionK(z); z.r = K.r; z.maxHp = z.hp = z.maxHp * (ZOMBIE_HORDE_KINDS[z.zk].k.hp || 1);
+  }
   addRing(z.x, z.y, 6, 220, 40, '#9ede5a', 4, 0.35);
   addDust(z.x, z.y, 4, 'rgba(90,110,60,');
   return z;
@@ -21106,6 +21275,7 @@ function raiseAt(x, y, kind, gt){
               moving:false, flash:0, phase:rnd(TAU), slot:minionSlot(), castT:0, strikeT:0, drawT:0,
               born:++minionBorn, scale:k === 'golem' ? 0.62 : 0.82 };
   if(gt) m.gt = gt;
+  if(k === 'spear' && Math.random() < SPEAR_PIKE_CHANCE) m.pike = true;
   m.mage = k === 'mage';
   m.el = m.mage ? MAGE_ELEMS[m.slot % MAGE_ELEMS.length] : null;
   minions.push(m);
@@ -21211,6 +21381,18 @@ function minionStep(m, tx, ty, dt, spd){
   collideWorld(m);
   m.moving = true; m.walk += dt*10; m.face = { x:dx/d, y:dy/d };
 }
+/* A LEAPING GOLEM COMES DOWN: a slam round where it lands, a little harder than
+   its blow, in its own element */
+function golemLand(m){
+  const K = minionK(m), T = GOLEM_TYPES[m.gt], r = (K.aoe || 62)*1.25;
+  addRing(m.x, m.y, 8, 320, r, T ? T.col : '#b7a6ff', 6, 0.4); addShake(0.12); addDust(m.x, m.y, 8);
+  const src = golemSrc(m), dmg = minionDamage('golem', m)*1.2;
+  for(const e of enemiesNear(m.x, m.y, r + 30, _minBuf).slice()){
+    if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+    if(Math.hypot(e.x - m.x, e.y - m.y) > r + (e.r || 12)) continue;
+    hitEnemy(e, dmg, Math.atan2(e.y - m.y, e.x - m.x), 220, src, {});
+  }
+}
 /* A MELEE BLOW LANDS: on its target, or -- a golem's -- on everything in front */
 function minionBlow(m){
   const K = minionK(m), t = m.strikeTgt;
@@ -21230,6 +21412,22 @@ function minionBlow(m){
   }
   if(!t || t.dead) return;
   if(props.includes(t)){ if(Math.hypot(t.x - m.x, t.y - m.y) < K.reach + (t.r || 14) + 12) knockProp(t); return; }
+  /* THE SPEAR: through everything on its line, as far as it reaches */
+  if(m.kind === 'spear'){
+    const len = K.reach + 18, ux = Math.cos(m.strikeA), uy = Math.sin(m.strikeA), dmg = minionDamage('spear', m);
+    let hitT = false;
+    for(const e of enemiesNear(m.x, m.y, len + 40, _minBuf).slice()){
+      if(e.dead || e.state !== 'active' || !breachSees(e)) continue;
+      const along = (e.x - m.x)*ux + (e.y - m.y)*uy, off = Math.abs((e.x - m.x)*uy - (e.y - m.y)*ux);
+      if(along < -6 || along > len + (e.r || 12) || off > SPEAR_LINE_W + (e.r || 12)) continue;
+      hitEnemy(e, dmg, m.strikeA, 90, 'minion', {});
+      if(e === t) hitT = true;
+    }
+    /* the one it was aimed at is hit even if it stepped a hair off the line */
+    if(!hitT && t.state === 'active' && Math.hypot(t.x - m.x, t.y - m.y) < K.reach + (t.r || 12) + 12)
+      hitEnemy(t, dmg, m.strikeA, 90, 'minion', {});
+    return;
+  }
   if(t.state === 'active' && Math.hypot(t.x - m.x, t.y - m.y) < K.reach + (t.r || 12) + 12)
     hitEnemy(t, minionDamage(m.kind, m), m.strikeA, 90, 'minion', {});
 }
@@ -21292,7 +21490,26 @@ function updateMinions(dt){
       const a = rnd(TAU), at = floorAt(h.x + Math.cos(a)*60, h.y + Math.sin(a)*60, m.r + 4);
       m.x = at.x; m.y = at.y; m.rise = 0.4;
     }
-    const K = minionK(m), spd = MINION_SPD * K.spd;
+    const K = minionK(m), spd = MINION_SPD * K.spd * minionMoveMul();
+    /* A GOLEM IN THE AIR finishes its leap before anything else */
+    if(m.leap){
+      const L = m.leap; L.t += dt;
+      const k = clamp(L.t / GOLEM_LEAP_T, 0, 1);
+      m.x = L.fx + (L.tx - L.fx)*k; m.y = L.fy + (L.ty - L.fy)*k; m.z = Math.sin(k*Math.PI)*GOLEM_LEAP_H;
+      m.moving = true;
+      if(k >= 1){ m.leap = null; m.z = 0; collideWorld(m); golemLand(m); m.atkCd = minionRate(m.kind, m)*0.5; }
+      continue;
+    }
+    /* A SWORDSMAN'S CHARGE runs its course */
+    if(m.charge){
+      const C = m.charge, t = C.tgt; C.t -= dt;
+      if(!t || t.dead || (t.state && t.state !== 'active') || C.t <= 0){ m.charge = null; }
+      else {
+        const d = Math.hypot(t.x - m.x, t.y - m.y), reach = K.reach + (t.r || 12);
+        if(d > reach){ minionStep(m, t.x, t.y, dt, spd*SWORD_CHARGE_SPD); if(Math.random() < 0.5) addDust(m.x, m.y + 2, 1); continue; }
+        m.charge = null; m.atkCd = 0;
+      }
+    }
     if(m.kind === 'overseer'){
       /* it keeps to your shoulder and keeps the legion's blood up */
       const fx = h.x - 55, fy = h.y + 25;
@@ -21302,6 +21519,7 @@ function updateMinions(dt){
       continue;
     }
     m.atkCd -= dt;
+    m.leapCd = Math.max(0, (m.leapCd || 0) - dt); m.chargeCd = Math.max(0, (m.chargeCd || 0) - dt);
     /* A BLOW IN THE AIR finishes before anything else */
     if(m.strikeT > 0){
       m.strikeT -= dt; m.moving = false;
@@ -21364,6 +21582,18 @@ function updateMinions(dt){
         }
       } else {
         const reach = K.reach + (t.r || 12);
+        /* a melee golem a few strides off LEAPS onto it */
+        if(m.kind === 'golem' && !prop && d > GOLEM_LEAP_MIN && d < GOLEM_LEAP_MAX && (m.leapCd || 0) <= 0 && !m.leap){
+          const land = floorAt(t.x - Math.cos(a)*(reach*0.6), t.y - Math.sin(a)*(reach*0.6), m.r + 2);
+          m.leap = { t:0, fx:m.x, fy:m.y, tx:land.x, ty:land.y }; m.leapCd = GOLEM_LEAP_CD; m.face = { x:Math.cos(a), y:Math.sin(a) };
+          addDust(m.x, m.y, 4);
+          continue;
+        }
+        /* a swordsman some way off may CHARGE the last of the ground */
+        if(m.kind === 'sword' && !prop && d > SWORD_CHARGE_MIN && d < SWORD_CHARGE_MAX && (m.chargeCd || 0) <= 0){
+          m.chargeCd = rnd(SWORD_CHARGE_CD[0], SWORD_CHARGE_CD[1]);
+          if(Math.random() < SWORD_CHARGE_CHANCE){ m.charge = { tgt:t, t:SWORD_CHARGE_T }; addSparks(m.x, m.y - 14, 4, '#ede8ff'); continue; }
+        }
         /* each comes at it from its own side, so a legion SURROUNDS a body
            instead of queueing behind one another on the same line */
         const fa = a + ((m.slot % 5) - 2) * 0.55;
@@ -21502,7 +21732,8 @@ function drawMinion(c, m){
     c.beginPath(); c.ellipse(m.x, m.y + 2, m.r*1.6, m.r*0.68, 0, 0, TAU); c.stroke(); }
   if(m.kind === 'golem'){
     const g = m.gfx || (m.gfx = { golem:(GOLEM_TYPES[m.gt] && GOLEM_TYPES[m.gt].skin) || 'bone', type:'minion' });
-    Object.assign(g, { x:m.x, y:m.y, scale:m.scale, moving:m.moving, walk:m.walk, phase:m.phase,
+    if(m.z > 0){ c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(m.x, m.y + 3, m.r*1.3, m.r*0.5, 0, 0, TAU); c.fill(); }
+    Object.assign(g, { x:m.x, y:m.y - (m.z || 0), scale:m.scale, moving:m.moving, walk:m.walk, phase:m.phase,
       face:m.face, flash:m.flash, mode:m.strikeT > 0 ? 'stompWind' : 'chase', hp:m.hp, maxHp:m.maxHp, r:m.r });
     drawGolem(c, g);
   } else {
@@ -21514,10 +21745,14 @@ function drawMinion(c, m){
       if(m.castT > 0){ o.armsUp = true; o.castGlow = true; } }
     else if(m.kind === 'bow'){ o.bowPull = m.drawT > 0 ? clamp(1 - m.drawT/0.3, 0, 1) : 0; }
     else if(m.kind === 'zombie'){ o.colors = ZOMBIE_MINION_COLORS; o.style = 'zombie'; o.noHelm = true;
-      o.zombieArms = true; o.s = 0.84; if(m.strikeT > 0) o.armsUp = true; }
+      o.zombieArms = true; o.s = 0.84; if(m.strikeT > 0) o.armsUp = true;
+      const Z = m.zk && ZOMBIE_HORDE_KINDS[m.zk];
+      if(Z){ o.s = Z.s; if(Z.fat) o.fat = true;
+        if(Z.crawl){ drawCrawler(c, { x:m.x, y:m.y, scale:Z.s, walk:m.walk, face:m.face, flash:m.flash, moving:m.moving, col:ZOMBIE_MINION_COLORS });
+          o.skip = true; } } }
     else if(m.kind === 'sword'){ o.weapon = 'greatsword'; o.wScale = 0.7; if(m.strikeT > 0) o.armsUp = true; }
-    else { o.weapon = 'spear'; if(m.strikeT > 0) o.armsUp = true; }
-    drawFigure(c, o);
+    else { o.weapon = 'spear'; if(m.pike) o.wScale = 1.35; if(m.strikeT > 0) o.armsUp = true; }
+    if(!o.skip) drawFigure(c, o);
   }
   if(m.hp < m.maxHp){
     const w5 = 20, top = m.kind === 'golem' ? 56 : 42;
@@ -26030,7 +26265,7 @@ function drawFigure(c, o){
   }
   if(o.weapon==='spear'){
     c.save(); c.translate(handR2.x,handR2.y); c.rotate(carryY);
-    drawSpear(c, s);
+    drawSpear(c, s*(o.wScale || 1));
     c.restore();
   }
   if(o.weapon==='staff'){
@@ -29028,6 +29263,7 @@ function dpsSeries(source){
 }
 let clogOn = false;
 let clogView = CLOG_OUT;
+let clogLastHit = null;
 let clogLines = [[], [], []];         /* one scrollback per tab */
 let clogOutW = [], clogInW = [];      /* rolling windows: {t, d} */
 let clogSrc = {}, clogFrom = {};      /* run totals by damage source / by attacker */
@@ -29058,7 +29294,7 @@ function clogCycle(){
 /* Lines merge while they repeat: twenty orbit ticks in a third of a second are
    one line that counts up, not twenty lines that scroll the tab away. */
 function clogPush(ch, key, txt, col){
-  if(!clogOn) return;
+  if(!clogOn && ch !== CLOG_IN) return;
   const L = clogLines[ch];
   const last = L[L.length-1];
   if(key && last && last.key===key && runTime - last.t0 < CLOG_MERGE){
@@ -29069,7 +29305,9 @@ function clogPush(ch, key, txt, col){
   if(L.length > CLOG_MAX) L.shift();
 }
 function clogPushDmg(ch, key, pre, d, col){
-  if(!clogOn) return;
+  /* what hits YOU is always written down, open or not: after a death, the log
+     is how you find out what did it */
+  if(!clogOn && ch !== CLOG_IN) return;
   const L = clogLines[ch];
   const last = L[L.length-1];
   if(last && last.key===key && runTime - last.t0 < CLOG_MERGE){
@@ -29118,7 +29356,8 @@ function logTaken(n, src, elem, suppressed, shockCrit){
   const who = (src && (src.bname || src.type || src.kind)) || 'the world';
   clogFrom[who] = (clogFrom[who]||0) + n;
   clogInW.push({ t: runTime, d:n }); clogTrim(clogInW);
-  if(!clogOn) return;
+  /* the last blow, for the death screen: who, how much, of what */
+  clogLastHit = { who: (src && src.type === 'ailment') ? 'ailments' : who, n, elem:elem || null, t:runTime };
   /* burns tick every single frame — they go in the totals in full, but they only
      earn a LINE once a whole heart of them has gone, or nothing else would be
      readable while you are on fire */
@@ -29821,6 +30060,14 @@ function renderHUD(){
       const txt = 'next skill point at level ' + nl;
       ctx.strokeStyle = 'rgba(15,20,25,0.75)'; ctx.lineWidth = 3; ctx.strokeText(txt, bx+30, xpY+21);
       ctx.fillStyle = soon ? '#8fd4ff' : '#9fb0a4'; ctx.fillText(txt, bx+30, xpY+21);
+    }
+    /* and the second chance: ready, or waiting on a boss */
+    if(arcadeMode() && !sandbox){
+      const ok = respawn.free > 0, t2 = ok ? 'second chance ready' : 'second chance used — kill a boss';
+      ctx.font = '700 10px Fredoka'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      const y2 = xpY + (nl ? 34 : 21);
+      ctx.strokeStyle = 'rgba(15,20,25,0.75)'; ctx.lineWidth = 3; ctx.strokeText(t2, bx+30, y2);
+      ctx.fillStyle = ok ? '#ffd76e' : '#9fb0a4'; ctx.fillText(t2, bx+30, y2);
     } }
   /* POINTS WAITING. A point earned mid-run is only worth something if you know
      it is there, so while any sit unplaced the level bar says so -- and names
@@ -30040,7 +30287,7 @@ function renderHUD(){
     for(const m of L) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
     const worth = Object.entries(kinds).map(([k, n])=>n+' '+(k === 'bow' ? 'archer' : k === 'spear' ? 'spear' : k)+(n > 1 ? 's' : ''));
     if(golemMax()) worth.push(golems().length+'/'+golemMax()+' golems');
-    if(player.minions.zombies) worth.push(zombieMinions().length+'/'+ZOMBIE_MINION_MAX+' zombies · '+corpses.length+' corpses');
+    if(player.minions.zombies) worth.push(zombieMinions().length+'/'+zombieCap()+' zombies · '+corpses.length+' corpses');
     if(minions.some(m=>m.kind === 'overseer' && !m.gone)) worth.push('overseer');
     buffs.push({ c:'#b7a6ff', t:'LEGION '+L.length+'/'+minionMax(), more:worth });
   }
@@ -30129,7 +30376,7 @@ function renderHUD(){
     autos.push({ f: mx ? clamp(up/mx, 0, 1) : 1, label:'LEGION '+up+'/'+mx, icon:(x,y)=>drawLegionIcon(x, y, up) });
     if(p.minions.zombies){
       const zu = zombieMinions().filter(m=>m.rise >= 1).length;
-      autos.push({ f: clamp(zu/ZOMBIE_MINION_MAX, 0, 1), label:'ZOMBIES '+zu+'/'+ZOMBIE_MINION_MAX, icon:(x,y)=>drawZombieBadge(x, y, zu) });
+      autos.push({ f: clamp(zu/zombieCap(), 0, 1), label:'ZOMBIES '+zu+'/'+zombieCap(), icon:(x,y)=>drawZombieBadge(x, y, zu) });
     }
     const gm = golemMax();
     if(gm){
@@ -30349,7 +30596,8 @@ function resetRun(demo){
   taken = {}; buildLog = []; banner = null; runTime = 0; redFlash = 0; tScale = 1;
   pendingPicks = []; upgradeMode = 'wave'; lootChain = false;
   rerollsUsed = 0; screenRerolls = 0; shunned = {};
-  clogReset();
+  clogReset(); clogLastHit = null;
+  respawnReset();
   buildGround(); buildProps();
   navBuild();
   player = newPlayer(); heroObj = player;
@@ -30425,9 +30673,16 @@ function showGameOver(){
      and not a promise. Read `prevBest` first — metaBank moves it. */
   const cur = metaCur();
   const prevBest = metaRun ? metaRun.wave : (cur.best.wave || 0);
-  const res = (META && META.on && !runLink) ? metaBank() : null;
-  renderRunEnd(res, prevBest);
-  document.getElementById('overScreen').classList.remove('hidden');
+  /* WITH A SECOND CHANCE ON THE TABLE THE RUN IS NOT OVER, so it is not banked:
+     standing up again would bank it twice. It is banked when you leave. */
+  const offer = respawnOffer();
+  const hold = !!(offer && offer.can);
+  const res = (!hold && META && META.on && !runLink && !respawn.banked) ? (respawn.banked = true, metaBank()) : null;
+  renderRunEnd(res, prevBest, hold);
+  renderRespawn(offer);
+  const ov = document.getElementById('overScreen');
+  ov.classList.remove('peek');
+  ov.classList.remove('hidden');
   try{
     const best = Math.max(wave.n, +(localStorage.getItem('bb_best')||0));
     localStorage.setItem('bb_best', best);
@@ -30438,15 +30693,35 @@ function showGameOver(){
    thing, name what is newly within reach, and shout about anything that was a
    FIRST. When nothing new happened it says so rather than inventing a reward —
    a screen that celebrates every run teaches you to ignore it. */
-function renderRunEnd(res, prevBest){
+/* WHAT KILLED YOU: the last blow the log saw, and the way to the log itself */
+function killerLine(){
+  const h = clogLastHit;
+  if(!h) return '';
+  const what = h.who === 'ailments' ? 'what you were burning, bleeding or poisoned with' : String(h.who);
+  return `<div class="rekill">KILLED BY <b>${esc(what)}</b> <i>${fmtHp(h.n)}${h.elem ? ' '+esc(h.elem) : ''} · COMBAT LOG for the rest</i></div>`;
+}
+function renderRespawn(offer){
+  const b = document.getElementById('respawnBtn');
+  if(!b) return;
+  if(!offer){ b.style.display = 'none'; return; }
+  b.style.display = '';
+  b.disabled = !offer.can;
+  b.textContent = offer.free ? 'SECOND CHANCE — FREE' : 'RESPAWN — '+offer.cost+' STUDS';
+  b.title = offer.free ? 'stand up where you fell, whole -- it comes back when you next kill a boss'
+    : (offer.can ? 'the fine multiplies by '+RESPAWN_FINE_MUL+' with every one paid this run'
+                 : 'you have '+(player.studs || 0)+' studs -- kill a boss to get the free one back');
+}
+function renderRunEnd(res, prevBest, hold){
   const el = document.getElementById('runEnd');
   if(!el) return;
-  if(!res){ el.innerHTML = '<div class="renone">The skill tree is switched off for this run.</div>'; return; }
+  if(hold){ el.innerHTML = killerLine() + '<div class="renone">A second chance stands — the run is banked to the tree when you leave.</div>'; return; }
+  if(!res){ el.innerHTML = killerLine() + '<div class="renone">The skill tree is switched off for this run.</div>'; return; }
   const m = metaCur();
   const L = [];
   /* THE WAVE YOU CLEARED. You died ON wave 30 without finishing it, so the run
      is a wave-29 run and the tree is paid for 29. */
   const done = res.cleared;
+  if(clogLastHit) L.push(killerLine());
   L.push(`<div class="rebest">CLEARED <b>${done}</b>`+
     (done > prevBest ? ` <em>a new best \u2014 was ${prevBest}</em>`
                      : ` <span>best ${prevBest}</span>`)+
@@ -30678,9 +30953,24 @@ document.getElementById('clearBtn').addEventListener('click', ()=>{
 document.getElementById('treeOffBtn').addEventListener('click', ()=>{
   if(state === 'tree') return;
   SFX.click(); metaToggle(); renderTree(); refreshTreeBtn(); });
-document.getElementById('retryBtn').addEventListener('click', ()=>{ SFX.click();
+/* leaving a death screen that held the run back banks it now */
+function overLeave(){
+  if(!respawn.banked && META && META.on && !runLink && player && player.dead){ respawn.banked = true; metaBank(); }
+  document.getElementById('overScreen').classList.remove('peek');
+}
+document.getElementById('retryBtn').addEventListener('click', ()=>{ SFX.click(); overLeave();
   document.getElementById('overScreen').classList.add('hidden'); startGame(); });
-document.getElementById('titleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
+document.getElementById('titleBtn').addEventListener('click', ()=>{ SFX.click(); overLeave(); backToTitle(); });
+document.getElementById('respawnBtn').addEventListener('click', ()=>{ if(respawnNow()) SFX.levelup(); else SFX.click(); });
+/* THE LOG, from the death screen: the plate steps aside and the combat log opens
+   on what you TOOK; BACK brings the plate back */
+function overPeek(on){
+  const ov = document.getElementById('overScreen');
+  ov.classList.toggle('peek', on);
+  if(on){ if(!clogOn) clogToggle(); clogView = CLOG_IN; }
+}
+document.getElementById('overLogBtn').addEventListener('click', ()=>{ SFX.click(); overPeek(true); });
+document.getElementById('overBackBtn').addEventListener('click', ()=>{ SFX.click(); overPeek(false); });
 document.getElementById('resumeBtn').addEventListener('click', ()=>{ SFX.click(); togglePause(); });
 document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click();
   document.getElementById('pauseScreen').classList.add('hidden'); startGame(); });

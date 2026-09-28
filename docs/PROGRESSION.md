@@ -4455,3 +4455,56 @@ on the canvas walks the hero there). Breaks `noclick`, `notap`, `noonce`, `noshi
 buttons by row, since MOVEMENT's are the first choice buttons on the screen. `summon`'s "brute
 stands inside the skeleton" (a 2px overlap in a real-time run) fails about one run in five on both
 the old and the new build (6/30 each) -- a flake that predates this pass.
+
+## Seventy-third pass — walking while fighting, the legion's minions, the arcade's second chance
+
+**Point and click, two channels.** `heroControl` no longer has a *stand* mode that clears the
+walk. A *free attack* (`CTL.free`) — SHIFT with the left button, or the right button when the
+attack lives there (unless it is pressed on a monster while standing still and walking nothing,
+which approaches it) — fires at the cursor and leaves `CTL.dest` alone; `freeDown` (SHIFT + left
+held, or right held) keeps it going, and a tap too quick for a frame still gets its one attack. A
+held left walk follows the cursor except while SHIFT holds it for an attack, when the walk goes on to
+where it was going. `click72` gains four cases (SHIFT+click mid-walk swings and still arrives within
+12px; holding SHIFT while walking swings as it goes; a right-button attack mid-walk arrives; both
+buttons walk after the cursor and swing); breaks `shiftstops`, `rightstops` caught.
+
+**Minions.** `minionMoveMul()` = (1 + minion speed) × (1 + half the hero's increased movement
+speed), on every `minionStep`; the stat's text now says so. Melee golems leap (`m.leap`, 0.5s arc,
+70px high, drawn lifted with a shadow; `golemLand` slams 1.25× their aoe at 1.2× damage; every 6s,
+at 120–340px). Swordsmen are `spd` 1.25 and charge (`m.charge`: half the time their 3–6s cooldown
+comes round at 90–280px, 2.6× pace for up to 0.45s, striking on arrival). Spearmen thrust along a
+line (`SPEAR_LINE_W` 16 either side, reach + 18 long) and 40% carry a pike (58 reach, drawn 1.35×
+long). **The Horde** (`zombiehorde`, legendary, needs `minions.zombies`): `zombieCap()` doubles and
+`raiseZombie` rolls a kind from `ZOMBIE_HORDE_KINDS` (walker 3, runner 2, crawler 2, bloater 1,
+hulk 1) whose numbers ride on `minionK`; crawlers draw with `drawCrawler`, bloaters fat.
+
+**Arcade.** `arcadeMode()` (not the RPG). A level adds `ARCADE_LEVEL_HEART` to `hpFlat` and heals
+to full (and fills the shield); `levelHearts(p)` puts them back in `rebuildWithout` and
+`runLinkApply`. **The second chance**: `respawn = { free, paid, banked }`, reset per run;
+`respawnOffer()` (null outside the arcade or on the bench), `respawnFine()` =
+(150 + 25·wave)·3^paid, `respawnNow()` (full life and shield, 3s grace, a 320px shove, enemy
+shots near you cleared), `respawnOnBoss()` from `killEnemy`. `showGameOver` does not bank while an
+affordable respawn stands (`overLeave` banks on TRY AGAIN / TITLE), so a respawned run is never
+banked twice. **The log after death**: `clogPush`/`clogPushDmg` always record the TAKEN channel,
+`logTaken` always runs and keeps `clogLastHit`; the death screen names the killer and
+`overPeek` hides the plate (`.peek`, pointer-events off) and opens the log on TAKEN.
+
+**Legion, awakened.** At the end of the freeze the broken no longer die: each gets up AWAKENED
+(`LEGION_WAKE_HP` 1.6, dmg ×1.35, speed ×1.15, scale ×1.15), back into `enemies` once (it may not
+have been swept out yet), with a violet flame and the word over it, and pays only when killed for
+good. Squad centres are now tried for open floor and a soldier whose squad has no room stands
+anywhere on the field — `legionlg` had dropped to 33–34 of 38 placed now and then. `legionlg` also
+strips PROXIMAL TANGIBILITY from the soldiers it hits (the squads stand far off, outside its ring):
+its occasional failures this pass were that, not the game.
+
+New `r73` (minion speed stat and hero speed on the walk; an ice golem leaps onto a target 240px off,
+lands within 90px and hurts what is there, a flame golem never leaps; the Horde is legendary, gated
+on Raise Zombie, doubles the cap and raises four-plus kinds with hulks tougher than crawlers; a
+spear hits two bodies on its line and not one beside it, ~40% pikes; swordsmen faster and charging;
+an arcade level +1–2 max hearts and a full heal, none in the RPG, kept through a rebuild; the free
+second chance offered without banking, taken, an unaffordable one shown disabled and the run banked,
+a fine paid and the next tripled, a boss giving the free one back, none in the RPG; the TAKEN log
+kept with the log closed, the killer named, COMBAT LOG and BACK). Breaks `nomove`, `noleap`,
+`nohorde`, `hordeopen`, `onekind`, `noline`, `nopike`, `nocharge`, `noheart`, `rebuildlose`,
+`nofree`, `flatfine`, `bossnoreset`, `bankearly`, `logoff`, `nokiller` caught; `noawake` caught by
+`legionlg`. `qol`'s death-screen check now dies with no second chance on the table.

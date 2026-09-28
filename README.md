@@ -3127,11 +3127,14 @@ is marked by the army on it, and the time left is the monolith's four runes goin
   they do not walk, swing or shoot, and they cannot be shoved. **The clock is fixed** — a kill
   buys no time (the league tree's *Longer Moment* is what will). The monolith's runes go dark
   as the time runs down, and the HUD counts the time, the broken and the standing.
-- **A soldier you break does not die yet.** It stands where it was as a block of cracked ice —
-  out of the fight, nothing aims at it — and **shatters when time starts again**, which is when
-  it pays out: its kill, its studs, a sergeant's war chest. Breaking the whole army no longer
-  ends the legion on the spot; the freeze always runs to the end.
-- **Then time starts again**: the broken shatter, and what is left wakes up and fights.
+- **A soldier you break does not die.** It stands where it was as a block of cracked ice — out
+  of the fight, nothing aims at it — until time starts again. Breaking the whole army does not
+  end the legion; the freeze always runs to the end.
+- **Then time starts again, and they ALL get up.** The ones you broke rise **AWAKENED** — 1.6×
+  their life, 35% harder hits, faster and bigger, with a violet flame at their feet and the word
+  over their heads — and the rest simply wake. Nothing pays out until it is killed for good: its
+  kill, its studs, a sergeant's war chest. Breaking a soldier in the freeze is choosing which ones
+  you will fight at their worst.
 - **Sergeants** (two, three from wave 20, four from 35 — elites, with rare modifiers) each drop a
   **war chest**: rare, epic 37% of the time, legendary 5%.
 - **From wave 15 a general** leads them — an elite with 2.5× the life, bigger — and pays an **epic
@@ -3262,6 +3265,18 @@ water and rocks the way you do.
   character sheet shows the hit it gets there (*...in the Overseer's aura*). It is not one of the
   legion and rises again 15s after it falls.
 - **Raise Zombie** (epic, once): see [the graveyard](#raise-zombie--the-graveyard) below.
+- **The Horde** (legendary, once — only once you raise zombies): the zombie cap doubles (**24**),
+  and what rises is any of the family, not only the walker — fast **runners**, low **crawlers**
+  that go down easily, fat **bloaters** with twice the life, and heavy **hulks** that hit nearly
+  twice as hard.
+- **How they move and fight.** The minion speed stat (*increased minion attack, cast and movement
+  speed*) speeds their feet as well as their hands, and half of your own increased movement speed is
+  theirs, so a quick hero keeps its legion. **Spearmen** thrust *through a line* — everything on
+  the spear, not one body — and four in ten carry a **pike**, 58 reach against 34. **Swordsmen**
+  are a quarter faster than the rest, and from a little way off (90–280px) one may **charge**: the
+  last of the ground at 2.6× its pace, striking on arrival. The **melee golems** (ice, stone, chaos,
+  carrion) **leap** onto what they are after when it is a few strides off (120–340px, every 6s):
+  up, across, and down with a slam round where they land.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
   × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
   it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
@@ -3732,9 +3747,33 @@ walks even when the cursor passes over a monster. The spot you clicked gets a sm
 what you are after a red dashed one. <kbd>Space</kbd> still rolls, the way you are walking. (With
 WASD the attack button setting applies too: the weapon is on whichever button you chose.)
 
+**Walking and attacking are two things at once.** SHIFT with the left button (or the right button,
+with the attack there) attacks at the cursor **without stopping the walk**: click somewhere far,
+then SHIFT+click or right-click as you go and the hero keeps walking to the spot while swinging or
+shooting. Holding SHIFT while the left button walks attacks as it goes; holding both buttons (attack
+on the right) walks after the cursor and fights at once. Only a plain click ON a monster turns the
+walk into an approach.
+
 **The next skill point, on the HUD.** Under the level bar: *next skill point at level N* — a level
 pays a point the first time you reach it, so it is the level after your best, in blue when it is
 the very next one.
+
+### Arcade: every level a heart, and a second chance
+
+- **A level is a heart.** In the arcade every level adds **+1 maximum heart** (a flat heart: your
+  increases multiply it like any other) and **heals you to full**. The RPG will earn its life
+  from gear instead.
+- **A second chance.** A run begins with one free respawn. Die, and the death screen offers
+  **SECOND CHANCE — FREE**: you stand up where you fell, whole, with three seconds' grace, the
+  monsters close by thrown back and every shot near you gone. It comes back when you next **kill a
+  boss** (the HUD says *second chance ready* or *used — kill a boss*). Die again before then and you
+  may still **RESPAWN for a fine** in studs — 150 + 25 a wave, **tripled for every fine already
+  paid** this run. The run is not banked to the tree while a respawn is on the table; it is banked
+  when you leave (TRY AGAIN or TITLE).
+- **What killed you.** The death screen names it — *KILLED BY brute · 3.2* — and **COMBAT LOG**
+  steps the results aside and opens the log on **TAKEN**, every blow that landed on you (kept even
+  while the log was closed), with the other tabs a click away; **BACK TO THE RESULTS** brings them
+  back.
 
 ---
 
