@@ -3489,10 +3489,16 @@ function audioSave(){
 function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
 /* a voice nobody will hear is not worth building */
 function destOff(dest){ return (dest === A.mus || dest === A.delay) ? !A.musicOn : !A.sfxOn; }
-function audioApply(){
+/* just the levels -- what a volume slider calls while it is being dragged. It
+   must NOT go through refreshAudioBtns, which redraws the options list and
+   would replace the slider under the cursor, ending the drag after one step. */
+function audioGains(){
   if(A.master) A.master.gain.value = A.muted ? 0 : MASTER_GAIN;
   if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN*A.musVol : 0;
   if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN*A.sfxVol : 0;
+}
+function audioApply(){
+  audioGains();
   /* THE SCHEDULER STOPS DEAD while the music is off, so its clock falls behind
      real time. Catching it up here is the difference between the music coming
      back on the beat and it coming back as ten minutes of notes at once. */
@@ -8754,8 +8760,14 @@ function shuffleArr(a){
   return a;
 }
 
+/* how much of the pack odds a wave gets: a sliver on wave 6, all of it by 30 */
+const PACK_RAMP_FROM = 6, PACK_RAMP_FULL = 30, PACK_RAMP_MIN = 0.12;
+function packRamp(n){ return clamp(PACK_RAMP_MIN + (1 - PACK_RAMP_MIN)*(n - PACK_RAMP_FROM)/(PACK_RAMP_FULL - PACK_RAMP_FROM), PACK_RAMP_MIN, 1); }
+/* ...and how many a wave may hold: one magic band and two elites on wave 6,
+   one more band every four waves and one more elite every two */
+function packCaps(n){ const k = Math.max(0, n - PACK_RAMP_FROM); return { magic:1 + Math.floor(k/4), elite:2 + Math.floor(k/2) }; }
 function startWave(n){
-  wave.n = n; wave.queue = composeWave(n); wave.hold = false;
+  wave.n = n; wave.queue = composeWave(n); wave.hold = false; wave.magicN = 0; wave.eliteN = 0;
   { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); legionRoll(n, L.legion); }
   sboxRoll(n);
   goblinRoll(n);
@@ -8932,10 +8944,14 @@ function updateWave(dt){
               spawnEnemy('boss', pos.x, pos.y);
             }
           } else if(type==='boneling'){
-            for(let k=0;k<3;k++)
+            /* bonelings come in threes, and each used to roll its own elite
+               with no ramp and no cap -- most of wave 6's elites were bonelings */
+            for(let k=0;k<3;k++){
+              const el = wave.n>=6 && (wave.eliteN || 0) < packCaps(wave.n).elite && Math.random() < 0.15*packRamp(wave.n);
+              if(el) wave.eliteN = (wave.eliteN || 0) + 1;
               spawnEnemy('boneling', clamp(pos.x+rnd(-45,45), W.wall+40, W.w-W.wall-40),
-                clamp(pos.y+rnd(-45,45), W.wall+40, W.h-W.wall-40),
-                wave.n>=6 && Math.random()<0.15);
+                clamp(pos.y+rnd(-45,45), W.wall+40, W.h-W.wall-40), el);
+            }
           } else {
             const packable = wave.n>=6;
             /* A PACK IS A PACK. Three bodies read as "the spawner hiccuped";
@@ -8947,13 +8963,22 @@ function updateWave(dt){
             /* golems are siege units — they only rarely head a magic or elite pack,
                and the odds climb slowly as the run goes on */
             const isGolem = type.endsWith('golem');
-            const pk = difficulty.pack * (isGolem ? clamp(0.10 + (wave.n-10)*0.015, 0.10, 0.45) : 1);
-            if(packable && roll < 0.09*pk){
+            /* THE PACKS COME IN GRADUALLY. Every body in the queue rolls, so the
+               full odds from the first wave they are allowed on made wave 6 --
+               the one after the first boss -- twenty elites and five magic
+               bands. The odds now ramp in (packRamp) and a wave holds only so
+               many of either (packCaps), both growing with the wave. */
+            const pk = difficulty.pack * (isGolem ? clamp(0.10 + (wave.n-10)*0.015, 0.10, 0.45) : 1) * packRamp(wave.n);
+            const caps = packCaps(wave.n);
+            const magicOk = (wave.magicN || 0) < caps.magic, eliteOk = (wave.eliteN || 0) < caps.elite;
+            if(packable && magicOk && roll < 0.09*pk){
+              wave.magicN = (wave.magicN || 0) + 1;
               /* THE MAGIC GOES ON ALL OF THEM. It used to be three copies each
                  carrying the full modifier; it is a whole band now, and the
                  modifier is smaller per body to pay for the extra bodies. */
               spawnMagicPack(type, pos, packSize + irnd(0, 3));
-            } else if(packable && roll < 0.09*pk + 0.12*pk){
+            } else if(packable && eliteOk && roll < 0.09*pk + 0.12*pk){
+              wave.eliteN = (wave.eliteN || 0) + 1;
               /* AN ELITE IS ONE BODY WITH A COURT, not three of the same thing.
                  Three identical elites was a damage spike with no shape to it;
                  one hard body ringed by its own minions is something you have to
@@ -8968,8 +8993,11 @@ function updateWave(dt){
                   clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, false);
               }
             } else {
-              spawnEnemy(type, pos.x, pos.y,
-                (packable && Math.random() < 0.15*pk) || Math.random() < waveModElite());
+              /* a lone elite counts against the cap too; a wave modifier that
+                 promises elites still hands them out */
+              const lone = packable && eliteOk && Math.random() < 0.15*pk;
+              if(lone) wave.eliteN = (wave.eliteN || 0) + 1;
+              spawnEnemy(type, pos.x, pos.y, lone || Math.random() < waveModElite());
             }
           }
         }
@@ -29783,7 +29811,7 @@ function optRender(){
       A[inp.dataset.vol] = clamp(+inp.value/100, 0, 1);
       if(lab) lab.textContent = Math.round(A[inp.dataset.vol]*100)+'%';
       fill();
-      audioApply();
+      audioGains(); audioSave();
     });
     /* let go of the sound slider and you hear where you put it */
     inp.addEventListener('change', ()=>{ if(inp.dataset.vol === 'sfxVol'){ try { for(const k in sfxLast) delete sfxLast[k]; SFX.hit(); } catch(e){} } });

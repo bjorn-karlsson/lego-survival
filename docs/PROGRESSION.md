@@ -4312,3 +4312,17 @@ track, save, restore, and survive a switch off and on; VERY LARGE is ×1.32 on t
 canvas, remembered, SMALL ×0.88, NORMAL exactly as written, and both survive a reload. Breaks
 `volmus`, `volsfx`, `volnosave`, `volnoload`, `txtnocss`, `txtnocanvas`, `txtnosave`,
 `txtnoboot` caught.
+
+**Packs come in gradually, and the sliders drag.** Each queued body rolls for a magic band (9%),
+an elite with a court (12%) and a lone elite (15%) from wave 6, so wave 6 averaged ~23 elites
+and ~43 magic bodies. Now `packRamp(n)` scales those odds from 0.12 on wave 6 to 1 by wave 30,
+and `packCaps(n)` limits a wave to 1 + ⌊(n−6)/4⌋ magic bands and 2 + ⌊(n−6)/2⌋ elites
+(`wave.magicN`/`wave.eliteN`, reset in `startWave`); the boneling triple's per-body elite roll,
+which was most of wave 6's elites, goes through the same ramp and cap. Wave modifiers' elites
+are untouched. Measured: wave 6 ~2 elites and ≤1 band; wave 20 ~10 and ~3; wave 30 ~17 and ~4.
+The volume sliders only moved on a click because every `input` went through `audioApply` →
+`refreshAudioBtns` → `optRender`, which replaced the slider under the cursor; they now call
+`audioGains()` (the levels alone) and `audioSave()`. New `packs70` (ramp and caps, wave 6 never
+over 2 elites or 1 band across eight spawns, wave 12 within its caps, wave 30 well above wave 6,
+and a real mouse drag walking the music slider 100 → 13 on the same element); breaks `noramp`,
+`nocap`, `bonenocap`, `dragdies` caught.

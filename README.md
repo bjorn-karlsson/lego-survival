@@ -1542,6 +1542,13 @@ the modifier — it used to be three copies each carrying the full thing. Each b
 smaller to pay for the extra bodies: **×1.18 health, ×1.12 speed, 12% less damage taken**,
 down from ×1.5, ×1.3 and 30%.
 
+**They come in gradually.** Every body in a wave's queue rolls for a pack, so full odds from
+wave 6 on made the wave after the first boss about twenty elites and five magic bands. The odds
+now **ramp in** — 12% of their full value on wave 6, all of it by wave 30 — and a wave holds at
+most **one magic band and two elites on wave 6**, one more band every four waves and one more
+elite every two. Bonelings, which arrive in threes and used to roll an elite each, count against
+the same limit. A wave modifier that promises elites still hands them out.
+
 Magic-touched is **blue** now rather than purple: purple is already the epic rarity band and
 the necromancers' own colour, so a magic pack read as *something arcane* instead of as the
 pack modifier it is.
