@@ -4326,3 +4326,52 @@ The volume sliders only moved on a click because every `input` went through `aud
 over 2 elites or 1 band across eight spawns, wave 12 within its caps, wave 30 well above wave 6,
 and a real mouse drag walking the music slider 100 → 13 on the same element); breaks `noramp`,
 `nocap`, `bonenocap`, `dragdies` caught.
+
+## Seventy-first pass — searching the tree, and the Heart
+
+**Search.** Every node wears tags read off its stats (`META_TAGS`, one line per stat; `cv_`/`gn_`
+conversions, `inc_`/`dmg_` weapon stats, spell-brick stats and `grant` are tagged by rule, and a
+stat's `only` list adds the weapons). `metaNodeTags(n)` adds the kind (`travel` reads as *path
+travel highway*, a balancing break as *attribute break*) and a door's own steps their weapon;
+`metaNodeHay(n)` is the name, note, cluster name, kind, every line of the card and the tags.
+Second-hand counts: `allRes` carries *fire/cold/lightning resistance*, `incElem` and `flatElem`
+*fire cold lightning*, conversions both of their types. `metaSearchRe(q)` compiles
+`new RegExp(q, 'i')`; if that throws it tries the glob reading (`*attr*` → `attr`, inner `*` →
+`.*`), then the escaped letters. The box (`treeFindBox`, made once and moved into the top of
+`.treeside` on every render, sticky) drives `treeFindApply`, which sorts the matches by distance
+from the start and appends a `.tfind` circle to each matching `.tnode`; `treeFindSize` (also
+called from `treeApplyView`) keeps each ring at least 6 screen px in radius, drawn with a
+non-scaling stroke. Enter/Shift+Enter → `treeFindNext` (centres, zooms to at least 100%, marks
+`.cur`, shows the card); Esc empties then leaves; Ctrl+F or `/` focuses it while the tree is open.
+New `search71` (every node and every stat on the map tagged; `Attr` finds all 569 attribute nodes
+and no damage node; `Minions?` every minion stat and nothing else; `Fire Resistance` every
+fireRes *and* allRes and no cold-only node; `sword` its door, oath, reach and lifesteal and no
+axe node; `Defence`, `Spell`, `Physical`, `Over time`; the syntax cases; then the real box:
+Ctrl+F, rings on exactly the matches, ≥9px wide at FIT, Enter to the nearest, a purchase
+keeping the search, Esc twice, typing T not closing the tree). Breaks `noallres`, `noattr`,
+`nodoortag`, `noglob`, `tinyring`, `nokeep`, `noctrlf`, `escleaves`, `nosort` caught. The
+flaky `breach` case (a 65s breach once in ~20 runs) was the perfect clear's leftover splinters
+buying a ring rank mid-measurement and letting a second lord in; the test now clears
+`player.splinters` with the rings.
+
+**The Heart.** `CORE_ROOM` (560) moves every ring out; `DOOR_R` is 1300 and `DOOR_SPREAD` 1.0,
+so the six doors stand 55–70° apart instead of 44–75°. Step 6b lays, *before the doors*, a ring
+of `HEART_N` (12) travel stops at `HEART_R` (520), and between each pair of planned door
+bearings (`doorDeg`, shared with step 6) a straight highway from the Heart to the inner ring —
+of the two Heart stops and two junctions nearest the bisector, the straightest pair whose road
+crosses nothing. Each door then opens **two ways out** (`WAYS` 2, picked as before, now able to
+see and avoid the highways) and **one way in**: its third flavoured path aimed at the nearest
+free Heart stop (`inward` on those nodes). Step 6c puts a `META_HEART_GROUPS` site halfway
+between each way in and the highway's actual line at `HEART_SITE_R` (1000), dealt per country
+so none repeats (five per country, defensive only), and step 8 joins each to its way in and its
+highway by the nearest pair and nothing else. `META_TREE_VER` 4 refunds saved points. The
+first attempt left the fans free and a door this near the inner ring drew its third way straight
+across the middle to the far side; restricting reach helped, but only laying the highways first
+and turning the third way inward got the map to zero crossings. Measured: 1623 nodes, 206
+clusters, 103 nodes inside r 1300 (the old middle was bare inside its doors), home prizes 21.1 against away
+25.1. New `heart71` (doors ≥50° and ≥1000 apart at r ≥1200; the ring a 12-cycle paying its
+ground; every door 3 first steps — one in reaching the Heart within two road steps, two out;
+a highway per gap, pure attributes, Heart to hub, landing between its doors; ≥10 groups,
+unique, two short (≤400) connectors, defensive, no damage; no empty spot in the middle; no
+door taken through the Heart). Breaks `spread08`, `threeout`, `dmgheart`, `repeat`,
+`nohighway`, `hgloose`, `doorsin` caught.

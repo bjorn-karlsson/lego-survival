@@ -1685,24 +1685,78 @@ weapons — and **they share nothing**. Points earned on a staff are a staff's; 
 axe and you find the axe's own tree exactly as you left it, and switching back finds the
 staff's.
 
-**Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
-dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
-is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
-swings, the staff's is focus and warding. Each door sits in its own country — the sword and
-the mace in the red, the axe in the green, the staff in the blue.
+**Everyone starts round the middle, and no two weapons start the same way.** Six doors stand
+evenly round the Heart, and each one opens into steps nobody else can reach cheaply — the
+sword's are edge and footwork, the mace's the weight of the slam, the axe's quick hands and
+openings, and so on. Each door sits in its own country — the sword and the mace in the red,
+the axe and the bow in the green, the staff and the scepter in the blue.
 
-### Four beginnings, and all four are on the map
+### Six beginnings, set apart, round the Heart
 
-Each door **fans into four paths of three flavoured nodes** — a sword's edge, its footwork,
-its guard, its opening — before the plain attribute road takes over. One flavoured node and
-then a corridor made the beginning of a build a formality: you pressed a button and then
-walked. Three is a small decision of its own, which of the four directions you commit to
-before the map opens.
+![The Heart: the ring in the middle, a way in from every door, highways out between them](docs/tree-heart.png)
+
+Each door opens **three paths of three flavoured nodes** — **two out** to the lattice and **one
+in** to the Heart — before the plain attribute road takes over. One flavoured node and then a
+corridor made the beginning of a build a formality: you pressed a button and then walked.
+Three is a small decision of its own: out into your country, or in towards the middle and
+everybody else's.
+
+**The doors stand apart.** They used to sit 900 from the middle, in pairs — the bow 44° from
+the axe, the scepter 44° from the staff — round a black disc the size of a country. They stand
+evenly now, **55 to 70° apart** and 1300 out, at least 1300 from each other, and the whole
+lattice moved out by 560 to make room.
+
+**The middle is the Heart**, PoE's centre: a ring of **twelve plain attribute stops** round
+the very middle, each paying the ground it stands on; **a way in from every door**; and
+between each pair of doors a **highway** — straight, attributes only — from the Heart out to
+the inner ring of the lattice. It is all road, one piece with the rest of the highway, so the
+middle is somewhere every build passes through rather than somewhere it has to buy. In the
+gaps between a door's way in and a highway stand **twelve small defensive groups**, never the
+same one twice: armour, life and regeneration in the red (THE BULWARK, HEARTMENDING, IRON HIDE,
+THE HEARTH), evasion, accuracy and life in the green (THE SLIP, STEADY HAND, KEEN EYE, THE
+DODGE), energy shield and regeneration in the blue (THE INNER WARD, THE CALM, CLEAR MIND, THE
+LANTERN) — each with a few points of its country's attribute. **None of it is damage**: the
+middle is where every build walks, and a damage group there would be one every build takes.
+Each group hangs off the two roads beside it by one short line each and nothing else.
+
+**Nobody walks through a door by way of the Heart.** A way in stops at its door like every
+other road does, so holding the whole Heart still does not let you take a step from somebody
+else's beginning. Laying the highways *before* the doors choose their ways out is what keeps
+the middle clean: a door sees the highways and goes round them, and **no two lines on the
+map cross**.
+
+### Finding things — the search box
+
+![Searching the tree for minion](docs/tree-search.png)
+
+**Fifteen hundred nodes is a map you search.** The box at the top of the tree's panel
+(<kbd>Ctrl</kbd>+<kbd>F</kbd> or <kbd>/</kbd> goes to it) takes a **regular expression**,
+case-blind and found anywhere — `attr` is `*attr*` — and every node it matches wears a **small
+yellow ring**, readable even with the whole map on screen. **Enter** walks to the next one,
+nearest your beginning first, and shows its card (<kbd>Shift</kbd>+<kbd>Enter</kbd> goes back);
+**Esc** empties the box, a second Esc leaves it. Taking a node mid-search keeps the search.
+
+**It reads tags, not just names.** Every node carries words for what it is *for*, read off its
+stats the way its icon is, so a stat added tomorrow is findable the day it lands:
+
+| Search | Finds |
+|---|---|
+| `attr` | every strength, dexterity and intelligence node |
+| `minion` | every node a summoner wants — damage, life, speed, golems, zombies |
+| `sword` | the sword's door and oath, and every node only a sword (or melee) is paid by |
+| `fire res` | fire resistance **and** +every resistance — second-hand counts |
+| `defence` | life, armour, evasion, energy shield, resistances, regeneration, suppression |
+| `spell`, `physical`, `over time` | spell damage and cast speed; physical and bleeding; every damage-over-time node |
+| `life\|armour`, `^hale$` | anything a regular expression can say |
+
+Something that is not a legal expression is not an error: `*attr*` is read as the wildcard the
+hand meant, and anything else that still will not compile is searched for as the letters typed.
 
 **And every door's paths are open to everybody.** You still *begin* at your own one, and
 nothing paths through somebody else's door — so a sword hero reaching the staff's beginning
-has to come at it from the far end, up the lane it hangs off. Your own costs you **3**
-points; it costs everybody else **5 to 13**, averaging more than double. Leaning into the
+has to come at it from the far end, up the lane it hangs off. A whole path of your own costs
+you **3** points; walking to the far end of somebody else's costs **8 to 17**, about 12 on
+average. Leaning into the
 beginning next door is a real option, the way it is in the tree this is borrowed from; four
 beginnings that only one weapon could ever touch were four quarters of the middle of the map
 wasted.

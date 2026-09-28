@@ -12860,8 +12860,6 @@ const HEART_R = 520, HEART_N = 12;
 const HEART_STRIDE = 250;
 /* the small defensive groups between a passage and a highway: how far out */
 const HEART_SITE_R = 1000;
-/* how far round the inner ring a door's ways out may reach, in degrees */
-const DOOR_REACH = 45;
 /* a gap between two doors narrower than this has room for its highway and nothing beside it */
 const HEART_GROUP_GAP = 50;
 /* HOW WIDE THE TWO DOORS OF A COUNTRY STAND. 1 is dead even across the wedge;
@@ -14229,22 +14227,13 @@ const RING_AT = [0, 5, 12, 22, 34];
          to the Heart, the way a PoE class has a road towards the middle as well
          as out -- still three ways, still three steps each. */
       const WAYS = 2;
-      /* OUTWARD, ALWAYS. Since the Heart, a door has a way IN of its own (its
-         passage, 6b), so the three ways out are only ever out: to a junction of
-         the inner ring no more than DOOR_REACH degrees round from the door. Left
-         free, a door stood this close to the ring found its third way on the far
-         side of the map and drew it straight across the middle. */
-      /* ...and as near round as will do: DOOR_REACH first, a little wider only
-         if three clean ways cannot be had inside it. A crossing is accepted
-         last of all, after every reach has been tried without one. */
-      const outward = (h, reach)=> Math.abs(((h.deg - deg + 540) % 360) - 180) <= reach;
+      /* (the Heart's highways are already laid when this runs, so a way out
+         that would cross one is refused here like any other crossing) */
       const near = [];
-      for(const pass of [0, 1]) for(const reach of [DOOR_REACH, DOOR_REACH + 15, DOOR_REACH + 35])
-      for(const gap of [0.72, 0.52, 0.34, 0]){
+      for(const gap of [0.72, 0.52, 0.34, 0]) for(const pass of [0, 1]){
         for(const h of sorted){
           if(near.length >= WAYS) break;
           if(near.indexOf(h) >= 0) continue;
-          if(!outward(h, reach)) continue;
           if(gap > 0 && near.some(o=>apart(bearing(o), bearing(h)) < gap)) continue;
           if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
           near.push(h);
