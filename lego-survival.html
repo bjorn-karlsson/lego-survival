@@ -33,7 +33,8 @@
     flex-wrap:wrap;width:100%;padding:0 12px;box-sizing:border-box}
   .boxplate{order:2}
   #comboStats{order:1}  #comboBricks{order:3}
-  @media (max-width:1240px){ .boxplate{order:1} #comboStats{order:2} #comboBricks{order:3} }
+  /* stacked (set by fitTitle when three columns cannot fit even zoomed out) */
+  .titlewrap.stacked .boxplate{order:1} .titlewrap.stacked #comboStats{order:2} .titlewrap.stacked #comboBricks{order:3}
   .cpanel{width:330px;flex:0 1 330px;background:rgba(10,15,13,.86);
     border:2px solid rgba(255,214,110,.32);border-radius:20px;padding:14px 16px 16px;
     text-align:left;font-family:'Fredoka';color:#e8ece9;
@@ -3281,19 +3282,48 @@ function resize(){
   zoom = Math.min(zoom, 3);
   reclampCam();
 }
-/* The title plate is laid out at its natural size and then scaled to fit the
-   window, so it never runs off the bottom on a short screen — and never sits
-   there shrunken on a tall one. */
+/* THE TITLE FITS THE WINDOW, NO SCROLLING. The plate is measured at its natural
+   size and the whole title -- the plate AND the two panels beside it -- is
+   ZOOMED to fit the window's height. It used to be a transform scale on the
+   plate alone, which only shrank the picture: the layout box stayed full size,
+   so the page still scrolled past a plate that looked like it fitted. Zoom
+   shrinks the layout itself. Never below half size, never above natural; and it
+   refits whenever the plate's content changes (a longer weapon blurb, the RPG
+   button text) as well as on a resize. */
+const TITLE_FIT_PAD = 40, TITLE_FIT_MIN = 0.5, TITLE_ROW_MIN = 0.6;
 function fitTitle(){
-  const el = document.querySelector('#titleScreen .boxplate');
-  if(!el) return;
+  const wrap = document.querySelector('#titleScreen .titlewrap'), el = document.querySelector('#titleScreen .boxplate');
+  if(!wrap || !el) return;
   el.style.transform = 'rotate(-.5deg)';
+  wrap.style.zoom = ''; wrap.classList.remove('stacked');
   const h = el.offsetHeight;
   if(!h) return;
-  const k = Math.min(1, (window.innerHeight - 26) / h);
-  el.style.transform = k < 1 ? `rotate(-.5deg) scale(${k.toFixed(3)})` : 'rotate(-.5deg)';
+  /* the panels beside it are as tall as the plate may be, in the same zoom */
+  for(const q of wrap.querySelectorAll('.cpanel')) q.style.maxHeight = Math.max(320, h) + 'px';
+  /* the height the plate needs, and the width all three columns need side by side */
+  const side = [...wrap.querySelectorAll('.cpanel')].reduce((a, q)=>a + q.offsetWidth + 18, 0);
+  const rowW = el.offsetWidth + side + 24;
+  const kh = (window.innerHeight - TITLE_FIT_PAD) / h, kw = (window.innerWidth - 8) / rowW;
+  let k = Math.min(1, kh);
+  /* one row if a reasonable zoom gets it there; otherwise the panels go under */
+  if(kw >= TITLE_ROW_MIN) k = Math.min(k, kw);
+  else wrap.classList.add('stacked');
+  k = clamp(k, TITLE_FIT_MIN, 1);
+  if(k < 1) wrap.style.zoom = k.toFixed(3);
+}
+let titleFitQ = false;
+function fitTitleSoon(){
+  if(titleFitQ) return;
+  titleFitQ = true;
+  requestAnimationFrame(()=>{ titleFitQ = false; fitTitle(); });
 }
 window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
+/* content changes only -- never attributes, so the zoom it sets cannot wake it */
+try {
+  const plate = document.querySelector('#titleScreen .boxplate');
+  if(plate && window.MutationObserver) new MutationObserver(fitTitleSoon).observe(plate, { childList:true, subtree:true, characterData:true });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fitTitleSoon);
+} catch(e){}
 
 /* ============================== SETTINGS ==============================
    Music and sound already had their own localStorage keys and their own button
