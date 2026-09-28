@@ -4083,7 +4083,7 @@ function runLinkState(){
     tree = m.nodes.filter(id=>META_BY_ID[id] && !metaLocked(META_BY_ID[id], m)); } } catch(e){}
   if(runLink && runLink.t){ tree = runLink.t.slice(); on = runLink.on; }
   return { v:RUNLINK_V, w:weapon.id, d:(difficulty && difficulty.id) || 'hard', f:favourite.id,
-    n:Math.max(1, wave.n|0), s:seed, on, t:tree,
+    n:Math.max(1, wave.n|0), s:seed, on, t:tree, tv:META_TREE_VER,
     ro:ROSTER.map(r=>[r.k, r.at]),
     b:buildLog.map(e=>[e.id, Math.max(0, RAR_ORDER.indexOf(e.rar))]),
     lv:p.level, xp:Math.round(p.xp), xn:p.xpNext, st:p.studs, k:p.kills, gh:p.gHearts || 0,
@@ -4209,7 +4209,9 @@ function runLinkApply(){
   runTime = o.rt || 0;
   const n = clamp(o.n|0, 1, 999);
   logEvent('RUN LINK — wave '+n+', level '+p.level+', '+(o.b || []).length+' bricks', '#9fd4ff');
-  showBanner('RUN LINK', 'wave '+n+' · level '+p.level+' · '+(o.b || []).length+' bricks', '#9fd4ff', 2.4, 44);
+  if(o.treeStale) logEvent('   its '+o.treeStale+' tree points were placed on an older skill tree and are left out', '#ffb900');
+  showBanner('RUN LINK', 'wave '+n+' · level '+p.level+' · '+(o.b || []).length+' bricks'+
+    (o.treeStale ? ' · OLDER TREE LEFT OUT' : ''), '#9fd4ff', 2.4, 44);
   return n;
 }
 /* the page was opened on a run link: start it */
@@ -4218,6 +4220,12 @@ function runLinkBoot(){
   if(!m) return false;
   try {
     const o = runLinkDecode(m[1]);
+    /* A TREE IS A LIST OF NODE IDS, and an id means a place on one layout. A link
+       copied on another version of the tree (every link before the Heart carries
+       no version at all) would put its points on whatever stands at those ids
+       now -- a different build wearing the old one's name. So its tree is left
+       out, and the run says so; everything else in it still stands. */
+    if(o.t && o.t.length && (o.tv|0) !== META_TREE_VER){ o.treeStale = o.t.length; o.t = []; o.tv = META_TREE_VER; }
     runLink = o;
     weapon = WEAPONS[o.w] || WEAPONS.sword;
     difficulty = DIFFS[o.d] || DIFFS.hard;
@@ -5932,13 +5940,22 @@ function mimicLoot(e){
 /* ---- THE BANNER-BEARER ---- */
 const BANNER_R = 280, BANNER_PLANT_D = 420, BANNER_PLANT_T = 0.9, BANNER_REPLANT = 10;
 const BANNER_DMG = 1.30, BANNER_SPD = 1.20, BANNER_ATK = 0.85;
+/* HOW MANY MAY STAND AT ONCE. Every bearer used to keep one up, and a late
+   wave with five bearers in it was a field of flags -- one standing until wave
+   24, two until 36, three at most. A bearer whose turn it is not waits. */
+function bannerCap(n){ return Math.min(3, 1 + Math.floor(Math.max(0, (n ?? wave.n) - 12)/12)); }
+function bannersUp(){ return enemies.filter(b=>b.type === 'warbanner' && !b.dead).length; }
+/* A BANNER IS NOT A MONSTER. It is not counted in what is left of a wave and it
+   does not hold the wave open: when the last monster falls, the banners fall
+   with it, quietly, paying nothing. */
+function isBanner(e){ return !!e && e.type === 'warbanner'; }
 function plantBanner(e){
   const fx = e.face ? e.face.x : 0, fy = e.face ? e.face.y : 1, fl = Math.hypot(fx, fy) || 1;
   spawnEnemy('warbanner', clamp(e.x + fx/fl*18, W.wall+40, W.w-W.wall-40), clamp(e.y + fy/fl*18, W.wall+40, W.h-W.wall-40));
   const b = enemies[enemies.length-1];
   b.state = 'active'; b.mode = 'planted'; b.bearer = e;
   e.banner = b; e.plantCd = BANNER_REPLANT;
-  addRing(b.x, b.y, 8, 360, BANNER_R, '#ff5a4a', 5, 0.5);
+  addRing(b.x, b.y, 8, 360, BANNER_R, '#fff0b0', 3, 0.3);
   try { SFX.clank(); } catch(err){}
   return b;
 }
@@ -5998,9 +6015,10 @@ function drawMimic(c, e){
 }
 function drawWarBanner(c, e){
   const pulse = 0.5 + 0.5*Math.sin(vtime*3 + (e.phase || 0));
-  c.fillStyle = `rgba(255,90,74,${0.05 + 0.03*pulse})`;
+  /* pale and faint: the ground it holds should be readable, not a red alarm */
+  c.fillStyle = `rgba(255,240,176,${0.03 + 0.015*pulse})`;
   c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.fill();
-  c.setLineDash([12,10]); c.strokeStyle = `rgba(255,110,90,${0.35 + 0.25*pulse})`; c.lineWidth = 3;
+  c.setLineDash([12,10]); c.strokeStyle = `rgba(255,240,176,${0.16 + 0.08*pulse})`; c.lineWidth = 2;
   c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.stroke(); c.setLineDash([]);
   c.save(); c.translate(e.x, e.y);
   c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(0, 2, 12, 5, 0, 0, TAU); c.fill();
@@ -8941,7 +8959,7 @@ function updateWave(dt){
     return;
   }
   if(wave.state==='fight'){
-    const alive = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant).length;
+    const alive = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant && !isBanner(e)).length;
     const cap = Math.min(MAX_ALIVE, 30 + wave.n*16);
     /* a running ritual holds the wave's own bodies back until it is done */
     if(wave.queue.length && alive < cap && !ritualActiveNow()){
@@ -9023,8 +9041,9 @@ function updateWave(dt){
       }
     }
     /* a sleeping ritual pack is not the wave's: it waits for you across waves */
-    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin') && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow() && !legionActiveNow()){
+    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin' && !isBanner(e)) && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow() && !legionActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
+      for(const b of enemies) if(isBanner(b) && !b.dead){ b.dead = true; addSparks(b.x, b.y - 60, 8, '#fff0b0'); }
       wave.hold = leagueLeft().length > 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
          wave-29 run, and the run-end screen used to claim otherwise. */
@@ -10814,9 +10833,16 @@ function drawRitualHud(){
    then the broken shatter and the rest of the army wakes up and fights.
    SERGEANTS carry war chests; from wave 15 a GENERAL leads them, and it carries
    a better one. A running legion holds the wave. */
-const LEGION_R = 480, LEGION_TOUCH = 50, LEGION_T = 9;
+/* LEGION_R is how far out the battlefield reaches -- there is no ring drawn at
+   it any more, the army simply stands scattered across that much ground */
+const LEGION_R = 620, LEGION_TOUCH = 50, LEGION_T = 9;
+/* THE ARMY STANDS IN SQUADS, not in a ring: a few knots of soldiers of uneven
+   size scattered round the stone, so one side of the field is thick with them
+   and another nearly bare -- a battle stopped mid-battle, not a parade */
+const LEGION_SQUADS = [3, 6];
 const LEGION_DELAY = [3, 8], LEGION_GENERAL_FROM = 15;
-const LEGION_COL = '#9fd4ff';
+const LEGION_COL = '#c3a6ff';     /* frozen time is a pale violet */
+const LEGION_ICE = '215,200,255';
 const LEGION_FACTIONS = {
   empire:{ name:'THE ETERNAL EMPIRE', col:'#ffd76e', ranks:['knight','lancer','archer','skeleton'], sergeant:'bastion', general:'jugg' },
   horde: { name:'THE KARUI HORDE',    col:'#ff8a3c', ranks:['brute','stalker','imp','superimp'],     sergeant:'zhulk',   general:'jugg' },
@@ -10857,30 +10883,50 @@ function legionStart(){
   const L = legionEv, n = wave.n;
   const fk = Math.random() < 0.5 ? 'empire' : 'horde', FAC = LEGION_FACTIONS[fk];
   L.faction = fk; L.state = 'frozen'; L.t = L.T0 = legionTimeNow(); L.kills = 0;
-  const put = (type, elite, magic, rr0, rr1)=>{
+  /* the squads: where each stands, how loosely, which way it faces, and a
+     weight -- squared randomness, so a couple are big and the rest are knots */
+  const squads = [], nS = irnd(LEGION_SQUADS[0], LEGION_SQUADS[1]);
+  for(let i=0;i<nS;i++){
+    const a = rnd(TAU), rr = rnd(170, LEGION_R - 110);
+    squads.push({ x:L.x + Math.cos(a)*rr, y:L.y + Math.sin(a)*rr, spread:rnd(70, 150),
+                  face:rnd(TAU), w:0.25 + Math.pow(Math.random(), 2)*2.5 });
+  }
+  const wSum = squads.reduce((t, q)=>t + q.w, 0);
+  const pickSquad = ()=>{ let r = Math.random()*wSum; for(const q of squads){ r -= q.w; if(r <= 0) return q; } return squads[0]; };
+  L.squads = squads.map(q=>({ x:Math.round(q.x), y:Math.round(q.y) }));
+  /* one soldier, in a squad (or, for the general, beside the stone) */
+  const put = (type, elite, magic, sq)=>{
     for(let tries=0; tries<30; tries++){
-      const a = rnd(TAU), rr = rnd(rr0, rr1);
-      const x = L.x + Math.cos(a)*rr, y = L.y + Math.sin(a)*rr;
+      let x, y, fa;
+      if(sq){ const a = rnd(TAU), rr = sq.spread*Math.sqrt(Math.random()); x = sq.x + Math.cos(a)*rr; y = sq.y + Math.sin(a)*rr; fa = sq.face + rnd(-0.5, 0.5); }
+      else  { const a = rnd(TAU), rr = rnd(70, 130); x = L.x + Math.cos(a)*rr; y = L.y + Math.sin(a)*rr; fa = a + Math.PI; }
+      if(Math.hypot(x - L.x, y - L.y) > LEGION_R || Math.hypot(x - L.x, y - L.y) < 60) continue;
       if(!abyssFloorOk(x, y, 40)) continue;
       spawnEnemy(type, x, y, elite, magic);
       const e = enemies[enemies.length-1];
       e.state = 'active'; e.legion = L; e.legionFrozen = true; e.lgx = x; e.lgy = y;
-      e.face = { x:Math.cos(a + Math.PI), y:Math.sin(a + Math.PI) }; e.walk = rnd(TAU);
+      e.face = { x:Math.cos(fa), y:Math.sin(fa) }; e.walk = rnd(TAU);
       return e;
     }
     return null;
   };
   const N = legionSize(n);
-  for(let i=0;i<N;i++) put(FAC.ranks[(Math.random()*FAC.ranks.length)|0], false, Math.random() < 0.15, 110, LEGION_R - 30);
+  for(let i=0;i<N;i++){
+    const sq = pickSquad();
+    put(FAC.ranks[(Math.random()*FAC.ranks.length)|0], false, Math.random() < 0.15, sq) ||
+      put(FAC.ranks[(Math.random()*FAC.ranks.length)|0], false, Math.random() < 0.15, pickSquad());
+  }
+  /* a sergeant leads a squad -- the biggest ones first */
+  const bySize = squads.slice().sort((a, b)=>b.w - a.w);
   for(let i=0;i<legionSergeants(n);i++){
-    const e = put(FAC.sergeant, true, false, 150, LEGION_R - 60);
+    const e = put(FAC.sergeant, true, false, bySize[i % bySize.length]);
     if(e){ e.legionChest = Math.random() < 0.05 ? 'legendary' : Math.random() < 0.37 ? 'epic' : 'rare'; }
   }
   if(n >= LEGION_GENERAL_FROM){
-    const g = put(FAC.general, true, false, 60, 120);
+    const g = put(FAC.general, true, false, null);
     if(g){ g.legionGeneral = true; g.maxHp *= 2.5; g.hp = g.maxHp; g.scale *= 1.3; g.r *= 1.3; }
   }
-  addRing(L.x, L.y, 12, 700, LEGION_R, LEGION_COL, 8, 0.7); addShake(0.3);
+  addSparks(L.x, L.y - 60, 30, LEGION_COL); addShake(0.3);
   showBanner(FAC.name, 'FROZEN IN TIME — '+L.T0+'s', LEGION_COL, 2.0, 42);
   logEvent('   LEGION — '+FAC.name+' stands frozen; what you break shatters when time starts again', LEGION_COL);
   try { SFX.freeze(); } catch(err){}
@@ -10894,7 +10940,7 @@ function legionHolds(e, source){
   e.hp = 0; e.dead = true; e.legionDown = true; e.legionSrc = source;
   (L.held = L.held || []).push(e);
   L.kills++;
-  addSparks(e.x, e.y - 18, 10, '#dff2ff');
+  addSparks(e.x, e.y - 18, 10, '#e6dcff');
   return true;
 }
 function legionRelease(){
@@ -10904,15 +10950,15 @@ function legionRelease(){
   const held = L.held || []; L.held = [];
   for(const e of held){
     e.dead = false; e.hp = 0; e.legionFrozen = false;
-    addSparks(e.x, e.y - 22*(e.scale || 1), 14, '#dff2ff');
-    addRing(e.x, e.y, 4, 260, 46*(e.scale || 1), '#dff2ff', 4, 0.35);
+    addSparks(e.x, e.y - 22*(e.scale || 1), 14, '#e6dcff');
+    addRing(e.x, e.y, 4, 260, 46*(e.scale || 1), '#e6dcff', 4, 0.35);
     killEnemy(e, e.legionSrc || 'sword');
   }
   for(const e of enemies) if(e.legion === L && !e.dead){ e.legionFrozen = false; e.mode = 'chase'; e.atkCd = rnd(0.2, 1.0); }
   const woke = enemies.filter(e=>e.legion === L && !e.dead).length;
   showBanner('TIME STARTS AGAIN', held.length ? held.length+' SHATTER'+(woke ? ' · THE REST BREAK FREE' : ' · NONE LEFT STANDING')
                                               : 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
-  addRing(L.x, L.y, 12, 700, LEGION_R, '#ffffff', 6, 0.5);
+  addSparks(L.x, L.y - 60, 30, '#ffffff');
   try { SFX.roar(); } catch(err){}
 }
 function legionDone(){
@@ -10961,25 +11007,27 @@ function drawLegion(){
   const L = legionEv;
   if(!L || L.state === 'pending') return;
   const c = ctx;
-  if(L.state === 'frozen'){
-    c.fillStyle = 'rgba(190,225,255,0.07)'; c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.fill();
-    c.strokeStyle = `rgba(159,212,255,${0.45 + 0.25*Math.sin(vtime*6)})`; c.lineWidth = 4;
-    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke();
-    /* the time left, as the ring itself running out */
-    c.strokeStyle = '#ffffff'; c.lineWidth = 6;
-    c.beginPath(); c.arc(L.x, L.y, LEGION_R, -Math.PI/2, -Math.PI/2 + TAU*clamp(L.t/(L.T0 || LEGION_T), 0, 1)); c.stroke();
-  } else if(L.state === 'idle'){
-    c.setLineDash([14,12]); c.strokeStyle = 'rgba(159,212,255,0.28)'; c.lineWidth = 3;
-    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke(); c.setLineDash([]);
-  }
+  /* NO RING ON THE GROUND. The field is marked by the frozen army standing on
+     it; the time left is the monolith's own runes going dark one by one */
   /* the monolith */
   const glow = 0.5 + 0.5*Math.sin(vtime*2.5 + L.seed);
   c.save(); c.translate(L.x, L.y);
   c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(0, 4, 26, 9, 0, 0, TAU); c.fill();
   c.fillStyle = '#4a5058'; c.strokeStyle = 'rgba(15,20,25,0.8)'; c.lineWidth = 2.5;
   c.beginPath(); c.moveTo(-16, 2); c.lineTo(-11, -96); c.lineTo(0, -110); c.lineTo(11, -96); c.lineTo(16, 2); c.closePath(); c.fill(); c.stroke();
-  c.fillStyle = `rgba(159,212,255,${L.state === 'idle' ? 0.45 + 0.5*glow : 0.25})`;
-  for(let i=0;i<4;i++){ c.fillRect(-4, -86 + i*20, 8, 10); }
+  const lit = L.state === 'frozen' ? clamp(L.t/(L.T0 || LEGION_T), 0, 1)*4 : L.state === 'idle' ? 4 : 0;
+  for(let i=0;i<4;i++){
+    /* bottom rune last to go out: a rune is on while its share of the time is left */
+    const on = clamp(lit - (3 - i), 0, 1);
+    c.fillStyle = L.state === 'idle' ? `rgba(${LEGION_ICE},${0.45 + 0.5*glow})`
+                : `rgba(${LEGION_ICE},${0.18 + 0.8*on})`;
+    c.fillRect(-4, -86 + i*20, 8, 10);
+  }
+  if(L.state === 'frozen'){
+    /* and a faint violet haze off the stone while time is stopped */
+    c.fillStyle = `rgba(${LEGION_ICE},${0.10 + 0.06*Math.sin(vtime*5)})`;
+    c.beginPath(); c.ellipse(0, -50, 30, 70, 0, 0, TAU); c.fill();
+  }
   drawStudG(c, 0, -108, 3.5, '#6d747c');
   c.restore();
 }
@@ -10990,17 +11038,17 @@ function drawLegionIce(){
     for(const e of enemies){
       if(e.dead || e.legion !== L || !e.legionFrozen || !onScreen(e, 80)) continue;
       const s = e.scale || 1;
-      c.fillStyle = 'rgba(210,235,255,0.32)'; c.strokeStyle = 'rgba(223,242,255,0.75)'; c.lineWidth = 1.5;
+      c.fillStyle = `rgba(${LEGION_ICE},0.34)`; c.strokeStyle = 'rgba(232,222,255,0.8)'; c.lineWidth = 1.5;
       c.beginPath(); c.ellipse(e.x, e.y - 26*s, 17*s, 32*s, 0, 0, TAU); c.fill(); c.stroke();
     }
     /* ...and the broken ones stand as cracked ice until time starts again */
     for(const e of (L.held || [])){
       if(!onScreen(e, 80)) continue;
       const s = e.scale || 1, cy = e.y - 26*s;
-      c.fillStyle = 'rgba(225,242,255,0.62)'; c.strokeStyle = '#ffffff'; c.lineWidth = 2;
+      c.fillStyle = 'rgba(230,220,255,0.62)'; c.strokeStyle = '#ffffff'; c.lineWidth = 2;
       c.beginPath(); c.moveTo(e.x - 15*s, e.y); c.lineTo(e.x - 18*s, cy - 14*s); c.lineTo(e.x - 6*s, cy - 34*s);
       c.lineTo(e.x + 8*s, cy - 30*s); c.lineTo(e.x + 17*s, cy - 8*s); c.lineTo(e.x + 14*s, e.y); c.closePath(); c.fill(); c.stroke();
-      c.strokeStyle = 'rgba(90,150,210,0.85)'; c.lineWidth = 1.5;
+      c.strokeStyle = 'rgba(130,95,210,0.85)'; c.lineWidth = 1.5;
       c.beginPath(); c.moveTo(e.x - 2*s, cy - 30*s); c.lineTo(e.x + 3*s, cy - 12*s); c.lineTo(e.x - 5*s, cy + 2*s); c.lineTo(e.x + 2*s, e.y - 4*s);
       c.moveTo(e.x + 3*s, cy - 12*s); c.lineTo(e.x + 12*s, cy - 4*s); c.moveTo(e.x - 5*s, cy + 2*s); c.lineTo(e.x - 13*s, cy - 6*s); c.stroke();
     }
@@ -22232,8 +22280,10 @@ function updateEnemyCore(e, dt){
     if(!live){ e.banner = null; e.plantCd = Math.max(0, (e.plantCd || 0) - dt); }
     if(e.mode === 'plant'){
       e.modeT += dt; e.face = { x:Math.cos(toP), y:Math.sin(toP) };
-      if(e.modeT >= BANNER_PLANT_T){ plantBanner(e); e.mode = 'chase'; }
-    } else if(!live && (e.plantCd || 0) <= 0 && dP < BANNER_PLANT_D && !e.docile){ e.mode = 'plant'; e.modeT = 0; }
+      /* asked again as it goes in: five bearers can all start planting in the
+         same second, before any of their banners is up to be counted */
+      if(e.modeT >= BANNER_PLANT_T){ if(bannersUp() < bannerCap()) plantBanner(e); else e.plantCd = 2; e.mode = 'chase'; }
+    } else if(!live && (e.plantCd || 0) <= 0 && dP < BANNER_PLANT_D && !e.docile && bannersUp() < bannerCap()){ e.mode = 'plant'; e.modeT = 0; }
     else { e.mode = 'chase'; vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed; }
   }
   else if(e.type==='mimic'){
@@ -27656,7 +27706,7 @@ function render(){
       ctx.restore();
     }
   }
-  const aliveList = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant);
+  const aliveList = enemies.filter(e=>!e.dead && e.state==='active' && !e.dormant && !isBanner(e));
   const markFew = state==='play' && aliveList.length>0 && aliveList.length<=6;
   if(markFew){
     for(const e of aliveList){
@@ -29599,7 +29649,7 @@ function renderHUD(){
   if(wave.n>0){
     ctx.textAlign='center'; ctx.font='700 20px "Titan One"';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
-    const left = enemies.filter(e=>!e.dead&&e.state==='active'&&!e.dormant).length + wave.queue.length;
+    const left = enemies.filter(e=>!e.dead&&e.state==='active'&&!e.dormant&&!isBanner(e)).length + wave.queue.length;
     /* the monster LEVEL rides beside the wave number once it starts to bite —
        it is the number that explains why wave 60 hurts more than wave 50, so it
        has to be something you can actually see */

@@ -1495,7 +1495,11 @@ off it, and that is the actual mechanic.
 - **The Banner-bearer** joins the roster (from wave 11 or so). It walks in, stops, and **plants a
   war banner**: everything within **280px** of it hits **30% harder**, moves **20% faster** and
   attacks faster, for as long as the banner stands. Break the banner (it has a little life) and
-  the buff is gone; the bearer plants another ten seconds later.
+  the buff is gone; the bearer plants another ten seconds later. **Only a few stand at once** —
+  one until wave 24, two until 36, three at most — however many bearers there are. The ground
+  it holds is a faint, pale-yellow circle. **A banner is not a monster:** it is not counted in
+  *bricks left*, gets no last-monsters pointer, does not hold a wave open, and falls, paying
+  nothing, when the wave's last monster does.
 - **The Witch Doctor** — a zombie caster — joins the roster around wave 16. It keeps its
   distance and raises **three blood orbs** (or plague orbs) at a time.
 - **Blood orbs** rise beside whoever raised them and **hunt you**: they set off roughly your way,
@@ -3113,13 +3117,16 @@ you have since capped out of reads *YOU CAN NO LONGER TAKE IT* and cannot be bou
 PoE's Legion. A **monolith** rises somewhere off to one side (with a marker on the screen's rim).
 **Touch it** and a battle stopped in time comes into being around it: an army — **the Eternal
 Empire** (knights, lancers, archers, skeletons; bastion sergeants) or **the Karui Horde** (brutes,
-stalkers, imps, superimps; zombie-hulk sergeants) — standing in its ranks, **frozen**, in a
-480px ring about the stone: 22 + the wave of them (60 at most), 15% magic.
+stalkers, imps, superimps; zombie-hulk sergeants) — **frozen** mid-battle in pale violet ice,
+**scattered in three to six squads of uneven size** across the ground round the stone (up to
+620px out; one side of the field thick with them, another nearly bare), a sergeant leading each
+of the biggest: 22 + the wave of them (60 at most), 15% magic. **No ring is drawn**: the field
+is marked by the army on it, and the time left is the monolith's four runes going dark.
 
 - **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt, but
   they do not walk, swing or shoot, and they cannot be shoved. **The clock is fixed** — a kill
-  buys no time (the league tree's *Longer Moment* is what will). The ring round the stone runs
-  down as the time does, and the HUD counts the time, the broken and the standing.
+  buys no time (the league tree's *Longer Moment* is what will). The monolith's runes go dark
+  as the time runs down, and the HUD counts the time, the broken and the standing.
 - **A soldier you break does not die yet.** It stands where it was as a block of cracked ice —
   out of the fight, nothing aims at it — and **shatters when time starts again**, which is when
   it pays out: its kill, its studs, a sergeant's war chest. Breaking the whole army no longer
@@ -3155,6 +3162,10 @@ someone else sees exactly what you had. A linked run is a replay: it banks nothi
 The run is **compressed before it is base64'd** (LZW, zip's family), so a long run's link is well
 under half the length it was — a level-49 bow run went from 6,459 characters to 2,813. New links
 start with `z`; old ones still open.
+**A link's tree belongs to one version of the tree.** It is a list of node ids, and an id is a
+place on one layout, so a link copied before the Heart (or on any other version) keeps its
+weapon, bricks, level and everything else but **leaves its tree out**, and says so — rather than
+putting its points on whatever stands at those ids now. New links carry the version.
 **TRY AGAIN** replays the link from its wave; **TITLE** lets go of it.
 
 ### Block

@@ -4391,3 +4391,30 @@ clock; the clock runs at its own pace; at release the broken pay — two kills, 
 chest; the general pays only when it shatters; breaking the whole army keeps the legion frozen
 to the end, then all of it shatters and it is done); breaks `noheld`, `buytime`, `earlyend`,
 `noshatter` caught.
+
+**Banners, and the legion's field.** `bannerCap(n)` — 1 until wave 24, 2 until 36, 3 at most —
+is asked when a bearer decides to plant *and* again when the banner goes in (five bearers could
+all start planting in one second, before any banner existed to count). `isBanner` keeps banners
+out of *bricks left*, the last-monsters pointers, the spawn cap and the wave-clear test, and a
+clearing wave takes its banners down with it, paying nothing. The aura is a faint pale yellow
+(`rgba(255,240,176,~0.04)`, dashed rim ~0.2). The legion is violet (`LEGION_COL #c3a6ff`, ice
+`215,200,255`), draws no ring (the monolith's four runes go dark as the time runs out, with a
+violet haze off the stone while frozen), and stands in `LEGION_SQUADS` 3–6 squads within
+`LEGION_R` 620: each squad a centre 170–510 out, a spread of 70–150, a facing, and a weight
+`0.25 + r²·2.5`, so a couple are big and the rest are knots; sergeants lead the biggest, the
+general stands by the stone. New `lb71` (the cap by wave; five bearers raising 1 banner on wave
+14 and 3 on 36; banners not in *bricks left* and not holding the wave, gone with it; the pale
+aura read off a pretend context; the colour violet; six legions each in 3–6 squads, all inside
+620, reaching past 350, and at least four of six with one eighth of the field ≥3× another; no
+arc of 200+ drawn by `drawLegion`).
+
+**Run links carry the tree's version.** The suite's `minion2` replays a saved scepter link and
+went from ~40s to ~52s on its boss: the link's tree is a list of ids, and after the Heart those
+ids named different nodes. `runLinkState` now writes `tv`; `runLinkBoot` drops a tree whose `tv`
+is not `META_TREE_VER` (every older link has none), notes it (`treeStale`, a log line and the
+banner's `OLDER TREE LEFT OUT`), and keeps everything else. The fixture was translated to the
+new ids by content (same name and stats; five CADENCE nodes by the nearest node with the same
+stats) and is back at ~41s. `zombie` and `r56` compared every node against a snapshot of the
+round-42 tree; the snapshot is now `tree71.ids`, the v4 tree, and `r56` counts a door's way in as
+a road when asking whether a cluster is a pocket. New `link71` (a copied link carries `tv`; a
+current link restores its tree exactly; a version-less one restores none of it and says so).
