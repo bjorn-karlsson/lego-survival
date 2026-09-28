@@ -765,7 +765,13 @@
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
-      <div class="seclabel">SANDBOX — TURN IT ON AND NO WAVE EVER ARRIVES. CLICK A MONSTER TO PUT ONE IN FRONT OF YOU (SHIFT-CLICK FOR AN ELITE, RIGHT-CLICK FOR FIVE)</div>
+      <div class="seclabel">LEAGUES — PUT ONE DOWN NOW, WHATEVER THE WAVE (A BREACH OR AN ABYSS SURFACES AS SOON AS A WAVE IS BEING FOUGHT)</div>
+      <div class="cheatrow" id="cheatLeagues"></div>
+      <div class="seclabel">LEAGUE TREE — PRE-BUILT, NOT LIVE IN A RUN: SWITCH IT ON AND TAKE ITS NODES HERE (CLICK A TAKEN NODE AT THE END OF A ROAD TO GIVE IT BACK)</div>
+      <div class="cheatrow" id="cheatLtree"></div>
+      <div class="seclabel">RARE MODIFIERS — PICK ANY, AND EVERY SHIFT-CLICKED ELITE BELOW WEARS EXACTLY THOSE (NONE PICKED: ROLLED AS IN A RUN)</div>
+      <div class="cheatrow" id="cheatRareMods"></div>
+      <div class="seclabel">SANDBOX — TURN IT ON AND NO WAVE EVER ARRIVES. CLICK A MONSTER TO PUT ONE IN FRONT OF YOU (SHIFT-CLICK FOR AN ELITE, RIGHT-CLICK FOR FIVE; KINDRED PACK SENDS A BOUND MAGIC PACK OF THE LAST ONE YOU CLICKED)</div>
       <div class="cheatrow" id="cheatSandbox"></div>
       <div class="cheatrow" id="cheatSpawn"></div>
     </div>
@@ -5562,7 +5568,9 @@ function applyRareMod(e, id){
   M.apply(e);
   return true;
 }
+let rareModForce = null;          /* the test bench's pick: exactly these, whatever the wave */
 function rollRareMods(e){
+  if(rareModForce && rareModForce.length){ for(const id of rareModForce) applyRareMod(e, id); return; }
   const want = rareModCount(), pool = RARE_MODS.map(m=>m.id);
   for(let i=0; i<want && pool.length; i++) applyRareMod(e, pool.splice((Math.random()*pool.length)|0, 1)[0]);
 }
@@ -5628,8 +5636,8 @@ function kindredOnKill(e){
   for(const o of enemies) if(o !== e && !o.dead && o.kindred === e.kindred) kindredGrow(o);
 }
 /* the magic pack, as the wave spawns it: n bodies in a loose ring, bound or not */
-function spawnMagicPack(type, pos, n){
-  const kin = wave.n >= KINDRED_FROM && Math.random() < KINDRED_CHANCE ? ++kindredUid : 0;
+function spawnMagicPack(type, pos, n, kinForce){
+  const kin = (kinForce !== undefined ? kinForce : (wave.n >= KINDRED_FROM && Math.random() < KINDRED_CHANCE)) ? ++kindredUid : 0;
   const out = [];
   for(let k=0;k<n;k++){
     const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
@@ -16188,6 +16196,40 @@ function revokeAll(id){
   rebuildWithout(id);
   buildCheatRows();
 }
+/* THE BENCH'S LEAGUES: one put down now, whatever the wave -- sandbox, boss
+   wave or wave 1 alike, none of which the league roll would ever allow */
+let benchMods = new Set(), benchLastMob = 'knight';
+function benchLeague(kind, arg){
+  const p = player;
+  if(!p) return false;
+  const near = (lo, hi)=>{ for(let i=0;i<60;i++){ const a = rnd(TAU), r = rnd(lo, hi);
+    const x = p.x + Math.cos(a)*r, y = p.y + Math.sin(a)*r; if(abyssFloorOk(x, y, 60)) return { x, y }; }
+    return { x:clamp(p.x + lo, W.wall+60, W.w-W.wall-60), y:p.y }; };
+  if(kind === 'breach'){
+    const free = BREACH_LORD_KEYS.filter(q=>!allBreaches().some(B=>B && B.lord === q));
+    if(!free.length) return false;
+    const B = breachNewAt(arg || free[(Math.random()*free.length)|0]); B.delay = 0;
+    if(!breach) breach = B; else breachExtra.push(B);
+    return true;
+  }
+  if(kind === 'abyss'){ const A = abyssNew(); A.delay = 0; if(!abyss) abyss = A; else abyssExtra.push(A); return true; }
+  if(kind === 'ritual'){ if(!ritualCanRise()) return false; ritualS.pending = null; return ritualPlaceSet(); }
+  if(kind === 'legion'){
+    if(legionActiveNow() || (legionEv && legionEv.state === 'idle')) return false;
+    legionEv = { state:'pending', delay:0, n:wave.n, t:0, seed:rnd(1000) };
+    return legionPlace();
+  }
+  if(kind === 'sbox') return !!sboxPlace(arg);
+  if(kind === 'chest' || kind === 'mimic'){
+    const at = near(160, 260);
+    props.push(shoveToFloor({ type:'chest', x:at.x, y:at.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16,
+      rar:arg || rollRarity('chest'), mimic:kind === 'mimic' }, 20));
+    return true;
+  }
+  if(kind === 'goblin'){ const at = near(320, 420); goblinSpawn(at.x, at.y); return true; }
+  if(kind === 'orbs'){ for(let i=0;i<3;i++){ const at = near(260, 340); orbSpawn(at.x, at.y, arg || 'blood', Math.max(1, 1 + wave.n*0.3), null); } return true; }
+  return false;
+}
 function buildCheatRows(){
   const waves = document.getElementById('cheatWaves');
   if(!waves) return;
@@ -16320,6 +16362,7 @@ function buildCheatRows(){
   bands.sort((a,b)=>a.lo-b.lo);
   bands.push({lo:0, hi:0, name:'GOLEMS &middot; seeded into waves, not bought',
               keys:['stonegolem','icegolem','firegolem','stormgolem']});
+  bands.push({lo:0, hi:0, name:'SPECIALS &middot; not bought from the budget', keys:['goblin','mimic','warbanner','kin:pack']});
   bands.push({lo:0, hi:0, name:'BOSSES', keys:bossKeys.map(k=>'boss:'+k)});
   spawn.innerHTML = bands.map(b=>
     `<div class="mobband"><div class="mobbandhead">${
@@ -16330,6 +16373,7 @@ function buildCheatRows(){
            return `<div class="cheatbtn got mob" data-mob="boss" data-boss="${bk}">${
              esc((BOSSES[bk]||SUPERBOSSES[bk]).name)}</div>`;
          }
+         if(k === 'kin:pack') return `<div class="cheatbtn" data-kin="1">KINDRED PACK (${esc(benchLastMob)})</div>`;
          return `<div class="cheatbtn mob" data-mob="${k}">${esc(k)}</div>`;
        }).join('')}</div></div>`).join('');
   for(const el of spawn.querySelectorAll('.cheatbtn.mob')){
@@ -16338,8 +16382,16 @@ function buildCheatRows(){
       for(let i=0;i<n;i++){
         const a = i/n*TAU + rnd(-0.2,0.2);
         const d = n===1 ? 190 : rnd(170, 280);
-        spawnEnemy(el.dataset.mob, p.x+Math.cos(a)*d, p.y+Math.sin(a)*d,
-                   elite, false, el.dataset.boss || null);
+        const x = p.x+Math.cos(a)*d, y = p.y+Math.sin(a)*d;
+        if(el.dataset.mob === 'goblin'){ goblinSpawn(x, y); continue; }
+        rareModForce = elite && benchMods.size ? [...benchMods] : null;
+        try { spawnEnemy(el.dataset.mob, x, y, elite, false, el.dataset.boss || null); } finally { rareModForce = null; }
+        const e = enemies[enemies.length-1];
+        if(e && e.type === 'mimic' && !e.mimicRar) e.mimicRar = 'rare';
+      }
+      if(!el.dataset.boss && el.dataset.mob !== 'goblin'){
+        const was = benchLastMob; benchLastMob = el.dataset.mob;
+        const kb = spawn.querySelector('[data-kin]'); if(kb && was !== benchLastMob) kb.textContent = 'KINDRED PACK ('+benchLastMob+')';
       }
       SFX.click();
     };
@@ -16350,6 +16402,13 @@ function buildCheatRows(){
     el.addEventListener('mouseenter', ()=>{ try { mobTipShow(el, key); } catch(e){ cmpHide(); } });
     el.addEventListener('mouseleave', cmpHide);
   }
+  const kinBtn = spawn.querySelector('[data-kin]');
+  if(kinBtn) kinBtn.addEventListener('click', ()=>{
+    const p = player, a = rnd(TAU);
+    const pk = spawnMagicPack(benchLastMob, { x:clamp(p.x + Math.cos(a)*260, W.wall+80, W.w-W.wall-80), y:clamp(p.y + Math.sin(a)*260, W.wall+80, W.h-W.wall-80) }, 6, true);
+    for(const e of pk) e.state = 'active';
+    SFX.click();
+  });
 
   const misc = document.getElementById('cheatMisc');
   misc.innerHTML = [
@@ -16376,6 +16435,65 @@ function buildCheatRows(){
       }
       SFX.click(); buildCheatRows();
     });
+
+  /* --- LEAGUES ------------------------------------------------------------ */
+  const lg = document.getElementById('cheatLeagues');
+  if(lg){
+    const LB = [['breach','','BREACH'], ['abyss','','ABYSS'], ['ritual','','RITUAL (3 ALTARS)'], ['legion','','LEGION MONOLITH'],
+      ['sbox','plain','STRONGBOX'], ['sbox','magic','MAGIC STRONGBOX'], ['sbox','rare','RARE STRONGBOX'], ['sbox','epic','EPIC STRONGBOX'],
+      ['chest','','CHEST'], ['mimic','','MIMIC CHEST'], ['goblin','','TREASURE GOBLIN'], ['orbs','blood','BLOOD ORBS ×3'], ['orbs','chaos','PLAGUE ORBS ×3']];
+    lg.innerHTML = LB.map(([k, a, label])=>`<div class="cheatbtn" data-lg="${k}" data-arg="${a}">${label}</div>`).join('');
+    for(const el of lg.children)
+      el.addEventListener('click', ()=>{
+        const ok = benchLeague(el.dataset.lg, el.dataset.arg || undefined);
+        if(!ok) addHitNum(player.x, player.y - 60, 'NOT NOW', '#9aa39c', 14);
+        SFX.click();
+      });
+  }
+
+  /* --- THE LEAGUE TREE ------------------------------------------------------ */
+  const lt = document.getElementById('cheatLtree');
+  if(lt){
+    const tip = n=>Object.entries(n.stats).map(([k, v])=>LT_STATS[k].txt(v)).join(' · ') || 'where every road starts';
+    lt.innerHTML =
+      `<div class="cheatbtn${LEAGUE_TREE_ON ? ' got' : ''}" data-lt="toggle">LEAGUE TREE: ${LEAGUE_TREE_ON ? 'ON' : 'OFF'}</div>`+
+      `<div class="cheatbtn" data-lt="pts">+5 POINTS (${LTREE.pts})</div>`+
+      `<div class="cheatbtn" data-lt="all">TAKE EVERY NODE</div>`+
+      `<div class="cheatbtn" data-lt="reset">RESET THE TREE</div>`+
+      LEAGUE_TREE.filter(n=>!n.hub).map(n=>`<div class="cheatbtn${LTREE.nodes.includes(n.id) ? ' got' : ''}" data-lt="node" data-node="${n.id}" title="${esc(tip(n))}">${
+        esc((n.notable ? '★ ' : '') + n.name)}</div>`).join('');
+    for(const el of lt.children)
+      el.addEventListener('click', ()=>{
+        const k = el.dataset.lt;
+        if(k === 'toggle') LEAGUE_TREE_ON = !LEAGUE_TREE_ON;
+        else if(k === 'pts'){ LTREE.pts += 5; ltreeSave(); }
+        else if(k === 'all'){
+          for(let pass=0; pass<LEAGUE_TREE.length; pass++) for(const n of LEAGUE_TREE)
+            if(!LTREE.nodes.includes(n.id) && n.links.some(l=>LTREE.nodes.includes(l))) LTREE.nodes.push(n.id);
+          ltreeRebuild(); ltreeSave();
+        }
+        else if(k === 'reset'){ LTREE = { pts:0, nodes:['lt_root'] }; ltreeRebuild(); ltreeSave(); }
+        else if(k === 'node'){
+          const id = el.dataset.node;
+          if(LTREE.nodes.includes(id)) ltreeRefund(id);
+          else { if(LTREE.pts < 1) LTREE.pts++; if(!ltreeTake(id) && LTREE.pts > 0) LTREE.pts--; }
+        }
+        SFX.click(); buildCheatRows();
+      });
+  }
+
+  /* --- RARE MODIFIERS FOR THE NEXT ELITES ---------------------------------- */
+  const rm = document.getElementById('cheatRareMods');
+  if(rm){
+    rm.innerHTML = RARE_MODS.map(m=>`<div class="cheatbtn${benchMods.has(m.id) ? ' got' : ''}" data-rm="${m.id}" title="${esc(m.tip)}" style="color:${m.col}">${m.name}</div>`).join('')+
+      `<div class="cheatbtn" data-rm="">CLEAR (ROLL AS IN A RUN)</div>`;
+    for(const el of rm.children)
+      el.addEventListener('click', ()=>{
+        const id = el.dataset.rm;
+        if(!id) benchMods.clear(); else if(benchMods.has(id)) benchMods.delete(id); else benchMods.add(id);
+        SFX.click(); buildCheatRows();
+      });
+  }
 }
 function toggleCheat(){
   if(state==='play'){

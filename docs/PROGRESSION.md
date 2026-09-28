@@ -4255,3 +4255,16 @@ random number as the old uniform pick, so with even weights nothing moves.
 `lgnotime`, `lgnocap`, `lgnochest`, `lgnogen`, `lgnorun`, `lgnoroll`, `lgstays`, `lgnowake`,
 `lgnoleft`, `ltalwayson`, `ltskip`, `ltfree`, `ltmidref`, `ltnosave`, `ltnochance`, `ltnoalt`,
 `ltnolvl`, `ltnolgt`, `ltnostud` caught.
+
+**The test bench, brought up to date.** Three new rows and a new sandbox group. **LEAGUES**
+(`benchLeague`) puts any league down on the spot, whatever the wave and in the sandbox too: a
+breach (up to one per lord, its hand due at once), an abyss, a ritual set (`ritualPlaceSet`
+directly), a legion monolith, a strongbox of each tier, a chest, a mimic chest, a treasure goblin,
+three blood or three plague orbs. **LEAGUE TREE** toggles `LEAGUE_TREE_ON`, adds points, takes or
+refunds a node (a take hands over the point it needs), takes every node or resets. **RARE
+MODIFIERS** picks the exact modifiers a shift-clicked elite wears (`rareModForce`, set only for
+that one spawn). The sandbox's **SPECIALS** group has the goblin, the mimic and the war banner,
+and **KINDRED PACK** sends a bound magic pack (`spawnMagicPack`'s new `kinForce`) of the last
+monster clicked; the banner-bearer and the witch doctor sit in their roster bands. New `bench69`
+covers all of it; breaks `bnoleague`, `bnosand`, `bnowaitnow`, `bnokin`, `bnoforce`, `bleak`,
+`bnospecial`, `bnotree`, `bnorefund` caught.

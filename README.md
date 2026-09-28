@@ -3666,9 +3666,18 @@ difficulty live. Each card opens at its **own lowest rarity**, which is what you
 you are balancing: you see what it is worth when it actually drops. Hovering shows the full
 now → next comparison; <kbd>Shift</kbd>+scroll walks the rarity up.
 
-It also has a **sandbox**: switch it on and no wave ever arrives, then put any of the 37
-monsters or 8 bosses in front of you on demand — <kbd>Shift</kbd>-click for an elite,
-right-click for five.
+It also has a **sandbox**: switch it on and no wave ever arrives, then put any monster or boss
+in front of you on demand — <kbd>Shift</kbd>-click for an elite, right-click for five. A
+**SPECIALS** group holds what the wave budget never buys — the treasure goblin, the mimic, the
+war banner — and **KINDRED PACK** sends a bound magic pack of whichever monster you clicked last.
+
+- **LEAGUES** puts any league down now, on any wave and in the sandbox (which the league roll
+  never allows): a breach, an abyss, a ritual set, a legion monolith, a strongbox of each tier,
+  a chest, a mimic chest, a treasure goblin, three blood or plague orbs.
+- **RARE MODIFIERS**: pick any, and every <kbd>Shift</kbd>-clicked elite wears exactly those;
+  with none picked they roll as in a run. The pick never reaches the wave's own elites.
+- **LEAGUE TREE** drives the pre-built tree: switch it on, add points, take or give back any
+  node (hover one for what it does), take every node, or reset it.
 
 It is how the numbers in this README were balanced, and it is deliberately not advertised
 anywhere in the game.
