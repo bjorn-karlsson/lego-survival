@@ -6534,7 +6534,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
     sfxAt(e.x).hit();
   }
   logDealt(e, d, source, crit, suppressed, mix);
-  if(e.hp<=0) killEnemy(e, source);
+  if(e.hp<=0 && !legionHolds(e, source)) killEnemy(e, source);
 }
 /* LIFESTEAL. A chance, then a share, then the per-swing ceiling — and it is
    silent when you are already full, so a healthy hero is not covered in green
@@ -10807,11 +10807,14 @@ function drawRitualHud(){
    PoE's Legion. A MONOLITH rises somewhere off to one side. Touch it and a
    battle that was stopped in time comes into being around it: an army standing
    in its ranks, frozen mid-stride, in a ring about the stone. For a few seconds
-   NOTHING MOVES -- hit as many of them as you can; every one you bring down
-   buys a little more time. Then time starts again, and what is left of the
-   army wakes up and fights. SERGEANTS carry war chests; from wave 15 a GENERAL
-   leads them, and it carries a better one. A running legion holds the wave. */
-const LEGION_R = 480, LEGION_TOUCH = 50, LEGION_T = 9, LEGION_KILL_T = 0.35, LEGION_T_MAX = 14;
+   NOTHING MOVES -- hit as many of them as you can. A soldier you break does not
+   die yet: it stands where it was, a block of cracked ice, and SHATTERS when
+   time starts again -- that is when it pays out. The freeze always runs its full
+   length (kills buy no time; the league tree's Longer Moment is what does), and
+   then the broken shatter and the rest of the army wakes up and fights.
+   SERGEANTS carry war chests; from wave 15 a GENERAL leads them, and it carries
+   a better one. A running legion holds the wave. */
+const LEGION_R = 480, LEGION_TOUCH = 50, LEGION_T = 9;
 const LEGION_DELAY = [3, 8], LEGION_GENERAL_FROM = 15;
 const LEGION_COL = '#9fd4ff';
 const LEGION_FACTIONS = {
@@ -10879,31 +10882,49 @@ function legionStart(){
   }
   addRing(L.x, L.y, 12, 700, LEGION_R, LEGION_COL, 8, 0.7); addShake(0.3);
   showBanner(FAC.name, 'FROZEN IN TIME — '+L.T0+'s', LEGION_COL, 2.0, 42);
-  logEvent('   LEGION — '+FAC.name+' stands frozen; every kill buys time', LEGION_COL);
+  logEvent('   LEGION — '+FAC.name+' stands frozen; what you break shatters when time starts again', LEGION_COL);
   try { SFX.freeze(); } catch(err){}
+}
+/* A FROZEN SOLDIER BROUGHT TO NOTHING IS HELD, NOT KILLED. It leaves the
+   fight (nothing aims at it, nothing counts it as standing) and waits, as ice,
+   for the moment time starts again. Called from hitEnemy in place of the death. */
+function legionHolds(e, source){
+  const L = e.legion;
+  if(!L || L !== legionEv || !e.legionFrozen || L.state !== 'frozen' || e.dead) return false;
+  e.hp = 0; e.dead = true; e.legionDown = true; e.legionSrc = source;
+  (L.held = L.held || []).push(e);
+  L.kills++;
+  addSparks(e.x, e.y - 18, 10, '#dff2ff');
+  return true;
 }
 function legionRelease(){
   const L = legionEv;
   L.state = 'fighting';
+  /* the broken shatter first -- and only now die, with everything a death pays */
+  const held = L.held || []; L.held = [];
+  for(const e of held){
+    e.dead = false; e.hp = 0; e.legionFrozen = false;
+    addSparks(e.x, e.y - 22*(e.scale || 1), 14, '#dff2ff');
+    addRing(e.x, e.y, 4, 260, 46*(e.scale || 1), '#dff2ff', 4, 0.35);
+    killEnemy(e, e.legionSrc || 'sword');
+  }
   for(const e of enemies) if(e.legion === L && !e.dead){ e.legionFrozen = false; e.mode = 'chase'; e.atkCd = rnd(0.2, 1.0); }
-  showBanner('TIME STARTS AGAIN', 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
+  const woke = enemies.filter(e=>e.legion === L && !e.dead).length;
+  showBanner('TIME STARTS AGAIN', held.length ? held.length+' SHATTER'+(woke ? ' · THE REST BREAK FREE' : ' · NONE LEFT STANDING')
+                                              : 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
   addRing(L.x, L.y, 12, 700, LEGION_R, '#ffffff', 6, 0.5);
   try { SFX.roar(); } catch(err){}
 }
 function legionDone(){
   const L = legionEv;
   L.state = 'done';
-  showBanner('LEGION DEFEATED', L.kills+' OF THEM FELL IN TIME', LEGION_COL, 1.8, 40);
-  logEvent('   LEGION defeated — '+L.kills+' killed while frozen', LEGION_COL);
+  showBanner('LEGION DEFEATED', L.kills+' BROKEN IN TIME', LEGION_COL, 1.8, 40);
+  logEvent('   LEGION defeated — '+L.kills+' broken while frozen', LEGION_COL);
   legionEv = null;
 }
 function legionOnKill(e){
   const L = e.legion;
   if(!L) return;
-  if(e.legionFrozen && L.state === 'frozen'){
-    L.kills++; L.t = Math.min(LEGION_T_MAX + leagueStat('legionTime'), L.t + LEGION_KILL_T);
-    addSparks(e.x, e.y - 18, 10, '#dff2ff');
-  }
   if(e.legionChest)
     props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:e.legionChest, war:true }, 20));
   if(e.legionGeneral){
@@ -10925,9 +10946,12 @@ function updateLegion(dt){
     return;
   }
   const left = enemies.filter(e=>e.legion === L && !e.dead);
+  /* THE FREEZE RUNS ITS FULL LENGTH, however many are broken: breaking the
+     whole army early used to end the legion on the spot, before time had
+     started again or anything had shattered */
   if(L.state === 'frozen'){
     L.t -= dt;
-    if(L.t <= 0 || !left.length){ if(left.length) legionRelease(); else { L.state = 'fighting'; } }
+    if(L.t <= 0) legionRelease();
     return;
   }
   if(L.state === 'fighting' && !left.length) legionDone();
@@ -10969,6 +10993,17 @@ function drawLegionIce(){
       c.fillStyle = 'rgba(210,235,255,0.32)'; c.strokeStyle = 'rgba(223,242,255,0.75)'; c.lineWidth = 1.5;
       c.beginPath(); c.ellipse(e.x, e.y - 26*s, 17*s, 32*s, 0, 0, TAU); c.fill(); c.stroke();
     }
+    /* ...and the broken ones stand as cracked ice until time starts again */
+    for(const e of (L.held || [])){
+      if(!onScreen(e, 80)) continue;
+      const s = e.scale || 1, cy = e.y - 26*s;
+      c.fillStyle = 'rgba(225,242,255,0.62)'; c.strokeStyle = '#ffffff'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(e.x - 15*s, e.y); c.lineTo(e.x - 18*s, cy - 14*s); c.lineTo(e.x - 6*s, cy - 34*s);
+      c.lineTo(e.x + 8*s, cy - 30*s); c.lineTo(e.x + 17*s, cy - 8*s); c.lineTo(e.x + 14*s, e.y); c.closePath(); c.fill(); c.stroke();
+      c.strokeStyle = 'rgba(90,150,210,0.85)'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(e.x - 2*s, cy - 30*s); c.lineTo(e.x + 3*s, cy - 12*s); c.lineTo(e.x - 5*s, cy + 2*s); c.lineTo(e.x + 2*s, e.y - 4*s);
+      c.moveTo(e.x + 3*s, cy - 12*s); c.lineTo(e.x + 12*s, cy - 4*s); c.moveTo(e.x - 5*s, cy + 2*s); c.lineTo(e.x - 13*s, cy - 6*s); c.stroke();
+    }
   }
 }
 function drawLegionHud(){
@@ -10980,7 +11015,7 @@ function drawLegionHud(){
   if(!legionActiveNow()) return;
   const left = enemies.filter(e=>e.legion === L && !e.dead).length;
   const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0) + (abyssOpenNow() ? 30 : 0) + (sboxActiveNow() ? 20 : 0) + (ritualActiveNow() ? 20 : 0);
-  const head = L.state === 'frozen' ? 'LEGION · FROZEN '+L.t.toFixed(1)+'s · '+L.kills+' fallen · '+left+' standing'
+  const head = L.state === 'frozen' ? 'LEGION · FROZEN '+L.t.toFixed(1)+'s · '+L.kills+' broken · '+left+' standing'
                                     : 'LEGION · '+left+' still fighting';
   ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;

@@ -4375,3 +4375,19 @@ a highway per gap, pure attributes, Heart to hub, landing between its doors; ≥
 unique, two short (≤400) connectors, defensive, no damage; no empty spot in the middle; no
 door taken through the Heart). Breaks `spread08`, `threeout`, `dmgheart`, `repeat`,
 `nohighway`, `hgloose`, `doorsin` caught.
+
+**Legion, the way PoE does it.** A report: the whole frozen army was cut down (every kill added
+0.35s, so a strong build always could) and the legion simply ended — nothing woke, nothing
+happened when time "started again". Now kills buy no time (`LEGION_KILL_T` and `LEGION_T_MAX`
+are gone; the base 9s plus the league tree's `legionTime` is the whole clock), and a frozen
+soldier brought to nothing is **held**: `hitEnemy` asks `legionHolds(e)` before `killEnemy`,
+which marks it `dead` (so every loop, aim and count leaves it alone), `legionDown`, and parks it
+in `L.held` — nothing paid. It is drawn as a block of cracked ice where it stood. The freeze
+always runs to zero; `legionRelease` then revives each held body for an instant and puts it
+through `killEnemy` (its kill, studs, frenzy charge, a sergeant's war chest, a general's), and
+wakes whatever is left; with nothing left, the legion is done on the next frame. The HUD counts
+*broken* and *standing*. `legionlg` rewritten for it (a break holds, pays nothing and moves no
+clock; the clock runs at its own pace; at release the broken pay — two kills, the sergeant's
+chest; the general pays only when it shatters; breaking the whole army keeps the legion frozen
+to the end, then all of it shatters and it is done); breaks `noheld`, `buytime`, `earlyend`,
+`noshatter` caught.

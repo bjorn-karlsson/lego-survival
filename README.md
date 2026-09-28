@@ -3116,11 +3116,15 @@ Empire** (knights, lancers, archers, skeletons; bastion sergeants) or **the Karu
 stalkers, imps, superimps; zombie-hulk sergeants) — standing in its ranks, **frozen**, in a
 480px ring about the stone: 22 + the wave of them (60 at most), 15% magic.
 
-- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt and
-  killed, but they do not walk, swing or shoot, and they cannot be shoved. **Every kill buys
-  0.35s**, up to 14s. The ring round the stone runs down as the time does, and the HUD counts
-  the time, the fallen and the standing.
-- **Then time starts again**, and what is left wakes up and fights.
+- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt, but
+  they do not walk, swing or shoot, and they cannot be shoved. **The clock is fixed** — a kill
+  buys no time (the league tree's *Longer Moment* is what will). The ring round the stone runs
+  down as the time does, and the HUD counts the time, the broken and the standing.
+- **A soldier you break does not die yet.** It stands where it was as a block of cracked ice —
+  out of the fight, nothing aims at it — and **shatters when time starts again**, which is when
+  it pays out: its kill, its studs, a sergeant's war chest. Breaking the whole army no longer
+  ends the legion on the spot; the freeze always runs to the end.
+- **Then time starts again**: the broken shatter, and what is left wakes up and fights.
 - **Sergeants** (two, three from wave 20, four from 35 — elites, with rare modifiers) each drop a
   **war chest**: rare, epic 37% of the time, legendary 5%.
 - **From wave 15 a general** leads them — an elite with 2.5× the life, bigger — and pays an **epic
