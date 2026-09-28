@@ -409,7 +409,15 @@
     justify-content:center}
   .treewrap svg{display:block;width:100%;height:100%;max-height:100%}
   .treeside{flex:0 0 330px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;
-    padding-right:4px}
+    padding-right:8px;scrollbar-width:thin;scrollbar-color:rgba(255,215,110,.55) rgba(0,0,0,.18);
+    scrollbar-gutter:stable}
+  /* a slim gold rail in the plate's own colours, not the browser's grey one */
+  .treeside::-webkit-scrollbar{width:8px}
+  .treeside::-webkit-scrollbar-track{background:rgba(0,0,0,.18);border-radius:8px;margin:4px 0}
+  .treeside::-webkit-scrollbar-thumb{background:rgba(255,215,110,.55);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  .treeside::-webkit-scrollbar-thumb:hover{background:rgba(255,215,110,.85);background-clip:padding-box}
+  .treeside::-webkit-scrollbar-button{display:none;height:0}
+  #treeZoomLbl{cursor:pointer}
   /* THE CARD COMES TO YOU. Reading a node meant looking away to a panel 900px
      to the right and then back to find where you were -- twice per node, on a
      map with twelve hundred of them. It follows the cursor now, and the panel
@@ -906,7 +914,7 @@
       <button id="treeInBtn" class="tbtn gray zoom">+</button>
       <button id="treeOutBtn" class="tbtn gray zoom">&minus;</button>
       <button id="treeFitBtn" class="tbtn gray">FIT</button>
-      <span id="treeZoomLbl">100%</span>
+      <span id="treeZoomLbl" title="back to 100%, on your starting point">100%</span>
       <button id="respecBtn" class="tbtn">REFUND MODE</button>
       <button id="clearBtn" class="tbtn gray">CLEAR ALL</button>
       <button id="treeSecBtn" class="tbtn gray">COUNTRIES</button>
@@ -2640,12 +2648,15 @@ const HERO_STACKS = {
      of a fight costs you the ramp gradually instead of all at once. ---- */
   frenzy: {
     name:'FRENZY', col:'#6ee06e', max:3, decay:4.0,
+    /* a charge is the HERO's and nothing of it reaches a minion, so the summoner
+       -- whose hero does not fight -- is never handed the offensive two */
+    not:['scepter'],
     /* speed AND damage, because a frenzy charge in PoE is the one that makes
        you faster at everything. moreAll, not moreDmg: rage's is melee only. */
     mods:{ atk:0.04, cast:0.04, moreAll:0.04 },
   },
   power: {
-    name:'POWER', col:'#b46aff', max:3, decay:4.0,
+    name:'POWER', col:'#b46aff', max:3, decay:4.0, not:['scepter'],
     mods:{ crit:0.30 },         /* INCREASED critical chance, into the one pool */
   },
   endurance: {
@@ -2678,6 +2689,7 @@ function stackAllows(id, ent){
   if(!d) return false;
   if(ent && ent !== player) return !!(d.mob && ent.stackOn && ent.stackOn[id]);
   if(d.only && (!weapon || d.only.indexOf(weapon.id) < 0)) return false;
+  if(d.not && weapon && d.not.indexOf(weapon.id) >= 0) return false;
   return true;
 }
 /* THE CEILING, which is the table's plus whatever the hero has bought. Kept
@@ -12082,7 +12094,7 @@ const UPGRADES = [
      until something hands them the reason to, so these are the cards that turn
      a charge into a build and the tree is what deepens it. ---- */
   { id:'chgkill', name:'Blood Rush', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>chargeGenRoom('frenzy', player.chargeKill),
+    req:()=>stackAllows('frenzy') && chargeGenRoom('frenzy', player.chargeKill),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`Killing a monster grants ${c.v} FRENZY charge${c.v>1?'s':''} (now `+
       `${(player.chargeKill||0)+c.v} a kill, ${stackCap('frenzy')} at once). Each is `+
@@ -12091,7 +12103,7 @@ const UPGRADES = [
       `every ${HERO_STACKS.frenzy.decay}s`,
     apply:c=>{ player.chargeKill += c.v; } },
   { id:'chgcrit', name:'Sharpened Focus', icon:'target', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>chargeGenRoom('power', player.chargeCrit),
+    req:()=>stackAllows('power') && chargeGenRoom('power', player.chargeCrit),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`A CRITICAL grants ${c.v} POWER charge${c.v>1?'s':''} (now `+
       `${(player.chargeCrit||0)+c.v} a crit, ${stackCap('power')} at once). Each is `+
@@ -12107,8 +12119,9 @@ const UPGRADES = [
       `+${Math.round(HERO_STACKS.endurance.mods.res*100)}% to every elemental resistance`,
     apply:c=>{ player.chargeHurt += c.v; } },
   { id:'chgmax', name:'Reservoir', icon:'force', cls:'OFFENSE', minRar:'rare',
-    req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0)
-            && CHARGE_IDS.some(k=>stackCap(k) < CHARGE_CAP_MAX),
+    /* only for a charge this hero can carry AND is earning */
+    req:()=>[['frenzy','chargeKill'],['power','chargeCrit'],['endurance','chargeHurt']]
+            .some(([k, g])=>player[g] > 0 && stackAllows(k) && stackCap(k) < CHARGE_CAP_MAX),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`+${c.v} maximum of EVERY charge — FRENZY to ${stackCap('frenzy')+c.v}, `+
       `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
@@ -14825,10 +14838,22 @@ function treeToggleSectors(){
    than a thing you read. The view is one viewBox attribute, written straight
    onto the <svg> — re-rendering four hundred nodes on every wheel tick would
    make the whole thing feel like mud. */
-const TREE_ZOOM_MIN = 1, TREE_ZOOM_MAX = 6;
+/* THE SCALE THE LABEL READS. The whole map is 0% -- it is a picture, not a
+   reading distance; three times closer is 100%, where a node's name can be
+   read, and it goes on to 200% at nine times. The steps are even on the
+   label: each wheel tick adds the same few percent however deep you are. */
+const TREE_ZOOM_MIN = 1, TREE_ZOOM_MAX = 9, TREE_ZOOM_HOME = 3;
 let treeZoom = 1, treeCx = 0, treeCy = 0, treeDrag = null;
+function treeZoomPct(z){ return Math.round(Math.log(z ?? treeZoom) / Math.log(TREE_ZOOM_HOME) * 100); }
 function treeFit(){ treeZoom = 1; treeCx = TREE_VIEW.x + TREE_VIEW.w/2;
                     treeCy = TREE_VIEW.y + TREE_VIEW.h/2; treeApplyView(); }
+/* 100%, on your own starting point: where the tree opens */
+function treeHome(){
+  const n = META_BY_ID[metaStartId()];
+  treeZoom = TREE_ZOOM_HOME;
+  treeCx = n ? n.x : TREE_VIEW.x + TREE_VIEW.w/2; treeCy = n ? n.y : TREE_VIEW.y + TREE_VIEW.h/2;
+  treeApplyView();
+}
 function treeApplyView(){
   const svg = document.getElementById('treeSvg');
   if(!svg) return;
@@ -14840,7 +14865,7 @@ function treeApplyView(){
   treeCy = clamp(treeCy, TREE_VIEW.y, TREE_VIEW.y + TREE_VIEW.h);
   svg.setAttribute('viewBox', `${treeCx - w/2} ${treeCy - h/2} ${w} ${h}`);
   const z = document.getElementById('treeZoomLbl');
-  if(z) z.textContent = Math.round(treeZoom*100)+'%';
+  if(z) z.textContent = treeZoomPct()+'%';
 }
 /* where a screen point lands on the map, letterboxing and all */
 function treeUserXY(svg, ev){
@@ -15278,7 +15303,7 @@ function toggleTree(){
       document.getElementById('pauseScreen').classList.add('hidden');
       state = 'tree'; cv.style.cursor = 'default';
     }
-    treePick = null; treeRefund = false; renderTree(); treeFit();
+    treePick = null; treeRefund = false; renderTree(); treeHome();
     el.classList.remove('hidden');
   } else {
     el.classList.add('hidden');
@@ -29745,6 +29770,7 @@ document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.clic
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });
 document.getElementById('treeFitBtn').addEventListener('click', ()=>{ SFX.click(); treeFit(); });
+document.getElementById('treeZoomLbl').addEventListener('click', ()=>{ SFX.click(); treeHome(); });
 document.getElementById('treeSecBtn').addEventListener('click', ()=>{ SFX.click();
   treeToggleSectors(); refreshTreeSecBtn(); });
 function refreshTreeSecBtn(){

@@ -1957,7 +1957,11 @@ ALL` is there when you want it.
 
 **Zoom and drag.** The map does not fit on a screen at a size you can read it, so scroll to
 zoom toward the cursor, drag to pan, and `FIT` puts the whole thing back. A drag is never
-mistaken for a purchase.
+mistaken for a purchase. **The tree opens at 100%, centred on your own starting point** — the
+distance a node's name can be read at. The whole map is **0%**, and it goes on in to **200%**
+(nine times the whole-map scale); every wheel tick moves the readout by the same few percent,
+and clicking the readout takes you back to 100% on your start. The panel beside the map
+scrolls on a slim gold rail rather than the browser's grey one.
 
 > The first version of this captured the pointer on the `<svg>` to follow a drag, which
 > retargets the pointer — and the `click` that follows is delivered to the `<svg>` and never
@@ -2444,6 +2448,12 @@ the ramp gradually instead of all at once.
 does — and a build that does all three gets all three. Like rage, **nobody gains them by
 default**: the ceiling is three and the generation is zero until a brick or a node hands it
 over. That is what keeps them a build rather than a thing that happens to everyone.
+
+**The scepter never gets frenzy or power.** A charge is the hero's alone — nothing of it reaches
+a minion — and a summoner's hero does not fight, so the two offensive charges would be dead
+weight: the scepter can't carry them, the cards that earn them are never offered to it, and
+`Reservoir` only turns up for a charge the hero both can carry and is earning. Endurance still
+works for everyone.
 
 **A generator stops being offered at the bar it fills.** A card that fills a three-deep bar three
 at a time has nothing left to sell, and one that fills it *four* at a time is selling you a point

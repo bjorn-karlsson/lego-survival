@@ -4268,3 +4268,32 @@ and **KINDRED PACK** sends a bound magic pack (`spawnMagicPack`'s new `kinForce`
 monster clicked; the banner-bearer and the witch doctor sit in their roster bands. New `bench69`
 covers all of it; breaks `bnoleague`, `bnosand`, `bnowaitnow`, `bnokin`, `bnoforce`, `bleak`,
 `bnospecial`, `bnotree`, `bnorefund` caught.
+
+## Seventieth pass — a title that fits, no offensive charges for the scepter, and the tree's zoom
+
+**The title fits the window.** `fitTitle` zooms the whole `.titlewrap` (plate and both panels)
+with CSS `zoom` to the window's height, and to its width so the three columns stay in a row
+(`stacked` only below a 0.6 zoom), refitting on resize and — through a MutationObserver on the
+plate's content — whenever the plate changes; the panels are capped at the plate's height. The
+old version scaled the plate with a transform, which left its full-size box behind to scroll.
+New `titlefit2`: no scroll and START on screen at 1024×700 through 2560×1300, a row from 1300
+wide, full size at 1080 tall, a refit when a blurb grows. Breaks `nozoom`, `nowidth`, `norefit`,
+`shrinkbig` caught.
+
+**No frenzy or power for the scepter.** `HERO_STACKS` gains a `not` gate beside `only`;
+frenzy and power carry `not:['scepter']`, so `stackAllows` refuses them (nothing is gained, the
+HUD shows none), `Blood Rush` and `Sharpened Focus` ask `stackAllows` first, and `Reservoir`
+needs a charge the hero can carry and is generating. Endurance is untouched.
+
+**The tree's zoom.** `TREE_ZOOM_MAX` 6 → 9, and the readout is `treeZoomPct`: log₃ of the
+zoom, so the whole map reads 0%, three times closer 100%, nine times 200%. The tree opens at
+`treeHome()` — 100% on `metaStartId()`'s node — and clicking the readout goes back there; FIT
+is still the whole map. `metaplay` presses FIT before measuring the whole-map view. The side
+panel has a thin gold scrollbar (`scrollbar-color`, and `::-webkit-scrollbar` rules).
+
+**Proof.** New `t70`: the scepter refuses frenzy and power (and gains none), is never offered
+the two cards in 300 draws, gets `Reservoir` only for endurance; the sword keeps all three; the
+tree opens at zoom 3 reading 100% on the start node, FIT reads 0%, it goes to 9 (200%) and no
+further, back out to 0%, and the readout click returns to 100%; the side panel's scrollbar is
+thin and gold. Breaks `frenzyok`, `cardnogate`, `resvany`, `oldlabel`, `openfit`, `shallow`,
+`greybar` caught.
