@@ -434,6 +434,18 @@
   .treeside::-webkit-scrollbar-thumb:hover{background:rgba(255,215,110,.85);background-clip:padding-box}
   .treeside::-webkit-scrollbar-button{display:none;height:0}
   #treeZoomLbl{cursor:pointer}
+  /* THE SEARCH, at the top of the panel and staying there while it scrolls */
+  .treefind{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;
+    background:#3a1512;border:2px solid rgba(255,225,74,.55);border-radius:11px;padding:6px 10px}
+  .treefind input{flex:1 1 auto;min-width:0;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);
+    border-radius:7px;color:#fff3c4;font:12px 'Titan One';letter-spacing:.6px;padding:6px 8px;outline:none}
+  .treefind input:focus{border-color:#ffe14a}
+  .treefind input::placeholder{color:#b89a86;letter-spacing:.3px}
+  #treeFindN{font-size:10.5px;color:#ffe14a;white-space:nowrap;line-height:1.2}
+  /* a found node wears a small yellow ring: thin at any zoom, and never so small
+     that it vanishes when the whole map is on screen */
+  .tfind{fill:rgba(255,225,74,.16);stroke:#ffe14a;stroke-width:2.5px;vector-effect:non-scaling-stroke;pointer-events:none}
+  .tfind.cur{stroke-width:4.5px;fill:rgba(255,225,74,.30)}
   /* THE CARD COMES TO YOU. Reading a node meant looking away to a panel 900px
      to the right and then back to find where you were -- twice per node, on a
      map with twelve hundred of them. It follows the cursor now, and the panel
@@ -3887,6 +3899,12 @@ window.addEventListener('keydown', e=>{
   if(tg === 'INPUT' || tg === 'TEXTAREA'){
     if(e.code === 'Escape') e.target.blur();
     return;
+  }
+  /* CTRL+F, or /, while the tree is open goes to its search box, as it would on
+     any page with a search on it -- not to the browser's own find bar */
+  if(treeOn && ((e.code === 'KeyF' && (e.ctrlKey || e.metaKey)) || e.key === '/')){
+    const inp = document.getElementById('treeSearch');
+    if(inp){ e.preventDefault(); inp.focus(); inp.select(); return; }
   }
   everInput = true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
@@ -12394,7 +12412,7 @@ const META_POINT_MAX      = 120;
    stud, every best wave and every boss — it just hands its allocated points
    BACK, because the nodes it chose are no longer where it left them. Nobody
    loses progress to a patch; they respec. */
-const META_TREE_VER = 3;
+const META_TREE_VER = 4;
 /* first time only, and per weapon — grinding a wave you have already beaten
    with that weapon pays nothing */
 /* ...and the achievements on top of it, which are the things a wave count
@@ -12827,7 +12845,25 @@ const META_HOME = { sword:'str', mace:'str', axe:'dex', staff:'int', bow:'dex', 
    that is coming is worth more on the map than a gap where one should be: it
    tells you the shape of the thing, which is the whole point of a tree you can
    see all of at once. */
-const DOOR_R = 900;
+/* THE HEART, AND THE ROOM IT NEEDS. The six doors used to stand 900 from the
+   middle with nothing inside them at all -- a black disc the size of a country
+   in the one place everybody looks first, and six beginnings crowded round its
+   edge. PoE's answer is the one taken here: the classes stand well apart, and
+   between them lies a ring of plain nodes with a passage in from every class
+   and a highway out between each pair. So everything from the doors outward
+   moves out by CORE_ROOM, and the ground freed up is the Heart (see 6b). */
+const CORE_ROOM = 560;
+const DOOR_R = 1300;
+/* the ring round the very middle, and how many stops it has */
+const HEART_R = 520, HEART_N = 12;
+/* ...and how far apart the stops of a highway out of it are */
+const HEART_STRIDE = 250;
+/* the small defensive groups between a passage and a highway: how far out */
+const HEART_SITE_R = 1000;
+/* how far round the inner ring a door's ways out may reach, in degrees */
+const DOOR_REACH = 45;
+/* a gap between two doors narrower than this has room for its highway and nothing beside it */
+const HEART_GROUP_GAP = 50;
 /* HOW WIDE THE TWO DOORS OF A COUNTRY STAND. 1 is dead even across the wedge;
    below that they draw in towards the middle of their own country. Even spacing
    put a door 27 degrees from a border and a red keystone came out cheaper from
@@ -12839,7 +12875,13 @@ const DOOR_R = 900;
    out a point cheaper from the bow than from the sword. At 0.80 the lanes out
    of the doors fall so that both are the sword's again, and every door is
    still 33 degrees clear of a border. */
-const DOOR_SPREAD = 0.80;
+/* 1.0 SINCE THE HEART: dead even, every door 55 to 70 degrees from the next.
+   At 0.80 the bow and the axe (and the staff and the scepter) stood 44 degrees
+   apart -- three pairs rather than six beginnings, and the pairs' ways out ran
+   over each other and over the highway between them. With the doors further
+   out and the Heart between them, even spacing keeps every prize nearest its
+   own country (the lattice test measures it). */
+const DOOR_SPREAD = 1.0;
 const META_DOORS = [
   ...WEAPON_KEYS.map(wk=>({ id:wk, weap:wk, home:META_HOME[wk] || 'str',
                             name:'THE ' + ((WEAPONS[wk] && WEAPONS[wk].name) || wk).toUpperCase() })),
@@ -12852,12 +12894,14 @@ const META_DOORS = [
    length in points is the only thing keeping the outer keystones apart: shorten
    it and one walk round the rim collected every keystone on it for 55 points
    against a ceiling of 60. So the distance went up and the count stayed put. */
+/* (every radius here is CORE_ROOM further out than it was before the Heart:
+   the lattice itself is unchanged, it simply stands round a bigger middle) */
 const META_RINGS = [
-  { r:1180, n:12, phase:0  },
-  { r:2230, n:18, phase:10 },
-  { r:3380, n:24, phase:5  },
-  { r:4590, n:30, phase:8  },
-  { r:5830, n:36, phase:3  },
+  { r:1180 + CORE_ROOM, n:12, phase:0  },
+  { r:2230 + CORE_ROOM, n:18, phase:10 },
+  { r:3380 + CORE_ROOM, n:24, phase:5  },
+  { r:4590 + CORE_ROOM, n:30, phase:8  },
+  { r:5830 + CORE_ROOM, n:36, phase:3  },
 ];
 const HUB_JIT   = 0.055;  /* how far a hub wanders off its ring */
 const HUB_SWING = 0.30;   /* ...and round it, as a share of the gap to the next */
@@ -13493,6 +13537,48 @@ const META_LEGENDS = SPELL_KEYS.map((k, i)=>({
            note:'you begin every run already holding it',
            mods:[['grant', k]] },
 }));
+/* ---- THE HEART'S OWN GROUPS. Plain, defensive, and cheap to want: life,
+   armour, evasion, energy shield, regeneration, accuracy, and the attribute of
+   the ground they stand on. Nothing here is damage -- the middle of the map is
+   where every build passes through, and a damage group there would be one that
+   every build takes. Five per country and never the same one twice: the Heart
+   is small, and two copies of a group a few hundred feet apart read as a
+   mistake (the lattice test holds every repeat 1200 apart). */
+const META_HEART_GROUPS = [
+  /* red: armour, life, regeneration */
+  { id:'hg_bulwark', name:'THE BULWARK',    sp:'arm',  home:'str', shape:'arc',
+    minors:[['Bulwark','armour',3],['Hale Heart','incHp',0.03],['Stout','str',4]] },
+  { id:'hg_mend',    name:'HEARTMENDING',   sp:'vit',  home:'str', shape:'ring',
+    minors:[['Heartmend','incRegen',0.08],['Vigour','incHp',0.025],['Stout','str',4]] },
+  { id:'hg_iron',    name:'IRON HIDE',      sp:'arm',  home:'str', shape:'arc',
+    minors:[['Iron Hide','incArmour',0.06],['Thick Blood','incRegen',0.06],['Brawn','str',4]] },
+  { id:'hg_hearth',  name:'THE HEARTH',     sp:'vit',  home:'str', shape:'ring',
+    minors:[['Hearth','incHp',0.03],['Warm Blood','incRegen',0.06],['Brawn','str',4]] },
+  { id:'hg_stead',   name:'STEADFAST',      sp:'arm',  home:'str', shape:'arc',
+    minors:[['Steadfast','armour',3],['Unbowed','suppress',0.03],['Brawn','str',4]] },
+  /* green: evasion, accuracy, life */
+  { id:'hg_slip',    name:'THE SLIP',       sp:'swift',home:'dex', shape:'arc',
+    minors:[['Slip','incEva',0.06],['Nimble','dex',4],['Wiry','incHp',0.025]] },
+  { id:'hg_steady',  name:'STEADY HAND',    sp:'prec', home:'dex', shape:'ring',
+    minors:[['Steady','acc',25],['Deft','dex',4],['Sidestep','eva',30]] },
+  { id:'hg_keen',    name:'KEEN EYE',       sp:'prec', home:'dex', shape:'arc',
+    minors:[['Keen Eye','incAcc',0.06],['Lithe','dex',4],['Wiry','incHp',0.025]] },
+  { id:'hg_dodge',   name:'THE DODGE',      sp:'swift',home:'dex', shape:'ring',
+    minors:[['Dodge','eva',30],['Tumble','roll',0.06],['Lithe','dex',4]] },
+  { id:'hg_hunter',  name:"HUNTER'S HIDE",  sp:'swift',home:'dex', shape:'arc',
+    minors:[['Hunter\'s Hide','incEva',0.05],['Lean','incHp',0.025],['Deft','dex',4]] },
+  /* blue: energy shield, regeneration, resistances */
+  { id:'hg_ward',    name:'THE INNER WARD', sp:'arc',  home:'int', shape:'arc',
+    minors:[['Inner Ward','es',3],['Warded','incEs',0.05],['Studied','int',4]] },
+  { id:'hg_calm',    name:'THE CALM',       sp:'vit',  home:'int', shape:'ring',
+    minors:[['Calm','incRegen',0.07],['Insight','int',4],['Shielded','es',3]] },
+  { id:'hg_clear',   name:'CLEAR MIND',     sp:'arc',  home:'int', shape:'arc',
+    minors:[['Clear Mind','incEs',0.05],['Warding','allRes',0.02],['Learned','int',4]] },
+  { id:'hg_lantern', name:'THE LANTERN',    sp:'arc',  home:'int', shape:'ring',
+    minors:[['Lantern','es',3],['Glow','incRegen',0.06],['Learned','int',4]] },
+  { id:'hg_veil',    name:'THE VEIL',       sp:'arc',  home:'int', shape:'arc',
+    minors:[['Veil','incEs',0.05],['Soft Step','incHp',0.025],['Studied','int',4]] },
+];
 const META_NODES = [];
 const META_BY_ID = {};
 const META_CLUSTER_BY_ID = {};
@@ -13673,7 +13759,7 @@ const RING_AT = [0, 5, 12, 22, 34];
   for(const t of META_LATE){
     const a = t.spot.deg*Math.PI/180;
     sites.push({ ring:t.spot.ring, j:1000 + sites.length, deg:t.spot.deg, rim:false,
-      x:Math.round(CX + Math.cos(a)*t.spot.rad), y:Math.round(CY + Math.sin(a)*t.spot.rad),
+      x:Math.round(CX + Math.cos(a)*(t.spot.rad + CORE_ROOM)), y:Math.round(CY + Math.sin(a)*(t.spot.rad + CORE_ROOM)),
       sec:t.home, site:t });
   }
 
@@ -13981,6 +14067,94 @@ const RING_AT = [0, 5, 12, 22, 34];
 
   const byHome = {};
   for(const d of META_DOORS) (byHome[d.home] = byHome[d.home] || []).push(d);
+  /* where the i-th of n doors in a country stands, in degrees (see DOOR_SPREAD) */
+  const doorDeg = (sec, i, n)=>{
+    const f = META_MAP.sector[sec][0], t = META_MAP.sector[sec][1], span = ((t - f) + 360) % 360;
+    return f + span * (0.5 + (((i + 0.5) / n) - 0.5) * DOOR_SPREAD);
+  };
+  /* ---- 6b. THE HEART. A ring of HEART_N plain stops round the middle of the
+     map, each paying the attribute of the ground it stands on; a way IN from
+     every door -- the third of its three, three flavoured steps like the other
+     two (see step 6); and between each pair of doors a HIGHWAY out to the
+     inner ring of the lattice. It is all road: travel nodes, one piece with the
+     rest of the highway, so the middle is somewhere you pass through on the way
+     to anywhere rather than a place you have to buy. The ground left between a
+     door's way in and a highway takes a small defensive group
+     (META_HEART_GROUPS). Nobody walks through somebody else's door by way of
+     the Heart: a way in stops at its door like every other road does.
+     THE RING AND ITS HIGHWAYS ARE LAID BEFORE THE DOORS, off the bearings the
+     doors are about to stand at, so that a door choosing its ways out can see
+     the highways and go round them; the passages and the groups come after. */
+  const heart = [];
+  for(let j=0;j<HEART_N;j++){
+    const deg = j*360/HEART_N, a = deg*Math.PI/180;
+    const x = Math.round(CX + Math.cos(a)*HEART_R), y = Math.round(CY + Math.sin(a)*HEART_R);
+    const sec = metaSectorAt(x, y), use = META_TRAVEL[sec] || META_TRAVEL.core;
+    heart.push(push({ id:'hc'+j, kind:'travel', spoke:sec, cl:null, road:'heart', deg,
+      name:use[0], x, y, at:0, cost:1, mods:[[use[1], use[2]]], req:[] }));
+  }
+  for(let j=0;j<HEART_N;j++) add(heart[j].id, heart[(j+1) % HEART_N].id);
+  /* a road of exactly k stops between two nodes, each paying its own ground */
+  const road = (an, bn, k, key)=>{
+    const dx = bn.x - an.x, dy = bn.y - an.y, ang = Math.atan2(dy, dx) + Math.PI/2;
+    let prev = an;
+    for(let i=1;i<=k;i++){
+      /* STRAIGHT. A highway is the fastest way somewhere and should look it */
+      const t = i/(k+1);
+      const px = Math.round(an.x + dx*t), py = Math.round(an.y + dy*t);
+      const sec = metaSectorAt(px, py), use = META_TRAVEL[sec] || META_TRAVEL.core;
+      const n = push({ id:key+'_'+i, kind:'travel', spoke:sec, cl:null, road:key,
+        name:use[0], x:px, y:py, at:0, cost:1, mods:[[use[1], use[2]]], req:[] });
+      add(prev.id, n.id); prev = n;
+    }
+    add(prev.id, bn.id);
+  };
+  const gapDeg = (a, b)=> Math.abs(((a - b + 540) % 360) - 180);
+  const heartUsed = new Set();
+  const doors = [];
+  for(const sec of Object.keys(byHome)) byHome[sec].forEach((D, i)=>{
+    if(D.weap) doors.push({ weap:D.weap, deg:((doorDeg(sec, i, byHome[sec].length) % 360) + 360) % 360 });
+  });
+  doors.sort((a, b)=>a.deg - b.deg);
+  const ways = [];
+  /* THE HIGHWAYS: between each pair of neighbouring doors, from the Heart out to
+     the inner ring's junction nearest the line halfway between them */
+  for(let i=0;i<doors.length;i++){
+    const A = doors[i], B = doors[(i+1) % doors.length];
+    const span = ((B.deg - A.deg) + 360) % 360, mid = (A.deg + span/2) % 360;
+    /* of the two stops of the Heart and the two junctions nearest that line,
+       the straightest pair whose road crosses nothing already laid -- a
+       highway drawn over a door's way out reads as the two being joined */
+    const hs2 = heart.slice().sort((p, q)=>gapDeg(p.deg, mid) - gapDeg(q.deg, mid)).slice(0, 2);
+    const os2 = ringHubs(0).slice().sort((p, q)=>gapDeg(p.deg, mid) - gapDeg(q.deg, mid)).slice(0, 2);
+    const clean = (a, b)=>{
+      for(const e of edges){
+        const P1 = META_BY_ID[e[0]], P2 = META_BY_ID[e[1]];
+        if(!P1 || !P2 || P1 === a || P2 === a || P1 === b || P2 === b) continue;
+        const d = (P2.y-P1.y)*(b.x-a.x) - (P2.x-P1.x)*(b.y-a.y);
+        if(Math.abs(d) < 1e-9) continue;
+        const ua = ((P2.x-P1.x)*(a.y-P1.y) - (P2.y-P1.y)*(a.x-P1.x))/d;
+        const ub = ((b.x-a.x)*(a.y-P1.y) - (b.y-a.y)*(a.x-P1.x))/d;
+        if(ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) return false;
+      }
+      return true;
+    };
+    let h = hs2[0], o = os2[0], bestK = Infinity;
+    for(const hh of hs2) for(const oo of os2){
+      const k = gapDeg(hh.deg, mid) + gapDeg(oo.deg, mid) + (clean(hh, oo.node) ? 0 : 1000);
+      if(k < bestK){ bestK = k; h = hh; o = oo; }
+    }
+    const len = Math.hypot(o.x - h.x, o.y - h.y);
+    road(h, o.node, Math.max(2, Math.min(5, Math.round(len/HEART_STRIDE) - 1)), 'hw'+i);
+    /* where the highway actually crosses the groups' circle: the groups stand
+       halfway between it and each passage, not halfway to a line it missed */
+    let hwDeg = mid;
+    for(let t=0; t<=1; t+=0.01){
+      const px = h.x + (o.x - h.x)*t, py = h.y + (o.y - h.y)*t;
+      if(Math.hypot(px - CX, py - CY) >= HEART_SITE_R){ hwDeg = ((Math.atan2(py - CY, px - CX)*180/Math.PI) + 360) % 360; break; }
+    }
+    ways.push({ mid, A, B, key:'hw'+i, span, hwDeg });
+  }
   /* ---- 6. THE DOORS. One per weapon, in its own country, spread evenly across
      it so two weapons sharing a country do not share a beginning. FOUR WAYS OUT
      AND NONE OF THEM STOPS: each is a lane to a different hub of the inner ring,
@@ -14005,7 +14179,7 @@ const RING_AT = [0, 5, 12, 22, 34];
          beginnings were three pairs. At (i+0.5)/n they are 55 apart and still
          a comfortable 27 degrees clear of either border, which is the thing the
          old even spacing was protecting. */
-      const deg = f + span * (0.5 + (((i + 0.5) / list.length) - 0.5) * DOOR_SPREAD);
+      const deg = doorDeg(sec, i, list.length);
       const a = deg*Math.PI/180, R = DOOR_R;
       const st = { id:'st_'+D.id, weap:wk, name:D.name, soon:D.soon || null,
                    deg:((deg%360)+360)%360,
@@ -14048,12 +14222,29 @@ const RING_AT = [0, 5, 12, 22, 34];
          inside the ring, and twelve nodes inside one 50-degree slice is the
          tangle at the middle of the map. Three, at least 40 degrees apart, is
          a beginning you can read at a glance. */
-      const WAYS = 3;
+      /* TWO OUT AND ONE IN, since the Heart. A door's third way used to point
+         outward too, and with the doors stood this near the inner ring it had to
+         reach past a highway or another door's way to find room: every one of
+         the last crossed lines on the map was a third way out. It goes IN now,
+         to the Heart, the way a PoE class has a road towards the middle as well
+         as out -- still three ways, still three steps each. */
+      const WAYS = 2;
+      /* OUTWARD, ALWAYS. Since the Heart, a door has a way IN of its own (its
+         passage, 6b), so the three ways out are only ever out: to a junction of
+         the inner ring no more than DOOR_REACH degrees round from the door. Left
+         free, a door stood this close to the ring found its third way on the far
+         side of the map and drew it straight across the middle. */
+      /* ...and as near round as will do: DOOR_REACH first, a little wider only
+         if three clean ways cannot be had inside it. A crossing is accepted
+         last of all, after every reach has been tried without one. */
+      const outward = (h, reach)=> Math.abs(((h.deg - deg + 540) % 360) - 180) <= reach;
       const near = [];
-      for(const gap of [0.72, 0.52, 0.34, 0]) for(const pass of [0, 1]){
+      for(const pass of [0, 1]) for(const reach of [DOOR_REACH, DOOR_REACH + 15, DOOR_REACH + 35])
+      for(const gap of [0.72, 0.52, 0.34, 0]){
         for(const h of sorted){
           if(near.length >= WAYS) break;
           if(near.indexOf(h) >= 0) continue;
+          if(!outward(h, reach)) continue;
           if(gap > 0 && near.some(o=>apart(bearing(o), bearing(h)) < gap)) continue;
           if(!pass && crossesAny(st.x, st.y, h.x, h.y)) continue;
           near.push(h);
@@ -14072,7 +14263,11 @@ const RING_AT = [0, 5, 12, 22, 34];
         return;
       }
       const flavour = META_BRANCH[wk] || META_BRANCH._;
-      near.slice(0, WAYS).forEach((h, k)=>{
+      /* the way in: to the stop of the Heart nearest the door's own bearing */
+      const hin = heart.filter(o=>!heartUsed.has(o.id))
+                       .sort((p, q)=>gapDeg(p.deg, st.deg) - gapDeg(q.deg, st.deg))[0];
+      heartUsed.add(hin.id);
+      near.slice(0, WAYS).concat([{ node:hin, x:hin.x, y:hin.y, inward:true }]).forEach((h, k)=>{
         /* THREE STEPS, not one. They are laid along the way to the hub this
            path is aimed at, so the beginning of a build is a short walk you
            chose rather than a button you pressed — and the lane picks up where
@@ -14095,12 +14290,42 @@ const RING_AT = [0, 5, 12, 22, 34];
           const n = push({ id:st.id+'_s'+k+'_'+j, kind:'minor', spoke:metaSectorAt(fx, fy),
             cl:null, start:wk, name:row[0], x:fx, y:fy, at:0, cost:1,
             mods:[[row[1], row[2]]], req:[] });
+          if(h.inward) n.inward = wk;
           add(prev.id, n.id);
           prev = n;
         });
         lane(prev, h.node, 'door_'+wk+'_'+k);
       });
     });
+  }
+  /* ---- 6c. THE HEART'S GROUPS, now the doors and their ways in stand. ---- */
+  {
+    /* THE GROUPS: one each side of every highway, halfway to the doors */
+    let gi2 = 0;
+    const dealt = {};
+    for(const w of ways){
+      const span = w.span;
+      if(span < HEART_GROUP_GAP) continue;
+      for(const f of [0.27, 0.73]){
+        /* halfway round from the door's passage to where the highway runs */
+        const from = f < 0.5 ? w.A.deg : w.B.deg;
+        const turn = ((w.hwDeg - from + 540) % 360) - 180;
+        const deg = ((from + turn/2) % 360 + 360) % 360, a = deg*Math.PI/180;
+        const x = Math.round(CX + Math.cos(a)*HEART_SITE_R), y = Math.round(CY + Math.sin(a)*HEART_SITE_R);
+        const sec = metaSectorAt(x, y), mine = META_HEART_GROUPS.filter(g=>g.home === sec);
+        dealt[sec] = (dealt[sec] || 0) + 1; gi2++;
+        const tpl = mine[(dealt[sec] - 1) % mine.length];
+        /* it hangs between the way in of the door it is nearer and this highway */
+        const hs = { ring:0, j:3000 + gi2, deg, rim:false, x, y, sec, site:tpl, heart:true,
+                     ways:['in:'+(f < 0.5 ? w.A : w.B).weap, w.key] };
+        let g = Infinity;
+        for(const o of META_NODES) if(o.kind === 'start' || o.road === 'heart') g = Math.min(g, Math.hypot(o.x - x, o.y - y));
+        hs.gap = Math.min(560, g*1.4); hs.wall = wallAt(x, y).d;
+        sites.push(hs);
+        drawSite(hs);
+        hs.cluster.heart = hs.ways;
+      }
+    }
   }
   /* ---- 7. THE NUDGE. A lane laid straight through a cluster node reads as a
      node belonging to it, and clicking for one and getting the other is the
@@ -14268,6 +14493,26 @@ const RING_AT = [0, 5, 12, 22, 34];
        of its own on it was tried, and read as the highway leaking into the
        groups.) */
     for(const c of META_CLUSTERS){
+      /* A GROUP OF THE HEART is joined to the two roads either side of it and to
+         nothing else: the nearest stop of its passage and of its highway, each to
+         the node of the group nearest it. Left to the general rule below, it
+         reached nine hundred feet across the middle for a third way in, and the
+         middle of the map is the last place for lines that go nowhere useful. */
+      if(c.heart){
+        const mine = c.nodes.map(id=>META_BY_ID[id]).filter(Boolean);
+        let got = 0;
+        for(const key of c.heart){
+          let best = null, bd = Infinity;
+          const isIn = key.indexOf('in:') === 0, wk = key.slice(3);
+          for(const ln of META_NODES){
+            if(isIn ? ln.inward !== wk : (ln.kind !== 'travel' || ln.road !== key)) continue;
+            for(const n of mine){ const d = Math.hypot(n.x - ln.x, n.y - ln.y); if(d < bd){ bd = d; best = [ln, n]; } }
+          }
+          if(best){ add(best[0].id, best[1].id); seg.push(best); got++; }
+        }
+        c.ways = got;
+        continue;
+      }
       const want = c.rim ? 1 : 2 + (hash(c.x*13 + c.y*7) % 2);
       const mine = c.nodes.map(id=>META_BY_ID[id]).filter(Boolean);
       /* every lane node near enough, against every node of the cluster, cheapest
@@ -14920,6 +15165,150 @@ function metaBossKill(key){
   if(m.bosses.indexOf(key) >= 0) return false;
   m.bosses.push(key); metaSave(); return true;
 }
+/* ======================= FINDING THINGS ON THE MAP ========================
+   Fifteen hundred nodes is a map you SEARCH, not one you read. Every node wears
+   TAGS -- words for what it is FOR, not just what it says -- and the search box
+   matches a regular expression against the name, the lines on the node, the
+   cluster it sits in and those tags. So "minion" finds every node a summoner
+   wants, "attr" every strength, dexterity and intelligence, "sword" every node
+   a sword needs or is paid by, and "fire res" finds +every resistance too:
+   a node that gives fire resistance SECOND-HAND is still a node that gives it.
+
+   The tags come off the STAT, like the icon does, so a stat written tomorrow
+   needs one line here and every node carrying it is findable from then on. */
+const META_TAG_DMG = { phys:'physical', fire:'fire elemental', frost:'cold frost elemental',
+                       shock:'lightning shock elemental', chaos:'chaos' };
+/* what each spell brick deals, so "lightning" finds the Storm Brick's nodes */
+const META_TAG_SPELL = { orbit:'physical guardian orbit', chain:'lightning shock elemental chain',
+  storm:'physical bladestorm', vortex:'physical vortex', freeze:'cold frost elemental freeze chill',
+  bomb:'fire elemental bomb area', bane:'chaos damage over time poison' };
+const META_TAG_RES = 'defence resistance elemental resistance ';
+const META_TAG_LIFE = 'defence life hearts health ';
+const META_TAGS = {
+  incMelee:'offence damage physical attack melee',   incSpell:'offence damage spell caster',
+  incAll:'offence damage generic',                   moreAll:'offence damage more multiplier',
+  flatPhys:'offence damage physical attack flat',    flatElem:'offence damage elemental fire cold frost lightning flat',
+  incAtk:'offence attack speed',                     incCast:'offence spell caster cast speed',
+  incCrit:'offence critical crit',                   critMult:'offence critical crit multiplier',
+  incCritMult:'offence critical crit multiplier',    reach:'offence melee attack area range',
+  incDot:'offence damage over time dot ailment',     lessDot:'damage over time dot ailment',
+  bleedChance:'offence physical bleed bleeding damage over time dot ailment',
+  bleedShare:'offence physical bleed bleeding damage over time dot ailment',
+  poisonDot:'offence chaos poison damage over time dot ailment',
+  ailChance:'offence ailment ignite burn chill shock bleed poison damage over time',
+  rageHit:'offence rage melee attack',               rageHurt:'offence rage',
+  rageMax:'offence rage',
+  chargeKill:'charge frenzy offence',                chargeCrit:'charge power critical crit offence',
+  chargeHurt:'charge endurance defence',             chargeMax:'charge frenzy power endurance',
+  chargeAll:'charge frenzy power endurance',
+  acc:'offence accuracy attack',                     incAcc:'offence accuracy attack',
+  eva:'defence evasion',                             incEva:'defence evasion',
+  es:'defence energy shield es',                     incEs:'defence energy shield es',
+  ailMag:'offence ailment chill shock elemental cold frost lightning',
+  incElem:'offence damage elemental fire cold frost lightning',
+  incFire:'offence damage elemental fire',           incFrost:'offence damage elemental cold frost',
+  incShock:'offence damage elemental lightning shock', incChaos:'offence damage chaos',
+  chaosRes:'defence resistance chaos resistance',
+  heartsPerInt:META_TAG_LIFE+'intelligence attribute',
+  noArmour:'defence armour armor',                   lessSpell:'defence spell damage taken',
+  boltR:'offence spell area fireball fire elemental', ember:'offence spell fire elemental',
+  armour:'defence armour armor',                     incArmour:'defence armour armor',
+  suppress:'defence spell suppression',
+  allRes:META_TAG_RES+'fire resistance cold resistance frost resistance lightning resistance all resistances',
+  fireRes:META_TAG_RES+'fire resistance',            frostRes:META_TAG_RES+'cold resistance frost resistance',
+  shockRes:META_TAG_RES+'lightning resistance',
+  str:'attribute strength',  dex:'attribute dexterity',  int:'attribute intelligence',
+  hearts:META_TAG_LIFE,  incHp:META_TAG_LIFE,  moreHp:META_TAG_LIFE,
+  mana:'mana',  incMana:'mana',  manaRegen:'mana regeneration recovery',  incManaRegen:'mana regeneration recovery',
+  regen:META_TAG_LIFE+'regeneration regen recovery', incRegen:META_TAG_LIFE+'regeneration regen recovery',
+  leech:META_TAG_LIFE+'leech lifesteal recovery attack', leechRate:META_TAG_LIFE+'leech lifesteal recovery attack',
+  heartDrop:META_TAG_LIFE+'recovery utility',
+  speed:'utility movement move speed',  roll:'utility movement roll dodge',
+  magnet:'utility loot pickup',  studs:'utility loot studs',  xp:'utility experience xp',
+  slamDmg:'offence damage physical attack slam area', slamArc:'offence slam area', slamRange:'offence slam area',
+  spellCap:'spell brick',
+  orbitDmg:'offence damage spell brick', orbitR:'offence spell brick area', orbitSpd:'offence spell brick speed',
+  chainDmg:'offence damage spell brick', chainFork:'offence spell brick', chainRate:'offence spell brick speed',
+  stormDmg:'offence damage spell brick', stormSize:'offence spell brick area', stormRate:'offence spell brick speed',
+  vortexDmg:'offence damage spell brick', vortexR:'offence spell brick area', vortexRate:'offence spell brick speed',
+  freezeR:'offence spell brick area', freezeRate:'offence spell brick speed',
+  bombDmg:'offence damage spell brick', bombCluster:'offence spell brick', bombRate:'offence spell brick speed',
+  bombR:'offence spell brick area',
+  baneDmg:'offence damage spell brick', baneR:'offence spell brick area', baneRate:'offence spell brick speed',
+  tollDelay:'utility elemental toll',  reroll:'utility reroll',  noReroll:'utility reroll',
+  chestCards:'utility loot chest cards',  bankMul:'utility loot studs bank',
+  noRegen:META_TAG_LIFE+'regeneration regen',
+  minionDmg:'minion summon offence damage',  minionLife:'minion summon defence life',
+  minionSpd:'minion summon attack cast speed',  minionZombies:'minion summon zombie corpse',
+  minionProj:'minion summon skeleton projectile',  golemCap:'minion summon golem',
+  minionMax:'minion summon skeleton',  minionLess:'minion summon damage',
+  minionMirror:'minion summon damage conversion',  minionInstab:'minion summon skeleton fire elemental area',
+  chaosInoc:'defence chaos resistance energy shield es life hearts',
+  ghostReaver:'defence energy shield es leech lifesteal recovery',
+  zealot:'defence energy shield es regeneration regen recovery',
+  arrowFlat:'offence damage physical attack projectile arrow flat', arrowPierce:'offence attack projectile arrow pierce',
+  ricochet:'offence attack projectile arrow', arrowLess:'attack projectile arrow damage',
+  prolif:'offence ailment area ignite burn poison bleed damage over time',
+  critAilAll:'offence critical crit ailment',  noCrit:'critical crit',
+  ailFull:'offence ailment chill shock elemental',
+  exposeChance:'offence exposure elemental penetration',
+};
+/* which spell brick a stat belongs to, off its prefix: "chainRate" is the Storm Brick's */
+function metaStatSpell(k){
+  for(const sk of SPELL_KEYS) if(k.indexOf(sk) === 0) return sk;
+  return null;
+}
+function metaWeapTag(wk){ const W = WEAPONS[wk], nm = ((W && W.name) || wk).toLowerCase(); return nm === wk ? wk : wk+' '+nm; }
+function metaStatTags(k, v){
+  const out = [META_TAGS[k] || ''];
+  const st = META_STATS[k];
+  if(st && st.only) for(const wk of st.only) out.push(metaWeapTag(wk));
+  if(k === 'grant' && v) out.push('spell brick legendary '+(META_TAG_SPELL[v] || '')+' '+(SPELL_NAME[v] || '').toLowerCase());
+  const sp = metaStatSpell(k);
+  if(sp) out.push(META_TAG_SPELL[sp] || '', (SPELL_NAME[sp] || '').toLowerCase());
+  const cv = /^(cv|gn)_([a-z]+)_([a-z]+)$/.exec(k);
+  if(cv) out.push('offence damage conversion '+(cv[1] === 'gn' ? 'gain extra ' : 'converted ')+
+                  (META_TAG_DMG[cv[2]] || cv[2])+' '+(META_TAG_DMG[cv[3]] || cv[3]));
+  const w = /^(?:dmg|inc)_(.+)$/.exec(k);
+  if(w){ const W = WEAPONS[w[1]];
+         out.push('offence damage '+metaWeapTag(w[1])+' '+(W && W.cast ? 'spell caster' : 'physical attack')); }
+  return out.join(' ');
+}
+/* EVERY NODE'S TAGS, as one string of words. Read once, the first time anybody
+   searches, and kept: nothing about a node's tags changes during a session. */
+function metaNodeTags(n){
+  if(n._tags !== undefined) return n._tags;
+  const t = [];
+  t.push(n.kind === 'travel' ? (n.road === 'attr' ? 'attribute break' : 'path travel highway')
+       : n.kind === 'start' ? 'start class beginning' : n.kind === 'legend' ? 'legendary' : n.kind);
+  if(n.kind === 'start' && n.weap) t.push(metaWeapTag(n.weap));
+  if(n.start) t.push(metaWeapTag(n.start));                /* a door's own opening steps */
+  for(const m of (n.mods || [])) t.push(metaStatTags(m[0], m[1]));
+  return (n._tags = t.join(' ').replace(/\s+/g, ' ').trim());
+}
+/* what the search reads: the tags, and everything the card says */
+function metaNodeHay(n){
+  if(n._hay !== undefined) return n._hay;
+  const cl = META_CLUSTER_BY_ID[n.cl];
+  return (n._hay = [n.name, n.note || '', cl ? cl.name : '', metaKindName(n),
+    ...(n.mods || []).map(metaModText), metaNodeTags(n)].join(' · '));
+}
+/* THE QUERY IS A REGULAR EXPRESSION, case-blind, found anywhere in the text --
+   "attr" is *attr*. Something that is not a legal expression is not an error:
+   "*attr*" is read as the wildcard the hand meant, and anything else that still
+   will not compile is searched for as the letters typed. */
+function metaSearchRe(q){
+  q = String(q || '').trim();
+  if(!q) return null;
+  try { return new RegExp(q, 'i'); } catch(e){}
+  try { return new RegExp(q.replace(/^\*+|\*+$/g, '').replace(/\*/g, '.*'), 'i'); } catch(e){}
+  return new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+}
+function metaSearch(q){
+  const re = metaSearchRe(q);
+  if(!re) return [];
+  return META_NODES.filter(n=>re.test(metaNodeHay(n))).map(n=>n.id);
+}
 /* ---- the screen. An SVG map of the whole thing, always VISIBLE, because a
    tree you cannot see is a shopping list with extra steps. ---- */
 const TREE_VIEW = (function(){
@@ -14976,6 +15365,7 @@ function treeApplyView(){
   svg.setAttribute('viewBox', `${treeCx - w/2} ${treeCy - h/2} ${w} ${h}`);
   const z = document.getElementById('treeZoomLbl');
   if(z) z.textContent = treeZoomPct()+'%';
+  treeFindSize();
 }
 /* where a screen point lands on the map, letterboxing and all */
 function treeUserXY(svg, ev){
@@ -15088,6 +15478,85 @@ function metaTipHtml(n, m){
     `<div class="tmeta">${metaCost(n)} point${metaCost(n)===1?'':'s'}`+
     (cl ? ` · ${esc(cl.name)}` : '')+` · ${metaKindName(n)}</div>`+
     `<div class="tmeta tfoot">${foot}</div>`;
+}
+/* THE SEARCH BOX. Made once and carried from render to render, so taking a node
+   in the middle of a search does not throw away what was typed. ENTER walks to
+   the next thing found (SHIFT+ENTER back), nearest your beginning first; ESC
+   empties the box, and a second ESC leaves it. */
+let treeFindQ = '', treeFound = [], treeFoundI = -1, treeFindEl = null;
+function treeFindBox(){
+  if(treeFindEl) return treeFindEl;
+  const el = document.createElement('div');
+  el.className = 'treefind';
+  el.innerHTML = `<input id="treeSearch" type="text" spellcheck="false" autocomplete="off" `+
+    `placeholder="SEARCH — minion, fire res, attr, sword…" aria-label="search the tree"><span id="treeFindN"></span>`;
+  const inp = el.querySelector('input');
+  inp.addEventListener('input', ()=>{ treeFindQ = inp.value; treeFoundI = -1; treeFindApply(); });
+  inp.addEventListener('keydown', ev=>{
+    if(ev.key === 'Enter'){ ev.preventDefault(); treeFindNext(ev.shiftKey ? -1 : 1); }
+    else if(ev.key === 'Escape' && inp.value){
+      ev.preventDefault(); ev.stopPropagation();
+      inp.value = ''; treeFindQ = ''; treeFoundI = -1; treeFindApply();
+    }
+  });
+  return (treeFindEl = el);
+}
+function treeFindSet(q){
+  const inp = treeFindBox().querySelector('input');
+  inp.value = q; treeFindQ = q; treeFoundI = -1; treeFindApply();
+  return treeFound.length;
+}
+function treeFindApply(){
+  treeFound = metaSearch(treeFindQ);
+  /* nearest your own beginning first: that is the order you would walk them in */
+  const st = META_BY_ID[metaStartId()];
+  if(st) treeFound.sort((a, b)=>{ const A = META_BY_ID[a], B = META_BY_ID[b];
+    return Math.hypot(A.x - st.x, A.y - st.y) - Math.hypot(B.x - st.x, B.y - st.y); });
+  const svg = document.getElementById('treeSvg');
+  if(svg){
+    for(const r of svg.querySelectorAll('.tfind')) r.remove();
+    const at = {}; treeFound.forEach((id, i)=>{ at[id] = i; });
+    for(const g of svg.querySelectorAll('.tnode')){
+      const id = g.dataset.node, i = at[id];
+      g.classList.toggle('found', i !== undefined);
+      if(i === undefined) continue;
+      const n = META_BY_ID[id];
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('class', 'tfind' + (i === treeFoundI ? ' cur' : ''));
+      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y);
+      c.dataset.r = metaNodeRadius(n);
+      g.appendChild(c);
+    }
+    treeFindSize();
+  }
+  const lbl = document.getElementById('treeFindN');
+  if(lbl) lbl.textContent = !treeFindQ.trim() ? ''
+    : !treeFound.length ? 'none'
+    : (treeFoundI >= 0 ? (treeFoundI + 1)+' / ' : '') + treeFound.length + ' found';
+}
+/* the ring is drawn in map units and the map zooms twenty-fold, so its size is
+   worked out again whenever the view moves: never under a few pixels across */
+function treeFindSize(){
+  const svg = document.getElementById('treeSvg');
+  if(!svg) return;
+  const rings = svg.querySelectorAll('.tfind');
+  if(!rings.length) return;
+  const r = svg.getBoundingClientRect();
+  const px = (r.width && r.height)
+    ? Math.max((TREE_VIEW.w/treeZoom) / r.width, (TREE_VIEW.h/treeZoom) / r.height) : 10;
+  for(const c of rings) c.setAttribute('r', Math.round(Math.max(+c.dataset.r + 14, 6*px)));
+}
+function treeFindNext(dir){
+  if(!treeFound.length) return null;
+  treeFoundI = (treeFoundI + (dir || 1) + treeFound.length) % treeFound.length;
+  const n = META_BY_ID[treeFound[treeFoundI]];
+  treeZoom = Math.max(treeZoom, TREE_ZOOM_HOME);
+  treeCx = n.x; treeCy = n.y;
+  treeApplyView();
+  treeFindApply();
+  const info = document.getElementById('treeInfo');
+  if(info) info.innerHTML = metaTipHtml(n, metaCur());
+  return n.id;
 }
 function renderTree(){
   const body = document.getElementById('treeBody');
@@ -15296,11 +15765,14 @@ function renderTree(){
     </div>`;
   body.innerHTML = `<div class="treewrap">${parts.join('')}</div><div class="treeside">${side}</div>`;
 
+  const sideEl = body.querySelector('.treeside');
+  if(sideEl) sideEl.insertBefore(treeFindBox(), sideEl.firstChild);
   const svg = document.getElementById('treeSvg');
   if(svg){
     if(treeCx === 0 && treeCy === 0) treeFit(); else treeApplyView();
     treeBindView(svg);
   }
+  treeFindApply();
   const info = document.getElementById('treeInfo');
   const tip = document.getElementById('treeTip');
   /* KEPT INSIDE THE WINDOW. A card that runs off the right edge is a card you
