@@ -3679,6 +3679,8 @@ war banner — and **KINDRED PACK** sends a bound magic pack of whichever monste
 - **LEAGUE TREE** drives the pre-built tree: switch it on, add points, take or give back any
   node (hover one for what it does), take every node, or reset it.
 
+![The test bench: leagues, the league tree, rare modifiers and the sandbox](docs/bench.png)
+
 It is how the numbers in this README were balanced, and it is deliberately not advertised
 anywhere in the game.
 
