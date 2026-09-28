@@ -4297,3 +4297,18 @@ tree opens at zoom 3 reading 100% on the start node, FIT reads 0%, it goes to 9 
 further, back out to 0%, and the readout click returns to 100%; the side panel's scrollbar is
 thin and gold. Breaks `frenzyok`, `cardnogate`, `resvany`, `oldlabel`, `openfit`, `shallow`,
 `greybar` caught.
+
+**Volume sliders and a text size.** MUSIC and SOUND each gain a slider in their options row:
+`A.musVol`/`A.sfxVol` (0–1, saved as `bb_musvol`/`bb_sfxvol`) multiply `MUS_GAIN`/`SFX_GAIN` in
+`audioApply`, so the switches still silence and turning one back on keeps its level; the track
+fills gold to the thumb, and letting go of the sound slider plays a hit. **TEXT SIZE** is the
+first *choice* option (`OPT_DEFS` entries may carry `choices`; `optLoad`/`optSave`/`optSet`
+keep the value): SMALL 0.88, NORMAL 1, LARGE 1.15, VERY LARGE 1.32. `applyTextSize` rescales
+every px `font-size` in the stylesheets (each rule's own size remembered, so NORMAL restores it
+exactly) and the few inline ones, and the canvas's `font` setter scales the px in any font string
+it is handed (cached per string). The options screen scrolls when a big size makes it taller than
+the window. New `opts70`: the sliders set the live gains (0.4, 0.25), show 40%/25%, fill the
+track, save, restore, and survive a switch off and on; VERY LARGE is ×1.32 on the page and the
+canvas, remembered, SMALL ×0.88, NORMAL exactly as written, and both survive a reload. Breaks
+`volmus`, `volsfx`, `volnosave`, `volnoload`, `txtnocss`, `txtnocanvas`, `txtnosave`,
+`txtnoboot` caught.

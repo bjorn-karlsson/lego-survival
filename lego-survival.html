@@ -279,6 +279,22 @@
   .oswitch.armed{background:#e2323a;box-shadow:0 4px 0 #8f161d;color:#fff}
   .oswitch:active{transform:translateY(2px);box-shadow:none}
   .optnote{font-size:12.5px;color:#ffd0d0;font-weight:600;margin-top:10px;min-height:17px}
+  /* the volume sliders: a gold track on dark, a white brick of a thumb */
+  .ovol{flex:none;display:flex;align-items:center;gap:8px}
+  .ovol input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:8px;border-radius:6px;
+    background:rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(0,0,0,.3);cursor:pointer;accent-color:#ffb900}
+  .ovol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:5px;
+    background:#fff;box-shadow:0 3px 0 #b9b4a7,0 0 0 3px #ffb900}
+  .ovol input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:5px;border:0;
+    background:#fff;box-shadow:0 3px 0 #b9b4a7,0 0 0 3px #ffb900}
+  .ovol input[type=range]::-moz-range-progress{background:#ffb900;height:8px;border-radius:6px}
+  .ovoln{font-family:'Titan One';font-size:12px;color:#ffd76e;min-width:40px;text-align:right}
+  .optrow.choice .ochoices{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .ochoice{font-family:'Titan One';font-size:12px;letter-spacing:1.4px;padding:8px 14px;border:0;border-radius:10px;
+    cursor:pointer;color:#f0e6e6;background:rgba(9,13,17,.34);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+  .ochoice.on{background:#ffb900;color:#1b2a34;box-shadow:0 3px 0 #c98f00}
+  /* a bigger text size makes the options taller than a short window: scroll, never clip */
+  #optScreen{overflow-y:auto;justify-content:safe center;padding:18px 0}
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
   #modeRow,#diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
@@ -3359,7 +3375,14 @@ const OPT_DEFS = [
   { id:'autoLog', def:false, name:'START WITH THE COMBAT LOG',
     note:'open the log as soon as a run begins, instead of pressing L every time. '+
          'SHIFT+L still walks the tabs' },
+  /* a CHOICE rather than a switch: its value is one of `choices` */
+  { id:'textSize', def:'normal', name:'TEXT SIZE', choices:['small','normal','large','xlarge'],
+    note:'every word in the menus, the sheets, the cards and the log, and the text drawn in the '+
+         'field -- the HUD, damage numbers, names over monsters' },
 ];
+/* how big each text size is, against the game as it was written */
+const TEXT_SIZES = { small:{ name:'SMALL', k:0.88 }, normal:{ name:'NORMAL', k:1 },
+                     large:{ name:'LARGE', k:1.15 }, xlarge:{ name:'VERY LARGE', k:1.32 } };
 const OPT = {};
 for(const o of OPT_DEFS) OPT[o.id] = o.def;
 /* declared HERE, not next to the screen that uses them: refreshAudioBtns runs
@@ -3372,15 +3395,68 @@ function optLoad(){
   try { raw = localStorage.getItem(OPT_KEY); } catch(e){}
   let o = null;
   try { o = raw ? JSON.parse(raw) : null; } catch(e){}
-  for(const d of OPT_DEFS)
-    OPT[d.id] = (o && typeof o === 'object' && typeof o[d.id] === 'boolean') ? o[d.id] : d.def;
+  for(const d of OPT_DEFS){
+    const v = o && typeof o === 'object' ? o[d.id] : undefined;
+    OPT[d.id] = d.choices ? (d.choices.includes(v) ? v : d.def)
+                          : (typeof v === 'boolean' ? v : d.def);
+  }
 }
 function optSave(){
   const o = {};
-  for(const d of OPT_DEFS) o[d.id] = !!OPT[d.id];
+  for(const d of OPT_DEFS) o[d.id] = d.choices ? OPT[d.id] : !!OPT[d.id];
   try { localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch(e){}
 }
-function optSet(id, v){ OPT[id] = !!v; optSave(); return OPT[id]; }
+function optSet(id, v){
+  const d = OPT_DEFS.find(q=>q.id === id);
+  OPT[id] = d && d.choices ? (d.choices.includes(v) ? v : d.def) : !!v;
+  optSave();
+  if(id === 'textSize') applyTextSize();
+  return OPT[id];
+}
+/* ---- TEXT SIZE ----
+   Every size in the stylesheet is written in px, so the stylesheet itself is
+   rescaled: each rule's own size is remembered and multiplied, and the page
+   reflows around it. The canvas draws its words through ctx.font, so the font
+   setter scales the px size in the string it is handed (cached per string, and
+   untouched at NORMAL). */
+let TEXT_K = 1;
+const textFontOrig = new Map(), textFontCache = new Map();
+function textScaleRules(rules){
+  for(const r of rules){
+    if(r.cssRules && r.cssRules.length) textScaleRules(r.cssRules);
+    if(!r.style || !r.style.fontSize) continue;
+    if(!textFontOrig.has(r)) textFontOrig.set(r, r.style.fontSize);
+    const m = /^([\d.]+)px$/.exec(textFontOrig.get(r));
+    if(m) r.style.fontSize = TEXT_K === 1 ? textFontOrig.get(r) : (+m[1]*TEXT_K).toFixed(2)+'px';
+  }
+}
+function applyTextSize(){
+  TEXT_K = (TEXT_SIZES[OPT.textSize] || TEXT_SIZES.normal).k;
+  textFontCache.clear();
+  for(const ss of document.styleSheets){ let rules = null; try { rules = ss.cssRules; } catch(e){} if(rules) textScaleRules(rules); }
+  for(const el of document.querySelectorAll('[style*="font-size"]')){
+    if(el.dataset.fs === undefined) el.dataset.fs = el.style.fontSize;
+    const m = /^([\d.]+)px$/.exec(el.dataset.fs);
+    if(m) el.style.fontSize = TEXT_K === 1 ? el.dataset.fs : (+m[1]*TEXT_K).toFixed(2)+'px';
+  }
+  document.documentElement.dataset.text = OPT.textSize;
+  try { fitTitleSoon(); } catch(e){}
+}
+(function(){
+  const P = window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;
+  const D = P && Object.getOwnPropertyDescriptor(P, 'font');
+  if(!D || !D.set) return;
+  Object.defineProperty(P, 'font', { configurable:true, enumerable:D.enumerable,
+    get(){ return D.get.call(this); },
+    set(v){
+      if(TEXT_K !== 1 && typeof v === 'string'){
+        let w = textFontCache.get(v);
+        if(w === undefined){ w = v.replace(/([\d.]+)px/, (_, n)=>(+n*TEXT_K).toFixed(1)+'px'); textFontCache.set(v, w); }
+        v = w;
+      }
+      D.set.call(this, v);
+    } });
+})();
 function optToggle(id){ return optSet(id, !OPT[id]); }
 
 /* =============================== AUDIO =============================== */
@@ -3389,12 +3465,16 @@ function optToggle(id){ return optSet(id, !OPT[id]); }
    tired of. Music and sound are their own toggles, both remembered between
    sessions, and M still takes everything down at once. */
 const A = { ctx:null, master:null, sfx:null, mus:null, muted:false,
-            musicOn:true, sfxOn:true, noiseBuf:null, delay:null };
+            musicOn:true, sfxOn:true, noiseBuf:null, delay:null,
+            musVol:1, sfxVol:1 };     /* the two sliders, 0..1, on top of the mix */
 const MUS_GAIN = 0.17, SFX_GAIN = 0.8, MASTER_GAIN = 0.9;
 function audioLoad(){
   try{
     A.musicOn = localStorage.getItem('bb_music') !== '0';
     A.sfxOn   = localStorage.getItem('bb_sfx')   !== '0';
+    const mv = parseFloat(localStorage.getItem('bb_musvol')), sv = parseFloat(localStorage.getItem('bb_sfxvol'));
+    if(isFinite(mv)) A.musVol = clamp(mv, 0, 1);
+    if(isFinite(sv)) A.sfxVol = clamp(sv, 0, 1);
   }catch(e){}
   refreshAudioBtns();
 }
@@ -3402,6 +3482,8 @@ function audioSave(){
   try{
     localStorage.setItem('bb_music', A.musicOn ? '1' : '0');
     localStorage.setItem('bb_sfx',   A.sfxOn   ? '1' : '0');
+    localStorage.setItem('bb_musvol', String(A.musVol));
+    localStorage.setItem('bb_sfxvol', String(A.sfxVol));
   }catch(e){}
 }
 function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
@@ -3409,8 +3491,8 @@ function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
 function destOff(dest){ return (dest === A.mus || dest === A.delay) ? !A.musicOn : !A.sfxOn; }
 function audioApply(){
   if(A.master) A.master.gain.value = A.muted ? 0 : MASTER_GAIN;
-  if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN : 0;
-  if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN : 0;
+  if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN*A.musVol : 0;
+  if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN*A.sfxVol : 0;
   /* THE SCHEDULER STOPS DEAD while the music is off, so its clock falls behind
      real time. Catching it up here is the difference between the music coming
      back on the beat and it coming back as ten minutes of notes at once. */
@@ -3452,9 +3534,9 @@ function audioInit(){
     A.sfxLid = A.ctx.createBiquadFilter();
     A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 11000; A.sfxLid.Q.value = 0.4;   /* high enough to keep the clicks */
     A.sfxLid.connect(A.master);
-    A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN; A.sfx.connect(A.sfxLid);
+    A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN*A.sfxVol; A.sfx.connect(A.sfxLid);
     sfxLayerInit();
-    A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN; A.mus.connect(A.master);
+    A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN*A.musVol; A.mus.connect(A.master);
     const nb = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
     const d = nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     A.noiseBuf = nb;
@@ -29648,21 +29730,29 @@ function optRows(){
   return [
     { key:'music', name:'MUSIC', on:()=>A.musicOn && !A.muted,
       note:'the field and boss tracks. M still takes everything down at once',
-      hit:()=>{ audioInit(); toggleMusic(); } },
+      vol:'musVol', hit:()=>{ audioInit(); toggleMusic(); } },
     { key:'sfx', name:'SOUND', on:()=>A.sfxOn && !A.muted,
       note:'every hit, pickup, cast and smash',
-      hit:()=>{ audioInit(); toggleSfx(); } },
-    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note,
+      vol:'sfxVol', hit:()=>{ audioInit(); toggleSfx(); } },
+    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices,
       on:()=>!!OPT[d.id], hit:()=>optToggle(d.id) })),
   ];
 }
 function optRender(){
   const list = document.getElementById('optList');
   if(!list) return;
-  const rows = optRows().map(r=>
-    `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>`+
-    `<button class="oswitch ${r.on() ? 'on' : ''}" data-opt="${r.key}">`+
-    `${r.on() ? 'ON' : 'OFF'}</button></div>`);
+  const rows = optRows().map(r=>{
+    /* a choice: one button per value, the chosen one lit */
+    if(r.choices) return `<div class="optrow choice"><div class="otext"><b>${r.name}</b><i>${r.note}</i>`+
+      `<div class="ochoices">${r.choices.map(c=>`<button class="ochoice${OPT[r.key] === c ? ' on' : ''}" data-choice="${r.key}" data-val="${c}">${
+        (TEXT_SIZES[c] || { name:c }).name}</button>`).join('')}</div></div></div>`;
+    /* a switch, and -- for music and sound -- a volume slider beside it */
+    const vol = r.vol ? `<div class="ovol"><input type="range" min="0" max="100" step="1" value="${Math.round(A[r.vol]*100)}" data-vol="${r.vol}" aria-label="${r.name} volume">`+
+      `<span class="ovoln">${Math.round(A[r.vol]*100)}%</span></div>` : '';
+    return `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>${vol}`+
+      `<button class="oswitch ${r.on() ? 'on' : ''}" data-opt="${r.key}">`+
+      `${r.on() ? 'ON' : 'OFF'}</button></div>`;
+  });
   /* THE ONE THING THAT CANNOT BE UNDONE gets its own look and two clicks. It
      wipes the tree for EVERY weapon on EVERY difficulty, because "my character"
      is all of them and half a wipe is worse than none. */
@@ -29676,6 +29766,28 @@ function optRender(){
   list.innerHTML = rows.join('');
   for(const b of list.querySelectorAll('.oswitch'))
     b.addEventListener('click', ()=>optClick(b.getAttribute('data-opt')));
+  for(const b of list.querySelectorAll('.ochoice'))
+    b.addEventListener('click', ()=>{
+      SFX.click(); optArmed = 0;
+      optSet(b.dataset.choice, b.dataset.val);
+      optSay(OPT_DEFS.find(d=>d.id === b.dataset.choice).name + ' is now ' + (TEXT_SIZES[b.dataset.val] || { name:b.dataset.val }).name);
+      optRender();
+    });
+  for(const inp of list.querySelectorAll('input[data-vol]')){
+    const lab = inp.parentNode.querySelector('.ovoln');
+    /* the track fills gold up to the thumb */
+    const fill = ()=>{ inp.style.background = `linear-gradient(90deg, #ffb900 ${inp.value}%, rgba(0,0,0,.35) ${inp.value}%)`; };
+    fill();
+    inp.addEventListener('input', ()=>{
+      audioInit();
+      A[inp.dataset.vol] = clamp(+inp.value/100, 0, 1);
+      if(lab) lab.textContent = Math.round(A[inp.dataset.vol]*100)+'%';
+      fill();
+      audioApply();
+    });
+    /* let go of the sound slider and you hear where you put it */
+    inp.addEventListener('change', ()=>{ if(inp.dataset.vol === 'sfxVol'){ try { for(const k in sfxLast) delete sfxLast[k]; SFX.hit(); } catch(e){} } });
+  }
 }
 function optSay(msg){
   const el = document.getElementById('optNote');
@@ -29765,7 +29877,7 @@ document.getElementById('pauseOptBtn').addEventListener('click', ()=>{
 document.getElementById('optBackBtn').addEventListener('click', ()=>{
   SFX.click(); closeOptions(); });
 audioLoad();
-optLoad();
+optLoad(); applyTextSize();
 document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });

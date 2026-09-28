@@ -2566,12 +2566,15 @@ stays paused underneath it and the title stays a title, which is why the same sc
 opened from either. `ESC` closes it — and *only* it, so closing the options over a paused run
 does not also un-pause the run. Every switch is written to disk the moment you click it.
 
+![The options screen: volume sliders and the text size](docs/options.png)
+
 | switch | what it does |
 |---|---|
-| **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
-| **SOUND** | every hit, pickup, cast and smash |
+| **MUSIC** | the field and boss tracks, with a **volume slider** beside the switch. `M` still takes everything down at once |
+| **SOUND** | every hit, pickup, cast and smash, with its own **volume slider** — let go of it and you hear the level you chose |
 | **DAMAGE NUMBERS** | every number and word that floats off a hit — yours, the ones you take, your minions' |
 | **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
+| **TEXT SIZE** | **SMALL · NORMAL · LARGE · VERY LARGE** (88% · 100% · 115% · 132%) — every word in the menus, sheets, cards and log, and the text drawn in the field: the HUD, damage numbers, names over monsters |
 | **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
 
 **DAMAGE NUMBERS off is a quiet fight.** No figure off a monster, off you (a burn or a leech) or
@@ -2579,6 +2582,12 @@ off your minions, and none of the combat words either: `MISS`, `BLOCKED`, `EVADE
 `DEFLECT!`, `SUPPRESSED`, `SCORCHED!`, `FROZEN SOLID`, `CHILLED ×3` and the rest. What is not combat
 text still floats — loot, `LEVEL UP!`, a pickup, a boss calling its attack, a league appearing,
 ritual tribute. The combat log still counts every point either way.
+
+**The sliders and the text size are remembered like the switches.** A volume is a level on top
+of the mix, so turning music off and on again keeps where you left the slider. The text size
+rescales every size the stylesheet sets and every size the canvas draws at; NORMAL is the game
+exactly as written. The title screen still fits the window at any text size — a bigger size is
+taller, and the fit zooms it back in.
 
 **RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
 best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
