@@ -33,7 +33,8 @@
     flex-wrap:wrap;width:100%;padding:0 12px;box-sizing:border-box}
   .boxplate{order:2}
   #comboStats{order:1}  #comboBricks{order:3}
-  @media (max-width:1240px){ .boxplate{order:1} #comboStats{order:2} #comboBricks{order:3} }
+  /* stacked (set by fitTitle when three columns cannot fit even zoomed out) */
+  .titlewrap.stacked .boxplate{order:1} .titlewrap.stacked #comboStats{order:2} .titlewrap.stacked #comboBricks{order:3}
   .cpanel{width:330px;flex:0 1 330px;background:rgba(10,15,13,.86);
     border:2px solid rgba(255,214,110,.32);border-radius:20px;padding:14px 16px 16px;
     text-align:left;font-family:'Fredoka';color:#e8ece9;
@@ -278,9 +279,25 @@
   .oswitch.armed{background:#e2323a;box-shadow:0 4px 0 #8f161d;color:#fff}
   .oswitch:active{transform:translateY(2px);box-shadow:none}
   .optnote{font-size:12.5px;color:#ffd0d0;font-weight:600;margin-top:10px;min-height:17px}
+  /* the volume sliders: a gold track on dark, a white brick of a thumb */
+  .ovol{flex:none;display:flex;align-items:center;gap:8px}
+  .ovol input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:8px;border-radius:6px;
+    background:rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(0,0,0,.3);cursor:pointer;accent-color:#ffb900}
+  .ovol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:5px;
+    background:#fff;box-shadow:0 3px 0 #b9b4a7,0 0 0 3px #ffb900}
+  .ovol input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:5px;border:0;
+    background:#fff;box-shadow:0 3px 0 #b9b4a7,0 0 0 3px #ffb900}
+  .ovol input[type=range]::-moz-range-progress{background:#ffb900;height:8px;border-radius:6px}
+  .ovoln{font-family:'Titan One';font-size:12px;color:#ffd76e;min-width:40px;text-align:right}
+  .optrow.choice .ochoices{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .ochoice{font-family:'Titan One';font-size:12px;letter-spacing:1.4px;padding:8px 14px;border:0;border-radius:10px;
+    cursor:pointer;color:#f0e6e6;background:rgba(9,13,17,.34);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+  .ochoice.on{background:#ffb900;color:#1b2a34;box-shadow:0 3px 0 #c98f00}
+  /* a bigger text size makes the options taller than a short window: scroll, never clip */
+  #optScreen{overflow-y:auto;justify-content:safe center;padding:18px 0}
   /* ---- favourite picker ---- */
   .favhead{margin:10px 0 6px;font-family:'Titan One';font-size:11px;letter-spacing:2.5px;color:#ffe6a3}
-  #diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  #modeRow,#diffRow,#weaponRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
   /* six weapons on one line: a little narrower than the difficulty buttons */
   #weaponRow{gap:8px}
   #weaponRow .diff{position:relative;min-width:88px;padding:7px 9px 6px}
@@ -408,7 +425,15 @@
     justify-content:center}
   .treewrap svg{display:block;width:100%;height:100%;max-height:100%}
   .treeside{flex:0 0 330px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;
-    padding-right:4px}
+    padding-right:8px;scrollbar-width:thin;scrollbar-color:rgba(255,215,110,.55) rgba(0,0,0,.18);
+    scrollbar-gutter:stable}
+  /* a slim gold rail in the plate's own colours, not the browser's grey one */
+  .treeside::-webkit-scrollbar{width:8px}
+  .treeside::-webkit-scrollbar-track{background:rgba(0,0,0,.18);border-radius:8px;margin:4px 0}
+  .treeside::-webkit-scrollbar-thumb{background:rgba(255,215,110,.55);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  .treeside::-webkit-scrollbar-thumb:hover{background:rgba(255,215,110,.85);background-clip:padding-box}
+  .treeside::-webkit-scrollbar-button{display:none;height:0}
+  #treeZoomLbl{cursor:pointer}
   /* THE CARD COMES TO YOU. Reading a node meant looking away to a panel 900px
      to the right and then back to find where you were -- twice per node, on a
      map with twelve hundred of them. It follows the cursor now, and the panel
@@ -566,6 +591,21 @@
     padding:16px;font-size:13px;color:#ffd9d9;font-weight:600}
   .sheetfoot{flex:none;text-align:center;font-size:12.5px;color:#ffd0d0;padding:9px 0 11px;font-weight:600}
   /* ---- equipment: PoE's inventory panel ---- */
+  /* ---- the RPG mode's work-in-progress screen ---- */
+  #rpgScreen{z-index:29;overflow:auto;padding:2vh 16px}
+  .rpgwrap{background:linear-gradient(#1f2a33,#151c22);border:3px solid #2e7dd1;border-radius:16px;max-width:640px;
+    padding:18px 22px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:12px;margin:auto 0}
+  .rpgbadge{align-self:flex-start;font-family:'Titan One',cursive;font-size:11px;letter-spacing:2px;color:#12181d;
+    background:#ffd76e;border-radius:6px;padding:3px 9px}
+  .rpgwrap h2{font-family:'Titan One',cursive;color:#8fc2ff;letter-spacing:4px;font-size:34px;margin:0}
+  .rpglede{color:#dbe4ea;font-size:14px;line-height:1.5;margin:0}
+  .rpggrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.rpggrid{grid-template-columns:1fr}}
+  .rpggrid > div{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;color:#c9d2ce;font-size:13px}
+  .rpggrid b{font-family:'Titan One',cursive;letter-spacing:1px;color:#ffd76e;font-weight:400}
+  .rpggrid ul{margin:6px 0 0;padding-left:18px}
+  .rpgnote{color:#8e9aa4;font-size:12px;margin:0}
+  .rpgbtns{display:flex;gap:8px;justify-content:flex-end}
   /* ---- the ritual's offer ---- */
   #ritualScreen{z-index:30;overflow:auto;padding:2vh 0}
   .ritwrap{background:linear-gradient(#2a1a1e,#170e11);border:3px solid #6a1a24;border-radius:16px;max-width:760px;
@@ -583,6 +623,7 @@
   .riticon svg{max-width:100%;max-height:100%}
   .ritname{font-family:'Titan One',cursive;font-size:11px;letter-spacing:.5px;text-align:center;min-height:28px;display:flex;align-items:center}
   .ritkind{font-size:10.5px;color:#b9a7aa;text-align:center}
+  .ritdesc{font-size:10.5px;line-height:1.3;color:#e8dcdc;text-align:center;margin:2px 0}
   .ritcost{font-family:'Titan One',cursive;font-size:12px;color:#ffd76e}
   .ritcarried{position:absolute;top:4px;right:6px;font-family:'Titan One';font-size:8.5px;letter-spacing:1px;color:#ffb0b6}
   .ritbtns{display:flex;gap:4px}
@@ -678,6 +719,9 @@
     <div class="badge">BRICK-BUILT ACTION RPG</div>
     <canvas id="titleCanvas" width="760" height="400"></canvas>
     <div class="tag">Smash the waves. Grab the studs. Everything falls apart.</div>
+    <div class="favhead">GAME MODE</div>
+    <div id="modeRow"></div>
+    <div class="diffblurb" id="modeBlurb"></div>
     <div class="favhead">DIFFICULTY</div>
     <div id="diffRow"></div>
     <div class="diffblurb" id="diffBlurb"></div>
@@ -746,7 +790,13 @@
       <div class="cheatrow" id="cheatUps"></div>
       <div class="seclabel">UTILITIES</div>
       <div class="cheatrow" id="cheatMisc"></div>
-      <div class="seclabel">SANDBOX — TURN IT ON AND NO WAVE EVER ARRIVES. CLICK A MONSTER TO PUT ONE IN FRONT OF YOU (SHIFT-CLICK FOR AN ELITE, RIGHT-CLICK FOR FIVE)</div>
+      <div class="seclabel">LEAGUES — PUT ONE DOWN NOW, WHATEVER THE WAVE (A BREACH OR AN ABYSS SURFACES AS SOON AS A WAVE IS BEING FOUGHT)</div>
+      <div class="cheatrow" id="cheatLeagues"></div>
+      <div class="seclabel">LEAGUE TREE — PRE-BUILT, NOT LIVE IN A RUN: SWITCH IT ON AND TAKE ITS NODES HERE (CLICK A TAKEN NODE AT THE END OF A ROAD TO GIVE IT BACK)</div>
+      <div class="cheatrow" id="cheatLtree"></div>
+      <div class="seclabel">RARE MODIFIERS — PICK ANY, AND EVERY SHIFT-CLICKED ELITE BELOW WEARS EXACTLY THOSE (NONE PICKED: ROLLED AS IN A RUN)</div>
+      <div class="cheatrow" id="cheatRareMods"></div>
+      <div class="seclabel">SANDBOX — TURN IT ON AND NO WAVE EVER ARRIVES. CLICK A MONSTER TO PUT ONE IN FRONT OF YOU (SHIFT-CLICK FOR AN ELITE, RIGHT-CLICK FOR FIVE; KINDRED PACK SENDS A BOUND MAGIC PACK OF THE LAST ONE YOU CLICKED)</div>
       <div class="cheatrow" id="cheatSandbox"></div>
       <div class="cheatrow" id="cheatSpawn"></div>
     </div>
@@ -805,6 +855,22 @@
     <div class="sheetfoot">I or ESC to close &middot; click to wear or take off &middot; Ctrl-click to send between bag and stash &middot; drag anywhere it fits &middot; drop in the bin to destroy</div>
   </div>
 </div>
+<div id="rpgScreen" class="overlay hidden">
+  <div class="rpgwrap">
+    <div class="rpgbadge">WORK IN PROGRESS</div>
+    <h2>RPG</h2>
+    <p class="rpglede">The second way to play, and not playable yet. You make a character, start outside a town at
+      level 1, clear the fields to reach it, and from there take missions into dungeons. What you carry is
+      what makes you strong: gear with sockets, skill gems and support gems, a passive tree of its own and,
+      later, an ascendancy.</p>
+    <div class="rpggrid">
+      <div><b>Here now</b><ul><li>Equipment, per class</li><li>Inventory and the shared stash</li><li>Item levels, tiers and affixes</li></ul></div>
+      <div><b>Planned</b><ul><li>Town, home and missions</li><li>Click to move, skills on keys, the Ctrl layer</li><li>Mana costs, five flasks</li><li>Gems, supports and sockets</li><li>RPG passive tree and ascendancies</li></ul></div>
+    </div>
+    <p class="rpgnote">The full plan is in <code>docs/RPG-BLUEPRINT.md</code>.</p>
+    <div class="rpgbtns"><button id="rpgGearBtn" class="tbtn">EQUIPMENT &amp; STASH</button><button id="rpgBackBtn" class="tbtn gray">BACK</button></div>
+  </div>
+</div>
 <div id="ritualScreen" class="overlay hidden">
   <div class="ritwrap">
     <h2>RITUAL</h2>
@@ -813,7 +879,7 @@
     <div id="ritGrid" class="ritgrid"></div>
     <div id="ritDefer" class="ritdefer"></div>
     <div class="gearbar"><button id="ritRerollBtn" class="tbtn">REROLL</button><button id="ritCloseBtn" class="tbtn gray">CLOSE</button><button id="ritDoneBtn" class="tbtn">DONE</button></div>
-    <div class="sheetfoot">DONE ends this ritual's offer once every altar is finished (deferred items and tribute are kept) &middot; U or ESC to close &middot; BUY with tribute &middot; DEFER to see it again in the next ritual, 10% cheaper</div>
+    <div class="sheetfoot">DONE ends this ritual's offer once every altar is finished (deferred items and tribute are kept) &middot; U or ESC to close &middot; BUY or TAKE with tribute &middot; DEFER to see it again in the next ritual, 10% cheaper</div>
   </div>
 </div>
 <div id="gearTip" class="geartip hidden"></div>
@@ -864,7 +930,7 @@
       <button id="treeInBtn" class="tbtn gray zoom">+</button>
       <button id="treeOutBtn" class="tbtn gray zoom">&minus;</button>
       <button id="treeFitBtn" class="tbtn gray">FIT</button>
-      <span id="treeZoomLbl">100%</span>
+      <span id="treeZoomLbl" title="back to 100%, on your starting point">100%</span>
       <button id="respecBtn" class="tbtn">REFUND MODE</button>
       <button id="clearBtn" class="tbtn gray">CLEAR ALL</button>
       <button id="treeSecBtn" class="tbtn gray">COUNTRIES</button>
@@ -1747,6 +1813,28 @@ function psnList(){ return (player.psn && player.psn.list) || []; }
 function psnStacks(){ return psnList().length; }
 function psnDps(){ let d=0; for(const f of psnList()) d += f.dps; return d; }
 function psnTime(){ let t=0; for(const f of psnList()) t = Math.max(t, f.t); return t; }
+/* BLEEDING, on you. A wound bleeds a share of the hit that opened it for four
+   seconds -- physical, so no resistance stands in front of it -- and it bleeds
+   TWICE as fast while you are moving. Five wounds at most; a deeper one pushes
+   the shallowest out. */
+const PBLEED_T = 4, PBLEED_SHARE = 0.35, PBLEED_MOVE = 2, PBLEED_MAX = 5;
+function pbleedList(){ return (player.pbleed && player.pbleed.list) || []; }
+function pbleedStacks(){ return pbleedList().length; }
+function pbleedDps(){ let d=0; for(const f of pbleedList()) d += f.dps; return d; }
+function pbleedTime(){ let t=0; for(const f of pbleedList()) t = Math.max(t, f.t); return t; }
+function bleedPlayer(hit){
+  const p = player;
+  if(!p || p.dead || !(hit > 0)) return;
+  if(!p.pbleed) p.pbleed = { list:[], acc:0 };
+  const dps = hit*PBLEED_SHARE;
+  if(p.pbleed.list.length >= PBLEED_MAX){
+    let w = 0;
+    for(let i=1;i<p.pbleed.list.length;i++) if(p.pbleed.list[i].dps < p.pbleed.list[w].dps) w = i;
+    if(dps <= p.pbleed.list[w].dps) return;
+    p.pbleed.list.splice(w, 1);
+  }
+  p.pbleed.list.push({ dps, t:PBLEED_T });
+}
 const PSN_MAX_STACKS = 8;
 function poisonPlayer(dps, dur){
   const p = player;
@@ -2576,12 +2664,15 @@ const HERO_STACKS = {
      of a fight costs you the ramp gradually instead of all at once. ---- */
   frenzy: {
     name:'FRENZY', col:'#6ee06e', max:3, decay:4.0,
+    /* a charge is the HERO's and nothing of it reaches a minion, so the summoner
+       -- whose hero does not fight -- is never handed the offensive two */
+    not:['scepter'],
     /* speed AND damage, because a frenzy charge in PoE is the one that makes
        you faster at everything. moreAll, not moreDmg: rage's is melee only. */
     mods:{ atk:0.04, cast:0.04, moreAll:0.04 },
   },
   power: {
-    name:'POWER', col:'#b46aff', max:3, decay:4.0,
+    name:'POWER', col:'#b46aff', max:3, decay:4.0, not:['scepter'],
     mods:{ crit:0.30 },         /* INCREASED critical chance, into the one pool */
   },
   endurance: {
@@ -2614,6 +2705,7 @@ function stackAllows(id, ent){
   if(!d) return false;
   if(ent && ent !== player) return !!(d.mob && ent.stackOn && ent.stackOn[id]);
   if(d.only && (!weapon || d.only.indexOf(weapon.id) < 0)) return false;
+  if(d.not && weapon && d.not.indexOf(weapon.id) >= 0) return false;
   return true;
 }
 /* THE CEILING, which is the table's plus whatever the hero has bought. Kept
@@ -3218,19 +3310,48 @@ function resize(){
   zoom = Math.min(zoom, 3);
   reclampCam();
 }
-/* The title plate is laid out at its natural size and then scaled to fit the
-   window, so it never runs off the bottom on a short screen — and never sits
-   there shrunken on a tall one. */
+/* THE TITLE FITS THE WINDOW, NO SCROLLING. The plate is measured at its natural
+   size and the whole title -- the plate AND the two panels beside it -- is
+   ZOOMED to fit the window's height. It used to be a transform scale on the
+   plate alone, which only shrank the picture: the layout box stayed full size,
+   so the page still scrolled past a plate that looked like it fitted. Zoom
+   shrinks the layout itself. Never below half size, never above natural; and it
+   refits whenever the plate's content changes (a longer weapon blurb, the RPG
+   button text) as well as on a resize. */
+const TITLE_FIT_PAD = 40, TITLE_FIT_MIN = 0.5, TITLE_ROW_MIN = 0.6;
 function fitTitle(){
-  const el = document.querySelector('#titleScreen .boxplate');
-  if(!el) return;
+  const wrap = document.querySelector('#titleScreen .titlewrap'), el = document.querySelector('#titleScreen .boxplate');
+  if(!wrap || !el) return;
   el.style.transform = 'rotate(-.5deg)';
+  wrap.style.zoom = ''; wrap.classList.remove('stacked');
   const h = el.offsetHeight;
   if(!h) return;
-  const k = Math.min(1, (window.innerHeight - 26) / h);
-  el.style.transform = k < 1 ? `rotate(-.5deg) scale(${k.toFixed(3)})` : 'rotate(-.5deg)';
+  /* the panels beside it are as tall as the plate may be, in the same zoom */
+  for(const q of wrap.querySelectorAll('.cpanel')) q.style.maxHeight = Math.max(320, h) + 'px';
+  /* the height the plate needs, and the width all three columns need side by side */
+  const side = [...wrap.querySelectorAll('.cpanel')].reduce((a, q)=>a + q.offsetWidth + 18, 0);
+  const rowW = el.offsetWidth + side + 24;
+  const kh = (window.innerHeight - TITLE_FIT_PAD) / h, kw = (window.innerWidth - 8) / rowW;
+  let k = Math.min(1, kh);
+  /* one row if a reasonable zoom gets it there; otherwise the panels go under */
+  if(kw >= TITLE_ROW_MIN) k = Math.min(k, kw);
+  else wrap.classList.add('stacked');
+  k = clamp(k, TITLE_FIT_MIN, 1);
+  if(k < 1) wrap.style.zoom = k.toFixed(3);
+}
+let titleFitQ = false;
+function fitTitleSoon(){
+  if(titleFitQ) return;
+  titleFitQ = true;
+  requestAnimationFrame(()=>{ titleFitQ = false; fitTitle(); });
 }
 window.addEventListener('resize', ()=>{ resize(); fitTitle(); }); resize();
+/* content changes only -- never attributes, so the zoom it sets cannot wake it */
+try {
+  const plate = document.querySelector('#titleScreen .boxplate');
+  if(plate && window.MutationObserver) new MutationObserver(fitTitleSoon).observe(plate, { childList:true, subtree:true, characterData:true });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fitTitleSoon);
+} catch(e){}
 
 /* ============================== SETTINGS ==============================
    Music and sound already had their own localStorage keys and their own button
@@ -3254,7 +3375,14 @@ const OPT_DEFS = [
   { id:'autoLog', def:false, name:'START WITH THE COMBAT LOG',
     note:'open the log as soon as a run begins, instead of pressing L every time. '+
          'SHIFT+L still walks the tabs' },
+  /* a CHOICE rather than a switch: its value is one of `choices` */
+  { id:'textSize', def:'normal', name:'TEXT SIZE', choices:['small','normal','large','xlarge'],
+    note:'every word in the menus, the sheets, the cards and the log, and the text drawn in the '+
+         'field -- the HUD, damage numbers, names over monsters' },
 ];
+/* how big each text size is, against the game as it was written */
+const TEXT_SIZES = { small:{ name:'SMALL', k:0.88 }, normal:{ name:'NORMAL', k:1 },
+                     large:{ name:'LARGE', k:1.15 }, xlarge:{ name:'VERY LARGE', k:1.32 } };
 const OPT = {};
 for(const o of OPT_DEFS) OPT[o.id] = o.def;
 /* declared HERE, not next to the screen that uses them: refreshAudioBtns runs
@@ -3267,15 +3395,68 @@ function optLoad(){
   try { raw = localStorage.getItem(OPT_KEY); } catch(e){}
   let o = null;
   try { o = raw ? JSON.parse(raw) : null; } catch(e){}
-  for(const d of OPT_DEFS)
-    OPT[d.id] = (o && typeof o === 'object' && typeof o[d.id] === 'boolean') ? o[d.id] : d.def;
+  for(const d of OPT_DEFS){
+    const v = o && typeof o === 'object' ? o[d.id] : undefined;
+    OPT[d.id] = d.choices ? (d.choices.includes(v) ? v : d.def)
+                          : (typeof v === 'boolean' ? v : d.def);
+  }
 }
 function optSave(){
   const o = {};
-  for(const d of OPT_DEFS) o[d.id] = !!OPT[d.id];
+  for(const d of OPT_DEFS) o[d.id] = d.choices ? OPT[d.id] : !!OPT[d.id];
   try { localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch(e){}
 }
-function optSet(id, v){ OPT[id] = !!v; optSave(); return OPT[id]; }
+function optSet(id, v){
+  const d = OPT_DEFS.find(q=>q.id === id);
+  OPT[id] = d && d.choices ? (d.choices.includes(v) ? v : d.def) : !!v;
+  optSave();
+  if(id === 'textSize') applyTextSize();
+  return OPT[id];
+}
+/* ---- TEXT SIZE ----
+   Every size in the stylesheet is written in px, so the stylesheet itself is
+   rescaled: each rule's own size is remembered and multiplied, and the page
+   reflows around it. The canvas draws its words through ctx.font, so the font
+   setter scales the px size in the string it is handed (cached per string, and
+   untouched at NORMAL). */
+let TEXT_K = 1;
+const textFontOrig = new Map(), textFontCache = new Map();
+function textScaleRules(rules){
+  for(const r of rules){
+    if(r.cssRules && r.cssRules.length) textScaleRules(r.cssRules);
+    if(!r.style || !r.style.fontSize) continue;
+    if(!textFontOrig.has(r)) textFontOrig.set(r, r.style.fontSize);
+    const m = /^([\d.]+)px$/.exec(textFontOrig.get(r));
+    if(m) r.style.fontSize = TEXT_K === 1 ? textFontOrig.get(r) : (+m[1]*TEXT_K).toFixed(2)+'px';
+  }
+}
+function applyTextSize(){
+  TEXT_K = (TEXT_SIZES[OPT.textSize] || TEXT_SIZES.normal).k;
+  textFontCache.clear();
+  for(const ss of document.styleSheets){ let rules = null; try { rules = ss.cssRules; } catch(e){} if(rules) textScaleRules(rules); }
+  for(const el of document.querySelectorAll('[style*="font-size"]')){
+    if(el.dataset.fs === undefined) el.dataset.fs = el.style.fontSize;
+    const m = /^([\d.]+)px$/.exec(el.dataset.fs);
+    if(m) el.style.fontSize = TEXT_K === 1 ? el.dataset.fs : (+m[1]*TEXT_K).toFixed(2)+'px';
+  }
+  document.documentElement.dataset.text = OPT.textSize;
+  try { fitTitleSoon(); } catch(e){}
+}
+(function(){
+  const P = window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;
+  const D = P && Object.getOwnPropertyDescriptor(P, 'font');
+  if(!D || !D.set) return;
+  Object.defineProperty(P, 'font', { configurable:true, enumerable:D.enumerable,
+    get(){ return D.get.call(this); },
+    set(v){
+      if(TEXT_K !== 1 && typeof v === 'string'){
+        let w = textFontCache.get(v);
+        if(w === undefined){ w = v.replace(/([\d.]+)px/, (_, n)=>(+n*TEXT_K).toFixed(1)+'px'); textFontCache.set(v, w); }
+        v = w;
+      }
+      D.set.call(this, v);
+    } });
+})();
 function optToggle(id){ return optSet(id, !OPT[id]); }
 
 /* =============================== AUDIO =============================== */
@@ -3284,12 +3465,16 @@ function optToggle(id){ return optSet(id, !OPT[id]); }
    tired of. Music and sound are their own toggles, both remembered between
    sessions, and M still takes everything down at once. */
 const A = { ctx:null, master:null, sfx:null, mus:null, muted:false,
-            musicOn:true, sfxOn:true, noiseBuf:null, delay:null };
+            musicOn:true, sfxOn:true, noiseBuf:null, delay:null,
+            musVol:1, sfxVol:1 };     /* the two sliders, 0..1, on top of the mix */
 const MUS_GAIN = 0.17, SFX_GAIN = 0.8, MASTER_GAIN = 0.9;
 function audioLoad(){
   try{
     A.musicOn = localStorage.getItem('bb_music') !== '0';
     A.sfxOn   = localStorage.getItem('bb_sfx')   !== '0';
+    const mv = parseFloat(localStorage.getItem('bb_musvol')), sv = parseFloat(localStorage.getItem('bb_sfxvol'));
+    if(isFinite(mv)) A.musVol = clamp(mv, 0, 1);
+    if(isFinite(sv)) A.sfxVol = clamp(sv, 0, 1);
   }catch(e){}
   refreshAudioBtns();
 }
@@ -3297,6 +3482,8 @@ function audioSave(){
   try{
     localStorage.setItem('bb_music', A.musicOn ? '1' : '0');
     localStorage.setItem('bb_sfx',   A.sfxOn   ? '1' : '0');
+    localStorage.setItem('bb_musvol', String(A.musVol));
+    localStorage.setItem('bb_sfxvol', String(A.sfxVol));
   }catch(e){}
 }
 function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
@@ -3304,8 +3491,8 @@ function musicLive(){ return !!A.ctx && !A.muted && A.musicOn; }
 function destOff(dest){ return (dest === A.mus || dest === A.delay) ? !A.musicOn : !A.sfxOn; }
 function audioApply(){
   if(A.master) A.master.gain.value = A.muted ? 0 : MASTER_GAIN;
-  if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN : 0;
-  if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN : 0;
+  if(A.mus)    A.mus.gain.value    = musicLive() ? MUS_GAIN*A.musVol : 0;
+  if(A.sfx)    A.sfx.gain.value    = (!A.muted && A.sfxOn) ? SFX_GAIN*A.sfxVol : 0;
   /* THE SCHEDULER STOPS DEAD while the music is off, so its clock falls behind
      real time. Catching it up here is the difference between the music coming
      back on the beat and it coming back as ten minutes of notes at once. */
@@ -3347,9 +3534,9 @@ function audioInit(){
     A.sfxLid = A.ctx.createBiquadFilter();
     A.sfxLid.type = 'lowpass'; A.sfxLid.frequency.value = 11000; A.sfxLid.Q.value = 0.4;   /* high enough to keep the clicks */
     A.sfxLid.connect(A.master);
-    A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN; A.sfx.connect(A.sfxLid);
+    A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN*A.sfxVol; A.sfx.connect(A.sfxLid);
     sfxLayerInit();
-    A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN; A.mus.connect(A.master);
+    A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN*A.musVol; A.mus.connect(A.master);
     const nb = A.ctx.createBuffer(1, A.ctx.sampleRate, A.ctx.sampleRate);
     const d = nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     A.noiseBuf = nb;
@@ -3709,9 +3896,10 @@ window.addEventListener('keydown', e=>{
      pause toggle see the key as well would close the options AND un-pause the
      game in the same press. */
   if(e.code==='Escape' && optOn){ closeOptions(); }
+  else if(e.code==='Escape' && state==='title' && rpgScreenOn()){ toggleRpgScreen(false); }
   else if(e.code==='Escape' && bookOn){ toggleBook(); }
   else if(e.code==='Escape' && state==='gear'){ toggleGear(); }
-  else if(e.code==='KeyI' && (state==='play' || state==='gear')){ toggleGear(); }
+  else if(e.code==='KeyI' && ((state==='play' && modeHasGear()) || state==='gear')){ toggleGear(); }
   else if(e.code==='Escape' && state==='ritual'){ toggleRitual(); }
   else if(e.code==='KeyU' && (state==='play' || state==='ritual')){ toggleRitual(); }
   else if(e.code==='Escape' && (state==='play'||state==='pause')) togglePause();
@@ -3844,7 +4032,7 @@ function rebuildWithout(id){
   p.incAll = 0.05*(p.level-1);          /* the per-level bonus is not a brick */
   applyMetaTree(p);                     /* the tree is not a brick either... */
   applyFavPerks();                      /* nor is the favourite's starting kit */
-  gearApply(p, true);                   /* nor is what you are wearing */
+  if(modeHasGear()) gearApply(p, true); /* nor is what you are wearing */
   taken = {}; buildLog = [];
   for(const e of keep){
     const u = UPGRADES.find(x=>x.id===e.id);
@@ -3881,7 +4069,7 @@ function runLinkState(){
 }
 /* the gear goes in the link only when there is some, so a bare run's link is
    exactly the length it always was */
-function gearLinkPart(){ const g = gearPackEq(gearEqNow()); return g ? { g } : {}; }
+function gearLinkPart(){ if(!modeHasGear()) return {}; const g = gearPackEq(gearEqNow()); return g ? { g } : {}; }
 /* COMPRESSED, THEN BASE64. The JSON is squeezed first with LZW (the family zip
    comes from: every repeat of a run of bytes already seen becomes one code), and
    only the squeezed bytes are base64'd for the address bar -- a long run's link
@@ -4011,6 +4199,7 @@ function runLinkBoot(){
     difficulty = DIFFS[o.d] || DIFFS.hard;
     favourite = FAVOURITES.find(f=>f.id === o.f) || FAVOURITES[0];
     favSet = new Set(favourite.ids);
+    setGameMode('arcade');                 /* a run is an arcade run: the RPG is not playable yet */
     startGame();
     return true;
   } catch(e){
@@ -4595,6 +4784,7 @@ function addProp(type,x,y,rng){
 }
 function breakProp(p){
   if(p.indestructible) return;
+  if(p.type==='chest' && p.mimic){ mimicReveal(p); return; }
   if(p.type==='chest'){
     p.dead = true;
     /* the mystery chest rolls what is inside at the moment it comes apart */
@@ -5180,6 +5370,10 @@ const EDEF = {
              col:{head:'#9dbb62', torso:'#7e6b4a', legs:'#4a4d3a', hands:'#9dbb62', hair:'#4d6630'}, style:'zombie' },
   zrunner: { hp:6,  speed:116, r:12, scale:0.84, dmg:1, xp:5, studs:[3,6], zombie:1,
              col:{head:'#7aa65a', torso:'#8a2f2a', legs:'#2e3440', hands:'#7aa65a', hair:'#2b3a22'}, style:'zombie' },
+  /* the zombie WITCH DOCTOR: it keeps its distance and raises blood orbs (or
+     plague orbs) that hunt you down */
+  witchdoctor:{ hp:7, speed:52, r:13, scale:1.02, dmg:2, xp:12, studs:[6,10], zombie:1,
+             col:{head:'#8fa874', torso:'#5a2e4a', legs:'#3b2030', hands:'#8fa874', hair:'#2b1a22'}, style:'zombie' },
   zhulk:   { hp:26, speed:56,  r:16, scale:1.25, dmg:3, xp:13, studs:[8,13], zombie:1, armourMul:1.3,
              col:{head:'#6f9a4c', torso:'#3d4a5c', legs:'#2b2f38', hands:'#6f9a4c', hair:'#243020'}, style:'zombie' },
   bigcrawler:{ hp:11, speed:40, r:14, scale:1.2, dmg:2, xp:3, studs:[2,4], zombie:1, crawl:1,
@@ -5195,6 +5389,19 @@ const EDEF = {
      health bar IS the fight, and at 30 he popped before the aura ever mattered.
      He costs the wave budget nearly twice what he did, so a wave still cannot
      be all wardens, and he pays out like the priority target he is. */
+  /* THE TREASURE GOBLIN: it does not fight, it runs -- with a sack of your
+     studs -- and it is very, very hard to bring down before it portals out */
+  goblin:  { hp:110, speed:150, r:13, scale:0.9, dmg:0, xp:40, studs:[0,0], armourMul:3,
+             res:{fire:0.3, frost:0.3, shock:0.3},
+             col:{head:'#7ac943', torso:'#7a4f2a', legs:'#3b2a1a', hands:'#7ac943', hair:'#3b2a1a'}, style:'goblin' },
+  /* a chest with teeth: it waits among the real ones and bites when opened */
+  mimic:   { hp:22, speed:118, r:16, scale:1.0, dmg:3, xp:24, studs:[10,18], armourMul:1.8,
+             col:{head:'#9c6a45', torso:'#7b5132', legs:'#583927', hands:'#9c6a45', hair:'#583927'}, style:'brute' },
+  /* the banner-bearer plants a war banner, and everything near it fights harder */
+  bannerman:{ hp:7, speed:64, r:14, scale:1.1, dmg:2, xp:12, studs:[6,10],
+             col:{head:'#e8e4d8', torso:'#a8201a', legs:'#5a1410', hands:'#e8e4d8', hair:'#5a1410'}, style:'knight' },
+  warbanner:{ hp:14, speed:0, r:12, scale:1.0, dmg:0, xp:6, studs:[3,6], armourMul:1.2,
+             col:{head:'#a8201a', torso:'#a8201a', legs:'#6d6e68', hands:'#a8201a', hair:'#a8201a'}, style:'knight' },
   greenwarden:{ hp:95, speed:46, r:15, scale:1.45, dmg:1, xp:52, studs:[36,58], armourMul:1.6,
              col:{head:'#eef0ee', torso:'#2f6b33', legs:'#1d4523', hands:'#bdf0a8', hair:'#1d4523'}, style:'hexer' },
   necrolord:{ hp:34, speed:44, r:16, scale:1.35, dmg:1, xp:30, studs:[22,38],
@@ -5427,7 +5634,11 @@ const BOSS_TRAITS = [
   { id:'legion',   name:'LEGION',   col:'#c9b8e8', tip:'brings more of its court',
     apply(b){ b.trLegion = true; } },
   { id:'thorned',  name:'THORNED',  col:'#ffb066', tip:'hurts to stand next to',
-    apply(b){ b.thorns = true; } }
+    apply(b){ b.thorns = true; } },
+  { id:'bloodcall', name:'BLOOD-CALLER',  col:'#e0203a', tip:'blood orbs rise around it and hunt you',
+    apply(b){ b.orbAura = 'blood'; } },
+  { id:'plaguecall', name:'PLAGUE-CALLER', col:'#8ede4a', tip:'plague orbs rise around it and hunt you',
+    apply(b){ b.orbAura = 'chaos'; } }
 ];
 function rollBossTraits(b){
   /* one trait always, a second from wave ten on, and never the same one twice */
@@ -5442,6 +5653,453 @@ function rollBossTraits(b){
   }
   if(b.traits.length)
     logEvent((b.bname||'BOSS')+' — '+b.traits.map(t=>t.name).join(' + '), '#ffb900');
+}
+/* ============================== RARE MONSTER MODIFIERS ==============================
+   Path of Exile's rares: from wave 6 every rare (the gold-ringed elite) rolls
+   named modifiers -- one, two from wave 15, three from wave 30, never the same
+   twice -- and wears their names over its head, so you can read what you are
+   walking into. Each one changes how the fight goes, not only how long. */
+const RARE_MOD_FROM = 6;
+const RM_NEAR_R = 300;                  /* PROXIMAL TANGIBILITY: close enough to hurt it */
+const RM_SOUL_R = 650, RM_SOUL_MAX = 12;
+const RM_CORE_T = 1.4, RM_CORE_R = 120, RM_CORE_MUL = 2.5;
+function rareModCount(n){ n = n ?? wave.n; return n >= 30 ? 3 : n >= 15 ? 2 : n >= RARE_MOD_FROM ? 1 : 0; }
+const RARE_MODS = [
+  { id:'hasted',      name:'HASTED',      col:'#a5e06e', tip:'moves 30% faster and attacks faster',
+    apply(e){ e.speed *= 1.30; e.atkS *= 0.78; e.touchCd *= 0.78; } },
+  { id:'armoured',    name:'ARMOURED',    col:'#b8bfbb', tip:'double armour, and +25% to every elemental resistance',
+    apply(e){ e.armour *= 2; for(const k of ['fire','frost','shock']) e.res[k] = Math.min(0.75, (e.res[k] || 0) + 0.25); } },
+  { id:'regen',       name:'REGENERATING', col:'#ff8a8a', tip:'regenerates 2.5% of its life a second',
+    apply(e){ e.rmRegen = 0.025; } },
+  { id:'volatile',    name:'VOLATILE',    col:'#ff8a3c', tip:'dies into a core that bursts 1.4s later for fire damage -- step away',
+    apply(e){ e.rmVolatile = true; } },
+  { id:'souleater',   name:'SOUL EATER',  col:'#c9b8e8', tip:'every monster that dies near it makes it bigger, faster and harder-hitting',
+    apply(e){ e.rmSoul = 0; } },
+  { id:'proximal',    name:'PROXIMAL TANGIBILITY', col:'#9fd4ff', tip:'can only be hurt while you stand within its ring',
+    apply(e){ e.rmNear = RM_NEAR_R; } },
+  { id:'berserk',     name:'BERSERKER',   col:'#ff5a4a', tip:'below half its life it hits 50% harder and moves 30% faster',
+    apply(e){ e.rmBerserk = 1; } },
+  { id:'unstoppable', name:'UNSTOPPABLE', col:'#ffd166', tip:'cannot be knocked back, slowed, chilled, frozen or stunned',
+    apply(e){ e.rmUnstop = true; } },
+  { id:'envenomed',   name:'ENVENOMED',   col:'#8ede4a', tip:'every hit it lands poisons you',
+    apply(e){ e.rmVenom = true; } },
+];
+const RARE_MOD_BY_ID = Object.fromEntries(RARE_MODS.map(m=>[m.id, m]));
+function applyRareMod(e, id){
+  const M = RARE_MOD_BY_ID[id];
+  if(!M || (e.rmods || []).includes(id)) return false;
+  (e.rmods = e.rmods || []).push(id);
+  M.apply(e);
+  return true;
+}
+let rareModForce = null;          /* the test bench's pick: exactly these, whatever the wave */
+function rollRareMods(e){
+  if(rareModForce && rareModForce.length){ for(const id of rareModForce) applyRareMod(e, id); return; }
+  const want = rareModCount(), pool = RARE_MODS.map(m=>m.id);
+  for(let i=0; i<want && pool.length; i++) applyRareMod(e, pool.splice((Math.random()*pool.length)|0, 1)[0]);
+}
+/* every frame, for a body that carries any of them */
+function rareModTick(e, dt){
+  if(e.rmRegen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*e.rmRegen*dt);
+  if(e.rmBerserk === 1 && e.hp < e.maxHp*0.5){
+    e.rmBerserk = 2; e.dmg = e.dmg*1.5; e.speed *= 1.30; e.atkS *= 0.85;
+    addHitNum(e.x, e.y - 60*(e.scale||1), 'BERSERK!', '#ff5a4a', 16);
+    addRing(e.x, e.y, 8, 300, 90, '#ff5a4a', 5, 0.4);
+  }
+  if(e.rmUnstop){ e.kx = 0; e.ky = 0; e.slowT = 0; e.chillN = 0; e.chillT = 0; e.frozen = null; e.stunT = 0; }
+}
+/* the rest happens when something dies */
+let rmCores = [];
+function rareModOnKill(e){
+  if(e.rmVolatile){
+    rmCores.push({ x:e.x, y:e.y, t:RM_CORE_T, dmg:Math.max(2, (e.dmg || 1)*RM_CORE_MUL), type:'volatile core', bname:'a volatile core' });
+  }
+  for(const o of enemies){
+    if(o === e || o.dead || o.rmSoul === undefined || o.rmSoul >= RM_SOUL_MAX) continue;
+    if(Math.hypot(o.x - e.x, o.y - e.y) > RM_SOUL_R) continue;
+    o.rmSoul++; o.dmg = o.dmg*1.06; o.speed *= 1.03; o.scale *= 1.025; o.r *= 1.025;
+    if(Math.random() < 0.5) particles.push({ kind:'spark', x:e.x, y:e.y - 20, vx:(o.x - e.x)*1.4, vy:(o.y - e.y)*1.4, life:0.6, max:0.6, color:'#c9b8e8' });
+  }
+  if(e.kindred) kindredOnKill(e);
+}
+function updateRareMods(dt){
+  if(!rmCores.length) return;
+  const h = heroObj || player;
+  for(const c of rmCores){
+    c.t -= dt;
+    if(c.t > 0) continue;
+    c.done = true;
+    addRing(c.x, c.y, 10, 520, RM_CORE_R, '#ff8a3c', 9, 0.45);
+    addSparks(c.x, c.y - 10, 16, '#ffb066'); addShake(0.12);
+    try { SFX.bomb(); } catch(err){}
+    if(h && !h.dead && Math.hypot(h.x - c.x, h.y - c.y) < RM_CORE_R + (h.r || 12)) playerDamage(c.dmg, c, 'fire', true);
+    minionsIn(c.x, c.y, RM_CORE_R, m=>minionHurt(m, c.dmg, 'fire', c));
+  }
+  rmCores = rmCores.filter(c=>!c.done);
+}
+/* ---- KINDRED: a magic pack that has to die together ----
+   One magic pack in three from wave 8 is bound: every member that dies makes
+   the rest bigger, tougher and harder-hitting. Picked off one at a time, the
+   last of them is a monster; brought down together, they never grow. */
+const KINDRED_FROM = 8, KINDRED_CHANCE = 0.35, KINDRED_MAX = 8;
+const KINDRED_HP = 1.15, KINDRED_DMG = 1.20, KINDRED_SPD = 1.06, KINDRED_SIZE = 1.10, KINDRED_HEAL = 0.15;
+let kindredUid = 0;
+function kindredGrow(o){
+  if((o.kinN || 0) >= KINDRED_MAX) return false;
+  o.kinN = (o.kinN || 0) + 1;
+  const hpK = o.hp / Math.max(1, o.maxHp);
+  o.maxHp = o.maxHp*KINDRED_HP;
+  o.hp = Math.min(o.maxHp, o.maxHp*hpK + o.maxHp*KINDRED_HEAL);
+  o.dmg = o.dmg*KINDRED_DMG; o.speed *= KINDRED_SPD; o.scale *= KINDRED_SIZE; o.r *= KINDRED_SIZE;
+  o.flash = 1;
+  addRing(o.x, o.y, 8, 300, 70*o.scale, MAGIC_COL, 5, 0.4);
+  addHitNum(o.x, o.y - 56*o.scale, 'KINDRED ×'+o.kinN, MAGIC_COL, 15);
+  return true;
+}
+function kindredOnKill(e){
+  for(const o of enemies) if(o !== e && !o.dead && o.kindred === e.kindred) kindredGrow(o);
+}
+/* the magic pack, as the wave spawns it: n bodies in a loose ring, bound or not */
+function spawnMagicPack(type, pos, n, kinForce){
+  const kin = (kinForce !== undefined ? kinForce : (wave.n >= KINDRED_FROM && Math.random() < KINDRED_CHANCE)) ? ++kindredUid : 0;
+  const out = [];
+  for(let k=0;k<n;k++){
+    const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
+    spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
+      clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
+    const e = enemies[enemies.length-1];
+    if(kin) e.kindred = kin;
+    out.push(e);
+  }
+  return out;
+}
+/* DRAWN over everything: a rare's names, its ring if it has one, the cores, and
+   a bound pack's tethers */
+function drawMonsterMods(){
+  const c = ctx;
+  for(const k of rmCores){
+    const f = 1 - clamp(k.t / RM_CORE_T, 0, 1);
+    c.fillStyle = `rgba(255,138,60,${0.08 + 0.12*f})`; c.beginPath(); c.arc(k.x, k.y, RM_CORE_R, 0, TAU); c.fill();
+    c.setLineDash([10,8]); c.strokeStyle = `rgba(255,176,102,${0.5 + 0.35*Math.sin(vtime*18)})`; c.lineWidth = 3;
+    c.beginPath(); c.arc(k.x, k.y, RM_CORE_R, 0, TAU); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = 'rgba(255,230,160,0.9)'; c.lineWidth = 3; c.beginPath(); c.arc(k.x, k.y, 10 + (RM_CORE_R - 10)*f, 0, TAU); c.stroke();
+    c.fillStyle = '#ffb066'; c.beginPath(); c.arc(k.x, k.y - 8, 7 + 3*Math.sin(vtime*20), 0, TAU); c.fill();
+  }
+  const groups = new Map();
+  c.textAlign = 'center';
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || !onScreen(e, 120)) continue;
+    if(e.kindred){ const g = groups.get(e.kindred) || []; g.push(e); groups.set(e.kindred, g); }
+    if(!e.rmods || !e.rmods.length) continue;
+    if(e.rmNear){
+      c.setLineDash([8,9]); c.strokeStyle = 'rgba(159,212,255,0.45)'; c.lineWidth = 2;
+      c.beginPath(); c.arc(e.x, e.y, e.rmNear, 0, TAU); c.stroke(); c.setLineDash([]);
+    }
+    let y = e.y - 64*(e.scale || 1) - 8;
+    c.font = '700 12px Fredoka';
+    for(let i = e.rmods.length - 1; i >= 0; i--){
+      const M = RARE_MOD_BY_ID[e.rmods[i]];
+      const t = M.id === 'souleater' && e.rmSoul ? M.name+' ×'+e.rmSoul : M.name;
+      c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3; c.strokeText(t, e.x, y);
+      c.fillStyle = M.col; c.fillText(t, e.x, y);
+      y -= 13;
+    }
+  }
+  for(const g of groups.values()){
+    if(g.length < 1) continue;
+    let cx = 0, cy = 0; for(const e of g){ cx += e.x; cy += e.y; } cx /= g.length; cy /= g.length;
+    c.strokeStyle = `rgba(110,160,255,${0.22 + 0.12*Math.sin(vtime*4)})`; c.lineWidth = 2;
+    for(const e of g){ c.beginPath(); c.moveTo(cx, cy); c.lineTo(e.x, e.y - 14*(e.scale||1)); c.stroke(); }
+    const top = Math.min(...g.map(e=>e.y - 60*(e.scale||1)));
+    const n = Math.max(...g.map(e=>e.kinN || 0));
+    const t = 'KINDRED' + (n ? ' ×'+n : '');
+    c.font = '700 12px Fredoka';
+    c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 3; c.strokeText(t, cx, top - 6);
+    c.fillStyle = MAGIC_COL; c.fillText(t, cx, top - 6);
+  }
+}
+/* ============================== THE SPECIALS ==============================
+   Three monsters that are not about hitting you: a goblin that runs off with a
+   fortune, a chest that is not a chest, and a banner that makes a fight worse. */
+/* ---- THE TREASURE GOBLIN ---- */
+const GOBLIN_FROM = 4, GOBLIN_CHANCE = 0.10;
+const GOBLIN_LIFE = 14, GOBLIN_PORTAL_T = 2.2, GOBLIN_CALM = 520;
+const GOBLIN_STUDS = [30, 10];         /* 30 + 10 a wave, x your stud multiplier */
+let goblinPending = null;
+function goblinRoll(n){
+  goblinPending = (n >= GOBLIN_FROM && Math.random() < goblinChanceNow()) ? { delay:rnd(6, 20) } : null;
+  return !!goblinPending;
+}
+function goblinSpawn(x, y){
+  if(x === undefined){ const sp = randomSpawnPos(); x = sp.x; y = sp.y; }
+  spawnEnemy('goblin', x, y);
+  const e = enemies[enemies.length-1];
+  e.state = 'active'; e.mode = 'flee'; e.gobT = 0; e.gobDrop = 0.9;
+  showBanner('A TREASURE GOBLIN!', 'CATCH IT BEFORE IT PORTALS OUT', '#7ac943', 2.2, 40);
+  logEvent('   a TREASURE GOBLIN — it runs, and it portals out in '+GOBLIN_LIFE+'s', '#7ac943');
+  try { SFX.fortune(); } catch(err){}
+  return e;
+}
+function goblinTick(e, dt, toP, dP){
+  e.mode = 'flee'; e.gobT = (e.gobT || 0) + dt;
+  /* it leaks studs as it is hit: a tenth of its life, a handful */
+  while(e.hp < e.maxHp*(e.gobDrop ?? 0.9) && (e.gobDrop ?? 0.9) > 0){
+    spawnStuds(e.x, e.y, 2 + Math.round(wave.n*0.4)); e.gobDrop = (e.gobDrop ?? 0.9) - 0.1;
+  }
+  if(e.gobPortal !== undefined){
+    e.gobPortal -= dt;
+    if(Math.random() < 0.6) particles.push({ kind:'spark', x:e.x + rnd(-26,26), y:e.y - rnd(0,60), vx:rnd(-20,20), vy:rnd(-60,-20), life:0.5, max:0.5, color:'#7ac943' });
+    if(e.gobPortal <= 0) goblinEscape(e);
+    return { x:0, y:0 };
+  }
+  if(e.gobT >= GOBLIN_LIFE){
+    e.gobPortal = GOBLIN_PORTAL_T;
+    addHitNum(e.x, e.y - 60, 'OPENING A PORTAL!', '#7ac943', 17);
+    return { x:0, y:0 };
+  }
+  const h = heroObj || player;
+  let ax = e.x - h.x, ay = e.y - h.y; const d = Math.hypot(ax, ay) || 1; ax /= d; ay /= d;
+  const m = W.wall + 240;
+  if(e.x < m) ax += 1.3; else if(e.x > W.w - m) ax -= 1.3;
+  if(e.y < m) ay += 1.3; else if(e.y > W.h - m) ay -= 1.3;
+  const a = Math.atan2(ay, ax) + Math.sin(vtime*2.3 + (e.phase || 0))*0.35;
+  const sp = d < GOBLIN_CALM ? e.speed : e.speed*0.55;
+  if(Math.random() < 0.08) particles.push({ kind:'spark', x:e.x - 10, y:e.y - 26, vx:rnd(-30,30), vy:rnd(-50,-10), life:0.5, max:0.5, color:'#ffd166' });
+  return { x:Math.cos(a)*sp, y:Math.sin(a)*sp };
+}
+function goblinEscape(e){
+  e.dead = true; e.escaped = true;
+  addRing(e.x, e.y, 10, 420, 110, '#7ac943', 7, 0.5);
+  showBanner('THE GOBLIN GOT AWAY', 'AND YOUR STUDS WITH IT', '#9aa39c', 1.8, 34);
+  logEvent('   the treasure goblin portalled out', '#9aa39c');
+}
+function goblinLoot(e){
+  const n = Math.round((GOBLIN_STUDS[0] + GOBLIN_STUDS[1]*wave.n) * (player.studMul || 1));
+  spawnStuds(e.x, e.y, n);
+  pickups.push(makePickup('heart', e.x + rnd(-20,20), e.y + rnd(-20,20)));
+  const r1 = rollRarity('boss'); queuePick('chest', r1);
+  const two = Math.random() < 0.5; if(two) queuePick('chest', rollRarity('boss'));
+  showBanner('TREASURE GOBLIN SLAIN!', n+' STUDS · '+(two ? 'TWO CHESTS' : 'A CHEST')+' ON R', '#ffd166', 2.2, 42);
+  addRing(e.x, e.y, 12, 520, 160, '#ffd166', 8, 0.6); addShake(0.25);
+  return { studs:n, chests:two ? 2 : 1 };
+}
+/* ---- THE MIMIC ---- */
+const MIMIC_FROM = 5, MIMIC_CHANCE = 0.18;
+function mimicReveal(p){
+  p.dead = true;
+  spawnEnemy('mimic', p.x, p.y);
+  const e = enemies[enemies.length-1];
+  e.state = 'active'; e.mimicRar = p.wild ? 'epic' : (p.rar || 'common');
+  e.mode = 'chase'; e.atkCd = 0.25;
+  showBanner("IT'S A MIMIC!", 'KILL IT FOR WHAT IT WAS HIDING', '#ff5a4a', 1.8, 40);
+  addRing(p.x, p.y, 8, 360, 90, '#ff5a4a', 6, 0.45); addShake(0.2);
+  try { SFX.roar(); } catch(err){}
+  return e;
+}
+function mimicLoot(e){
+  /* what it swallowed, a tier better for the trouble -- never past epic */
+  const rk = Math.min(rarRank(e.mimicRar || 'common') + 1, rarRank('epic'));
+  const rar = RAR_ORDER[rk];
+  queuePick('chest', rar);
+  spawnStuds(e.x, e.y, 10 + wave.n*3);
+  showBanner("THE MIMIC'S HOARD", (RARITY[rar] || RARITY.common).name+' BRICK · ON R', (RARITY[rar] || RARITY.common).col, 1.8, 38);
+  return rar;
+}
+/* ---- THE BANNER-BEARER ---- */
+const BANNER_R = 280, BANNER_PLANT_D = 420, BANNER_PLANT_T = 0.9, BANNER_REPLANT = 10;
+const BANNER_DMG = 1.30, BANNER_SPD = 1.20, BANNER_ATK = 0.85;
+function plantBanner(e){
+  const fx = e.face ? e.face.x : 0, fy = e.face ? e.face.y : 1, fl = Math.hypot(fx, fy) || 1;
+  spawnEnemy('warbanner', clamp(e.x + fx/fl*18, W.wall+40, W.w-W.wall-40), clamp(e.y + fy/fl*18, W.wall+40, W.h-W.wall-40));
+  const b = enemies[enemies.length-1];
+  b.state = 'active'; b.mode = 'planted'; b.bearer = e;
+  e.banner = b; e.plantCd = BANNER_REPLANT;
+  addRing(b.x, b.y, 8, 360, BANNER_R, '#ff5a4a', 5, 0.5);
+  try { SFX.clank(); } catch(err){}
+  return b;
+}
+function bannerSet(e, on){
+  if(!!e.bannered === on) return;
+  e.bannered = on;
+  if(on){ e.dmg *= BANNER_DMG; e.speed *= BANNER_SPD; e.atkS *= BANNER_ATK; }
+  else  { e.dmg /= BANNER_DMG; e.speed /= BANNER_SPD; e.atkS /= BANNER_ATK; }
+}
+function updateBanners(){
+  const bs = enemies.filter(b=>b.type === 'warbanner' && !b.dead && b.state === 'active');
+  for(const e of enemies){
+    if(e.dead || e.type === 'warbanner') continue;
+    bannerSet(e, bs.length > 0 && bs.some(b=>Math.hypot(b.x - e.x, b.y - e.y) < BANNER_R));
+  }
+}
+/* the part of all three the main loop runs */
+function updateSpecials(dt){
+  if(goblinPending && wave.state === 'fight'){
+    goblinPending.delay -= dt;
+    if(goblinPending.delay <= 0){ goblinPending = null; goblinSpawn(); }
+  }
+  updateBanners();
+}
+function specialOnKill(e){
+  if(e.type === 'goblin') goblinLoot(e);
+  else if(e.type === 'mimic') mimicLoot(e);
+  else if(e.type === 'warbanner' && e.bearer && e.bearer.banner === e) e.bearer.banner = null;
+}
+/* ---- DRAWN ---- */
+function drawMimic(c, e){
+  const rc = (RARITY[e.mimicRar] || RARITY.common).col, s = (e.scale || 1)*1.25;
+  const biting = e.mode === 'lunge' || e.strikeT > 0;
+  const chomp = biting ? 1 : 0.3 + 0.3*Math.abs(Math.sin(vtime*7 + (e.phase || 0)));
+  const hop = (e.moving ? Math.abs(Math.sin((e.walk || 0)*0.6))*7 : 0);
+  c.save(); c.translate(e.x, e.y);
+  c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(0, 2, 18*s, 6*s, 0, 0, TAU); c.fill();
+  c.translate(0, -hop); c.scale(s, s);
+  c.strokeStyle = 'rgba(20,30,40,0.7)'; c.lineWidth = 2;
+  const lp = Math.sin(e.walk || 0)*3;
+  c.fillStyle = sh(rc, -0.55); c.fillRect(-13, -3 + lp*0.3, 6, 7); c.fillRect(7, -3 - lp*0.3, 6, 7);
+  c.fillStyle = sh(rc, -0.42); roundRect(c, -16, -16, 32, 16, 3); c.fill(); c.stroke();
+  const gap = 3 + chomp*13;
+  c.fillStyle = '#3a0c16'; roundRect(c, -15, -16 - gap, 30, gap + 2, 2); c.fill();
+  c.fillStyle = '#e0457a'; c.beginPath(); c.ellipse(4, -16 - gap*0.35, 6, 3, 0.2, 0, TAU); c.fill();
+  c.fillStyle = '#fff';
+  for(let i=0;i<5;i++){ const x = -15 + i*6; c.beginPath(); c.moveTo(x, -16); c.lineTo(x + 3, -21); c.lineTo(x + 6, -16); c.fill(); }
+  c.save(); c.translate(-16, -16 - gap);
+  c.fillStyle = sh(rc, -0.22); roundRect(c, 0, -10, 32, 10, 3); c.fill(); c.stroke();
+  c.fillStyle = '#fff';
+  for(let i=0;i<5;i++){ const x = 1 + i*6; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 3, 5); c.lineTo(x + 6, 0); c.fill(); }
+  c.fillStyle = '#ffe95a'; c.beginPath(); c.arc(16, -5, 3.4, 0, TAU); c.fill();
+  c.fillStyle = '#1b1f23'; c.fillRect(15.2, -7.5, 1.6, 5);
+  c.restore();
+  c.fillStyle = rc; roundRect(c, -3, -16, 6, 16, 2); c.fill(); c.stroke();
+  c.restore();
+}
+function drawWarBanner(c, e){
+  const pulse = 0.5 + 0.5*Math.sin(vtime*3 + (e.phase || 0));
+  c.fillStyle = `rgba(255,90,74,${0.05 + 0.03*pulse})`;
+  c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.fill();
+  c.setLineDash([12,10]); c.strokeStyle = `rgba(255,110,90,${0.35 + 0.25*pulse})`; c.lineWidth = 3;
+  c.beginPath(); c.arc(e.x, e.y, BANNER_R, 0, TAU); c.stroke(); c.setLineDash([]);
+  c.save(); c.translate(e.x, e.y);
+  c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(0, 2, 12, 5, 0, 0, TAU); c.fill();
+  c.fillStyle = '#6d6e68'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 2;
+  roundRect(c, -8, -6, 16, 8, 2); c.fill(); c.stroke();
+  c.fillStyle = '#7b5132'; c.fillRect(-2, -84, 4, 80); c.strokeRect(-2, -84, 4, 80);
+  drawStudG(c, 0, -86, 3.5, PAL.gold);
+  const wv = Math.sin(vtime*4 + (e.phase || 0))*3;
+  c.fillStyle = e.flash > 0 ? '#ffffff' : '#a8201a';
+  c.beginPath(); c.moveTo(2, -80); c.quadraticCurveTo(18, -80 + wv, 34, -78); c.lineTo(34, -50);
+  c.quadraticCurveTo(18, -52 - wv, 2, -48); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = PAL.gold; c.beginPath(); c.moveTo(18, -72); c.lineTo(24, -64); c.lineTo(18, -56); c.lineTo(12, -64); c.closePath(); c.fill();
+  c.restore();
+}
+function drawSpecialExtras(c, e){
+  if(e.type === 'goblin'){
+    /* the sack, and a few of your studs spilling out of it */
+    const bob = Math.sin((e.walk || 0)*0.8)*2, s = e.scale || 1;
+    c.fillStyle = '#b0835a'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(e.x - 14*s, e.y - 34*s + bob, 13*s, 15*s, -0.2, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = '#7a4f2a'; c.fillRect(e.x - 17*s, e.y - 50*s + bob, 7*s, 4*s);
+    for(const [dx, dy] of [[-18,-44],[-10,-45],[-14,-47]]){ drawStudG(c, e.x + dx*s, e.y + dy*s + bob, 2.6*s, PAL.gold); }
+    if(e.gobPortal !== undefined){
+      const k = 1 - clamp(e.gobPortal/GOBLIN_PORTAL_T, 0, 1);
+      c.strokeStyle = `rgba(122,201,67,${0.5 + 0.4*Math.sin(vtime*20)})`; c.lineWidth = 5;
+      c.beginPath(); c.ellipse(e.x, e.y - 30, 26 + 20*k, 40 + 26*k, 0, 0, TAU); c.stroke();
+    }
+  } else if(e.type === 'bannerman' && !(e.banner && !e.banner.dead)){
+    const s = e.scale || 1;
+    c.fillStyle = '#7b5132'; c.fillRect(e.x + 9*s, e.y - 80*s, 3*s, 70*s);
+    c.fillStyle = '#a8201a'; c.strokeStyle = 'rgba(20,30,40,0.6)'; c.lineWidth = 1.5;
+    roundRect(c, e.x + 6*s, e.y - 78*s, 9*s, 30*s, 3); c.fill(); c.stroke();
+  }
+}
+/* ============================== BLOOD ORBS ==============================
+   A red ball rises beside the caster and HUNTS you: slow at first, then faster
+   and faster, turning after you all the while. When its time is up -- or when it
+   reaches you -- it stops dead and hangs there for a second over a circle on the
+   ground, and then it drops: physical damage, and you bleed. The CHAOS kind is
+   green, and the drop is chaos and poison instead. Stop moving and let it
+   catch up in the open, or keep moving and drag it off the pack -- and do not
+   be standing in the circle when it falls. */
+const WD_CAST_T = 0.7, WD_ORBS = 3, WD_CD = 4.2;
+const ORB_TTL = 4.0, ORB_SPD0 = 45, ORB_ACC = 60, ORB_SPD_MAX = 330, ORB_TURN = 2.4;
+const ORB_HOLD_T = 1.0, ORB_R = 58, ORB_TOUCH = 24, ORB_CAP = 48;
+const ORB_AURA_T = 5, ORB_AURA_N = 2, ORB_DMG_MUL = 0.9;
+const ORB_KINDS = { blood:{ col:'#e0203a', rgb:'224,32,58', elem:undefined, name:'blood orb' },
+                    chaos:{ col:'#8ede4a', rgb:'142,222,74', elem:'chaos',   name:'plague orb' } };
+let bloodOrbs = [];
+function orbDmg(e){ return Math.max(1, (e && e.dmg || 1)*ORB_DMG_MUL); }
+function orbSpawn(x, y, kind, dmg, src){
+  if(bloodOrbs.length >= ORB_CAP) return null;
+  const h = heroObj || player;
+  const a = (h ? Math.atan2(h.y - y, h.x - x) : 0) + rnd(-1, 1), K = ORB_KINDS[kind] || ORB_KINDS.blood;   /* it sets off roughly your way */
+  const o = { x, y, px:x, py:y, vx:Math.cos(a)*ORB_SPD0, vy:Math.sin(a)*ORB_SPD0, t:0, hold:0,
+    kind:ORB_KINDS[kind] ? kind : 'blood', dmg, state:'fly', phase:rnd(TAU),
+    type:K.name, bname:(src && (src.bname || src.type)) ? (src.bname || src.type)+"'s "+K.name : 'a '+K.name };
+  bloodOrbs.push(o);
+  return o;
+}
+function orbDrop(o){
+  const K = ORB_KINDS[o.kind], h = heroObj || player;
+  addRing(o.x, o.y, 8, 420, ORB_R, K.col, 6, 0.35);
+  addSparks(o.x, o.y - 4, 10, K.col);
+  try { sfxAt(o.x).hit(); } catch(err){}
+  if(h && !h.dead && Math.hypot(h.x - o.x, h.y - o.y) < ORB_R + (h.r || 12)){
+    const keep = player; player = h;
+    try {
+      const can = !h.dead && h.invuln <= 0 && h.dash.t <= 0 && !ritualOutside(o) && !godMode;
+      playerDamage(o.dmg, o, K.elem, true);
+      if(can){ if(o.kind === 'chaos') poisonPlayer(Math.max(0.2, o.dmg*0.4), PSN_DUR); else bleedPlayer(o.dmg); }
+    } finally { player = keep; }
+  }
+  minionsIn(o.x, o.y, ORB_R, m=>minionHurt(m, o.dmg, K.elem, o));
+}
+function updateBloodOrbs(dt){
+  /* the casters that carry them as an aura: a boss that calls blood */
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || !e.orbAura) continue;
+    e.orbAuraT = (e.orbAuraT ?? 2) - dt;
+    if(e.orbAuraT <= 0){
+      e.orbAuraT = ORB_AURA_T;
+      for(let i=0;i<ORB_AURA_N + (e.super ? 1 : 0);i++) orbSpawn(e.x + rnd(-70,70), e.y - 20 + rnd(-50,50), e.orbAura, orbDmg(e), e);
+    }
+  }
+  if(!bloodOrbs.length) return;
+  const h = heroObj || player;
+  for(const o of bloodOrbs){
+    o.px = o.x; o.py = o.y;
+    if(o.state === 'fly'){
+      o.t += dt;
+      /* it gathers speed the longer it lives */
+      const sp = Math.min(ORB_SPD_MAX, ORB_SPD0 + ORB_ACC*o.t*(1 + 0.6*o.t));
+      const want = Math.atan2(h.y - o.y, h.x - o.x), cur = Math.atan2(o.vy, o.vx);
+      const na = cur + clamp(angDiff(want, cur), -ORB_TURN*dt, ORB_TURN*dt);
+      o.vx = Math.cos(na)*sp; o.vy = Math.sin(na)*sp;
+      o.x += o.vx*dt; o.y += o.vy*dt;
+      if(o.t >= ORB_TTL || Math.hypot(h.x - o.x, h.y - o.y) < ORB_TOUCH){ o.state = 'hold'; o.hold = ORB_HOLD_T; }
+    } else if(o.state === 'hold'){
+      o.hold -= dt;
+      if(o.hold <= 0){ orbDrop(o); o.dead = true; }
+    }
+  }
+  bloodOrbs = bloodOrbs.filter(o=>!o.dead);
+}
+function drawBloodOrbs(){
+  const c = ctx;
+  for(const o of bloodOrbs){
+    if(!onScreen(o, 120)) continue;
+    const K = ORB_KINDS[o.kind];
+    if(o.state === 'hold'){
+      const f = 1 - clamp(o.hold/ORB_HOLD_T, 0, 1);
+      c.fillStyle = `rgba(${K.rgb},${0.10 + 0.18*f})`; c.beginPath(); c.arc(o.x, o.y, ORB_R, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(${K.rgb},${0.55 + 0.35*Math.sin(vtime*22)})`; c.lineWidth = 3;
+      c.beginPath(); c.arc(o.x, o.y, ORB_R, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2; c.beginPath(); c.arc(o.x, o.y, 6 + (ORB_R - 6)*(1 - f), 0, TAU); c.stroke();
+    }
+    const z = o.state === 'hold' ? 34 : 26 + Math.sin(vtime*6 + o.phase)*4;
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(o.x, o.y + 2, 8, 3, 0, 0, TAU); c.fill();
+    c.fillStyle = `rgba(${K.rgb},0.28)`; c.beginPath(); c.arc(o.x, o.y - z, 15, 0, TAU); c.fill();
+    c.fillStyle = K.col; c.beginPath(); c.arc(o.x, o.y - z, 8.5, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.75)'; c.beginPath(); c.arc(o.x - 2.5, o.y - z - 3, 2.6, 0, TAU); c.fill();
+  }
 }
 function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   const tier = Math.max(1, Math.floor(wave.n/5));
@@ -5581,6 +6239,7 @@ function spawnEnemy(type, x, y, elite=false, magic=false, forceBossKey=null){
   /* LAST, so a modifier multiplies the finished number rather than a base the
      wave curve and the monster level have not been applied to yet */
   applyWaveMods(e);
+  if(elite) rollRareMods(e);
   enemies.push(e);
   SFX.build();
 }
@@ -5629,6 +6288,12 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
   kb *= KB_SCALE;
   if(e.dead||e.state!=='active') return;
   if(e.breach && !breachSees(e)) return;          /* outside its circle it is not there to hit */
+  if(ritualOutside(e)) return;                    /* beyond a running ritual's wall */
+  /* PROXIMAL TANGIBILITY: out of its ring, nothing of yours touches it */
+  if(e.rmNear){ const h = heroObj || player;
+    if(h && Math.hypot(h.x - e.x, h.y - e.y) > e.rmNear){
+      if((e.rmNearT || 0) <= vtime){ e.rmNearT = vtime + 0.6; addHitNum(e.x, e.y - 44*(e.scale||1), 'INTANGIBLE', '#9fd4ff', 13); }
+      return; } }
   /* a sleeping ritual guard wakes -- and its whole pack with it */
   if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); e.dormant = false; }
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
@@ -6185,6 +6850,9 @@ function killEnemy(e, source){
   if(e.abyss) abyssOnKill(e);
   if(e.sbox) sboxOnKill(e);
   if(e.ritual || e.ritualGuard) ritualOnKill(e);
+  rareModOnKill(e);
+  specialOnKill(e);
+  if(e.legion) legionOnKill(e);
   if(e.breach) breachSpoils(e);
   /* A FRENZY CHARGE IS EARNED BY KILLING. First thing in the death, before any
      of the things a death can set off -- a Spore Burst that kills three more
@@ -6266,7 +6934,7 @@ function killEnemy(e, source){
   sfxAt(e.x).brick(e.type==='boss'?10:6);
   addShake(e.type==='boss'?0.55:0.16);
   let amount = irnd(e.studs.a, e.studs.b);
-  amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort);
+  amount = Math.round(amount * player.studMul * (e.elite?2:1) * fort * studMoreMul());
   /* BANK WHAT YOU COLLECTED, NOT WHAT YOU ARE HOLDING. player.studs is spent on
      rerolls; banking that would charge you twice for rerolling. */
   player.studsTotal += amount;
@@ -6362,7 +7030,8 @@ function mobSpoils(e){
     pickups.push(makePickup('ward', at(26,26).x, at(26,26).y));
   if(Math.random() < DROP.chest * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000),
-      dead:false, hp:3, r:16, rar: rollRarity('chest') }, 20));
+      dead:false, hp:3, r:16, rar: rollRarity('chest'),
+      mimic: wave.n >= MIMIC_FROM && Math.random() < MIMIC_CHANCE }, 20));
   if(Math.random() < DROP.wild * cm && chestRoom())
     props.push(shoveToFloor({ type:'chest', wild:true, x:e.x+rnd(-12,12), y:e.y+rnd(-12,12),
       flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:'epic' }, 20));
@@ -7045,6 +7714,7 @@ function updateGearDrops(dt){
 /* what a boss leaves: one piece, and a super boss a second, at least magic */
 function gearBossSpoils(e){
   const lv = gearItemLevel(), out = [];
+  if(!modeHasGear()) return out;          /* an arcade boss drops bricks, not gear */
   const drop = (tier, dx, floor)=>{
     const B = gearRollBase(lv); if(!B) return;
     let r = gearRollRarity(tier); if(floor && r === 'normal') r = 'magic';
@@ -7074,6 +7744,7 @@ function gainXp(n, fromMob){
   const p = player;
   const waveBonus = 1 + wave.n/(fromMob ? MOB_XP_WAVE_DIV : STUD_XP_WAVE_DIV);
   p.xp += n * waveBonus * p.xpMul;
+  const lv0 = p.level;
   while(p.xp >= p.xpNext){
     p.xp -= p.xpNext; p.level++; p.xpNext = Math.round(p.xpNext*xpStep(p.level)+5);
     p.incAll += 0.05;      /* additive with every other increase, PoE style */
@@ -7085,6 +7756,9 @@ function gainXp(n, fromMob){
     queuePick('level');
     metaLiveBank();
   }
+  /* a level is worth more MANA (and anything else that reads the level), so the
+     pools are rebuilt -- and a level fills the mana pool, PoE's way */
+  if(p.level !== lv0){ syncStats(); p.mana = p.maxMana; }
 }
 /* Damage = (Base + Flat) × (1 + increased) × ∏(1 + more).
    `kind` picks which increased pool applies on top of the global one. */
@@ -7616,6 +8290,20 @@ function updateAilments(dt){
         vx:rnd(-12,12), vy:rnd(-60,-20), life:0.45, max:0.45,
         color: Math.random()<0.5 ? '#8ac24a' : '#5f9a2e'});
   } else p.psn.acc = 0;
+  if(!p.pbleed) p.pbleed = { list:[], acc:0 };
+  if(p.pbleed.list.length){
+    let deal = 0;
+    const mv = p.moving ? PBLEED_MOVE : 1;
+    for(const f of p.pbleed.list){ deal += f.dps * Math.min(f.t, dt) * mv; f.t -= dt; }
+    p.pbleed.list = p.pbleed.list.filter(f=>f.t > 0);
+    p.pbleed.acc += deal;
+    const show = p.pbleed.acc >= 1;
+    if(show) p.pbleed.acc -= 1;
+    if(deal > 0) ailmentDamage(deal, !show, 'phys');
+    if(show) addHitNum(p.x, p.y-44, '-1', '#ff5a5a', 16);
+    if(Math.random() < 0.3*mv)
+      particles.push({kind:'spark', x:p.x+rnd(-10,10), y:p.y-rnd(10,34), vx:rnd(-10,10), vy:rnd(10,50), life:0.45, max:0.45, color:'#c0182a'});
+  } else p.pbleed.acc = 0;
   if(p.chill.stacks > 0){
     p.chill.t -= dt;
     if(p.chill.t <= 0){ p.chill.stacks = Math.max(0, p.chill.stacks - 1); p.chill.t = p.chill.stacks>0 ? 2.2 : 0; }
@@ -7637,11 +8325,15 @@ function updateAilments(dt){
    hits meet armour — never both. */
 function playerDamage(n, src, elem, spell){
   const p = player;
+  if(src && ritualOutside(src)) return;           /* from beyond a running ritual's wall */
   if(p && p.isProxy){ minionHurt(p.minion, n, elem); return; }
   if(godMode) return;
   /* a VENOMOUS boss leaves something behind on every hit */
   if(src && src.venom && !p.dead && p.invuln<=0 && p.dash.t<=0)
     applyAilment('fire', src);
+  /* an ENVENOMED rare poisons with every hit it lands */
+  if(src && src.rmVenom && !p.dead && p.invuln<=0 && p.dash.t<=0)
+    poisonPlayer(Math.max(0.2, (src.dmg || 1)*0.35), PSN_DUR);
   if(p.dead || p.invuln>0 || p.dash.t>0 || state!=='play') return;
   const isSpell = (spell === undefined) ? !!elem : spell;
   /* AND THE OTHER HALF OF THE CONTEST. Evasion is the defence you CHOOSE -- a
@@ -7779,10 +8471,12 @@ const ROSTER = [
   { k:'knight',      at:9,  cost:8,  flavour:1 },
   { k:'stalker',     at:11, cost:9,  flavour:1 },
   { k:'lancer',      at:12, cost:10, flavour:1 },
+  { k:'bannerman',   at:12, cost:9,  flavour:0.8 },
   { k:'superimp',    at:15, cost:11, flavour:1 },
   { k:'hexer',       at:14, cost:12, flavour:0.8 },
   { k:'revenant',    at:16, cost:14, flavour:1 },
   { k:'lobber',      at:17, cost:15, flavour:0.9 },
+  { k:'witchdoctor', at:16, cost:13, flavour:0.85 },
   { k:'blightspitter', at:12, cost:11, flavour:0.85 },
   { k:'pyromancer',  at:19, cost:16, flavour:0.9 },
   { k:'frostmage',   at:21, cost:16, flavour:0.9 },
@@ -7820,8 +8514,8 @@ MONSTER_COST.firegolem = 34;  MONSTER_COST.stormgolem = 36;
 const ROSTER_BANDS = [
   ['imp','boneling','archer','spitter','skeleton'],
   ['shade','cryptbat','brute','knight','bloater'],
-  ['stalker','lancer','superimp','hexer','bomber','zrunner'],
-  ['revenant','lobber','pyromancer','frostmage','zhulk'],
+  ['stalker','lancer','superimp','hexer','bomber','zrunner','bannerman'],
+  ['revenant','lobber','pyromancer','frostmage','zhulk','witchdoctor'],
   ['necromancer','stormcaller','jugg','marksman','greenwarden'],
   ['bastion','direbat','pumpkinlord','impmaster'],
   ['shadestorm','pyrolord','frostlord','stormlord','necrolord','overseer']
@@ -8062,8 +8756,9 @@ function shuffleArr(a){
 
 function startWave(n){
   wave.n = n; wave.queue = composeWave(n); wave.hold = false;
-  { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); }
+  { const L = leagueRoll(n); breachRoll(n, L.breach); abyssRoll(n, L.abyss); ritualRoll(n, L.ritual); legionRoll(n, L.legion); }
   sboxRoll(n);
+  goblinRoll(n);
   logEvent('── WAVE '+n+' · '+wave.queue.length+' bodies · '+waveBudget(n)+' bricks ──', '#ffd76e');
   /* THE TOLL. It lands ON the wave that charges it, before a body walks in, so
      the numbers on your sheet have already changed when you read the banner. */
@@ -8117,16 +8812,18 @@ function leagueLeft(){
   for(const A of allAbysses()) if(A && A.state === 'idle') out.push('abyss');
   for(const b of sboxLive()) if(!b.sprung) out.push('strongbox');
   for(const A of ritualS.altars) if(A.state === 'guarded' || A.state === 'ready') out.push('ritual');
+  if(legionEv && legionEv.state === 'idle') out.push('legion');
   return out;
 }
 /* league content that is RUNNING right now: an open breach or abyss, a sprung
    strongbox, a ritual under way */
-function leagueRunning(){ return breachOpenNow() || abyssOpenNow() || sboxActiveNow() || ritualActiveNow(); }
+function leagueRunning(){ return breachOpenNow() || abyssOpenNow() || sboxActiveNow() || ritualActiveNow() || legionActiveNow(); }
 function leagueLeftText(){
   const L = leagueLeft(), n = k=>L.filter(x=>x === k).length, out = [];
   const say = (k, one, many)=>{ const c = n(k); if(c) out.push(c === 1 ? one : c+' '+many); };
   say('breach', 'a breach', 'breaches'); say('abyss', 'an abyss', 'abysses');
   say('strongbox', 'a strongbox', 'strongboxes'); say('ritual', 'a ritual altar', 'ritual altars');
+  say('legion', 'a legion monolith', 'legion monoliths');
   return out.join(' · ');
 }
 /* F ON A HELD WAVE: leave what is left. The breach hand and the unopened abyss
@@ -8255,12 +8952,7 @@ function updateWave(dt){
               /* THE MAGIC GOES ON ALL OF THEM. It used to be three copies each
                  carrying the full modifier; it is a whole band now, and the
                  modifier is smaller per body to pay for the extra bodies. */
-              const n = packSize + irnd(0, 3);
-              for(let k=0;k<n;k++){
-                const a = k/n*TAU + rnd(-0.25, 0.25), rr = rnd(40, 30 + n*9);
-                spawnEnemy(type, clamp(pos.x+Math.cos(a)*rr, W.wall+50, W.w-W.wall-50),
-                  clamp(pos.y+Math.sin(a)*rr, W.wall+50, W.h-W.wall-50), false, true);
-              }
+              spawnMagicPack(type, pos, packSize + irnd(0, 3));
             } else if(packable && roll < 0.09*pk + 0.12*pk){
               /* AN ELITE IS ONE BODY WITH A COURT, not three of the same thing.
                  Three identical elites was a damage spike with no shape to it;
@@ -8285,7 +8977,7 @@ function updateWave(dt){
       }
     }
     /* a sleeping ritual pack is not the wave's: it waits for you across waves */
-    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant) && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow()){
+    if(!wave.queue.length && !enemies.some(e=>!e.dead && !e.dormant && e.type!=='goblin') && wave.t>2 && !wave.callIn && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow() && !legionActiveNow()){
       wave.state = 'cleared'; wave.t = 0;
       wave.hold = leagueLeft().length > 0;
       /* the highest wave actually FINISHED. Dying to the wave-30 boss is a
@@ -8324,21 +9016,26 @@ const LEAGUE_FROM = 7;
 const LEAGUE_CHANCE = 0.22;
 const LEAGUE_PITY = 6;                /* the sixth ordinary wave in a row without one always has one */
 const LEAGUE_MORE_PER_LVL = 0.025, LEAGUE_MORE_MAX = 0.45, LEAGUE_MAX = 3;
-const LEAGUE_KINDS = ['breach', 'abyss', 'ritual'];
+const LEAGUE_KINDS = ['breach', 'abyss', 'ritual', 'legion'];
 let leagueMiss = 0;
 function leagueMoreChance(n){ return Math.min(LEAGUE_MORE_MAX, LEAGUE_MORE_PER_LVL * mobRank(n)); }
 function leagueRoll(n){
-  const plan = { breach:0, abyss:0, ritual:0 };
+  const plan = { breach:0, abyss:0, ritual:0, legion:0 };
   if(sandbox || n < LEAGUE_FROM || n % 5 === 0) return plan;
-  if(leagueMiss < LEAGUE_PITY - 1 && Math.random() >= LEAGUE_CHANCE){ leagueMiss++; return plan; }
+  if(leagueMiss < LEAGUE_PITY - 1 && Math.random() >= leagueChanceNow()){ leagueMiss++; return plan; }
   leagueMiss = 0;
   let k = 1;
   const more = leagueMoreChance(n);
   while(k < LEAGUE_MAX && Math.random() < more) k++;
   for(let i=0;i<k;i++){
     const ok = LEAGUE_KINDS.filter(t=>t === 'ritual' ? !plan.ritual && ritualCanRise()
+                                    : t === 'legion' ? !plan.legion && !legionActiveNow()
                                     : t === 'breach' ? plan.breach < BREACH_LORD_KEYS.length : true);
-    plan[ok[(Math.random()*ok.length)|0]]++;
+    /* weighted by the league tree; even weights are the plain uniform pick */
+    const ws = ok.map(leagueKindWeight), tot = ws.reduce((a, w)=>a + w, 0);
+    let r = Math.random()*tot, pick = ok[ok.length-1];
+    for(let j=0;j<ok.length;j++){ r -= ws[j]; if(r < 0){ pick = ok[j]; break; } }
+    plan[pick]++;
   }
   return plan;
 }
@@ -8543,6 +9240,9 @@ function breachNear(B){
 function breachify(e, lord){
   const L = BREACH_LORDS[lord];
   e.breach = lord; e.breachB = breach;
+  /* the league tree can drive a breach's monsters deeper */
+  const lvUp = leagueStat('breachMobLvl');
+  if(lvUp > 0){ const k = mobRankMul((e.mlvl || 0) + lvUp) / mobRankMul(e.mlvl || 0); e.mlvl = (e.mlvl || 0) + lvUp; e.maxHp *= k; e.hp = e.maxHp; e.dmg *= k; }
   const deep = Math.min(BREACH_DEPTH_HP_MAX, 1 + BREACH_DEPTH_HP * ((breach && breach.depth) || 0));
   e.hp = e.maxHp = Math.max(1, Math.ceil(e.maxHp * BREACH_HP * deep));
   e.xp *= BREACH_XP; e.studs = { a:0, b:0 };
@@ -9006,7 +9706,7 @@ function abyssBuild(A){
   /* THE FORKS, decided now and hidden like the rest: each a branch off the main
      line that wakes when the main front passes the fork, and ends in a pit */
   A.branches = [];
-  const forks = (Math.random() < ABYSS_FORK ? 1 : 0) + (wave.n >= ABYSS_FORK2_FROM && Math.random() < ABYSS_FORK2 ? 1 : 0);
+  const forks = (Math.random() < abyssForkChance() ? 1 : 0) + (wave.n >= ABYSS_FORK2_FROM && Math.random() < ABYSS_FORK2 ? 1 : 0);
   for(let i=0;i<forks;i++){
     /* a fork that runs straight into a wall is tried again somewhere else along
        the line, and off the other side -- a few times, then given up */
@@ -9323,7 +10023,7 @@ let sboxPending = [];
 function sboxRoll(n){
   sboxPending = [];
   if(sandbox || n < SBOX_FROM || n % 5 === 0) return;
-  if(Math.random() >= SBOX_CHANCE) return;
+  if(Math.random() >= sboxChanceNow()) return;
   const more = Math.min(SBOX_MORE_MAX, SBOX_MORE_PER_LVL * mobRank(n));
   let k = 1; while(k < SBOX_PER_WAVE && Math.random() < more) k++;
   for(let i=0;i<k;i++) sboxPending.push({ delay:rnd(SBOX_DELAY[0], SBOX_DELAY[1]) + i*rnd(2, 5) });
@@ -9552,7 +10252,12 @@ const RITUAL_REROLL = 60, RITUAL_REROLL_GROW = 1.5;
    the level they are fought at; a legendary chest is three to five sets of
    saving -- which is what DEFER is for: put it off, keep the tribute, and come
    back for it a set or three later, 10% cheaper each time you put it off. */
-const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2800 };
+const RITUAL_COST = { magic:90, rare:260, 'chest:rare':200, 'chest:epic':600, 'chest:legendary':2800,
+  /* ARCADE sells CARDS where the RPG sells gear: one named brick at a named
+     rarity, taken the moment it is bought. Dearer than a chest of the same
+     rarity -- a chest is a draw, this is the card you wanted */
+  'card:uncommon':110, 'card:rare':260, 'card:epic':760, 'card:legendary':3600 };
+const RITUAL_CARD_RAR_W = [['uncommon', 0.34], ['rare', 0.36], ['epic', 0.22], ['legendary', 0.08]];
 const RITUAL_OFFER_W = [['magic', 0.24], ['rare', 0.28], ['chest:rare', 0.24], ['chest:epic', 0.16], ['chest:legendary', 0.08]];
 /* what the fog swallows: anything a monster shoots at you from outside */
 /* THE RING IS A WALL for every missile, both ways: nothing flies in and nothing
@@ -9562,6 +10267,18 @@ const RITUAL_FOG_STILL = ['vtotem', 'gas'];
 function ritualBlank(){ return { altars:[], pending:null, tribute:0, offers:[], deferred:[], rerollN:0, fx:[], active:null, set:0, uid:1 }; }
 let ritualS = ritualBlank();
 function ritualActiveNow(){ return !!ritualS.active; }
+/* THE RING IS A WALL FOR HARM, not only for missiles: while a ritual runs,
+   nothing outside its circle can hurt anything inside, and nothing inside --
+   you, your legion, your burns -- can hurt anything outside. Everything of
+   yours is inside, so each gate only has to ask about the other party: the
+   monster you hit, or whatever hit you (a monster, a missile, a patch of
+   ground). A monster's side is fixed when the circle closes. */
+function ritualOutside(o){
+  const A = ritualS.active;
+  if(!A || !o || !isFinite(o.x) || !isFinite(o.y)) return false;
+  if(o.ritualSide !== undefined) return o.ritualSide < 0;
+  return Math.hypot(o.x - A.x, o.y - A.y) >= RITUAL_R;
+}
 function ritualLive(){ return ritualS.altars.filter(A=>A.state !== 'done'); }
 /* A RITUAL SET THIS WAVE, if the league roll picked one (`k` > 0) and none is
    already standing -- one set at a time */
@@ -9590,7 +10307,7 @@ function ritualSpot(taken){
 }
 function ritualPlaceSet(){
   const taken = [];
-  for(let i=0;i<RITUAL_N;i++){ const at = ritualSpot(taken); if(at) taken.push(at); }
+  for(let i=0;i<ritualAltarCount();i++){ const at = ritualSpot(taken); if(at) taken.push(at); }
   if(!taken.length) return false;
   ritualS.set++;
   ritualS.altars = taken.map(at=>({ x:at.x, y:at.y, state:'guarded', guards:0, woke:false, seed:rnd(1000),
@@ -9772,6 +10489,10 @@ function ritualClamp(){
     if(e.ritualSide === undefined) e.ritualSide = e.ritual === A || Math.hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
     if(e.ritualSide > 0) inside(e, (e.r || 12)); else outside(e, (e.r || 12));
   }
+  for(const o of bloodOrbs){
+    if((Math.hypot(o.px - A.x, o.py - A.y) >= RITUAL_R) !== (Math.hypot(o.x - A.x, o.y - A.y) >= RITUAL_R)){ o.dead = true; addDust(o.x, o.y, 3, 'rgba(120,40,50,'); }
+  }
+  bloodOrbs = bloodOrbs.filter(o=>!o.dead);
   for(const pr of projectiles){
     if(pr.dead || RITUAL_FOG_STILL.indexOf(pr.kind) >= 0 || pr.px === undefined) continue;
     const was = Math.hypot(pr.px - A.x, pr.py - A.y), now = Math.hypot(pr.x - A.x, pr.y - A.y);
@@ -9818,12 +10539,39 @@ function ritualCostOf(key){ return Math.round(RITUAL_COST[key] * mobRankMul() * 
 function ritualOffer(){
   let r = Math.random() * RITUAL_OFFER_W.reduce((a, q)=>a + q[1], 0), key = RITUAL_OFFER_W[0][0];
   for(const [k, w] of RITUAL_OFFER_W){ r -= w; if(r <= 0){ key = k; break; } }
+  /* an arcade ritual sells no gear: its gear offers are cards instead */
+  if((key === 'magic' || key === 'rare') && !modeHasGear()){ const c = ritualCard(); if(c) return c; key = 'chest:rare'; }
   if(key === 'magic' || key === 'rare'){
     const lv = gearItemLevel() + 2, B = gearRollBase(lv);
     if(B) return { id:ritualS.uid++, kind:'gear', key, it:gearMake(B.id, key, lv), cost:ritualCostOf(key) };
     key = 'chest:rare';
   }
   return { id:ritualS.uid++, kind:'chest', key, rar:key.slice(6), cost:ritualCostOf(key) };
+}
+/* A CARD ON THE ALTAR. The rarity is rolled first, then a brick that rarity
+   may hand you and that you can still take (every ceiling is a brick's `req`),
+   one of each on the altar at a time, weighted like the reward screen's flat
+   slots. Nothing fits the roll: it walks down, as the reward screen does. */
+function ritualCardUsable(o){
+  const u = UPGRADES.find(x=>x.id === o.uid);
+  if(!u) return false;
+  try { return (!u.req || !!u.req()) && rarAllows(u, o.rar); } catch(e){ return false; }
+}
+function ritualOfferUsable(o){ return o.kind !== 'card' || ritualCardUsable(o); }
+function ritualCard(){
+  let r = Math.random() * RITUAL_CARD_RAR_W.reduce((a, q)=>a + q[1], 0), rar = RITUAL_CARD_RAR_W[0][0];
+  for(const [k, w] of RITUAL_CARD_RAR_W){ r -= w; if(r <= 0){ rar = k; break; } }
+  const shown = new Set([...ritualS.offers, ...ritualS.deferred].filter(q=>q.kind === 'card').map(q=>q.uid));
+  const fits = R=>UPGRADES.filter(u=>!shown.has(u.id) && ritualCardUsable({ uid:u.id, rar:R }));
+  let cands = fits(rar);
+  for(let rk = rarRank(rar) - 1; !cands.length && rk >= rarRank('uncommon'); rk--){ rar = RAR_ORDER[rk]; cands = fits(rar); }
+  if(!cands.length) return null;
+  const wOf = u=>shunMul(u.id) * cardWeight(u);
+  let total = 0; for(const u of cands) total += wOf(u);
+  let x = Math.random() * total, t = cands[cands.length - 1];
+  for(const u of cands){ x -= wOf(u); if(x < 0){ t = u; break; } }
+  const key = 'card:' + rar;
+  return { id:ritualS.uid++, kind:'card', key, uid:t.id, rar, cost:ritualCostOf(key) };
 }
 /* a new set's offer: what you deferred last time first, then fresh ones */
 function ritualOffersNew(){
@@ -9840,7 +10588,7 @@ function ritualCanShop(){ return !ritualS.closed && ritualS.altars.some(A=>A.sta
 function ritualStuck(){
   const S = ritualS;
   if(!S.offers.length) return true;
-  return S.offers.every(o=>o.cost > S.tribute) && S.deferred.length >= RITUAL_DEFER_MAX && S.tribute < ritualRerollCost();
+  return S.offers.every(o=>o.cost > S.tribute || !ritualOfferUsable(o)) && S.deferred.length >= RITUAL_DEFER_MAX && S.tribute < ritualRerollCost();
 }
 /* DONE: the window closes, and once every altar of the set is finished the
    set's offer ends -- what was deferred and the tribute are kept for the next */
@@ -9853,9 +10601,15 @@ function ritualRerollCost(){ return Math.round(RITUAL_REROLL * mobRankMul() * Ma
 function ritualBuy(id){
   const o = ritualS.offers.find(q=>q.id === id);
   if(!o) return 'gone';
+  if(!ritualOfferUsable(o)) return 'maxed';   /* a card you have since capped out of */
   if(ritualS.tribute < o.cost) return 'poor';
   ritualS.tribute -= o.cost;
   ritualS.offers = ritualS.offers.filter(q=>q !== o);
+  if(o.kind === 'card'){
+    applyPick(UPGRADES.find(x=>x.id === o.uid), o.rar);
+    addRing(player.x, player.y, 10, 400, 130, RARITY[o.rar].col, 6, 0.5);
+    return 'card';
+  }
   if(o.kind === 'gear'){
     if(!gearInvAdd(o.it)){ gearDropAt(o.it, player.x, player.y); return 'floor'; }
     logEvent('RITUAL — '+gearName(o.it), GEAR_RAR[o.it.r].col);
@@ -10003,6 +10757,284 @@ function drawRitualHud(){
   ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
   ctx.strokeText(head, cw/2, by); ctx.fillStyle = RITUAL_COL; ctx.fillText(head, cw/2, by);
 }
+/* ================================== LEGION ==================================
+   PoE's Legion. A MONOLITH rises somewhere off to one side. Touch it and a
+   battle that was stopped in time comes into being around it: an army standing
+   in its ranks, frozen mid-stride, in a ring about the stone. For a few seconds
+   NOTHING MOVES -- hit as many of them as you can; every one you bring down
+   buys a little more time. Then time starts again, and what is left of the
+   army wakes up and fights. SERGEANTS carry war chests; from wave 15 a GENERAL
+   leads them, and it carries a better one. A running legion holds the wave. */
+const LEGION_R = 480, LEGION_TOUCH = 50, LEGION_T = 9, LEGION_KILL_T = 0.35, LEGION_T_MAX = 14;
+const LEGION_DELAY = [3, 8], LEGION_GENERAL_FROM = 15;
+const LEGION_COL = '#9fd4ff';
+const LEGION_FACTIONS = {
+  empire:{ name:'THE ETERNAL EMPIRE', col:'#ffd76e', ranks:['knight','lancer','archer','skeleton'], sergeant:'bastion', general:'jugg' },
+  horde: { name:'THE KARUI HORDE',    col:'#ff8a3c', ranks:['brute','stalker','imp','superimp'],     sergeant:'zhulk',   general:'jugg' },
+};
+let legionEv = null;
+function legionSize(n){ return Math.min(60, 22 + n); }
+function legionSergeants(n){ return 2 + (n >= 20 ? 1 : 0) + (n >= 35 ? 1 : 0); }
+function legionActiveNow(){ return !!legionEv && (legionEv.state === 'frozen' || legionEv.state === 'fighting'); }
+function legionRoll(n, k){
+  if(legionEv && legionEv.state === 'idle' && !k) legionEv = null;      /* an untouched monolith goes with its wave */
+  if(!k || legionActiveNow()) return false;
+  legionEv = { state:'pending', delay:rnd(LEGION_DELAY[0], LEGION_DELAY[1]), n, t:0, seed:rnd(1000) };
+  return true;
+}
+function legionSpot(){
+  const pad = LEGION_R*0.55 + 40;
+  for(let i=0;i<160;i++){
+    const a = rnd(TAU), rr = rnd(520, 1500);
+    const x = player.x + Math.cos(a)*rr, y = player.y + Math.sin(a)*rr;
+    if(!abyssFloorOk(x, y, pad)) continue;
+    let ok = 0;
+    for(let k=0;k<8;k++) if(breachFloorOk(x + Math.cos(k/8*TAU)*LEGION_R*0.6, y + Math.sin(k/8*TAU)*LEGION_R*0.6)) ok++;
+    if(ok >= 6) return { x, y };
+  }
+  return null;
+}
+function legionPlace(at){
+  at = at || legionSpot();
+  if(!at){ legionEv = null; return false; }
+  Object.assign(legionEv, { state:'idle', x:at.x, y:at.y });
+  showBanner('LEGION', 'A MONOLITH HAS RISEN — TOUCH IT', LEGION_COL, 2.0, 44);
+  logEvent('   LEGION — a monolith has risen; touch it to stop the battle in time', LEGION_COL);
+  try { SFX.roar(); } catch(err){}
+  return true;
+}
+/* the battlefield, stopped: an army in its ranks around the stone */
+function legionStart(){
+  const L = legionEv, n = wave.n;
+  const fk = Math.random() < 0.5 ? 'empire' : 'horde', FAC = LEGION_FACTIONS[fk];
+  L.faction = fk; L.state = 'frozen'; L.t = L.T0 = legionTimeNow(); L.kills = 0;
+  const put = (type, elite, magic, rr0, rr1)=>{
+    for(let tries=0; tries<30; tries++){
+      const a = rnd(TAU), rr = rnd(rr0, rr1);
+      const x = L.x + Math.cos(a)*rr, y = L.y + Math.sin(a)*rr;
+      if(!abyssFloorOk(x, y, 40)) continue;
+      spawnEnemy(type, x, y, elite, magic);
+      const e = enemies[enemies.length-1];
+      e.state = 'active'; e.legion = L; e.legionFrozen = true; e.lgx = x; e.lgy = y;
+      e.face = { x:Math.cos(a + Math.PI), y:Math.sin(a + Math.PI) }; e.walk = rnd(TAU);
+      return e;
+    }
+    return null;
+  };
+  const N = legionSize(n);
+  for(let i=0;i<N;i++) put(FAC.ranks[(Math.random()*FAC.ranks.length)|0], false, Math.random() < 0.15, 110, LEGION_R - 30);
+  for(let i=0;i<legionSergeants(n);i++){
+    const e = put(FAC.sergeant, true, false, 150, LEGION_R - 60);
+    if(e){ e.legionChest = Math.random() < 0.05 ? 'legendary' : Math.random() < 0.37 ? 'epic' : 'rare'; }
+  }
+  if(n >= LEGION_GENERAL_FROM){
+    const g = put(FAC.general, true, false, 60, 120);
+    if(g){ g.legionGeneral = true; g.maxHp *= 2.5; g.hp = g.maxHp; g.scale *= 1.3; g.r *= 1.3; }
+  }
+  addRing(L.x, L.y, 12, 700, LEGION_R, LEGION_COL, 8, 0.7); addShake(0.3);
+  showBanner(FAC.name, 'FROZEN IN TIME — '+L.T0+'s', LEGION_COL, 2.0, 42);
+  logEvent('   LEGION — '+FAC.name+' stands frozen; every kill buys time', LEGION_COL);
+  try { SFX.freeze(); } catch(err){}
+}
+function legionRelease(){
+  const L = legionEv;
+  L.state = 'fighting';
+  for(const e of enemies) if(e.legion === L && !e.dead){ e.legionFrozen = false; e.mode = 'chase'; e.atkCd = rnd(0.2, 1.0); }
+  showBanner('TIME STARTS AGAIN', 'THE LEGION BREAKS FREE', LEGION_FACTIONS[L.faction].col, 1.8, 40);
+  addRing(L.x, L.y, 12, 700, LEGION_R, '#ffffff', 6, 0.5);
+  try { SFX.roar(); } catch(err){}
+}
+function legionDone(){
+  const L = legionEv;
+  L.state = 'done';
+  showBanner('LEGION DEFEATED', L.kills+' OF THEM FELL IN TIME', LEGION_COL, 1.8, 40);
+  logEvent('   LEGION defeated — '+L.kills+' killed while frozen', LEGION_COL);
+  legionEv = null;
+}
+function legionOnKill(e){
+  const L = e.legion;
+  if(!L) return;
+  if(e.legionFrozen && L.state === 'frozen'){
+    L.kills++; L.t = Math.min(LEGION_T_MAX + leagueStat('legionTime'), L.t + LEGION_KILL_T);
+    addSparks(e.x, e.y - 18, 10, '#dff2ff');
+  }
+  if(e.legionChest)
+    props.push(shoveToFloor({ type:'chest', x:e.x, y:e.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16, rar:e.legionChest, war:true }, 20));
+  if(e.legionGeneral){
+    queuePick('chest', Math.random() < 0.25 ? 'legendary' : 'epic');
+    showBanner('THE GENERAL FALLS', 'ITS WAR CHEST IS YOURS · ON R', LEGION_FACTIONS[L.faction].col, 1.8, 40);
+  }
+}
+function updateLegion(dt){
+  if(!legionEv || !player) return;
+  const L = legionEv, h = heroObj || player;
+  if(L.state === 'pending'){
+    if(wave.state !== 'fight') return;
+    L.delay -= dt;
+    if(L.delay <= 0) legionPlace();
+    return;
+  }
+  if(L.state === 'idle'){
+    if(h && !h.dead && Math.hypot(h.x - L.x, h.y - L.y) < LEGION_TOUCH + (h.r || 12)) legionStart();
+    return;
+  }
+  const left = enemies.filter(e=>e.legion === L && !e.dead);
+  if(L.state === 'frozen'){
+    L.t -= dt;
+    if(L.t <= 0 || !left.length){ if(left.length) legionRelease(); else { L.state = 'fighting'; } }
+    return;
+  }
+  if(L.state === 'fighting' && !left.length) legionDone();
+}
+/* ---- DRAWN ---- */
+function drawLegion(){
+  const L = legionEv;
+  if(!L || L.state === 'pending') return;
+  const c = ctx;
+  if(L.state === 'frozen'){
+    c.fillStyle = 'rgba(190,225,255,0.07)'; c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(159,212,255,${0.45 + 0.25*Math.sin(vtime*6)})`; c.lineWidth = 4;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke();
+    /* the time left, as the ring itself running out */
+    c.strokeStyle = '#ffffff'; c.lineWidth = 6;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, -Math.PI/2, -Math.PI/2 + TAU*clamp(L.t/(L.T0 || LEGION_T), 0, 1)); c.stroke();
+  } else if(L.state === 'idle'){
+    c.setLineDash([14,12]); c.strokeStyle = 'rgba(159,212,255,0.28)'; c.lineWidth = 3;
+    c.beginPath(); c.arc(L.x, L.y, LEGION_R, 0, TAU); c.stroke(); c.setLineDash([]);
+  }
+  /* the monolith */
+  const glow = 0.5 + 0.5*Math.sin(vtime*2.5 + L.seed);
+  c.save(); c.translate(L.x, L.y);
+  c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(0, 4, 26, 9, 0, 0, TAU); c.fill();
+  c.fillStyle = '#4a5058'; c.strokeStyle = 'rgba(15,20,25,0.8)'; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(-16, 2); c.lineTo(-11, -96); c.lineTo(0, -110); c.lineTo(11, -96); c.lineTo(16, 2); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = `rgba(159,212,255,${L.state === 'idle' ? 0.45 + 0.5*glow : 0.25})`;
+  for(let i=0;i<4;i++){ c.fillRect(-4, -86 + i*20, 8, 10); }
+  drawStudG(c, 0, -108, 3.5, '#6d747c');
+  c.restore();
+}
+/* frozen soldiers wear a shell of ice -- drawn over them */
+function drawLegionIce(){
+  const L = legionEv, c = ctx;
+  if(L && L.state === 'frozen'){
+    for(const e of enemies){
+      if(e.dead || e.legion !== L || !e.legionFrozen || !onScreen(e, 80)) continue;
+      const s = e.scale || 1;
+      c.fillStyle = 'rgba(210,235,255,0.32)'; c.strokeStyle = 'rgba(223,242,255,0.75)'; c.lineWidth = 1.5;
+      c.beginPath(); c.ellipse(e.x, e.y - 26*s, 17*s, 32*s, 0, 0, TAU); c.fill(); c.stroke();
+    }
+  }
+}
+function drawLegionHud(){
+  const L = legionEv;
+  if(!L || !player) return;
+  if(L.state === 'idle')
+    edgeMarker(L.x, L.y, LEGION_COL, (x,y)=>{ ctx.fillStyle = '#4a5058'; ctx.strokeStyle = LEGION_COL; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 5, y + 8); ctx.lineTo(x - 3, y - 8); ctx.lineTo(x, y - 11); ctx.lineTo(x + 3, y - 8); ctx.lineTo(x + 5, y + 8); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
+  if(!legionActiveNow()) return;
+  const left = enemies.filter(e=>e.legion === L && !e.dead).length;
+  const by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0) + (abyssOpenNow() ? 30 : 0) + (sboxActiveNow() ? 20 : 0) + (ritualActiveNow() ? 20 : 0);
+  const head = L.state === 'frozen' ? 'LEGION · FROZEN '+L.t.toFixed(1)+'s · '+L.kills+' fallen · '+left+' standing'
+                                    : 'LEGION · '+left+' still fighting';
+  ctx.font = '700 12px Fredoka'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(15,20,25,0.85)'; ctx.lineWidth = 4;
+  ctx.strokeText(head, cw/2, by); ctx.fillStyle = LEGION_COL; ctx.fillText(head, cw/2, by);
+}
+/* ============================ THE LEAGUE TREE (pre-built) ============================
+   A second tree, for the leagues: spend points on HOW OFTEN each league turns up
+   and WHAT IT IS LIKE when it does -- more breaches, a fourth ritual altar, an
+   abyss that forks, deeper breach monsters, a longer frozen legion, more studs.
+   NOT LIVE YET: there is no screen and no way to earn a point. What is here is
+   everything the rest of the game has to read -- the nodes, the rule for taking
+   one, the save -- and every hook wired into the league code through
+   leagueStat(), which answers 0 while LEAGUE_TREE_ON is off, so nothing changes
+   until the tree is switched on. */
+let LEAGUE_TREE_ON = false;
+/* what each stat means, and how it reads on a node */
+const LT_STATS = {
+  leagueChance: { txt:v=>'+'+Math.round(v*100)+'% chance a wave carries a league' },
+  breachWeight: { txt:v=>'Breach '+Math.round(v*100)+'% more likely to be the league' },
+  abyssWeight:  { txt:v=>'Abyss '+Math.round(v*100)+'% more likely to be the league' },
+  ritualWeight: { txt:v=>'Ritual '+Math.round(v*100)+'% more likely to be the league' },
+  legionWeight: { txt:v=>'Legion '+Math.round(v*100)+'% more likely to be the league' },
+  breachMobLvl: { txt:v=>'+'+v+' monster level for breach monsters' },
+  ritualExtra:  { txt:v=>'+'+v+' altar in every ritual set' },
+  abyssFork:    { txt:v=>'+'+Math.round(v*100)+'% chance an abyss forks' },
+  legionTime:   { txt:v=>'+'+v+'s frozen in a legion' },
+  sboxChance:   { txt:v=>Math.round(v*100)+'% more strongboxes' },
+  goblinChance: { txt:v=>Math.round(v*100)+'% more treasure goblins' },
+  studMore:     { txt:v=>Math.round(v*100)+'% more studs from monsters' },
+};
+const LEAGUE_TREE = [
+  { id:'lt_root', name:'THE ATLAS', hub:true, stats:{}, links:[] },
+  /* breach */
+  { id:'lt_br1', league:'breach', name:'Thinning Veil',  stats:{ breachWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_br2', league:'breach', name:'Deeper Hands',   stats:{ breachMobLvl:1 },    links:['lt_br1'] },
+  { id:'lt_br3', league:'breach', name:'Through the Tear', stats:{ breachWeight:0.5, breachMobLvl:1 }, links:['lt_br2'], notable:true },
+  /* abyss */
+  { id:'lt_ab1', league:'abyss',  name:'Cracked Earth',  stats:{ abyssWeight:0.5 },   links:['lt_root'] },
+  { id:'lt_ab2', league:'abyss',  name:'Branching Rift', stats:{ abyssFork:0.15 },    links:['lt_ab1'] },
+  { id:'lt_ab3', league:'abyss',  name:'The Deep Split', stats:{ abyssWeight:0.5, abyssFork:0.20 }, links:['lt_ab2'], notable:true },
+  /* ritual */
+  { id:'lt_ri1', league:'ritual', name:'Blood Calling',  stats:{ ritualWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_ri2', league:'ritual', name:'A Fourth Altar', stats:{ ritualExtra:1 },     links:['lt_ri1'], notable:true },
+  /* legion */
+  { id:'lt_lg1', league:'legion', name:'Stopped Clocks', stats:{ legionWeight:0.5 },  links:['lt_root'] },
+  { id:'lt_lg2', league:'legion', name:'Longer Moment',  stats:{ legionTime:2 },      links:['lt_lg1'] },
+  { id:'lt_lg3', league:'legion', name:'Eternal Stand',  stats:{ legionWeight:0.5, legionTime:2 }, links:['lt_lg2'], notable:true },
+  /* the loot roads */
+  { id:'lt_lo1', league:'loot',   name:'League Veteran', stats:{ leagueChance:0.25 }, links:['lt_root'] },
+  { id:'lt_lo2', league:'loot',   name:'Heavy Pockets',  stats:{ studMore:0.15 },     links:['lt_lo1'] },
+  { id:'lt_lo3', league:'loot',   name:'Locksmith',      stats:{ sboxChance:0.30 },   links:['lt_lo1'] },
+  { id:'lt_lo4', league:'loot',   name:'Goblin Bait',    stats:{ goblinChance:1.0 },  links:['lt_lo2'], notable:true },
+];
+const LEAGUE_TREE_BY_ID = Object.fromEntries(LEAGUE_TREE.map(n=>[n.id, n]));
+let LTREE = { pts:0, nodes:['lt_root'] };
+let ltreeCache = {};
+function ltreeRebuild(){
+  ltreeCache = {};
+  for(const id of LTREE.nodes){ const n = LEAGUE_TREE_BY_ID[id]; if(!n) continue;
+    for(const k in n.stats) ltreeCache[k] = (ltreeCache[k] || 0) + n.stats[k]; }
+}
+function ltreeLoad(){
+  try { const o = JSON.parse(localStorage.getItem('bb_ltree') || 'null');
+    if(o && Array.isArray(o.nodes)) LTREE = { pts:Math.max(0, o.pts|0), nodes:['lt_root', ...o.nodes.filter(id=>id !== 'lt_root' && LEAGUE_TREE_BY_ID[id])] };
+  } catch(e){}
+  ltreeRebuild();
+}
+function ltreeSave(){ try { localStorage.setItem('bb_ltree', JSON.stringify(LTREE)); } catch(e){} }
+/* a node is taken next to one you have, for a point */
+function ltreeCanTake(id){
+  const n = LEAGUE_TREE_BY_ID[id];
+  if(!n || LTREE.nodes.includes(id) || LTREE.pts < 1) return false;
+  return n.links.some(l=>LTREE.nodes.includes(l));
+}
+function ltreeTake(id){
+  if(!ltreeCanTake(id)) return false;
+  LTREE.nodes.push(id); LTREE.pts--; ltreeRebuild(); ltreeSave();
+  return true;
+}
+/* ...and given back only from the end of a road, so nothing is left hanging */
+function ltreeCanRefund(id){
+  if(id === 'lt_root' || !LTREE.nodes.includes(id)) return false;
+  return !LTREE.nodes.some(o=>o !== id && (LEAGUE_TREE_BY_ID[o] || {links:[]}).links.includes(id));
+}
+function ltreeRefund(id){
+  if(!ltreeCanRefund(id)) return false;
+  LTREE.nodes = LTREE.nodes.filter(o=>o !== id); LTREE.pts++; ltreeRebuild(); ltreeSave();
+  return true;
+}
+function leagueStat(k){ return LEAGUE_TREE_ON ? (ltreeCache[k] || 0) : 0; }
+/* THE HOOKS, one per knob, so the code that reads them says what it reads */
+function leagueChanceNow(){ return LEAGUE_CHANCE*(1 + leagueStat('leagueChance')); }
+function leagueKindWeight(t){ return 1 + leagueStat(t+'Weight'); }
+function ritualAltarCount(){ return RITUAL_N + leagueStat('ritualExtra'); }
+function abyssForkChance(){ return ABYSS_FORK + leagueStat('abyssFork'); }
+function legionTimeNow(){ return LEGION_T + leagueStat('legionTime'); }
+function sboxChanceNow(){ return SBOX_CHANCE*(1 + leagueStat('sboxChance')); }
+function goblinChanceNow(){ return GOBLIN_CHANCE*(1 + leagueStat('goblinChance')); }
+function studMoreMul(){ return 1 + leagueStat('studMore'); }
+ltreeLoad();
 /* =============================== RARITY & UPGRADES =============================== */
 const RARITY = {
   common:   { name:'COMMON',   col:'#9ba19d', mult:1.0 },
@@ -11144,7 +12176,7 @@ const UPGRADES = [
      until something hands them the reason to, so these are the cards that turn
      a charge into a build and the tree is what deepens it. ---- */
   { id:'chgkill', name:'Blood Rush', icon:'sword', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>chargeGenRoom('frenzy', player.chargeKill),
+    req:()=>stackAllows('frenzy') && chargeGenRoom('frenzy', player.chargeKill),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`Killing a monster grants ${c.v} FRENZY charge${c.v>1?'s':''} (now `+
       `${(player.chargeKill||0)+c.v} a kill, ${stackCap('frenzy')} at once). Each is `+
@@ -11153,7 +12185,7 @@ const UPGRADES = [
       `every ${HERO_STACKS.frenzy.decay}s`,
     apply:c=>{ player.chargeKill += c.v; } },
   { id:'chgcrit', name:'Sharpened Focus', icon:'target', cls:'OFFENSE', minRar:'uncommon',
-    req:()=>chargeGenRoom('power', player.chargeCrit),
+    req:()=>stackAllows('power') && chargeGenRoom('power', player.chargeCrit),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`A CRITICAL grants ${c.v} POWER charge${c.v>1?'s':''} (now `+
       `${(player.chargeCrit||0)+c.v} a crit, ${stackCap('power')} at once). Each is `+
@@ -11169,8 +12201,9 @@ const UPGRADES = [
       `+${Math.round(HERO_STACKS.endurance.mods.res*100)}% to every elemental resistance`,
     apply:c=>{ player.chargeHurt += c.v; } },
   { id:'chgmax', name:'Reservoir', icon:'force', cls:'OFFENSE', minRar:'rare',
-    req:()=>(player.chargeKill > 0 || player.chargeCrit > 0 || player.chargeHurt > 0)
-            && CHARGE_IDS.some(k=>stackCap(k) < CHARGE_CAP_MAX),
+    /* only for a charge this hero can carry AND is earning */
+    req:()=>[['frenzy','chargeKill'],['power','chargeCrit'],['endurance','chargeHurt']]
+            .some(([k, g])=>player[g] > 0 && stackAllows(k) && stackCap(k) < CHARGE_CAP_MAX),
     calc:m=>({v: byRar(m, [1, 1, 2, 3, 4])}),
     desc:c=>`+${c.v} maximum of EVERY charge — FRENZY to ${stackCap('frenzy')+c.v}, `+
       `POWER to ${stackCap('power')+c.v}, ENDURANCE to ${stackCap('endurance')+c.v}. `+
@@ -13887,10 +14920,22 @@ function treeToggleSectors(){
    than a thing you read. The view is one viewBox attribute, written straight
    onto the <svg> — re-rendering four hundred nodes on every wheel tick would
    make the whole thing feel like mud. */
-const TREE_ZOOM_MIN = 1, TREE_ZOOM_MAX = 6;
+/* THE SCALE THE LABEL READS. The whole map is 0% -- it is a picture, not a
+   reading distance; three times closer is 100%, where a node's name can be
+   read, and it goes on to 200% at nine times. The steps are even on the
+   label: each wheel tick adds the same few percent however deep you are. */
+const TREE_ZOOM_MIN = 1, TREE_ZOOM_MAX = 9, TREE_ZOOM_HOME = 3;
 let treeZoom = 1, treeCx = 0, treeCy = 0, treeDrag = null;
+function treeZoomPct(z){ return Math.round(Math.log(z ?? treeZoom) / Math.log(TREE_ZOOM_HOME) * 100); }
 function treeFit(){ treeZoom = 1; treeCx = TREE_VIEW.x + TREE_VIEW.w/2;
                     treeCy = TREE_VIEW.y + TREE_VIEW.h/2; treeApplyView(); }
+/* 100%, on your own starting point: where the tree opens */
+function treeHome(){
+  const n = META_BY_ID[metaStartId()];
+  treeZoom = TREE_ZOOM_HOME;
+  treeCx = n ? n.x : TREE_VIEW.x + TREE_VIEW.w/2; treeCy = n ? n.y : TREE_VIEW.y + TREE_VIEW.h/2;
+  treeApplyView();
+}
 function treeApplyView(){
   const svg = document.getElementById('treeSvg');
   if(!svg) return;
@@ -13902,7 +14947,7 @@ function treeApplyView(){
   treeCy = clamp(treeCy, TREE_VIEW.y, TREE_VIEW.y + TREE_VIEW.h);
   svg.setAttribute('viewBox', `${treeCx - w/2} ${treeCy - h/2} ${w} ${h}`);
   const z = document.getElementById('treeZoomLbl');
-  if(z) z.textContent = Math.round(treeZoom*100)+'%';
+  if(z) z.textContent = treeZoomPct()+'%';
 }
 /* where a screen point lands on the map, letterboxing and all */
 function treeUserXY(svg, ev){
@@ -14340,7 +15385,7 @@ function toggleTree(){
       document.getElementById('pauseScreen').classList.add('hidden');
       state = 'tree'; cv.style.cursor = 'default';
     }
-    treePick = null; treeRefund = false; renderTree(); treeFit();
+    treePick = null; treeRefund = false; renderTree(); treeHome();
     el.classList.remove('hidden');
   } else {
     el.classList.add('hidden');
@@ -15147,6 +16192,58 @@ function buildWeaponRow(){
   try{ saved = localStorage.getItem('bb_weapon') || 'sword'; }catch(e){}
   setWeapon(WEAPONS[saved] ? saved : 'sword');
 }
+/* ============================== GAME MODES ==============================
+   ARCADE is the game as it is: a difficulty, a weapon, a favourite, waves,
+   levels into the arcade tree, reward cards, bosses and leagues -- and NO
+   gear: nothing is worn, nothing drops, the ritual sells none. RPG is the
+   second way to play and is work in progress: for now it is a screen, and the
+   equipment, the inventory and the stash live behind it (docs/RPG-BLUEPRINT.md).
+   Every piece of gear code is still here, asked through modeHasGear(). */
+const GAME_MODES = {
+  arcade: { name:'ARCADE', col:'#ffb900', blurb:'Waves, reward cards and the arcade skill tree. No gear: what you pick up in a run is bricks.' },
+  rpg:    { name:'RPG · W.I.P.', col:'#6fb6ff', blurb:'A character, a town, dungeons, gear with sockets and skill gems. Not playable yet: your equipment and stash live here.' },
+};
+let GAME_MODE = 'arcade';
+function modeHasGear(){ return GAME_MODE === 'rpg'; }
+function setGameMode(id){
+  GAME_MODE = GAME_MODES[id] ? id : 'arcade';
+  try { localStorage.setItem('bb_mode', GAME_MODE); } catch(e){}
+  const row = document.getElementById('modeRow');
+  if(row) for(const el of row.children){
+    const on = el.dataset.mode === GAME_MODE, col = GAME_MODES[el.dataset.mode].col;
+    el.classList.toggle('on', on);
+    el.style.borderColor = on ? col : 'rgba(255,255,255,.18)';
+    el.style.background = on ? col : 'rgba(9,13,17,.34)';
+    el.style.color = on ? '#12181d' : '#f0e6e6';
+  }
+  const bl = document.getElementById('modeBlurb'); if(bl) bl.textContent = GAME_MODES[GAME_MODE].blurb;
+  const rpg = GAME_MODE === 'rpg';
+  const sb = document.getElementById('startBtn'); if(sb) sb.textContent = rpg ? 'RPG — WORK IN PROGRESS' : 'START ADVENTURE';
+  const gb = document.getElementById('gearBtn'); if(gb) gb.classList.toggle('hidden', !rpg);
+  const pg = document.getElementById('pauseGearBtn'); if(pg) pg.classList.toggle('hidden', !rpg);
+  const tb = document.getElementById('treeBtn'); if(tb) tb.classList.toggle('hidden', rpg);
+}
+function buildModeRow(){
+  const row = document.getElementById('modeRow');
+  if(!row) return;
+  row.innerHTML = Object.keys(GAME_MODES).map(id=>`<div class="diff" data-mode="${id}">${GAME_MODES[id].name}</div>`).join('');
+  for(const el of row.children) el.addEventListener('click', ()=>{ SFX.click(); setGameMode(el.dataset.mode); });
+  let saved = 'arcade';
+  try { saved = localStorage.getItem('bb_mode') || 'arcade'; } catch(e){}
+  setGameMode(saved);
+}
+let gearFromRpg = false;   /* equipment opened from the RPG screen closes back to it */
+function rpgScreenOn(){ const el = document.getElementById('rpgScreen'); return !!el && !el.classList.contains('hidden'); }
+function toggleRpgScreen(show){
+  const el = document.getElementById('rpgScreen');
+  if(el) el.classList.toggle('hidden', !show);
+}
+function rpgOpenGear(){ toggleRpgScreen(false); gearFromRpg = true; toggleGear(); if(!gearOn) gearFromRpg = false; }
+/* START: an arcade run, or -- in RPG -- the work-in-progress screen */
+function startPressed(){
+  if(GAME_MODE === 'rpg'){ try { SFX.click(); } catch(e){} toggleRpgScreen(true); return; }
+  startGame();
+}
 function buildDiffRow(){
   const row = document.getElementById('diffRow');
   if(!row) return;
@@ -15235,6 +16332,40 @@ function revokeAll(id){
   if(!taken[id]) return;
   rebuildWithout(id);
   buildCheatRows();
+}
+/* THE BENCH'S LEAGUES: one put down now, whatever the wave -- sandbox, boss
+   wave or wave 1 alike, none of which the league roll would ever allow */
+let benchMods = new Set(), benchLastMob = 'knight';
+function benchLeague(kind, arg){
+  const p = player;
+  if(!p) return false;
+  const near = (lo, hi)=>{ for(let i=0;i<60;i++){ const a = rnd(TAU), r = rnd(lo, hi);
+    const x = p.x + Math.cos(a)*r, y = p.y + Math.sin(a)*r; if(abyssFloorOk(x, y, 60)) return { x, y }; }
+    return { x:clamp(p.x + lo, W.wall+60, W.w-W.wall-60), y:p.y }; };
+  if(kind === 'breach'){
+    const free = BREACH_LORD_KEYS.filter(q=>!allBreaches().some(B=>B && B.lord === q));
+    if(!free.length) return false;
+    const B = breachNewAt(arg || free[(Math.random()*free.length)|0]); B.delay = 0;
+    if(!breach) breach = B; else breachExtra.push(B);
+    return true;
+  }
+  if(kind === 'abyss'){ const A = abyssNew(); A.delay = 0; if(!abyss) abyss = A; else abyssExtra.push(A); return true; }
+  if(kind === 'ritual'){ if(!ritualCanRise()) return false; ritualS.pending = null; return ritualPlaceSet(); }
+  if(kind === 'legion'){
+    if(legionActiveNow() || (legionEv && legionEv.state === 'idle')) return false;
+    legionEv = { state:'pending', delay:0, n:wave.n, t:0, seed:rnd(1000) };
+    return legionPlace();
+  }
+  if(kind === 'sbox') return !!sboxPlace(arg);
+  if(kind === 'chest' || kind === 'mimic'){
+    const at = near(160, 260);
+    props.push(shoveToFloor({ type:'chest', x:at.x, y:at.y, flash:0, seed:rnd(1000), dead:false, hp:3, r:16,
+      rar:arg || rollRarity('chest'), mimic:kind === 'mimic' }, 20));
+    return true;
+  }
+  if(kind === 'goblin'){ const at = near(320, 420); goblinSpawn(at.x, at.y); return true; }
+  if(kind === 'orbs'){ for(let i=0;i<3;i++){ const at = near(260, 340); orbSpawn(at.x, at.y, arg || 'blood', Math.max(1, 1 + wave.n*0.3), null); } return true; }
+  return false;
 }
 function buildCheatRows(){
   const waves = document.getElementById('cheatWaves');
@@ -15368,6 +16499,7 @@ function buildCheatRows(){
   bands.sort((a,b)=>a.lo-b.lo);
   bands.push({lo:0, hi:0, name:'GOLEMS &middot; seeded into waves, not bought',
               keys:['stonegolem','icegolem','firegolem','stormgolem']});
+  bands.push({lo:0, hi:0, name:'SPECIALS &middot; not bought from the budget', keys:['goblin','mimic','warbanner','kin:pack']});
   bands.push({lo:0, hi:0, name:'BOSSES', keys:bossKeys.map(k=>'boss:'+k)});
   spawn.innerHTML = bands.map(b=>
     `<div class="mobband"><div class="mobbandhead">${
@@ -15378,6 +16510,7 @@ function buildCheatRows(){
            return `<div class="cheatbtn got mob" data-mob="boss" data-boss="${bk}">${
              esc((BOSSES[bk]||SUPERBOSSES[bk]).name)}</div>`;
          }
+         if(k === 'kin:pack') return `<div class="cheatbtn" data-kin="1">KINDRED PACK (${esc(benchLastMob)})</div>`;
          return `<div class="cheatbtn mob" data-mob="${k}">${esc(k)}</div>`;
        }).join('')}</div></div>`).join('');
   for(const el of spawn.querySelectorAll('.cheatbtn.mob')){
@@ -15386,8 +16519,16 @@ function buildCheatRows(){
       for(let i=0;i<n;i++){
         const a = i/n*TAU + rnd(-0.2,0.2);
         const d = n===1 ? 190 : rnd(170, 280);
-        spawnEnemy(el.dataset.mob, p.x+Math.cos(a)*d, p.y+Math.sin(a)*d,
-                   elite, false, el.dataset.boss || null);
+        const x = p.x+Math.cos(a)*d, y = p.y+Math.sin(a)*d;
+        if(el.dataset.mob === 'goblin'){ goblinSpawn(x, y); continue; }
+        rareModForce = elite && benchMods.size ? [...benchMods] : null;
+        try { spawnEnemy(el.dataset.mob, x, y, elite, false, el.dataset.boss || null); } finally { rareModForce = null; }
+        const e = enemies[enemies.length-1];
+        if(e && e.type === 'mimic' && !e.mimicRar) e.mimicRar = 'rare';
+      }
+      if(!el.dataset.boss && el.dataset.mob !== 'goblin'){
+        const was = benchLastMob; benchLastMob = el.dataset.mob;
+        const kb = spawn.querySelector('[data-kin]'); if(kb && was !== benchLastMob) kb.textContent = 'KINDRED PACK ('+benchLastMob+')';
       }
       SFX.click();
     };
@@ -15398,6 +16539,13 @@ function buildCheatRows(){
     el.addEventListener('mouseenter', ()=>{ try { mobTipShow(el, key); } catch(e){ cmpHide(); } });
     el.addEventListener('mouseleave', cmpHide);
   }
+  const kinBtn = spawn.querySelector('[data-kin]');
+  if(kinBtn) kinBtn.addEventListener('click', ()=>{
+    const p = player, a = rnd(TAU);
+    const pk = spawnMagicPack(benchLastMob, { x:clamp(p.x + Math.cos(a)*260, W.wall+80, W.w-W.wall-80), y:clamp(p.y + Math.sin(a)*260, W.wall+80, W.h-W.wall-80) }, 6, true);
+    for(const e of pk) e.state = 'active';
+    SFX.click();
+  });
 
   const misc = document.getElementById('cheatMisc');
   misc.innerHTML = [
@@ -15424,6 +16572,65 @@ function buildCheatRows(){
       }
       SFX.click(); buildCheatRows();
     });
+
+  /* --- LEAGUES ------------------------------------------------------------ */
+  const lg = document.getElementById('cheatLeagues');
+  if(lg){
+    const LB = [['breach','','BREACH'], ['abyss','','ABYSS'], ['ritual','','RITUAL (3 ALTARS)'], ['legion','','LEGION MONOLITH'],
+      ['sbox','plain','STRONGBOX'], ['sbox','magic','MAGIC STRONGBOX'], ['sbox','rare','RARE STRONGBOX'], ['sbox','epic','EPIC STRONGBOX'],
+      ['chest','','CHEST'], ['mimic','','MIMIC CHEST'], ['goblin','','TREASURE GOBLIN'], ['orbs','blood','BLOOD ORBS ×3'], ['orbs','chaos','PLAGUE ORBS ×3']];
+    lg.innerHTML = LB.map(([k, a, label])=>`<div class="cheatbtn" data-lg="${k}" data-arg="${a}">${label}</div>`).join('');
+    for(const el of lg.children)
+      el.addEventListener('click', ()=>{
+        const ok = benchLeague(el.dataset.lg, el.dataset.arg || undefined);
+        if(!ok) addHitNum(player.x, player.y - 60, 'NOT NOW', '#9aa39c', 14);
+        SFX.click();
+      });
+  }
+
+  /* --- THE LEAGUE TREE ------------------------------------------------------ */
+  const lt = document.getElementById('cheatLtree');
+  if(lt){
+    const tip = n=>Object.entries(n.stats).map(([k, v])=>LT_STATS[k].txt(v)).join(' · ') || 'where every road starts';
+    lt.innerHTML =
+      `<div class="cheatbtn${LEAGUE_TREE_ON ? ' got' : ''}" data-lt="toggle">LEAGUE TREE: ${LEAGUE_TREE_ON ? 'ON' : 'OFF'}</div>`+
+      `<div class="cheatbtn" data-lt="pts">+5 POINTS (${LTREE.pts})</div>`+
+      `<div class="cheatbtn" data-lt="all">TAKE EVERY NODE</div>`+
+      `<div class="cheatbtn" data-lt="reset">RESET THE TREE</div>`+
+      LEAGUE_TREE.filter(n=>!n.hub).map(n=>`<div class="cheatbtn${LTREE.nodes.includes(n.id) ? ' got' : ''}" data-lt="node" data-node="${n.id}" title="${esc(tip(n))}">${
+        esc((n.notable ? '★ ' : '') + n.name)}</div>`).join('');
+    for(const el of lt.children)
+      el.addEventListener('click', ()=>{
+        const k = el.dataset.lt;
+        if(k === 'toggle') LEAGUE_TREE_ON = !LEAGUE_TREE_ON;
+        else if(k === 'pts'){ LTREE.pts += 5; ltreeSave(); }
+        else if(k === 'all'){
+          for(let pass=0; pass<LEAGUE_TREE.length; pass++) for(const n of LEAGUE_TREE)
+            if(!LTREE.nodes.includes(n.id) && n.links.some(l=>LTREE.nodes.includes(l))) LTREE.nodes.push(n.id);
+          ltreeRebuild(); ltreeSave();
+        }
+        else if(k === 'reset'){ LTREE = { pts:0, nodes:['lt_root'] }; ltreeRebuild(); ltreeSave(); }
+        else if(k === 'node'){
+          const id = el.dataset.node;
+          if(LTREE.nodes.includes(id)) ltreeRefund(id);
+          else { if(LTREE.pts < 1) LTREE.pts++; if(!ltreeTake(id) && LTREE.pts > 0) LTREE.pts--; }
+        }
+        SFX.click(); buildCheatRows();
+      });
+  }
+
+  /* --- RARE MODIFIERS FOR THE NEXT ELITES ---------------------------------- */
+  const rm = document.getElementById('cheatRareMods');
+  if(rm){
+    rm.innerHTML = RARE_MODS.map(m=>`<div class="cheatbtn${benchMods.has(m.id) ? ' got' : ''}" data-rm="${m.id}" title="${esc(m.tip)}" style="color:${m.col}">${m.name}</div>`).join('')+
+      `<div class="cheatbtn" data-rm="">CLEAR (ROLL AS IN A RUN)</div>`;
+    for(const el of rm.children)
+      el.addEventListener('click', ()=>{
+        const id = el.dataset.rm;
+        if(!id) benchMods.clear(); else if(benchMods.has(id)) benchMods.delete(id); else benchMods.add(id);
+        SFX.click(); buildCheatRows();
+      });
+  }
 }
 function toggleCheat(){
   if(state==='play'){
@@ -17421,6 +18628,7 @@ function toggleGear(){
     state = gearFrom;
     if(state === 'play'){ cv.style.cursor = 'none'; try{ window.focus(); }catch(err){} }
     if(state === 'title') refreshGearBtn();
+    if(gearFromRpg){ gearFromRpg = false; if(state === 'title') toggleRpgScreen(true); }
     try { SFX.click(); } catch(e){}
     return;
   }
@@ -17482,6 +18690,12 @@ function ritualOfferLook(o){
              sub:GEAR_CLS[B.cls].name+' · item level '+o.it.il };
   }
   const R = RARITY[o.rar] || RARITY.common;
+  if(o.kind === 'card'){
+    const u = UPGRADES.find(x=>x.id === o.uid), owned = taken[o.uid] || 0;
+    return { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="${R.col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[u.icon] || ''}</svg>`,
+             name:u.name, col:R.col, sub:R.name+' CARD · '+u.cls+(owned ? ' · you have ×'+owned : ''),
+             desc:signWords(u.desc(u.calc(R.mult), owned)) };
+  }
   return { icon:ritualChestSvg(R.col), name:R.name+' CHEST', col:R.col, sub:'a '+o.rar+' brick, opened on R' };
 }
 function renderRitual(){
@@ -17494,13 +18708,14 @@ function renderRitual(){
   const g = document.getElementById('ritGrid');
   if(g){
     g.innerHTML = S.offers.length ? S.offers.map(o=>{
-      const L = ritualOfferLook(o), afford = S.tribute >= o.cost;
+      const L = ritualOfferLook(o), usable = ritualOfferUsable(o), afford = S.tribute >= o.cost && usable;
       const canDefer = S.deferred.length < RITUAL_DEFER_MAX;
       return `<div class="ritcard${afford ? '' : ' poor'}" data-id="${o.id}">`+
         (o.carried ? '<div class="ritcarried">RETURNED</div>' : '')+
         `<div class="riticon">${L.icon}</div><div class="ritname" style="color:${L.col}">${L.name}</div>`+
-        `<div class="ritkind">${L.sub}</div><div class="ritcost">${o.cost} tribute</div>`+
-        `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>BUY</button>`+
+        `<div class="ritkind">${L.sub}</div>`+(L.desc ? `<div class="ritdesc">${L.desc}</div>` : '')+
+        `<div class="ritcost">${usable ? o.cost+' tribute' : 'YOU CAN NO LONGER TAKE IT'}</div>`+
+        `<div class="ritbtns"><button class="tbtn" data-act="buy"${afford ? '' : ' disabled'}>${o.kind === 'card' ? 'TAKE' : 'BUY'}</button>`+
         `<button class="tbtn gray" data-act="defer"${canDefer ? '' : ' disabled'}>DEFER</button></div></div>`;
     }).join('') : '<div class="ritkind" style="grid-column:1/-1;padding:20px">NOTHING LEFT ON OFFER</div>';
   }
@@ -17523,8 +18738,10 @@ function ritualUiWire(){
     if(b.dataset.act === 'buy'){
       const L = ritualOfferLook(o), r = ritualBuy(id);
       if(r === 'poor'){ ritualNote('NOT ENOUGH TRIBUTE', true); return; }
+      if(r === 'maxed'){ ritualNote('YOU CAN NO LONGER TAKE '+L.name, true); return; }
       ritualNote(r === 'floor' ? 'BAG FULL — '+L.name+' LIES AT YOUR FEET'
-               : r === 'chest' ? L.name+' — WAITING ON R' : L.name+' — IN YOUR BAG');
+               : r === 'chest' ? L.name+' — WAITING ON R'
+               : r === 'card' ? L.name+' — TAKEN' : L.name+' — IN YOUR BAG');
       gearTipHide();
       try { SFX.fortune(); } catch(e){}
     } else {
@@ -20338,7 +21555,7 @@ function updateEnemy(e, dt){
    edge instead of walking into your middle; one that has reached a skeleton
    shares the shove with it. */
 function bodySpace(e){
-  if(e.dead || e.state !== 'active' || e.docile) return;
+  if(e.dead || e.state !== 'active' || e.docile || e.legionFrozen) return;
   const h = heroObj;
   if(h && !h.dead && player === h){
     const dx = e.x - h.x, dy = e.y - h.y, d = Math.hypot(dx, dy), min = (e.r||12) + (h.r||12);
@@ -20357,8 +21574,9 @@ function bodySpace(e){
 }
 /* A SKELETON TAKES A HIT. No armour and no resistances -- it is bones -- so it
    takes what the hit says. */
-function minionHurt(m, n, elem){
+function minionHurt(m, n, elem, src){
   if(!m || m.gone || m.rise < 1 || !(n > 0)) return;
+  if(src && ritualOutside(src)) return;           /* from beyond a running ritual's wall */
   /* ...except under your WARD: its armour stands in front of every physical
      blow and its resistance in front of fire, cold and lightning, for the
      legion exactly as for you (chaos goes through, as it does on you) */
@@ -20415,6 +21633,7 @@ function updateEnemyCore(e, dt){
      in them meant the next frame read `vx = e.lx * chargeSpd` as roughly two
      thousand times four hundred and thirty, and every golem, direbat, lancer
      and boss that charged was flung into the far corner of the map. */
+  if(e.rmods) rareModTick(e, dt);
   e.spdNow = dt > 0 ? Math.hypot(e.x - (e._spx ?? e.x), e.y - (e._spy ?? e.y)) / dt : 0;
   e._spx = e.x; e._spy = e.y;
   e.flash = Math.max(0, e.flash-4*dt);
@@ -20438,6 +21657,8 @@ function updateEnemyCore(e, dt){
   if(e.slowT>0 && Math.random()<0.15)
     particles.push({kind:'spark', x:e.x+rnd(-10,10), y:e.y-rnd(6,36), vx:rnd(-10,10), vy:-25,
       life:0.4, max:0.4, color:'#dff2ff'});
+  /* FROZEN IN TIME: it takes its wounds, and nothing else happens to it */
+  if(e.legionFrozen){ e.x = e.lgx; e.y = e.lgy; e.kx = 0; e.ky = 0; e.moving = false; e.strikeT = 0; return; }
   e.hitCd -= dt; e.atkCd -= dt;
   e.x += e.kx*dt; e.y += e.ky*dt;
   e.kx *= Math.max(0,1-7*dt); e.ky *= Math.max(0,1-7*dt);
@@ -20465,6 +21686,44 @@ function updateEnemyCore(e, dt){
     if(e.wanderT<=0){ const sp = randomSpawnPos(); e.wx=sp.x; e.wy=sp.y; e.wanderT=rnd(2,5); }
     const a = angTo(e,{x:e.wx,y:e.wy});
     if(dist(e,{x:e.wx,y:e.wy})>20){ vx = Math.cos(a)*40; vy=Math.sin(a)*40; }
+  }
+  else if(e.type==='goblin'){ const v = goblinTick(e, dt, toP, dP); vx = v.x; vy = v.y; if(e.dead) return; }
+  else if(e.type==='witchdoctor'){
+    if(!e.orbKind) e.orbKind = Math.random() < 0.5 ? 'blood' : 'chaos';
+    if(e.mode === 'cast'){
+      e.modeT += dt; e.face = { x:Math.cos(toP), y:Math.sin(toP) };
+      if(e.modeT >= WD_CAST_T){
+        for(let i=0;i<WD_ORBS;i++) orbSpawn(e.x + rnd(-34,34), e.y - 10 + rnd(-20,20), e.orbKind, orbDmg(e), e);
+        e.mode = 'kite'; e.atkCd = WD_CD*e.atkS;
+      }
+    } else {
+      e.mode = 'kite';
+      const mv = enemyCasterMove(e, dt, toP, dP, 420, 280); vx = mv.x; vy = mv.y;
+      if(e.atkCd <= 0 && dP < 700 && !e.docile){ e.mode = 'cast'; e.modeT = 0; }
+    }
+  }
+  else if(e.type==='warbanner'){ e.mode = 'planted'; e.kx = 0; e.ky = 0; }
+  else if(e.type==='bannerman'){
+    const live = e.banner && !e.banner.dead;
+    if(!live){ e.banner = null; e.plantCd = Math.max(0, (e.plantCd || 0) - dt); }
+    if(e.mode === 'plant'){
+      e.modeT += dt; e.face = { x:Math.cos(toP), y:Math.sin(toP) };
+      if(e.modeT >= BANNER_PLANT_T){ plantBanner(e); e.mode = 'chase'; }
+    } else if(!live && (e.plantCd || 0) <= 0 && dP < BANNER_PLANT_D && !e.docile){ e.mode = 'plant'; e.modeT = 0; }
+    else { e.mode = 'chase'; vx = Math.cos(toP)*e.speed; vy = Math.sin(toP)*e.speed; }
+  }
+  else if(e.type==='mimic'){
+    /* it hops at you, and when it is close it lunges with its lid open */
+    if(e.mode === 'lunge'){
+      e.modeT += dt;
+      vx = Math.cos(e.lockA)*430; vy = Math.sin(e.lockA)*430;
+      if(e.modeT >= 0.22){ e.mode = 'chase'; e.atkCd = 1.3*e.atkS; }
+    } else {
+      e.mode = 'chase';
+      const hopK = 0.35 + 0.9*Math.abs(Math.sin(vtime*5 + (e.phase || 0)));
+      vx = Math.cos(toP)*e.speed*hopK; vy = Math.sin(toP)*e.speed*hopK;
+      if(e.atkCd <= 0 && dP < 170 && !e.docile){ e.mode = 'lunge'; e.modeT = 0; e.lockA = toP; try { SFX.grunt(); } catch(err){} }
+    }
   }
   else if(e.type==='imp'){
     const wob = Math.sin(vtime*4 + e.phase)*0.5;
@@ -20908,7 +22167,7 @@ function updateEnemyCore(e, dt){
         if(hero && !hero.dead && hero.dash.t <= 0 && inCone(hero)){
           const keep = player; player = hero; poisonPlayer(dose, PSN_DUR); player = keep;
         }
-        for(const m of minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, 'chaos');
+        for(const m of minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, 'chaos', e);
       }
       if(e.modeT >= BLOAT_BREATH){ e.mode = 'chase'; e.atkCd = BLOAT_CD * e.atkS; }
     } else {
@@ -21003,7 +22262,7 @@ function updateEnemyCore(e, dt){
            armour, at any wave, for a monster that has to reach you to work. */
         if(dist(e,player)<85 && player.dash.t<=0 && player.invuln<=0 && !player.dead)
           playerDamage(Math.max(2, e.dmg*2.6), e);
-        minionsIn(e.x, e.y, 85, m=>{ if(!(player.isProxy && player.minion === m)) minionHurt(m, Math.max(2, e.dmg*2.6)); });
+        minionsIn(e.x, e.y, 85, m=>{ if(!(player.isProxy && player.minion === m)) minionHurt(m, Math.max(2, e.dmg*2.6), null, e); });
         return;
       }
     } else {
@@ -21531,7 +22790,7 @@ function maceSpin(b, dt, tier, enr, toP){
     const half = Math.atan2(m.r + MACE_BLADE_HALF, Math.max(8, dm)), pa = Math.atan2(m.y - b.y, m.x - b.x);
     const from = angDiff(pa, prevA), to = angDiff(pa, b.whirlA);
     if((from <= half && from >= -half) || (to <= half && to >= -half) || (from > 0 && to < 0 && (from - to) < Math.PI)){
-      m.maceCd = vtime + MACE_TICK; minionHurt(m, b.dmg+1);
+      m.maceCd = vtime + MACE_TICK; minionHurt(m, b.dmg+1, null, b);
     }
   }
   if(Math.random()<0.7){
@@ -21584,7 +22843,7 @@ function updateBoss(b, dt, toP, dP){
     addSparks(player.x, player.y-18, 3, '#ffb066');
   }
   if(b.thorns){
-    minionsIn(b.x, b.y, b.r + 30, m=>{ if((m.thornCd||0) <= vtime){ m.thornCd = vtime + 0.6; minionHurt(m, Math.max(1, Math.round(b.dmg*0.25))); } });
+    minionsIn(b.x, b.y, b.r + 30, m=>{ if((m.thornCd||0) <= vtime){ m.thornCd = vtime + 0.6; minionHurt(m, Math.max(1, Math.round(b.dmg*0.25)), null, b); } });
   }
   if(b.super){ updateSuperBoss(b, dt, toP, dP); return; }
   const enr = b.hp < b.maxHp*0.5;
@@ -22140,7 +23399,7 @@ function updateSpikes(dt){
     }
     if(sp.t >= SPIKE_RISE*0.45 && sp.t < SPIKE_RISE+SPIKE_HOLD && minions.length){
       sp.mHit = sp.mHit || new Set();
-      minionsIn(sp.x, sp.y, 20, m=>{ if(!sp.mHit.has(m)){ sp.mHit.add(m); minionHurt(m, sp.dmg); } });
+      minionsIn(sp.x, sp.y, 20, m=>{ if(!sp.mHit.has(m)){ sp.mHit.add(m); minionHurt(m, sp.dmg, null, sp); } });
     }
     if(sp.t >= sp.life) sp.dead = true;
   }
@@ -22520,8 +23779,8 @@ function updateProjectiles(dt){
         for(const m of minions){
           if(m.rise < 1 || m.gone) continue;
           if(!sweepsBody(m, pr.px, pr.py, pr.x, pr.y, pr.hitR !== undefined ? pr.hitR : 7+(pr.big?5:0))) continue;
-          if(pr.kind === 'frostrock'){ if(!(pr.mHit && pr.mHit.has(m))){ (pr.mHit = pr.mHit || new Set()).add(m); minionHurt(m, pr.dmg||1, 'frost'); } continue; }
-          if(pr.kind !== 'hexbolt') minionHurt(m, pr.dmg||1, pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null);
+          if(pr.kind === 'frostrock'){ if(!(pr.mHit && pr.mHit.has(m))){ (pr.mHit = pr.mHit || new Set()).add(m); minionHurt(m, pr.dmg||1, 'frost', pr); } continue; }
+          if(pr.kind !== 'hexbolt') minionHurt(m, pr.dmg||1, pr.kind==='frostbolt' ? 'frost' : pr.kind==='bolt' ? 'shock' : null, pr);
           addSparks(pr.x, pr.y, 3, '#c9b8ff');
           pr.dead = true; break;
         }
@@ -22606,7 +23865,7 @@ function updateProjectiles(dt){
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
           playerDamage(pr.dmg || 1, pr, 'shock');
         for(const m of minions) if(m.rise >= 1 && !m.gone && segDist(pr.x, pr.y, ex, ey, m.x, m.y - 14) < 9 + m.r)
-          minionHurt(m, pr.dmg || 1, 'shock');
+          minionHurt(m, pr.dmg || 1, 'shock', pr);
       }
       if(!pr.dead && !player.dead &&
          sweepsBody(player, pr.px, pr.py, pr.x, pr.y, 17)){
@@ -22637,7 +23896,7 @@ function updateProjectiles(dt){
         addRing(pr.x,pr.y,20,340,pr.r,FX.foe.frost,8,0.45);
         addSparks(pr.x,pr.y,14,FX.foe.frostDeep);
         SFX.freeze(); addShake(0.25);
-        minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, pr.dmg || 1, 'frost'));
+        minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, pr.dmg || 1, 'frost', pr));
         if(!player.dead){
           const d = dist(pr, player);
           if(d < pr.r){
@@ -22960,7 +24219,7 @@ function updateProjectiles(dt){
           addRing(pr.x, pr.y, 20, 520, pr.r, '#ff9a3c', 11, 0.5);
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:pr.r*0.55, life:3.5, max:3.5});
           SFX.bomb();
-          minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, (pr.dmg || 1)*1.5, 'fire'));
+          minionsIn(pr.x, pr.y, pr.r, m=>minionHurt(m, (pr.dmg || 1)*1.5, 'fire', pr));
           if(dist(pr,player) < pr.r && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else playerDamage((pr.dmg || 1)*1.5, pr, 'fire');
@@ -22997,7 +24256,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.74, 0, {hostile:true, shake:0.12});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3+rnd(0,2), max:5});
           SFX.fireball();
-          minionsIn(pr.x, pr.y, fr*0.87, m=>minionHurt(m, pr.dmg || 1, 'fire'));
+          minionsIn(pr.x, pr.y, fr*0.87, m=>minionHurt(m, pr.dmg || 1, 'fire', pr));
           if(dist(pr,player)<fr*0.87 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -23012,7 +24271,7 @@ function updateProjectiles(dt){
           hazards.push({kind:'venom', x:pr.x, y:pr.y, r:fr, life:VENOM_LIFE, max:VENOM_LIFE,
                         dmg: pr.dmg, tick:0, seed:rnd(TAU)});
           SFX.boomSmall();
-          minionsIn(pr.x, pr.y, fr*0.7, m=>minionHurt(m, pr.dmg || 1));
+          minionsIn(pr.x, pr.y, fr*0.7, m=>minionHurt(m, pr.dmg || 1, null, pr));
           if(dist(pr,player)<fr*0.7 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg, pr, null);
@@ -23024,7 +24283,7 @@ function updateProjectiles(dt){
           explode(pr.x, pr.y, fr*0.81, 0, {hostile:true, shake:0.18});
           hazards.push({kind:'fire', dmg:pr.dmg, x:pr.x, y:pr.y, r:fr, life:3.5, max:3.5});
           SFX.boomSmall();
-          minionsIn(pr.x, pr.y, fr*0.85, m=>minionHurt(m, pr.dmg || 1, 'fire'));
+          minionsIn(pr.x, pr.y, fr*0.85, m=>minionHurt(m, pr.dmg || 1, 'fire', pr));
           if(dist(pr,player)<fr*0.85 && !player.dead){
             if(player.dash.t>0){ perfectDodge(pr.x,pr.y); }
             else if(player.invuln<=0) playerDamage(pr.dmg || 1, pr, 'fire');
@@ -23035,7 +24294,7 @@ function updateProjectiles(dt){
           : pr.kind==='jrock' ? {rr:80, cols:['#8b8f8a','#6d6e68','#b6532b'], shk:0.3}
           : {rr:46, cols:['#3d7a2b','#8ac24a','#2f5e23'], shk:0.18};
         explode(pr.x, pr.y, conf.rr, 0, {hostile:true, brickCols:conf.cols, shake:conf.shk});
-        minionsIn(pr.x, pr.y, conf.rr, m=>minionHurt(m, pr.dmg || shotPow(pr.src, pr.kind)));
+        minionsIn(pr.x, pr.y, conf.rr, m=>minionHurt(m, pr.dmg || shotPow(pr.src, pr.kind), null, pr));
         if(dist(pr,player)<conf.rr && !player.dead){
           if(player.dash.t>0){ if(!pr.dodged){ pr.dodged=true; perfectDodge(pr.x,pr.y); } }
           else if(player.invuln<=0){
@@ -24115,6 +25374,17 @@ function drawFigure(c, o){
     }
     c.lineWidth = 2;
   }
+  if(o.style==='goblin'){
+    /* long green ears, swept out sideways */
+    c.fillStyle = T(o.colors.head); c.strokeStyle = OL;
+    for(const side of [-1, 1]){
+      c.beginPath();
+      c.moveTo(side*hr*0.75, hy2 - 3*s);
+      c.quadraticCurveTo(side*(hr + 8*s), hy2 - 8*s, side*(hr + 14*s), hy2 - 11*s);
+      c.quadraticCurveTo(side*(hr + 6*s), hy2 + 1*s, side*hr*0.75, hy2 + 3*s);
+      c.closePath(); c.fill(); c.stroke();
+    }
+  }
   if(o.style==='imp'){
     /* the big one wears the same horns, grown: longer, swept back, and a ridge
        of spines between them. Same silhouette, read at twice the size. */
@@ -24720,6 +25990,13 @@ function drawProp(c, p){
     roundRect(c,-3,-16,6,18,2); c.fill(); c.stroke();
     c.fillRect(-16,-13,32,3); c.strokeRect(-16,-13,32,3);
     drawStudG(c,-9,-26,3,sh(rc,0.2)); drawStudG(c,9,-26,3,sh(rc,0.2));
+    /* A MIMIC BREATHES. Every few seconds the lid lifts a crack and there are
+       teeth under it -- there to be noticed, if you are looking */
+    if(p.mimic && ((vtime + p.seed) % 4.5) < 0.4){
+      c.fillStyle = '#3a0c16'; c.fillRect(-14, -16, 28, 3);
+      c.fillStyle = '#fff';
+      for(let i=0;i<5;i++){ const x = -13 + i*5.5; c.beginPath(); c.moveTo(x, -16); c.lineTo(x + 2.5, -13); c.lineTo(x + 5, -16); c.fill(); }
+    }
     if(p.wild){
       /* a question mark where the pips would be, and a slow halo turning round it */
       c.fillStyle = '#ffffff';
@@ -25148,6 +26425,7 @@ function render(){
   drawAbyss();
   drawSboxGuards();
   drawRitual();
+  drawLegion();
   drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
@@ -25404,6 +26682,22 @@ function render(){
       ctx.beginPath(); ctx.arc(e.x,e.y,130,0,TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(255,230,150,0.8)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(e.x,e.y, 24 + 106*(1-k), 0, TAU); ctx.stroke();
+    }
+    /* THE BLOATER'S PLAGUE BREATH, where it will land: the cone and how far it
+       reaches, drawn from the moment it plants its feet -- filling outwards as
+       the heave builds so it lands at the rim as the breath comes -- and then
+       turning with the breath while it lasts. Flat, like the hit it shows. */
+    if(e.type==='bloater' && (e.mode==='breathWind' || e.mode==='breath')){
+      const wind = e.mode==='breathWind', k = wind ? clamp(e.modeT/BLOAT_WIND,0,1) : 1;
+      const a = e.breathA ?? 0, R = BLOAT_RANGE;
+      const cone = rr=>{ ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.arc(e.x, e.y, rr, a - BLOAT_CONE, a + BLOAT_CONE); ctx.closePath(); };
+      cone(R);
+      ctx.fillStyle = wind ? `rgba(158,222,90,${0.06 + 0.08*k})` : `rgba(120,190,60,${0.22 + 0.06*Math.sin(vtime*14)})`;
+      ctx.fill();
+      ctx.setLineDash(wind ? [10,8] : []);
+      ctx.strokeStyle = `rgba(190,240,120,${wind ? 0.5 + 0.3*Math.sin(vtime*16) : 0.8})`; ctx.lineWidth = 3; ctx.stroke();
+      ctx.setLineDash([]);
+      if(wind){ cone(R*k); ctx.fillStyle = 'rgba(190,240,120,0.18)'; ctx.fill(); }
     }
     /* generic small shockwave rings (jugg) */
     if(e.ring && e.type!=='revenant' && e.type!=='boss'){
@@ -26171,6 +27465,9 @@ function render(){
     ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y);
     ctx.globalAlpha = 1;
   }
+  drawLegionIce();
+  drawBloodOrbs();
+  drawMonsterMods();
   drawGearLabels();
   ctx.restore();
   renderHUD();
@@ -26770,6 +28067,15 @@ function drawEnemy(c, e){
         vx:rnd(-6,6), vy:rnd(-30,-10), life:rnd(0.5,1.0), max:1.0, color:'#bdf0a8'});
     }
   }
+  if(e.type==='mimic' || e.type==='warbanner'){
+    if(e.type==='mimic') drawMimic(c, e); else drawWarBanner(c, e);
+    const wS = 30*(e.scale || 1), yS = e.type==='mimic' ? e.y - 52*(e.scale || 1) : e.y - 96;
+    if(e.hp < e.maxHp){
+      c.fillStyle='rgba(15,20,25,0.6)'; c.fillRect(e.x-wS/2, yS, wS, 4);
+      c.fillStyle = e.elite?'#ffb900':(e.magic?MAGIC_COL:'#ff5a4a'); c.fillRect(e.x-wS/2, yS, wS*clamp(e.hp/e.maxHp,0,1), 4);
+    }
+    return;
+  }
   drawPoisonPips(c, e);
   const o = { x:e.x, y:e.y, s:e.scale, face:e.face, walk:e.walk, moving:e.moving,
     flash:e.flash, colors:e.col, style:e.style, elite:e.elite, magic:e.magic,
@@ -26796,6 +28102,8 @@ function drawEnemy(c, e){
   if(e.type==='overseer'){ o.weapon='staff'; o.orbCol='#ffe95a'; o.hoodCol='#5e4a12'; o.lord=true; if(e.mode==='buffWind'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='impmaster'){ o.weapon='staff'; o.orbCol='#ff5a4a'; o.hoodCol='#3a0c16'; o.horns=true; o.lord=true;
     if(e.mode==='summon'||e.mode==='hex'){ o.armsUp=true; o.castGlow=true; } }
+  if(e.type==='witchdoctor'){ o.weapon='staff'; o.orbCol = e.orbKind==='chaos' ? '#8ede4a' : '#e0203a'; o.hoodCol='#3b2030';
+    if(e.mode==='cast'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necromancer'){ o.weapon='staff'; o.orbCol='#c9b8e8'; o.hoodCol='#271b3a'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='necrolord'){ o.weapon='staff'; o.orbCol='#dccdf5'; o.hoodCol='#31204d'; if(e.mode==='summon'){ o.armsUp=true; o.castGlow=true; } }
   if(e.type==='greenwarden'){ o.weapon='staff'; o.orbCol='#8ede4a'; o.hoodCol='#1d4523'; o.lord=true;
@@ -26842,6 +28150,7 @@ function drawEnemy(c, e){
     if(e.bkey==='ashtyrant'){ o.weapon='greatsword'; o.armsUp = (e.mode==='slamWind'||e.mode==='rainWind'||e.mode==='volleyWind'||e.mode==='emberWind'); }
   }
   drawFigure(c, o);
+  drawSpecialExtras(c, e);
   /* ON TOP of the body, never under it: a gash is a mark ON the thing, and the
      dose count has to clear its head and its health bar. Anything drawn before
      drawFigure is simply painted over by the minifig. */
@@ -27848,6 +29157,7 @@ function renderHUD(){
   drawAbyssHud();
   drawSboxHud();
   drawRitualHud();
+  drawLegionHud();
   drawWaveHold();
   drawLootStash();
   const boss = enemies.find(e=>e.type==='boss' && !e.dead && e.state==='active');
@@ -27966,6 +29276,7 @@ function renderHUD(){
   const ails = [];
   if(burnStacks()>0)  ails.push({c:'#ff8a3c', t:'BURN ×'+burnStacks()+' · '+burnDps().toFixed(1)+'/s · '+Math.ceil(burnTime())+'s'});
   if(psnStacks()>0)   ails.push({c:'#8ac24a', t:'POISON ×'+psnStacks()+' · '+psnDps().toFixed(1)+'/s · '+Math.ceil(psnTime())+'s'});
+  if(pbleedStacks()>0) ails.push({c:'#ff5a5a', t:'BLEED ×'+pbleedStacks()+' · '+(pbleedDps()*(p.moving ? PBLEED_MOVE : 1)).toFixed(1)+'/s'+(p.moving ? ' (moving ×2)' : '')+' · '+Math.ceil(pbleedTime())+'s'});
   if(p.chill.stacks>0)ails.push({c:'#bfe3ff', t:'CHILL ×'+Math.round(p.chill.stacks)+' · -'+Math.round((1-chillMul())*100)+'% spd'});
   if(p.shock.stacks>0)ails.push({c:'#ffe95a', t:'SHOCK ×'+Math.round(p.shock.stacks)+' · +'+Math.round(shockCritChance()*100)+'% crit taken'});
   for(const el of ELEMENTS)
@@ -28276,8 +29587,9 @@ function resetRun(demo){
        number, it hands over a BRICK — so it is applied here, once, where a real
        run begins, and never in newPlayer or on the bench's preview heroes. */
     metaGrantBricks(player.metaGrants || []);
-    /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you */
-    gearApply(player, true);
+    /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you --
+       in RPG. An ARCADE run wears nothing. */
+    if(modeHasGear()) gearApply(player, true);
   }
   /* a run starts with a full mana pool, whatever the tree and the gear made it */
   player.mana = player.maxMana;
@@ -28289,7 +29601,7 @@ function resetRun(demo){
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
   breach = null; breachExtra = []; abyss = null; abyssExtra = []; leagueMiss = 0; sboxPending = [];
-  ritualS = ritualBlank();
+  ritualS = ritualBlank(); rmCores = []; kindredUid = 0; goblinPending = null; bloodOrbs = []; legionEv = null;
   rollRoster();
   /* a linked run meets the same roster it was copied from */
   if(!demo && runLink && runLink.ro) for(const [k, at] of runLink.ro){ const r = ROSTER.find(x=>x.k===k); if(r && at) r.at = at; }
@@ -28418,21 +29730,29 @@ function optRows(){
   return [
     { key:'music', name:'MUSIC', on:()=>A.musicOn && !A.muted,
       note:'the field and boss tracks. M still takes everything down at once',
-      hit:()=>{ audioInit(); toggleMusic(); } },
+      vol:'musVol', hit:()=>{ audioInit(); toggleMusic(); } },
     { key:'sfx', name:'SOUND', on:()=>A.sfxOn && !A.muted,
       note:'every hit, pickup, cast and smash',
-      hit:()=>{ audioInit(); toggleSfx(); } },
-    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note,
+      vol:'sfxVol', hit:()=>{ audioInit(); toggleSfx(); } },
+    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices,
       on:()=>!!OPT[d.id], hit:()=>optToggle(d.id) })),
   ];
 }
 function optRender(){
   const list = document.getElementById('optList');
   if(!list) return;
-  const rows = optRows().map(r=>
-    `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>`+
-    `<button class="oswitch ${r.on() ? 'on' : ''}" data-opt="${r.key}">`+
-    `${r.on() ? 'ON' : 'OFF'}</button></div>`);
+  const rows = optRows().map(r=>{
+    /* a choice: one button per value, the chosen one lit */
+    if(r.choices) return `<div class="optrow choice"><div class="otext"><b>${r.name}</b><i>${r.note}</i>`+
+      `<div class="ochoices">${r.choices.map(c=>`<button class="ochoice${OPT[r.key] === c ? ' on' : ''}" data-choice="${r.key}" data-val="${c}">${
+        (TEXT_SIZES[c] || { name:c }).name}</button>`).join('')}</div></div></div>`;
+    /* a switch, and -- for music and sound -- a volume slider beside it */
+    const vol = r.vol ? `<div class="ovol"><input type="range" min="0" max="100" step="1" value="${Math.round(A[r.vol]*100)}" data-vol="${r.vol}" aria-label="${r.name} volume">`+
+      `<span class="ovoln">${Math.round(A[r.vol]*100)}%</span></div>` : '';
+    return `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>${vol}`+
+      `<button class="oswitch ${r.on() ? 'on' : ''}" data-opt="${r.key}">`+
+      `${r.on() ? 'ON' : 'OFF'}</button></div>`;
+  });
   /* THE ONE THING THAT CANNOT BE UNDONE gets its own look and two clicks. It
      wipes the tree for EVERY weapon on EVERY difficulty, because "my character"
      is all of them and half a wipe is worse than none. */
@@ -28446,6 +29766,28 @@ function optRender(){
   list.innerHTML = rows.join('');
   for(const b of list.querySelectorAll('.oswitch'))
     b.addEventListener('click', ()=>optClick(b.getAttribute('data-opt')));
+  for(const b of list.querySelectorAll('.ochoice'))
+    b.addEventListener('click', ()=>{
+      SFX.click(); optArmed = 0;
+      optSet(b.dataset.choice, b.dataset.val);
+      optSay(OPT_DEFS.find(d=>d.id === b.dataset.choice).name + ' is now ' + (TEXT_SIZES[b.dataset.val] || { name:b.dataset.val }).name);
+      optRender();
+    });
+  for(const inp of list.querySelectorAll('input[data-vol]')){
+    const lab = inp.parentNode.querySelector('.ovoln');
+    /* the track fills gold up to the thumb */
+    const fill = ()=>{ inp.style.background = `linear-gradient(90deg, #ffb900 ${inp.value}%, rgba(0,0,0,.35) ${inp.value}%)`; };
+    fill();
+    inp.addEventListener('input', ()=>{
+      audioInit();
+      A[inp.dataset.vol] = clamp(+inp.value/100, 0, 1);
+      if(lab) lab.textContent = Math.round(A[inp.dataset.vol]*100)+'%';
+      fill();
+      audioApply();
+    });
+    /* let go of the sound slider and you hear where you put it */
+    inp.addEventListener('change', ()=>{ if(inp.dataset.vol === 'sfxVol'){ try { for(const k in sfxLast) delete sfxLast[k]; SFX.hit(); } catch(e){} } });
+  }
 }
 function optSay(msg){
   const el = document.getElementById('optNote');
@@ -28516,7 +29858,9 @@ function showBest(){
   try{ best = +(localStorage.getItem('bb_best')||0); }catch(e){}
   document.getElementById('bestLine').textContent = best>0 ? `Personal best: wave ${best}` : '';
 }
-document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('click', startPressed);
+document.getElementById('rpgBackBtn').addEventListener('click', ()=>{ SFX.click(); toggleRpgScreen(false); });
+document.getElementById('rpgGearBtn').addEventListener('click', rpgOpenGear);
 document.getElementById('treeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 /* audioInit() FIRST on both: a browser will not start an audio context until
    somebody clicks something, and this click is as good as any — otherwise
@@ -28533,11 +29877,12 @@ document.getElementById('pauseOptBtn').addEventListener('click', ()=>{
 document.getElementById('optBackBtn').addEventListener('click', ()=>{
   SFX.click(); closeOptions(); });
 audioLoad();
-optLoad();
+optLoad(); applyTextSize();
 document.getElementById('treeCloseBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 document.getElementById('treeInBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1.5); });
 document.getElementById('treeOutBtn').addEventListener('click', ()=>{ SFX.click(); treeZoomBy(1/1.5); });
 document.getElementById('treeFitBtn').addEventListener('click', ()=>{ SFX.click(); treeFit(); });
+document.getElementById('treeZoomLbl').addEventListener('click', ()=>{ SFX.click(); treeHome(); });
 document.getElementById('treeSecBtn').addEventListener('click', ()=>{ SFX.click();
   treeToggleSectors(); refreshTreeSecBtn(); });
 function refreshTreeSecBtn(){
@@ -28606,6 +29951,10 @@ function update(dt, raw){
     updateStrongboxes(dt);
     updateRitual(dt);
     ritualClamp();
+    updateRareMods(dt);
+    updateSpecials(dt);
+    updateBloodOrbs(dt);
+    updateLegion(dt);
     updateGearDrops(dt);
     updateFx(dt);
     if(player.swing){
@@ -28658,6 +30007,7 @@ gearLoad();          /* ...and the gear, for the same reason */
 gearWire();
 resetRun(true);
 buildFavRow();
+buildModeRow();
 buildDiffRow();
 buildWeaponRow();
 refreshTreeBtn();

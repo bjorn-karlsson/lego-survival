@@ -14,7 +14,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 <br>
 
-`83 bricks` · `41 monsters` · `8 bosses` · `13 builds` · `50 waves` · `1 file`
+`83 bricks` · `45 monsters` · `8 bosses` · `13 builds` · `50 waves` · `1 file`
 
 </div>
 
@@ -22,7 +22,7 @@ No build step. No bundler. No `node_modules`. Double-click it.
 
 ## Contents
 
-**Start here** — [Play it](#play-it) · [The loop](#the-loop) · [What's in the box](#whats-in-the-box) · [Controls](#controls)
+**Start here** — [Play it](#play-it) · [Two modes](#two-modes-arcade-and-rpg) · [The loop](#the-loop) · [What's in the box](#whats-in-the-box) · [Controls](#controls)
 
 **The kit** — [Weapons](#weapons) · [Elements & ailments](#elements--ailments)
 
@@ -46,6 +46,28 @@ git clone https://github.com/bjorn-karlsson/lego-survival.git
 That is the whole install. One 500 KB HTML file with a single `<script>` in it. The only
 thing it reaches for over the network is a Google Fonts stylesheet — block it and the game
 runs exactly the same in fallback type.
+
+---
+
+## Two modes: arcade and RPG
+
+The title screen asks first **how** you want to play.
+
+![The title screen with the mode row](docs/modes-title.png)
+
+- **ARCADE** is the game this README describes: a difficulty, a weapon, a favourite, then waves,
+  levels into the arcade skill tree, reward cards, bosses and leagues. **An arcade run has no
+  gear** — nothing is worn, nothing drops, the ritual sells cards instead, and there is no
+  equipment screen. What you pick up in a run is bricks.
+- **RPG · W.I.P.** is the second way to play, and **not playable yet**: START opens a work-in-progress
+  screen. The plan is a character and class, a start outside a town at level 1, a town with your
+  home, stash and a mission board, dungeons, and power that comes from **gear with sockets,
+  skill gems and support gems**, an RPG passive tree and ascendancies — with mana costs, five
+  flasks and Path of Exile's key layout. The [equipment](#equipment), the bag and the stash
+  live here now, behind the screen's **EQUIPMENT & STASH** button.
+  The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+
+The mode you pick is remembered. A run link always opens an arcade run.
 
 ---
 
@@ -767,6 +789,10 @@ Prefer the old way? **Options → AUTO-LOOT** opens every reward the moment you 
 
 ## Equipment
 
+> **RPG mode only.** Since the modes split, arcade runs wear and drop no gear; the equipment
+> screen is reached from the RPG W.I.P. screen (or the title's EQUIPMENT button when RPG is
+> selected). Everything below describes the item model the RPG will be built on.
+
 **The one thing a death leaves you.** Bosses drop gear; walk over a piece and it goes in your
 bag; the bag, the stash and whatever you are wearing are saved the moment anything changes, so the
 next run starts wearing it. **Each hero wears its own gear** — six sets, one per weapon — while
@@ -1122,6 +1148,11 @@ driven below zero, and at **-100% you take double**.
 | ❄️ **Chill** | -9% move speed and swing rate, floor 30% | **frozen solid for 3s** | **FROSTBITTEN** — -11% frost resistance, 22s |
 | ⚡ **Shock** | +10% chance a hit on you crits for **×1.8**, cap 95% | every hit against you crits | **CONDUCTIVE** — -11% lightning resistance, 22s |
 
+**Bleeding** (from a blood orb) is physical: each wound bleeds **35% of the hit that opened it a
+second for 4s** — no resistance stands in front of it — and **twice as fast while you are
+moving**. Five wounds at most; a deeper one pushes out the shallowest. It shows in the ailment
+list as BLEED, with the moving rate while you move.
+
 Resistance is capped at **80%** — nothing is ever fully immune — and it scales down both the
 elemental damage of a hit *and* the strength of the ailment that hit applies. Each element
 has its own **0.7s** application cooldown, so standing in a fire does not spam stacks onto
@@ -1447,6 +1478,37 @@ off it, and that is the actual mechanic.
 
 ---
 
+### New faces
+
+![The treasure goblin portalling, a mimic, a war banner and its bearer](docs/specials.png)
+
+- **The Treasure Goblin.** From wave 4, one wave in ten, a goblin with a sack of studs turns up
+  mid-fight — and **runs**. It never fights; it zigzags away from you (sauntering when you are far),
+  it leaks a handful of studs every tenth of its life, and it has **about eleven brutes' worth of
+  life** and heavy armour. After **14 seconds** it stops and opens a portal (2.2s) — kill it before
+  that, or it is gone with everything. Killed: a pile of studs (30 + 10 a wave, × your stud
+  multiplier), a heart, and **one or two boss-grade chests**. It never holds the wave.
+- **The Mimic.** From wave 5, **18% of the chests monsters drop are mimics**. A mimic breathes:
+  every few seconds its lid lifts a crack and there are teeth under it. Open it and it wakes —
+  hops at you and lunges with its lid wide. Kill it and it pays the chest it was, **a tier better**
+  (never past epic).
+- **The Banner-bearer** joins the roster (from wave 11 or so). It walks in, stops, and **plants a
+  war banner**: everything within **280px** of it hits **30% harder**, moves **20% faster** and
+  attacks faster, for as long as the banner stands. Break the banner (it has a little life) and
+  the buff is gone; the bearer plants another ten seconds later.
+- **The Witch Doctor** — a zombie caster — joins the roster around wave 16. It keeps its
+  distance and raises **three blood orbs** (or plague orbs) at a time.
+- **Blood orbs** rise beside whoever raised them and **hunt you**: they set off roughly your way,
+  turn after you and **gather speed the longer they live**. When their **4 seconds** are up — or
+  when they reach you — they **stop dead and hang for a second** over a circle on the ground, and
+  then they drop: **physical damage and a bleed**. **Plague orbs** (green) drop chaos and poison.
+  Step out of the circle before it falls. Bosses can roll **BLOOD-CALLER** or **PLAGUE-CALLER**
+  and raise two every five seconds (three for an ultra).
+- **The bloater's breath is drawn now**: from the moment it plants its feet, the cone it will
+  retch into and how far it reaches, filling as the heave builds and turning with the breath.
+
+![The bloater's breath, drawn](docs/bloater-breath.png) ![Blood and plague orbs](docs/blood-orbs.png)
+
 ### Nine buffs, not three
 
 A monster's buffs used to be **one counter capped at three**, so every aura in the game
@@ -1483,6 +1545,34 @@ down from ×1.5, ×1.3 and 30%.
 Magic-touched is **blue** now rather than purple: purple is already the epic rarity band and
 the necromancers' own colour, so a magic pack read as *something arcane* instead of as the
 pack modifier it is.
+
+### Rare modifiers
+
+**A rare reads its own danger over its head.** From **wave 6** every rare (the gold-ringed elite)
+rolls named modifiers — **one**, **two from wave 15**, **three from wave 30**, never the same
+twice — in the colour of what they do:
+
+![Rares wearing their modifiers, and a KINDRED pack two deaths in](docs/rare-mods.png)
+
+| modifier | what it does |
+|---|---|
+| **HASTED** | 30% faster, attacks faster |
+| **ARMOURED** | double armour, +25% to every elemental resistance |
+| **REGENERATING** | regenerates 2.5% of its life a second |
+| **VOLATILE** | dies into a core that bursts **1.4s** later for 2.5× its damage as fire — step out of the ring |
+| **SOUL EATER** | every monster that dies within 650px makes it 6% harder-hitting, 3% faster and bigger (12 at most) |
+| **PROXIMAL TANGIBILITY** | can only be hurt while you stand within its dashed 300px ring — *INTANGIBLE* otherwise |
+| **BERSERKER** | below half its life, hits 50% harder and moves 30% faster |
+| **UNSTOPPABLE** | cannot be knocked back, slowed, chilled, frozen or stunned |
+| **ENVENOMED** | every hit it lands poisons you |
+
+### KINDRED packs
+
+From **wave 8**, one magic pack in three is **KINDRED** — bound together, with faint blue tethers
+running between them and **KINDRED** over the pack. **Every member that dies makes the rest
+bigger, tougher and harder-hitting**: +15% life (and 15% of it healed), +20% damage, +6% speed,
++10% size, up to eight times. Pick them off one at a time and the last one is a monster; bring
+them down together and they never grow.
 
 ---
 
@@ -1867,7 +1957,11 @@ ALL` is there when you want it.
 
 **Zoom and drag.** The map does not fit on a screen at a size you can read it, so scroll to
 zoom toward the cursor, drag to pan, and `FIT` puts the whole thing back. A drag is never
-mistaken for a purchase.
+mistaken for a purchase. **The tree opens at 100%, centred on your own starting point** — the
+distance a node's name can be read at. The whole map is **0%**, and it goes on in to **200%**
+(nine times the whole-map scale); every wheel tick moves the readout by the same few percent,
+and clicking the readout takes you back to 100% on your start. The panel beside the map
+scrolls on a slim gold rail rather than the browser's grey one.
 
 > The first version of this captured the pointer on the `<svg>` to follow a drag, which
 > retargets the pointer — and the `click` that follows is delivered to the `<svg>` and never
@@ -2355,6 +2449,12 @@ does — and a build that does all three gets all three. Like rage, **nobody gai
 default**: the ceiling is three and the generation is zero until a brick or a node hands it
 over. That is what keeps them a build rather than a thing that happens to everyone.
 
+**The scepter never gets frenzy or power.** A charge is the hero's alone — nothing of it reaches
+a minion — and a summoner's hero does not fight, so the two offensive charges would be dead
+weight: the scepter can't carry them, the cards that earn them are never offered to it, and
+`Reservoir` only turns up for a charge the hero both can carry and is earning. Endurance still
+works for everyone.
+
 **A generator stops being offered at the bar it fills.** A card that fills a three-deep bar three
 at a time has nothing left to sell, and one that fills it *four* at a time is selling you a point
 that falls on the floor — but `Set Jaw` had no gate at all and kept turning up for a hero who
@@ -2466,12 +2566,15 @@ stays paused underneath it and the title stays a title, which is why the same sc
 opened from either. `ESC` closes it — and *only* it, so closing the options over a paused run
 does not also un-pause the run. Every switch is written to disk the moment you click it.
 
+![The options screen: volume sliders and the text size](docs/options.png)
+
 | switch | what it does |
 |---|---|
-| **MUSIC** | the field and boss tracks. `M` still takes everything down at once |
-| **SOUND** | every hit, pickup, cast and smash |
+| **MUSIC** | the field and boss tracks, with a **volume slider** beside the switch. `M` still takes everything down at once |
+| **SOUND** | every hit, pickup, cast and smash, with its own **volume slider** — let go of it and you hear the level you chose |
 | **DAMAGE NUMBERS** | every number and word that floats off a hit — yours, the ones you take, your minions' |
 | **START WITH THE COMBAT LOG** | opens the log as a run begins, instead of pressing `L` every time |
+| **TEXT SIZE** | **SMALL · NORMAL · LARGE · VERY LARGE** (88% · 100% · 115% · 132%) — every word in the menus, sheets, cards and log, and the text drawn in the field: the HUD, damage numbers, names over monsters |
 | **RESET CHARACTER PROGRESSION** | every tree, every weapon, every difficulty — two clicks |
 
 **DAMAGE NUMBERS off is a quiet fight.** No figure off a monster, off you (a burn or a leech) or
@@ -2479,6 +2582,12 @@ off your minions, and none of the combat words either: `MISS`, `BLOCKED`, `EVADE
 `DEFLECT!`, `SUPPRESSED`, `SCORCHED!`, `FROZEN SOLID`, `CHILLED ×3` and the rest. What is not combat
 text still floats — loot, `LEVEL UP!`, a pickup, a boss calling its attack, a league appearing,
 ritual tribute. The combat log still counts every point either way.
+
+**The sliders and the text size are remembered like the switches.** A volume is a level on top
+of the mix, so turning music off and on again keeps where you left the slider. The text size
+rescales every size the stylesheet sets and every size the canvas draws at; NORMAL is the game
+exactly as written. The title screen still fits the window at any text size — a bigger size is
+taller, and the fit zooms it back in.
 
 **RESET takes two clicks** and the second one says `ARE YOU SURE?`. It wipes the skill tree,
 best wave, best level, bosses put down, spells mastered and studs banked for **every weapon on
@@ -2688,13 +2797,13 @@ of them shows fewer.
 
 ### How often the leagues come
 
-**Rare, but it happens.** Strongboxes are the common one; the big three — **breach, abyss and
-ritual** — share **one roll**:
+**Rare, but it happens.** Strongboxes are the common one; the big four — **breach, abyss, ritual
+and legion** — share **one roll**:
 
 - From **wave 7**, an ordinary (non-boss) wave has a **22%** chance of a league event, and a run
   never goes **six** ordinary waves in a row without one.
-- **Which one is chance** — breach, abyss or ritual, evenly (a ritual only while no set of altars
-  is standing).
+- **Which one is chance** — breach, abyss, ritual or legion, evenly (a ritual only while no set of
+  altars is standing, a legion only while none is running).
 - **More than one at once is rarer, and the monster level decides it**: every MOB LV adds 2.5% to
   the chance of each further event, up to 45% — so at wave 8 about one event in forty comes with
   a second, at wave 24 one in eight, and past wave 45 nearly half. At most three in a wave — two
@@ -2706,14 +2815,18 @@ ritual** — share **one roll**:
 
 When the wave's last monster dies and there is **still league content untouched on the map** —
 an unopened breach hand, an abyss nobody has stepped into, a locked strongbox, a ritual altar
-still guarded or not yet begun — the next wave **does not start**. A prompt sits top middle
+still guarded or not yet begun, a legion monolith nobody has touched — the next wave **does not
+start**. A prompt sits top middle
 saying what is left:
 
 ![WAVE CLEARED — 2 strongboxes · 3 ritual altars left · F CONTINUE](docs/wave-hold.png)
 
 - **Do it all** and the run carries on by itself the moment the last of it is done.
 - **Press <kbd>F</kbd>** to leave it: the breach hand sinks and the abyss closes, as they always
-  did at the end of a wave; a strongbox or a ritual altar stays where it is for later.
+  did at the end of a wave; a strongbox or a ritual altar stays where it is for later; a legion
+  monolith goes when the next wave rolls its own leagues.
+- A ritual or a legion **begun after the wave was cleared** holds the next wave until its last
+  monster falls.
 - A ritual altar counts until its ritual is complete — guarded, freed but not begun, or both.
 
 ### Breach
@@ -2870,8 +2983,11 @@ diamond on the screen's rim for each one that still has something to give.
   out of it until the ritual is done**, and neither can your legion. What was inside when it
   closed stays inside; what was outside stands in the **fog** beyond the ring and cannot come in.
   **The ring is a wall for every missile, both ways**: nothing shot from outside comes in, and
-  nothing you (or your minions) shoot from inside gets out. The wave's own bodies wait until it is
-  over, and a running ritual holds the wave.
+  nothing you (or your minions) shoot from inside gets out. **And it is a wall for all harm**: a
+  monster outside cannot hurt you or your minions by any means — a swing across the line, a blast
+  whose edge reaches in, a patch of ground — and nothing of yours inside, not a swing, a burn or a
+  minion, can hurt anything outside. The wave's own bodies wait until it is over, and a running
+  ritual holds the wave.
 - **The altar calls a horde** into the circle: a pulse of six to nine every 1.6s (never more
   than twenty-six standing), **24 + the wave** of them in all — 14% magic, 6% elite. A ritual
   begun after the wave's last monster died still holds the next wave until its own last one falls.
@@ -2892,8 +3008,9 @@ before you shop buys the most:
 
 | offer | costs (×1.11 per MOB LV) | what you get |
 |---|--:|---|
-| magic gear | ~90 | a piece for your hero, **item level +2** over the floor's |
-| rare gear | ~260 | the same, rare |
+| **a card** *(arcade)* | ~110 uncommon · ~260 rare · ~760 epic · ~3600 legendary | that brick at that rarity, **taken on the spot** |
+| magic gear *(RPG)* | ~90 | a piece for your hero, **item level +2** over the floor's |
+| rare gear *(RPG)* | ~260 | the same, rare |
 | rare chest | ~200 | a rare brick, waiting on <kbd>R</kbd> |
 | epic chest | ~600 | an epic brick |
 | legendary chest | ~2800 | a legendary brick |
@@ -2903,7 +3020,18 @@ are fought at, and a legendary chest costs three to five sets of that. Getting o
 **DEFER** is for: put it off, keep your tribute, and each later set — deeper, so it pays more —
 brings it back **10% cheaper**. Expect to defer it three to six times.
 
-- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash.
+**Cards, in arcade.** An arcade run has no gear, so the altar's gear share — about half the offer —
+is **cards** instead: one named brick at a named rarity, with its text on the tile, the way the
+reward screen shows it. The rarity is rolled first (uncommon 34%, rare 36%, epic 22%, legendary
+8%), then a brick that rarity may hand you and that you can still take — every cap is honoured,
+and no card is on the altar twice (a deferred one included). A card costs more than a chest of
+its rarity: a chest is a draw, the card is the one you wanted. **TAKE** applies it at once. A card
+you have since capped out of reads *YOU CAN NO LONGER TAKE IT* and cannot be bought.
+
+![An arcade ritual offer: cards and chests](docs/ritual-cards.png)
+
+- **BUY** puts gear in your bag (at your feet if the bag is full) and a chest on the reward stash;
+  **TAKE** takes a card.
 - **DEFER** takes an offer off this set and puts it **first in the next set's offer**, **10%
   cheaper** — for the thing you want and cannot afford yet. It comes back as an ordinary offer
   (marked RETURNED); defer it again and it is another 10% off. Six at most at once.
@@ -2918,6 +3046,37 @@ brings it back **10% cheaper**. Expect to defer it three to six times.
 ![A ritual running: the circle, the fog, a mark and the altar's ring](docs/ritual.png)
 
 ![The ritual's offer](docs/ritual-offer.png)
+
+### Legion
+
+PoE's Legion. A **monolith** rises somewhere off to one side (with a marker on the screen's rim).
+**Touch it** and a battle stopped in time comes into being around it: an army — **the Eternal
+Empire** (knights, lancers, archers, skeletons; bastion sergeants) or **the Karui Horde** (brutes,
+stalkers, imps, superimps; zombie-hulk sergeants) — standing in its ranks, **frozen**, in a
+480px ring about the stone: 22 + the wave of them (60 at most), 15% magic.
+
+- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt and
+  killed, but they do not walk, swing or shoot, and they cannot be shoved. **Every kill buys
+  0.35s**, up to 14s. The ring round the stone runs down as the time does, and the HUD counts
+  the time, the fallen and the standing.
+- **Then time starts again**, and what is left wakes up and fights.
+- **Sergeants** (two, three from wave 20, four from 35 — elites, with rare modifiers) each drop a
+  **war chest**: rare, epic 37% of the time, legendary 5%.
+- **From wave 15 a general** leads them — an elite with 2.5× the life, bigger — and pays an **epic
+  chest, or a legendary one in four**.
+- A running legion **holds the wave**, including one begun after the wave was cleared.
+
+![A legion frozen in time round its monolith](docs/legion.png)
+
+### The league tree — *coming*
+
+A second tree, for the leagues: points spent on **how often each league turns up and what it is
+like** — more breaches, a fourth ritual altar, an abyss that forks more, deeper breach monsters,
+longer frozen legions, more strongboxes, more goblins, more studs. **It is pre-built, not
+playable**: the sixteen nodes on five roads (breach, abyss, ritual, legion, loot), the rule for
+taking one (next to one you have, for a point; given back from the end of a road), the save, and
+every hook in the league code are in, reading zero until it is switched on. The screen and the
+way to earn points come next.
 
 ### A run, as a link
 
@@ -3468,7 +3627,7 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>I</kbd> | **equipment** — what you wear and the bag. The run waits while it is open |
+| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag. The run waits while it is open |
 | <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
@@ -3526,9 +3685,20 @@ difficulty live. Each card opens at its **own lowest rarity**, which is what you
 you are balancing: you see what it is worth when it actually drops. Hovering shows the full
 now → next comparison; <kbd>Shift</kbd>+scroll walks the rarity up.
 
-It also has a **sandbox**: switch it on and no wave ever arrives, then put any of the 37
-monsters or 8 bosses in front of you on demand — <kbd>Shift</kbd>-click for an elite,
-right-click for five.
+It also has a **sandbox**: switch it on and no wave ever arrives, then put any monster or boss
+in front of you on demand — <kbd>Shift</kbd>-click for an elite, right-click for five. A
+**SPECIALS** group holds what the wave budget never buys — the treasure goblin, the mimic, the
+war banner — and **KINDRED PACK** sends a bound magic pack of whichever monster you clicked last.
+
+- **LEAGUES** puts any league down now, on any wave and in the sandbox (which the league roll
+  never allows): a breach, an abyss, a ritual set, a legion monolith, a strongbox of each tier,
+  a chest, a mimic chest, a treasure goblin, three blood or plague orbs.
+- **RARE MODIFIERS**: pick any, and every <kbd>Shift</kbd>-clicked elite wears exactly those;
+  with none picked they roll as in a run. The pick never reaches the wave's own elites.
+- **LEAGUE TREE** drives the pre-built tree: switch it on, add points, take or give back any
+  node (hover one for what it does), take every node, or reset it.
+
+![The test bench: leagues, the league tree, rare modifiers and the sandbox](docs/bench.png)
 
 It is how the numbers in this README were balanced, and it is deliberately not advertised
 anywhere in the game.

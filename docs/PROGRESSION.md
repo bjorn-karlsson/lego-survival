@@ -4138,3 +4138,177 @@ stay silent muted. New `quiet`: numbers off leaves LEVEL UP! and nothing numeric
 `fewcalls`, `oneway`, `fogall`, `nodeferagain`, `deferdearer`, `manaflat`, `noregen`, `emptystart`,
 `noglobes`, `nopan`, `nothrottle`, `mutedplays`, `runningnohold`, `loudoff`, `minionloud`, `nodone`,
 `nostuck` caught.
+
+## Sixty-seventh pass — two game modes: arcade, and an RPG that is still a plan
+
+**Arcade and RPG.** The title opens with a mode row. **ARCADE** is the game as it was — difficulty,
+weapon, favourite, waves, the arcade tree, reward cards, bosses, leagues — minus the gear: every
+gear path asks `modeHasGear()`, and in arcade the run wears nothing (`resetRun` and
+`rebuildWithout` skip `gearApply`), a boss's spoils have no gear (`gearBossSpoils` returns
+nothing), the ritual's magic and rare gear offers become rare and epic chests, the run link
+carries no gear part, <kbd>I</kbd> does nothing, and the EQUIPMENT buttons are hidden. The gear
+code, its save and the stash are untouched. **RPG · W.I.P.** turns START into a screen that says
+what the mode will be and holds **EQUIPMENT & STASH**; closing the equipment opened from it comes
+back to it, and <kbd>Esc</kbd> or BACK closes it. The choice is saved (`bb_mode`); a run link
+always boots arcade. The plan for the RPG — class, the Outskirts and a town, missions and
+dungeons, click-to-move, a 20-slot skill bar with PoE's Ctrl layer, mana costs, five flasks,
+skill and support gems in socketed gear, its own tree and ascendancies, a phased roadmap and the
+open questions (chiefly: <kbd>1</kbd>–<kbd>5</kbd> cannot be both skills and flasks) — is
+[RPG-BLUEPRINT.md](RPG-BLUEPRINT.md).
+
+**Also.** A level-up now re-syncs the stats and fills mana (`gainXp`), so a rebuilt hero matches
+the one that levelled.
+
+**Proof.** New `modes`: the title defaults to arcade with no equipment button; picking RPG
+changes START, shows EQUIPMENT, hides the arcade tree and is remembered; START in RPG opens the
+W.I.P. screen and no run; its equipment button opens the gear and returns; Esc and BACK close
+it; an arcade run with a rare helmet saved wears nothing (also after a rebuild), a wave-15 boss
+drops no gear, 400 ritual offers are all chests, <kbd>I</kbd> stays in play and a run link has no
+gear; switched to RPG the same calls drop, sell and wear gear; a run link boots arcade from RPG.
+`gear` now runs in RPG. Breaks `bossgear`, `ritgear`, `wornarcade`, `wornstart`, `ikey`,
+`linkgear`, `rpgruns`, `btnalways`, `nosave`, `noreturn`, `noesc`, `linkrpg` caught.
+
+## Sixty-eighth pass — the arcade ritual sells cards
+
+> *"in Ritual Arcade, instead of only getting presented with Chests, you get presented with cards also."*
+
+The altar's gear share (magic and rare gear, about half the offer) is **cards** in arcade instead
+of chests. `ritualCard()` rolls the rarity (uncommon .34, rare .36, epic .22, legendary .08), then
+draws a brick that the rarity may hand you (`rarAllows`) and whose `req` still passes — the same
+rule that keeps a capped stat off the reward screen — weighted like the screen's flat slots
+(`shunMul × cardWeight`), and never one already on the altar or deferred; nothing fits and the
+rarity walks down. Prices sit above the chest of the same rarity: 110 / 260 / 760 / 3600 at MOB LV 0.
+**TAKE** is `applyPick` — logged, counted in `taken` and the build log like a picked card. A card
+that has become untakeable since it was offered (`ritualCardUsable`) is refused (`'maxed'`), shows
+*YOU CAN NO LONGER TAKE IT*, and counts as unaffordable for the auto-close. The tile shows the
+brick's icon, name in its rarity's colour, class, how many you hold, and its text. RPG keeps gear.
+
+**Proof.** New `ritcards`: 150 arcade offers are 52% cards, the rest chests, no gear, no card
+twice, every card takeable; a card is dearer than its chest; TAKE pays, applies, counts and logs it
+and moves the hero's numbers; a card made untakeable is refused, keeps the tribute, shows disabled
+and lets a stuck window close; a deferred card comes back once, 10% cheaper, and the altar does
+not offer it again meanwhile; the tile shows the card and TAKE works from the window; an RPG
+offer has gear and no cards. `modes` counts cards with chests. Breaks `nocards`, `cheapcard`,
+`twice`, `anycard`, `nomaxcheck`, `noapply`, `stuckmaxed`, `nodesc`, `rpgcards` caught.
+
+## Sixty-ninth pass — Legion, a goblin, a mimic, a banner, blood orbs, rare modifiers, KINDRED packs, a wall round the ritual, and the league tree pre-built
+
+**The ritual's ring walls off harm, not just missiles.** `ritualOutside(o)` says whether something
+stands beyond a running ritual's ring (a monster by the side the clamp fixed it on, anything else by
+distance). Three gates ask it about the other party: `hitEnemy` (which burns, bleeds and poison
+ticks go through too) refuses a monster outside; `playerDamage` and `minionHurt` refuse a hit whose
+source is outside — every monster-side `minionHurt` call now passes its source. Everything of yours
+is inside, so that is the whole rule.
+
+**The bloater's breath is drawn**: the cone (±0.55 rad, 150px — the one that poisons) from the
+moment it plants its feet, filling outwards through the 0.55s heave, then turning with the breath.
+
+**Rare modifiers.** `RARE_MODS`, rolled in `spawnEnemy` for every elite from wave 6 — one, two from
+15, three from 30, distinct — and drawn over its head by `drawMonsterMods`: HASTED (×1.3 speed),
+ARMOURED (×2 armour, +25% elemental res), REGENERATING (2.5%/s), VOLATILE (`rmCores`: a core that
+bursts 1.4s after death for 2.5× its damage, fire, 120px), SOUL EATER (+6% damage, +3% speed, bigger
+per death within 650px, 12 at most), PROXIMAL TANGIBILITY (hurt only with the hero within 300px),
+BERSERKER (below half life ×1.5 damage, ×1.3 speed), UNSTOPPABLE (no knockback, slow, chill, freeze
+or stun), ENVENOMED (its hits poison). **KINDRED**: `spawnMagicPack` binds one magic pack in three
+from wave 8; each member's death grows the rest (+15% life and 15% healed, +20% damage, +6% speed,
++10% size, eight times at most), with tethers and a KINDRED ×n label.
+
+**The specials.** The TREASURE GOBLIN (`goblinRoll` in `startWave`, 10% from wave 4, 6–20s in):
+flees, leaks studs every tenth of its life, 110 base life with ×3 armour and 30% resistances (about
+eleven brutes), portals out after 14s + 2.2s; killed, 30 + 10/wave studs × stud multiplier, a heart
+and one or two boss-grade chests. It is ignored by the wave-clear check. The MIMIC: 18% of monster
+chests from wave 5 (`mimic` on the prop), a lid-and-teeth tell every 4.5s, `breakProp` wakes it,
+it hops and lunges, and pays its chest a tier up (to epic). The BANNER-BEARER joins the roster (band
+3): within 420px it plants a `warbanner` (0.9s), whose 280px aura (`updateBanners`, applied and
+removed as a delta) gives ×1.3 damage, ×1.2 speed, ×0.85 attack time; replants 10s after it falls.
+
+**Blood orbs.** `orbSpawn`/`updateBloodOrbs`: they set off roughly at the hero, turn at 2.4 rad/s and
+accelerate (45 → 330 px/s); after 4s, or within 24px of the hero, they hold for 1s over a 58px
+circle and drop — physical and `bleedPlayer`, or chaos and poison for the plague kind. The ritual's
+ring kills an orb that crosses it. The zombie WITCH DOCTOR joins the roster (band 4) and raises three
+every 4.2s from range; BLOOD-CALLER and PLAGUE-CALLER are new boss traits (two orbs every 5s, three
+for an ultra). **Bleeding on the hero** is new: 35% of the hit per second for 4s, physical, twice as
+fast while moving, five wounds, BLEED in the ailment list.
+
+**Legion.** A fourth kind in the league roll (evenly, one at a time). `legionPlace` raises a monolith
+520–1500px out; touching it (`legionStart`) stands 22 + wave soldiers (60 max, 15% magic) of the
+Eternal Empire or the Karui Horde in a 480px ring, plus sergeants (2/3/4) carrying war chests
+(rare/epic 37%/legendary 5%) and, from wave 15, a general (×2.5 life) worth an epic or legendary
+chest. Frozen soldiers are pinned (`legionFrozen`, skipped by `bodySpace`) but take damage; each
+kill buys 0.35s (9s, 14s max); `legionRelease` wakes the rest. `legionActiveNow` feeds
+`leagueRunning` and the wave-clear check, so a legion begun on a cleared wave holds the next one.
+
+**The league tree, pre-built.** `LEAGUE_TREE` (16 nodes, 5 roads), `LTREE` saved as `bb_ltree`,
+`ltreeTake`/`ltreeRefund` (adjacent, for a point; leaves only), and `leagueStat(k)` read through one
+hook per knob — `leagueChanceNow`, `leagueKindWeight`, `ritualAltarCount`, `abyssForkChance`,
+`legionTimeNow`, `sboxChanceNow`, `goblinChanceNow`, `studMoreMul`, and a breach monster-level bump
+in `breachify` — all 0 while `LEAGUE_TREE_ON` is false. The weighted kind pick uses the same one
+random number as the old uniform pick, so with even weights nothing moves.
+
+**Proof.** New `ritwall`, `puke`, `monmods`, `specials`, `orbs`, `legionlg`, `ltree`. Breaks
+`wallhit`, `wallhero`, `wallmin`, `nopuke`, `pukeshort`, `modsnone`, `modscount`, `regennone`,
+`unstopkb`, `proxall`, `soulall`, `coresoon`, `venomnone`, `kinall`, `kinnone`, `kinearly`,
+`nomodtext`, `berserkany`, `gobtoward`, `gobholds`, `gobstays`, `gobfree`, `gobsoft`, `gobnoleak`,
+`gobearly`, `mimicnone`, `mimicsame`, `mimicnever`, `mimictame`, `bannernone`, `bannerleak`,
+`bannerwide`, `bannerlazy`, `orbnohome`, `orbflat`, `orbnohold`, `orbforever`, `orbnobleed`,
+`orbwide`, `bleedflat`, `wdnocast`, `bossnoorb`, `orbnowall`, `chaosbleed`, `lgnofreeze`,
+`lgnotime`, `lgnocap`, `lgnochest`, `lgnogen`, `lgnorun`, `lgnoroll`, `lgstays`, `lgnowake`,
+`lgnoleft`, `ltalwayson`, `ltskip`, `ltfree`, `ltmidref`, `ltnosave`, `ltnochance`, `ltnoalt`,
+`ltnolvl`, `ltnolgt`, `ltnostud` caught.
+
+**The test bench, brought up to date.** Three new rows and a new sandbox group. **LEAGUES**
+(`benchLeague`) puts any league down on the spot, whatever the wave and in the sandbox too: a
+breach (up to one per lord, its hand due at once), an abyss, a ritual set (`ritualPlaceSet`
+directly), a legion monolith, a strongbox of each tier, a chest, a mimic chest, a treasure goblin,
+three blood or three plague orbs. **LEAGUE TREE** toggles `LEAGUE_TREE_ON`, adds points, takes or
+refunds a node (a take hands over the point it needs), takes every node or resets. **RARE
+MODIFIERS** picks the exact modifiers a shift-clicked elite wears (`rareModForce`, set only for
+that one spawn). The sandbox's **SPECIALS** group has the goblin, the mimic and the war banner,
+and **KINDRED PACK** sends a bound magic pack (`spawnMagicPack`'s new `kinForce`) of the last
+monster clicked; the banner-bearer and the witch doctor sit in their roster bands. New `bench69`
+covers all of it; breaks `bnoleague`, `bnosand`, `bnowaitnow`, `bnokin`, `bnoforce`, `bleak`,
+`bnospecial`, `bnotree`, `bnorefund` caught.
+
+## Seventieth pass — a title that fits, no offensive charges for the scepter, and the tree's zoom
+
+**The title fits the window.** `fitTitle` zooms the whole `.titlewrap` (plate and both panels)
+with CSS `zoom` to the window's height, and to its width so the three columns stay in a row
+(`stacked` only below a 0.6 zoom), refitting on resize and — through a MutationObserver on the
+plate's content — whenever the plate changes; the panels are capped at the plate's height. The
+old version scaled the plate with a transform, which left its full-size box behind to scroll.
+New `titlefit2`: no scroll and START on screen at 1024×700 through 2560×1300, a row from 1300
+wide, full size at 1080 tall, a refit when a blurb grows. Breaks `nozoom`, `nowidth`, `norefit`,
+`shrinkbig` caught.
+
+**No frenzy or power for the scepter.** `HERO_STACKS` gains a `not` gate beside `only`;
+frenzy and power carry `not:['scepter']`, so `stackAllows` refuses them (nothing is gained, the
+HUD shows none), `Blood Rush` and `Sharpened Focus` ask `stackAllows` first, and `Reservoir`
+needs a charge the hero can carry and is generating. Endurance is untouched.
+
+**The tree's zoom.** `TREE_ZOOM_MAX` 6 → 9, and the readout is `treeZoomPct`: log₃ of the
+zoom, so the whole map reads 0%, three times closer 100%, nine times 200%. The tree opens at
+`treeHome()` — 100% on `metaStartId()`'s node — and clicking the readout goes back there; FIT
+is still the whole map. `metaplay` presses FIT before measuring the whole-map view. The side
+panel has a thin gold scrollbar (`scrollbar-color`, and `::-webkit-scrollbar` rules).
+
+**Proof.** New `t70`: the scepter refuses frenzy and power (and gains none), is never offered
+the two cards in 300 draws, gets `Reservoir` only for endurance; the sword keeps all three; the
+tree opens at zoom 3 reading 100% on the start node, FIT reads 0%, it goes to 9 (200%) and no
+further, back out to 0%, and the readout click returns to 100%; the side panel's scrollbar is
+thin and gold. Breaks `frenzyok`, `cardnogate`, `resvany`, `oldlabel`, `openfit`, `shallow`,
+`greybar` caught.
+
+**Volume sliders and a text size.** MUSIC and SOUND each gain a slider in their options row:
+`A.musVol`/`A.sfxVol` (0–1, saved as `bb_musvol`/`bb_sfxvol`) multiply `MUS_GAIN`/`SFX_GAIN` in
+`audioApply`, so the switches still silence and turning one back on keeps its level; the track
+fills gold to the thumb, and letting go of the sound slider plays a hit. **TEXT SIZE** is the
+first *choice* option (`OPT_DEFS` entries may carry `choices`; `optLoad`/`optSave`/`optSet`
+keep the value): SMALL 0.88, NORMAL 1, LARGE 1.15, VERY LARGE 1.32. `applyTextSize` rescales
+every px `font-size` in the stylesheets (each rule's own size remembered, so NORMAL restores it
+exactly) and the few inline ones, and the canvas's `font` setter scales the px in any font string
+it is handed (cached per string). The options screen scrolls when a big size makes it taller than
+the window. New `opts70`: the sliders set the live gains (0.4, 0.25), show 40%/25%, fill the
+track, save, restore, and survive a switch off and on; VERY LARGE is ×1.32 on the page and the
+canvas, remembered, SMALL ×0.88, NORMAL exactly as written, and both survive a reload. Breaks
+`volmus`, `volsfx`, `volnosave`, `volnoload`, `txtnocss`, `txtnocanvas`, `txtnosave`,
+`txtnoboot` caught.
