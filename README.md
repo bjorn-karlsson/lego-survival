@@ -3697,7 +3697,8 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | | |
 |---|---|
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows | move |
-| **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
+| **Left mouse** | swing — *hold* to whirl, once you own Blademaster (or the right button: **OPTIONS → ATTACK BUTTON**) |
+| **Point & click** | **OPTIONS → MOVEMENT**: click to walk, click a monster to attack it — see [Point and click](#point-and-click) |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
@@ -3710,6 +3711,30 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
 | <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
+
+### Point and click
+
+**OPTIONS → MOVEMENT** switches between **WASD** (above, the default) and **POINT & CLICK**, PoE's
+way — and the movement the RPG will use. **ATTACK BUTTON** puts the weapon on the left or the
+right mouse button.
+
+| Point & click, attack on the **left** | |
+|---|---|
+| **Left-click the ground** | walk there, round whatever is in the way (the same A* the monsters use); **hold** to follow the cursor |
+| **Left-click a monster** (or a chest) | walk into range and **attack it once** — a sword walks into reach and swings, a bow or a staff walks into a comfortable shot (520 / 470px) and shoots; **hold** to keep attacking that one, wherever the cursor goes |
+| <kbd>Shift</kbd> + **left-click** | attack **where you stand**, at the cursor — a tap too quick for a frame still gets its one attack |
+| **Scepter** | a click walks (it attacks nothing itself); <kbd>Shift</kbd>+click is **Convocation** |
+
+With the attack on the **right**, the **left button only ever walks**, even over a monster, and
+the **right** button attacks: on a monster it walks in and hits it, anywhere else it attacks from
+where you stand. A press decides what a hold means, as in PoE: pressed on the ground, a held button
+walks even when the cursor passes over a monster. The spot you clicked gets a small pale ring, and
+what you are after a red dashed one. <kbd>Space</kbd> still rolls, the way you are walking. (With
+WASD the attack button setting applies too: the weapon is on whichever button you chose.)
+
+**The next skill point, on the HUD.** Under the level bar: *next skill point at level N* — a level
+pays a point the first time you reach it, so it is the level after your best, in blue when it is
+the very next one.
 
 ---
 

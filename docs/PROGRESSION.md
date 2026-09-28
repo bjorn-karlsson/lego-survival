@@ -4418,3 +4418,40 @@ stats) and is back at ~41s. `zombie` and `r56` compared every node against a sna
 round-42 tree; the snapshot is now `tree71.ids`, the v4 tree, and `r56` counts a door's way in as
 a road when asking whether a cluster is a pocket. New `link71` (a copied link carries `tv`; a
 current link restores its tree exactly; a version-less one restores none of it and says so).
+
+## Seventy-second pass — point and click, and the next skill point
+
+**The next skill point.** `metaNextLevelPoint()` is `max(best level, level) + 1` while the tree
+is live for this run (`metaRun`, tree on, under the ceiling) and `null` otherwise; `renderHUD`
+writes *next skill point at level N* under the level bar, blue when it is the very next level.
+
+**Point and click.** Two options: `moveMode` (`wasd` | `click`) and `attackBtn` (`left` |
+`right`); `OPT_DEFS` choices may now carry display `names`. The mouse gains `rdown` and per-button
+presses latched on the canvas only (`lpress`, `rpress`). `updatePlayer` asks `heroControl(p, dt)`
+for one frame of intent — `{ ax, ay, aim, face, attack, held, press, engaged, stand }` — and uses
+it where it read the keys and `mouse.down`: the walk vector, the facing, the whirl (`held &&
+attack`), the attack block, and Convocation (`press`). WASD answers as before (with the weapon on
+the chosen button). POINT & CLICK keeps `CTL` (`dest`, `target`, `mode` move/attack/stand, `fired`,
+a cached `path`): a press decides the mode — SHIFT or the right button off a monster is *stand*,
+a monster (or breakable prop, `clickTargetAt`, picked round the body's middle) under the attack
+button is *attack*, else *move*; a quick tap still sets the destination or its one attack. *Move*
+follows the cursor while held and walks to the last point on release; *attack* walks
+(`heroSteer`: straight while `navLineOpen` and no water, else `navFindPath`, string-pulled,
+repathed when the goal moves 60px) until within `heroAttackRange()` — 0.85 of the swing's reach,
+0.7 of a slam, 520 for a bow, 470 for a staff, 0 for the scepter — then attacks; the attack block
+sets `CTL.fired`, and a target not held is let go after its one attack. `drawClickMarks` draws the
+pale ring where you clicked and a red dashed one under the target. `resetRun` clears `CTL`.
+New `click72` (the options; WASD still walks and swings, and with the attack on the right only
+the right button swings; a ground click walks there and stops, a held one follows the cursor; a
+monster click walks into reach and swings exactly once, a hold keeps swinging even with the cursor
+wandered off, a press on the ground dragged over a monster never attacks; SHIFT swings where you
+stand, and a SHIFT tap swings once; a bow walks from 1000 to its range and shoots once, SHIFT
+shoots from where it is; with the attack on the right the left walks up to a monster without
+swinging, the right engages it (one swing) or swings in place; the scepter walks on a click and
+SHIFT+click is Convocation; a click across a 120px boulder walks round it; the next-point level
+7→8, 9→10, shown, off without a run; the options screen names both rows; and a real mouse click
+on the canvas walks the hero there). Breaks `noclick`, `notap`, `noonce`, `noshift`, `nopath`,
+`nextsame`, `scepterconvo`, `dragattack`, `rightboth` caught. `opts70` now picks its TEXT SIZE
+buttons by row, since MOVEMENT's are the first choice buttons on the screen. `summon`'s "brute
+stands inside the skeleton" (a 2px overlap in a real-time run) fails about one run in five on both
+the old and the new build (6/30 each) -- a flake that predates this pass.

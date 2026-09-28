@@ -3387,6 +3387,17 @@ const OPT_DEFS = [
   { id:'autoLog', def:false, name:'START WITH THE COMBAT LOG',
     note:'open the log as soon as a run begins, instead of pressing L every time. '+
          'SHIFT+L still walks the tabs' },
+  /* HOW YOU MOVE. WASD is the arcade's; POINT & CLICK is PoE's, and the one the
+     RPG will use: left-click the ground to walk there, left-click a monster to
+     walk into range and hit it, SHIFT to stand still and attack where you point */
+  { id:'moveMode', def:'wasd', name:'MOVEMENT', choices:['wasd','click'], names:{ wasd:'WASD', click:'POINT & CLICK' },
+    note:'WASD: the keys walk and the mouse aims. POINT & CLICK: click the ground to walk there (hold to '+
+         'follow the cursor), click a monster to walk into range and attack it (hold to keep attacking), '+
+         'SHIFT+click to attack where you stand. SPACE still rolls' },
+  { id:'attackBtn', def:'left', name:'ATTACK BUTTON', choices:['left','right'], names:{ left:'LEFT CLICK', right:'RIGHT CLICK' },
+    note:'which mouse button uses your weapon. With POINT & CLICK on the left, the left button walks and '+
+         'attacks; on the right, the left button only ever walks, and the right attacks — a monster '+
+         'under the cursor is walked to and hit, anywhere else is attacked from where you stand' },
   /* a CHOICE rather than a switch: its value is one of `choices` */
   { id:'textSize', def:'normal', name:'TEXT SIZE', choices:['small','normal','large','xlarge'],
     note:'every word in the menus, the sheets, the cards and the log, and the text drawn in the '+
@@ -3890,7 +3901,7 @@ function A_bossFight(){ return enemies.some(e=>e.type==='boss'); }
 
 /* =============================== INPUT =============================== */
 const keys = {};
-const mouse = { x:0, y:0, down:false, wx:0, wy:0 };
+const mouse = { x:0, y:0, down:false, wx:0, wy:0, rdown:false, lpress:false, rpress:false };
 let everInput = false;
 window.addEventListener('keydown', e=>{
   /* A TEXT FIELD OWNS ITS KEYS. Without this, naming a preset "Tank" would type
@@ -3965,12 +3976,14 @@ window.addEventListener('mousedown', e=>{
     /* the scepter's click (Convocation) is latched, so it must only latch a click
        ON THE FIELD: picking a reward card is a mousedown too, and it used to
        arrive in the next frame of play as a Convocation */
-    if(state === 'play' && e.target === cv) mouse.fresh = true;
+    if(state === 'play' && e.target === cv){ mouse.fresh = true; mouse.lpress = true; }
   }
+  /* THE RIGHT BUTTON, for an attack bound to it (see OPT.attackBtn) */
+  if(e.button===2){ mouse.rdown = true; if(state === 'play' && e.target === cv) mouse.rpress = true; }
 });
-window.addEventListener('mouseup', e=>{ if(e.button===0) mouse.down=false; });
+window.addEventListener('mouseup', e=>{ if(e.button===0) mouse.down=false; if(e.button===2) mouse.rdown=false; });
 window.addEventListener('contextmenu', e=> e.preventDefault());
-window.addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; mouse.down=false; lootHeld = false; });
+window.addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; mouse.down=false; mouse.rdown=false; lootHeld = false; });
 
 /* =============================== STATE =============================== */
 let state = 'title';
@@ -14925,6 +14938,16 @@ function metaPointsEarned(m){
   m = m || metaCur();
   return Math.min(META_POINT_MAX, metaWavePoints(m) + metaMilestonePoints(m));
 }
+/* THE NEXT LEVEL THAT PAYS A POINT. A level pays one the first time it is
+   reached -- your BEST level is the record -- so on a fresh character it is the
+   next level up, and on a hero below their best it is one past the best. null
+   when nothing would pay: the tree switched off, a replayed link, the ceiling. */
+function metaNextLevelPoint(){
+  if(!metaRun || !META || !META.on || !player) return null;
+  const m = metaCur();
+  if(metaPointsEarned(m) >= META_POINT_MAX) return null;
+  return Math.max(m.best.level || 0, player.level || 0) + 1;
+}
 function metaPointsSpent(m){
   m = m || metaCur();
   let t = 0;
@@ -19872,6 +19895,167 @@ document.getElementById('rejectBtn').addEventListener('click', ()=>{ SFX.click()
 document.getElementById('rerollBtn').addEventListener('click', doReroll);
 
 /* =============================== UPDATE =============================== */
+/* ============================ POINT AND CLICK ============================
+   PoE's movement, as an option (OPT.moveMode) -- and the movement the RPG will
+   use. Everything the hero does each frame is asked of heroControl(): which way
+   to walk, where to aim, whether to attack. WASD answers the way it always did;
+   POINT & CLICK answers from the mouse:
+     - the left button on the GROUND walks there, routed round what is in the
+       way; held, the hero follows the cursor;
+     - the attack button on a MONSTER (or anything breakable) walks into range
+       and attacks it once; held, it keeps attacking that one;
+     - SHIFT with the attack button attacks where you stand, at the cursor;
+     - with the attack on the RIGHT button, the left only ever walks.
+   A press decides what a hold means, as in PoE: pressed on the ground, a held
+   button walks even when the cursor passes over a monster; pressed on a monster,
+   it keeps hitting that monster wherever the cursor goes. */
+const CLICK_STOP = 10;          /* close enough to a clicked spot */
+const CLICK_PICK = 20;          /* slack round a body that still counts as clicking it */
+const CLICK_RANGE_ARROW = 520;  /* how close a bow walks before it shoots (arrows fly ~740) */
+const CLICK_RANGE_BOLT = 470;   /* ...and a staff (bolts fly ~700) */
+const CTL = { dest:null, target:null, mode:null, btn:null, fired:false, path:null, pathI:0, pathT:0, goal:null, mark:null };
+function clickMode(){ return OPT.moveMode === 'click'; }
+function attackOnRight(){ return OPT.attackBtn === 'right'; }
+function shiftHeld(){ return !!(keys.ShiftLeft || keys.ShiftRight); }
+function ctlReset(){ CTL.dest = null; CTL.target = null; CTL.mode = null; CTL.btn = null; CTL.fired = false; CTL.path = null; CTL.mark = null; }
+/* how close the weapon has to be to its target: a swing's reach, a slam's
+   length, a comfortable bowshot. The scepter attacks nothing itself: 0. */
+function heroAttackRange(){
+  const p = player;
+  if(!p || !weapon) return 0;
+  if(isSummoner()) return 0;
+  if(isArcher()) return CLICK_RANGE_ARROW;
+  if(isCaster()) return CLICK_RANGE_BOLT;
+  if(isSlammer()) return Math.max(90, (p.slamRange || 220)*0.7);
+  return Math.max(30, (weapon.reach*(1 + stackMod('reach')) + (p.reach || 0))*0.85);
+}
+/* what is under the cursor: a monster first, then anything breakable. A body is
+   drawn standing UP from its feet, so it is picked round its middle, not its feet */
+function clickTargetAt(wx, wy){
+  let best = null, bd = Infinity;
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || e.docile) continue;
+    const s = e.scale || 1, cy = e.y - 18*s;
+    const d = Math.min(Math.hypot(e.x - wx, cy - wy), Math.hypot(e.x - wx, e.y - wy)) - hitR(e) - CLICK_PICK;
+    if(d < 0 && d < bd){ bd = d; best = e; }
+  }
+  if(best) return best;
+  for(const pr of props){
+    if(pr.dead || pr.indestructible || !(pr.hp > 0)) continue;
+    const d = Math.hypot(pr.x - wx, pr.y - 10 - wy) - (pr.r || 14) - CLICK_PICK*0.5;
+    if(d < 0 && d < bd){ bd = d; best = pr; }
+  }
+  return best;
+}
+function clickTargetLive(t){ return !!t && !t.dead && (props.includes(t) ? t.hp > 0 : t.state === 'active'); }
+function clickTargetR(t){ return props.includes(t) ? (t.r || 14) : hitR(t); }
+/* which way to walk towards a point: straight while the line is open, else the
+   same A* the monsters use, string-pulled, repathed when the goal moves */
+function heroSteer(p, tx, ty, dt){
+  const d = Math.hypot(tx - p.x, ty - p.y);
+  if(d < 1) return null;
+  if(!NAV.blocked || (navLineOpen(p.x, p.y, tx, ty) && !segHitsWater(p.x, p.y, tx, ty, (p.r || 12)*0.8))){
+    CTL.path = null; return { x:(tx - p.x)/d, y:(ty - p.y)/d };
+  }
+  CTL.pathT -= dt;
+  if(!CTL.path || CTL.pathT <= 0 || !CTL.goal || Math.hypot(CTL.goal.x - tx, CTL.goal.y - ty) > 60){
+    CTL.path = navFindPath(p.x, p.y, tx, ty); CTL.pathI = 0; CTL.goal = { x:tx, y:ty }; CTL.pathT = 0.5;
+  }
+  if(!CTL.path || !CTL.path.length) return { x:(tx - p.x)/d, y:(ty - p.y)/d };
+  let best = CTL.pathI;
+  for(let i = Math.min(CTL.path.length-1, CTL.pathI+6); i > CTL.pathI; i--)
+    if(navLineOpen(p.x, p.y, CTL.path[i].x, CTL.path[i].y)){ best = i; break; }
+  CTL.pathI = best;
+  let wp = CTL.path[CTL.pathI];
+  if(Math.hypot(wp.x - p.x, wp.y - p.y) < NAV.cs*0.5 && CTL.pathI < CTL.path.length-1){ CTL.pathI++; wp = CTL.path[CTL.pathI]; }
+  const dw = Math.hypot(wp.x - p.x, wp.y - p.y) || 1;
+  return { x:(wp.x - p.x)/dw, y:(wp.y - p.y)/dw };
+}
+/* ONE FRAME OF INTENT: { ax, ay } to walk, aim, attack (fire the weapon if it
+   can), held (the attack button is being held -- a whirl spins), press (the
+   attack was pressed this frame -- a Convocation) and face (where the body looks) */
+function heroControl(p, dt){
+  const mouseA = Math.atan2(mouse.wy - p.y, mouse.wx - p.x);
+  const out = { ax:0, ay:0, aim:mouseA, face:mouseA, attack:false, held:false, press:false, engaged:false };
+  const right = attackOnRight();
+  if(!clickMode()){
+    let ax = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0);
+    let ay = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0);
+    const al = Math.hypot(ax, ay) || 1; out.ax = ax/al; out.ay = ay/al;
+    out.attack = out.held = right ? mouse.rdown : mouse.down;
+    out.press = right ? mouse.rpress : !!mouse.fresh;
+    if(!right) mouse.fresh = false;
+    mouse.lpress = mouse.rpress = false;
+    ctlReset();
+    return out;
+  }
+  const sh = shiftHeld(), range = heroAttackRange();
+  const lp = mouse.lpress, rp = mouse.rpress;
+  mouse.lpress = mouse.rpress = false; mouse.fresh = false;
+  const atkDown = right ? mouse.rdown : mouse.down, atkPress = right ? rp : lp;
+  const under = (atkPress || (atkDown && CTL.mode === 'attack' && !clickTargetLive(CTL.target))) ? clickTargetAt(mouse.wx, mouse.wy) : null;
+  /* THE ATTACK BUTTON */
+  if(atkPress){
+    /* the scepter attacks nothing itself: its click walks, and SHIFT+click (or
+       the right button, bound) is its Convocation */
+    if(sh || (right && (!under || range <= 0))){ CTL.mode = 'stand'; }
+    else if(under && range > 0){ CTL.mode = 'attack'; CTL.target = under; CTL.fired = false; CTL.dest = null; }
+    else CTL.mode = right ? 'stand' : 'move';
+    out.press = CTL.mode === 'stand';
+    if(CTL.mode === 'stand') CTL.fired = false;
+  }
+  /* a press on the ground sets where to walk even if the button is already up
+     again -- a quick tap goes down and up between two frames */
+  if(!right && lp && CTL.mode === 'move'){ CTL.target = null; CTL.dest = { x:mouse.wx, y:mouse.wy }; CTL.mark = { x:mouse.wx, y:mouse.wy, t:0.45 }; }
+  /* THE WALK BUTTON, when the attack is on the right: it only ever walks */
+  if(right && lp){ CTL.target = null; if(CTL.mode !== 'stand') CTL.mode = 'move'; CTL.dest = { x:mouse.wx, y:mouse.wy }; CTL.mark = { x:mouse.wx, y:mouse.wy, t:0.45 }; }
+  const walkDown = right ? mouse.down : (atkDown && CTL.mode === 'move');
+  if(walkDown) CTL.dest = { x:mouse.wx, y:mouse.wy };
+  /* STANDING AND ATTACKING: nothing moves you, the weapon points at the cursor */
+  /* (a tap too quick for a frame still gets its one attack) */
+  if(CTL.mode === 'stand'){
+    if(atkDown || !CTL.fired){ CTL.dest = null; CTL.target = null; out.attack = true; out.held = atkDown || !CTL.fired; out.stand = true; out.aim = out.face = mouseA; }
+    else CTL.mode = null;
+  }
+  /* HOLDING ON A MONSTER: a dead target hands the hold to whatever is under the cursor */
+  if(CTL.mode === 'attack' && atkDown && !clickTargetLive(CTL.target)){
+    if(under){ CTL.target = under; CTL.fired = false; } else { CTL.mode = 'move'; CTL.target = null; }
+  }
+  /* ENGAGING: into range, then the weapon -- once, or for as long as it is held */
+  let steer = null;
+  if(CTL.target){
+    const t = CTL.target;
+    if(!clickTargetLive(t) || (CTL.fired && !(atkDown && CTL.mode === 'attack'))){ CTL.target = null; if(CTL.mode === 'attack' && !atkDown) CTL.mode = null; }
+    else {
+      const gap = Math.hypot(t.x - p.x, t.y - p.y) - clickTargetR(t);
+      out.aim = out.face = Math.atan2(t.y - p.y, t.x - p.x);
+      if(gap > range) steer = heroSteer(p, t.x, t.y, dt);
+      else { out.attack = true; out.held = atkDown || !CTL.fired; out.engaged = true; }
+    }
+  } else if(CTL.dest){
+    if(Math.hypot(CTL.dest.x - p.x, CTL.dest.y - p.y) <= CLICK_STOP){ if(!walkDown) CTL.dest = null; }
+    else steer = heroSteer(p, CTL.dest.x, CTL.dest.y, dt);
+  }
+  if(!walkDown && CTL.mode === 'move' && !CTL.dest) CTL.mode = null;
+  if(steer){ out.ax = steer.x; out.ay = steer.y; if(!out.attack) out.face = Math.atan2(steer.y, steer.x); }
+  if(CTL.mark){ CTL.mark.t -= dt; if(CTL.mark.t <= 0) CTL.mark = null; }
+  return out;
+}
+/* the little ring where you clicked the ground, and a ring under what you are after */
+function drawClickMarks(c){
+  if(!clickMode() || !player) return;
+  if(CTL.mark){
+    const k = clamp(CTL.mark.t/0.45, 0, 1);
+    c.strokeStyle = `rgba(255,236,160,${0.8*k})`; c.lineWidth = 2.5;
+    c.beginPath(); c.ellipse(CTL.mark.x, CTL.mark.y, 16 + 10*(1-k), 7 + 4*(1-k), 0, 0, TAU); c.stroke();
+  }
+  const t = CTL.target;
+  if(t && clickTargetLive(t)){
+    const r = clickTargetR(t) + 8;
+    c.strokeStyle = 'rgba(255,90,74,0.8)'; c.lineWidth = 2.5; c.setLineDash([6, 5]);
+    c.beginPath(); c.ellipse(t.x, t.y + 2, r, r*0.45, 0, 0, TAU); c.stroke(); c.setLineDash([]);
+  }
+}
 function updatePlayer(dt){
   const p = player;
   if(p.dead){ p.deadT += dt; return; }
@@ -19948,16 +20132,17 @@ function updatePlayer(dt){
   } else p.regenAcc = 0;
   updateAilments(dt);
   p.blinkT -= dt; if(p.blinkT<=0){ p.blink=0.12; p.blinkT=rnd(2,4.5); } p.blink = Math.max(0,p.blink-dt);
-  const aimA = Math.atan2(mouse.wy-p.y, mouse.wx-p.x);
-  p.face = { x:Math.cos(aimA), y:Math.sin(aimA) };
-  let ax = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0);
-  let ay = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0);
-  const al = Math.hypot(ax,ay)||1; ax/=al; ay/=al;
+  /* WHAT THE PLAYER WANTS THIS FRAME -- from the keys, or from the mouse (see
+     POINT AND CLICK above heroControl) */
+  const ctl = heroControl(p, dt);
+  const aimA = ctl.aim;
+  p.face = { x:Math.cos(ctl.face), y:Math.sin(ctl.face) };
+  const ax = ctl.ax, ay = ctl.ay;
   p.moving = (ax!==0||ay!==0);
   /* Blademaster: holding the swing button spins the hero up into a whirl. It is a
      stance, not an attack — it replaces swinging, costs footing, and locks out
      the roll while it is up. */
-  p.whirl = p.blademaster>0 && !isSlammer() && mouse.down && p.stunT<=0 && p.dash.t<=0 && !p.dead;
+  p.whirl = p.blademaster>0 && !isSlammer() && ctl.held && ctl.attack && p.stunT<=0 && p.dash.t<=0 && !p.dead;
   if(p.whirl){
     p.whirlAng += WHIRL_SPIN*dt;
     /* the legs keep working under the crouch, whether or not you are walking */
@@ -20028,6 +20213,8 @@ function updatePlayer(dt){
         vx:tx*rnd(180, 300), vy:ty*rnd(180, 300), vz:rnd(80, 200), rot:rnd(TAU), vr:rnd(-12, 12),
         w:rnd(4, 7), h:rnd(3, 5), color:pick(['#8a8f96','#b9a88a','#6e7378']), life:rnd(0.4, 0.7), max:0.7 });
     }
+    /* a click on a monster asked for ONE attack; a whirl gives it its tick */
+    if(ctl.engaged || ctl.stand) CTL.fired = true;
   } else p.whirlAng = 0;
   const spdMul = chillMul() * (p.whirl ? (WHIRL_SLOW[p.blademaster] || 1) : 1);
   let vx, vy;
@@ -20051,7 +20238,8 @@ function updatePlayer(dt){
     p.dash.dir = p.moving ? {x:ax,y:ay} : {x:Math.cos(aimA), y:Math.sin(aimA)};
     SFX.dash(); addDust(p.x,p.y,5);
   }
-  if(mouse.down && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
+  if(ctl.attack && !p.swing && !p.slamAct && p.atkCd<=0 && p.stunT<=0 && !p.whirl){
+    if(ctl.engaged || ctl.stand) CTL.fired = true;         /* the one attack a click asked for */
     if(isCaster())      castBolt(aimA);
     else if(isArcher())  fireArrow(aimA);
     else if(isSummoner()){ /* the click is latched below */ }
@@ -20065,7 +20253,7 @@ function updatePlayer(dt){
     p.convoCd = Math.max(0, (p.convoCd || 0) - dt);
     /* CONVOCATION is a CLICK, latched on mousedown: a quick tap can go down and
        up between two frames, and asking "is it held?" would miss it */
-    if(mouse.fresh){ mouse.fresh = false; if(p.stunT <= 0) convocation(); }
+    if(ctl.press && p.stunT <= 0) convocation();
     convoTick(dt);
     if(!p.dead && p.stunT <= 0 && p.raiseCd <= 0 && legion().length < minionMax()) raiseMinion(aimA, false);
     /* ...and, with Raise Zombie, the dead that were zombies: their own pool, their own clock */
@@ -27000,6 +27188,7 @@ function render(){
   drawSboxGuards();
   drawRitual();
   drawLegion();
+  drawClickMarks(ctx);
   drawCorpses();
   for(const h of hazards){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
@@ -29624,6 +29813,15 @@ function renderHUD(){
   ctx.strokeStyle='rgba(15,20,25,0.7)'; ctx.lineWidth=2.5; ctx.stroke();
   ctx.fillStyle = '#1b2a34'; ctx.font='700 15px "Titan One"'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(p.level, bx+10, xpY+7);
+  /* ...and under the bar, which level pays the next skill point */
+  { const nl = metaNextLevelPoint();
+    if(nl){
+      const soon = nl === p.level + 1;
+      ctx.font = '700 10px Fredoka'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      const txt = 'next skill point at level ' + nl;
+      ctx.strokeStyle = 'rgba(15,20,25,0.75)'; ctx.lineWidth = 3; ctx.strokeText(txt, bx+30, xpY+21);
+      ctx.fillStyle = soon ? '#8fd4ff' : '#9fb0a4'; ctx.fillText(txt, bx+30, xpY+21);
+    } }
   /* POINTS WAITING. A point earned mid-run is only worth something if you know
      it is there, so while any sit unplaced the level bar says so -- and names
      the key, because T is a new door into an old screen. */
@@ -30144,6 +30342,7 @@ let titleClock = 0;
 
 /* =============================== GAME FLOW =============================== */
 function resetRun(demo){
+  ctlReset();
   seed = (!demo && runLink && runLink.s) ? runLink.s : (Math.random()*1e9)|0;
   enemies=[]; projectiles=[]; pickups=[]; debris=[]; particles=[]; dmgTexts=[]; sched=[]; hazards=[]; spikes=[]; pspikes=[];
   minions=[]; corpses=[]; gearDrops=[];
@@ -30308,7 +30507,7 @@ function optRows(){
     { key:'sfx', name:'SOUND', on:()=>A.sfxOn && !A.muted,
       note:'every hit, pickup, cast and smash',
       vol:'sfxVol', hit:()=>{ audioInit(); toggleSfx(); } },
-    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices,
+    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices, names:d.names,
       on:()=>!!OPT[d.id], hit:()=>optToggle(d.id) })),
   ];
 }
@@ -30319,7 +30518,7 @@ function optRender(){
     /* a choice: one button per value, the chosen one lit */
     if(r.choices) return `<div class="optrow choice"><div class="otext"><b>${r.name}</b><i>${r.note}</i>`+
       `<div class="ochoices">${r.choices.map(c=>`<button class="ochoice${OPT[r.key] === c ? ' on' : ''}" data-choice="${r.key}" data-val="${c}">${
-        (TEXT_SIZES[c] || { name:c }).name}</button>`).join('')}</div></div></div>`;
+        (r.names && r.names[c]) || (TEXT_SIZES[c] || { name:c }).name}</button>`).join('')}</div></div></div>`;
     /* a switch, and -- for music and sound -- a volume slider beside it */
     const vol = r.vol ? `<div class="ovol"><input type="range" min="0" max="100" step="1" value="${Math.round(A[r.vol]*100)}" data-vol="${r.vol}" aria-label="${r.name} volume">`+
       `<span class="ovoln">${Math.round(A[r.vol]*100)}%</span></div>` : '';
