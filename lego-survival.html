@@ -14185,7 +14185,7 @@ const RING_AT = [0, 5, 12, 22, 34];
     const a = t.spot.deg*Math.PI/180;
     const s = { ring:t.spot.ring, j:3000 + i, deg:t.spot.deg, rim:false,
       x:Math.round(CX + Math.cos(a)*(t.spot.rad + CORE_ROOM)), y:Math.round(CY + Math.sin(a)*(t.spot.rad + CORE_ROOM)),
-      sec:t.home, site:t, late:true, after:true };
+      sec:t.home, site:t, after:true };
     let g = Infinity;
     for(const o of taken.concat(fillers)) g = Math.min(g, Math.hypot(o.x-s.x, o.y-s.y));
     s.gap = isFinite(g) ? g : 900;
@@ -14312,9 +14312,11 @@ const RING_AT = [0, 5, 12, 22, 34];
       for(const i of G.toHub) if(c.nodes[i]) add(c.nodes[i], n.id);
     }
   };
-  for(const s of sites) if(s.site && !s.late) drawSite(s);
+  for(const s of sites) if(s.site && !s.late && !s.after) drawSite(s);
   /* the filled quads last, so their numbers follow everything already known */
   for(const s of sites) if(s.late){ drawSite(s); s.cluster.late = true; }
+  /* ...and after them the `after` templates: notables of their own, not filler */
+  for(const s of sites) if(s.after) drawSite(s);
   META_SITES = sites;
 
   const byHome = {};

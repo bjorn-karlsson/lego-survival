@@ -4532,7 +4532,8 @@ damage) -- with pierce and flat arrow damage on their minors, and a new tree sta
 every shot*, capped with Split Arrow at 9. Adding them was the hard part: the in-quad groups number
 themselves off how many sites came before them, so one more site anywhere re-seeded 262 nodes that
 saved trees own. These three are laid **after** every other site is numbered and measured
-(`after:true` on the template), and not one node of the round-71 snapshot moves.
+(`after:true` on the template) and drawn last -- as notables of their own, not as the defensive
+filler the empty quads take -- and not one node of the round-71 snapshot moves.
 
 **+1 maximum golems.** THE FOUNDRY's *Golem Commander* reads **+1 maximum golems** and says what
 it is: room for one more, raising nothing until a golem brick picks which. (A golem at the start
