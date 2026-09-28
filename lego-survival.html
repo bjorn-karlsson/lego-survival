@@ -8552,7 +8552,12 @@ function respawnNow(){
   document.getElementById('overScreen').classList.add('hidden', 'peek');
   document.getElementById('overScreen').classList.remove('peek');
   p.dead = false; p.deadT = 0; p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax;
-  p.invuln = RESPAWN_GRACE; p.stunT = 0; p.psn = null; p.pbleed = null; p.burn = null;
+  /* the ailments are CLEARED, not deleted: every one of them is a live object the
+     frame reads, and a null here froze the hero where they stood */
+  p.invuln = RESPAWN_GRACE; p.stunT = 0; p.kx = 0; p.ky = 0;
+  p.psn = { list:[], acc:0 }; p.pbleed = { list:[], acc:0 }; p.burn = { list:[], acc:0, brkCd:0 };
+  p.chill = { stacks:0, t:0 }; p.shock = { stacks:0, t:0 }; p.slowT = 0;
+  ctlReset();   /* no walk or target from before the fall carries over */
   tScale = 1;
   /* room to breathe: everything close is thrown back, every shot in the air near you goes */
   for(const e of enemies){
@@ -11515,6 +11520,7 @@ const GOLEM_TYPES = {
 const GOLEM_KEYS = Object.keys(GOLEM_TYPES);
 const CARRION_FLAT = 0.35, CARRION_R = 320, CARRION_PER = 0.06, CARRION_MAX = 1.0;
 const STONE_TAUNT_R = 360;
+const BARBED_OVER = 0.5;     /* Barbed Arrows: Sharpened Blade's flat, +0.5, arrows only */
 const UPGRADES = [
   { id:'dmg', name:'Sharpened Blade', icon:'sword', cls:'OFFENSE',
     req:()=>!isCaster() && !isSummoner(),
@@ -11776,9 +11782,13 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased armour (cap ${Math.round(ARMOUR_INC_MAX*100)}%)`,
     apply:c=>{ player.incArmour += c.v; syncStats(); } },
   { id:'suppress', name:'Spell Suppression', icon:'ward', cls:'DEFENSE', minRar:'uncommon',
-    req:()=>player.suppress < 1,
+    /* the WHOLE chance, what you hold included: a shield's suppression counts,
+       and at 100% there is nothing left for this brick to give */
+    req:()=>suppressChance() < 1,
     calc:m=>({v:0.08+0.06*m}),
-    desc:c=>`+${Math.round(c.v*100)}% chance to suppress spell damage — a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`,
+    desc:c=>{ const now = suppressChance(), to = Math.min(1, now + c.v);
+      return `+${Math.round((to - now)*100)}% chance to suppress spell damage (${Math.round(now*100)}% \u2192 ${Math.round(to*100)}%, cap 100%) — `+
+        `a suppressed hit deals ${Math.round(SUPPRESS_TAKEN*100)}%`; },
     apply:c=>{ player.suppressFlat += c.v; syncStats(); } },
   { id:'reach', name:'Longsword', icon:'range', cls:'OFFENSE',
     /* a staff has no reach to lengthen — it throws. Nor has a mace: it does not
@@ -12291,7 +12301,9 @@ const UPGRADES = [
     apply:c=>{ player.bow.pierce = Math.min(ARROW_MAX_PIERCE, player.bow.pierce + c.p); } },
   { id:'arrowflat', name:'Barbed Arrows', icon:'bow', cls:'OFFENSE',
     req:()=>isArcher(),
-    calc:m=>({v: byRar(m, [0.3, 0.5, 0.8, 1.2, 1.8])}),
+    /* the Sharpened Blade's numbers and half a point more: it only ever feeds
+       arrows, so it has to beat the brick that feeds everything */
+    calc:m=>({v: byRar(m, [0.5, 1, 3, 5, 8]) + BARBED_OVER}),
     desc:c=>`+${c.v} FLAT physical damage to every arrow \u2014 before any increase, so every `+
       `increase multiplies it (an arrow is ${fmtHp(arrowDamage())} now)`,
     apply:c=>{ player.bow.flat = Math.round((player.bow.flat + c.v)*100)/100; } },
@@ -12823,7 +12835,7 @@ const META_STATS = {
   minionZombies:{ n:'your summon aura raises ZOMBIES from corpses, up to twelve',
                 w:(p)=>{ p.minions.zombies = true; }, only:['scepter'] },
   minionProj: { n:'projectile for your skeleton archers and mages', w:(p,v)=>{ p.minions.proj += v; }, only:['scepter'] },
-  golemCap:   { n:'golem you may keep',     w:(p,v)=>{ p.minions.golemCap = (p.minions.golemCap || 0) + v; }, only:['scepter'] },
+  golemCap:   { n:'maximum golems', w:(p,v)=>{ p.minions.golemCap = (p.minions.golemCap || 0) + v; }, only:['scepter'] },
   minionMax:  { n:'skeleton in your legion', w:(p,v)=>{ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + v); }, only:['scepter'] },
   minionLess: { n:'LESS minion damage', pct:1, w:(p,v)=>{ p.minions.more *= (1 - v); }, only:['scepter'] },
   minionMirror:{ n:'your minions gain three quarters of your increased damage, and your conversions',
@@ -12840,6 +12852,7 @@ const META_STATS = {
   arrowFlat:  { n:'flat physical damage to arrows',       w:(p,v)=>{ p.bow.flat += v; }, only:['bow'] },
   arrowPierce:{ n:'arrow pierce',                         w:(p,v)=>{ p.bow.pierce = Math.min(ARROW_MAX_PIERCE, p.bow.pierce + v); },
                 only:['bow'] },
+  arrowN:     { n:'arrow on every shot',                  w:(p,v)=>{ p.bow.n = Math.min(ARROW_MAX_N, p.bow.n + v); }, only:['bow'] },
   ricochet:   { n:'chance for an arrow that would stop to RICOCHET to another body, up to twice', pct:1,
                 w:(p,v)=>{ p.ricochet = (p.ricochet||0) + v; }, only:['bow'] },
   arrowLess:  { n:'LESS arrow damage', pct:1, w:(p,v)=>{ p.bow.more *= (1 - v); }, only:['bow'] },
@@ -12988,7 +13001,7 @@ const META_ICON_EXACT = {
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
   minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', golemCap:'skull', minionProj:'split', minionZombies:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
-  prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
+  prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', arrowN:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -13185,7 +13198,7 @@ const META_BRANCH = {
     [['Bloodletting','bleedChance',0.04],['Gutting','bleedShare',0.03],['Septic','incDot',0.05]],
     [['Surefoot','speed',0.03],       ['Vaulting','roll',0.10],        ['Warpaint','frostRes',0.05]]],
   bow:  [
-    [['Draw','incMelee',0.03],        ['Full Draw','incMelee',0.035],  ['Barbed','arrowFlat',0.3]],
+    [['Draw','incMelee',0.03],        ['Full Draw','incMelee',0.035],  ['Barbed','arrowFlat',0.5]],
     [['Nock','incAtk',0.03],          ['Quick Nock','incAtk',0.035],   ['Fleet','speed',0.03]],
     [['Sighted','acc',30],            ['Steady','incCrit',0.04],       ['Marked','critMult',0.08]],
     [['Light Step','eva',40],         ['Slip','incEva',0.08],          ['Quiver','arrowPierce',1]]],
@@ -13389,7 +13402,24 @@ const META_LATE = [
   { id:'n_foundry', name:'THE FOUNDRY', sp:'arc', home:'int', d:[2,3], shape:'arc',
     spot:{ ring:2, rad:4500, deg:246 },        /* the next clear ground in blue */
     minors:[['Clay','minionLife',0.08],['Kiln','minionDmg',0.06],['Mould','minionLife',0.06]],
-    notable:{ name:'Golem Commander', mods:[['golemCap',1],['minionDmg',0.06]] } },
+    notable:{ name:'Golem Commander', note:'room for one more golem -- which one, a golem brick decides',
+              mods:[['golemCap',1],['minionDmg',0.06]] } },
+  /* THE ARCHER'S GROUND. The bow's numbers were three minors scattered across
+     the green -- no arrow anywhere, hardly any pierce. Three clusters of its own:
+     one more arrow near the door, pierce on the way out, and one more arrow
+     again at the far edge for a price. */
+  { id:'n_fletch', name:'THE FLETCHERY',  sp:'prec', home:'dex', d:[1,3], shape:'fan',
+    after:true, spot:{ ring:1, rad:1400, deg:16 },         /* clear ground a short walk off the green door */
+    minors:[['Split Nock','arrowFlat',0.4],['Broadhead','arrowPierce',1],['Quick Nock','incAtk',0.04]],
+    notable:{ name:'Volley', note:'one more arrow on every shot', mods:[['arrowN',1],['incAtk',0.04]] } },
+  { id:'n_skewer', name:'THE SKEWER',     sp:'swift',home:'dex', d:[2,3], shape:'chain',
+    after:true, spot:{ ring:2, rad:3000, deg:70 },         /* the widest gap in green's middle ring */
+    minors:[['Bodkin','arrowPierce',1],['Fletching','arrowFlat',0.4],['Draw Weight','incMelee',0.05]],
+    notable:{ name:'Skewer', note:'every arrow goes through two more', mods:[['arrowPierce',2],['arrowFlat',0.5]] } },
+  { id:'n_barrage',name:'THE BARRAGE',    sp:'prec', home:'dex', d:[2,4], shape:'arc',
+    after:true, spot:{ ring:3, rad:5000, deg:18 },         /* the widest clear ground left in green, far out */
+    minors:[['Full Quiver','arrowPierce',1],['Barbed','arrowFlat',0.5],['Loose','incAtk',0.05]],
+    notable:{ name:'Barrage', note:'one more arrow, each a little lighter', mods:[['arrowN',1],['arrowLess',0.08]] } },
 ];
 const META_NOTABLES = [
   /* red */
@@ -13679,7 +13709,7 @@ const META_KEYSTONES = [
   /* THE ARCHER'S KEYSTONE. An arrow that would stop has a chance to find one
      more body, and then another -- bought with a little off every arrow. */
   { id:'k_rico',  name:'THE RICOCHET', sp:'prec', home:'dex', d:[4,4], shape:'arc',
-    minors:[['Fletched','arrowPierce',1],['Barbed','arrowFlat',0.4],['Quick Draw','incAtk',0.05]],
+    minors:[['Fletched','arrowPierce',1],['Barbed','arrowFlat',0.5],['Quick Draw','incAtk',0.05]],
     keystone:{ name:'Ricochet', note:'an arrow that should stop finds another body, and hits a little softer',
                mods:[['ricochet',0.40],['arrowLess',0.15]] } },
 
@@ -13962,6 +13992,7 @@ const RING_AT = [0, 5, 12, 22, 34];
      late template brings its own ground -- a spot picked where nothing stands --
      appended AFTER every other site, so nothing built before it moves. */
   for(const t of META_LATE){
+    if(t.after) continue;
     const a = t.spot.deg*Math.PI/180;
     sites.push({ ring:t.spot.ring, j:1000 + sites.length, deg:t.spot.deg, rim:false,
       x:Math.round(CX + Math.cos(a)*(t.spot.rad + CORE_ROOM)), y:Math.round(CY + Math.sin(a)*(t.spot.rad + CORE_ROOM)),
@@ -14145,6 +14176,22 @@ const RING_AT = [0, 5, 12, 22, 34];
     s.gap = isFinite(g) ? g : 900;
     s.wall = wallAt(s.x, s.y).d;
   }
+  /* LATER STILL: a template marked `after` arrives once every other site --
+     the in-quad groups included -- is numbered and measured. Those number
+     themselves off how many sites came first, so one more site ahead of them
+     re-seeded every group on the map; here it re-seeds nothing, and is drawn
+     last of all. */
+  META_LATE.filter(t=>t.after).forEach((t, i)=>{
+    const a = t.spot.deg*Math.PI/180;
+    const s = { ring:t.spot.ring, j:3000 + i, deg:t.spot.deg, rim:false,
+      x:Math.round(CX + Math.cos(a)*(t.spot.rad + CORE_ROOM)), y:Math.round(CY + Math.sin(a)*(t.spot.rad + CORE_ROOM)),
+      sec:t.home, site:t, late:true, after:true };
+    let g = Infinity;
+    for(const o of taken.concat(fillers)) g = Math.min(g, Math.hypot(o.x-s.x, o.y-s.y));
+    s.gap = isFinite(g) ? g : 900;
+    s.wall = wallAt(s.x, s.y).d;
+    sites.push(s); fillers.push(s);
+  });
   let cn = 0;
   const drawn = [];
   const drawSite = (s)=>{
@@ -15452,7 +15499,7 @@ const META_TAGS = {
   chaosInoc:'defence chaos resistance energy shield es life hearts',
   ghostReaver:'defence energy shield es leech lifesteal recovery',
   zealot:'defence energy shield es regeneration regen recovery',
-  arrowFlat:'offence damage physical attack projectile arrow flat', arrowPierce:'offence attack projectile arrow pierce',
+  arrowFlat:'offence damage physical attack projectile arrow flat', arrowPierce:'offence attack projectile arrow pierce', arrowN:'offence attack projectile arrow multiple extra additional',
   ricochet:'offence attack projectile arrow', arrowLess:'attack projectile arrow damage',
   prolif:'offence ailment area ignite burn poison bleed damage over time',
   critAilAll:'offence critical crit ailment',  noCrit:'critical crit',
@@ -20138,7 +20185,12 @@ function heroControl(p, dt){
   /* THE FREE ATTACK: while its button is held (SHIFT held with the left, or the
      right button), and once for a tap too quick to be held for a frame */
   const freeDown = right ? (mouse.rdown && CTL.mode !== 'attack') : (mouse.down && sh);
-  if(freeDown && !CTL.free){ CTL.free = true; CTL.fired = false; }
+  if(freeDown && !CTL.free){
+    CTL.free = true; CTL.fired = false;
+    /* the scepter's attack is a PRESS (Convocation): SHIFT coming down on a held
+       walk is that press too, or nothing happened until you let go and clicked */
+    if(range <= 0) out.press = true;
+  }
   if(CTL.free){
     if(freeDown || !CTL.fired){ out.attack = true; out.held = freeDown || !CTL.fired; out.stand = true; out.aim = out.face = mouseA; }
     else CTL.free = false;

@@ -4508,3 +4508,46 @@ kept with the log closed, the killer named, COMBAT LOG and BACK). Breaks `nomove
 `nohorde`, `hordeopen`, `onekind`, `noline`, `nopike`, `nocharge`, `noheart`, `rebuildlose`,
 `nofree`, `flatfine`, `bossnoreset`, `bankearly`, `logoff`, `nokiller` caught; `noawake` caught by
 `legionlg`. `qol`'s death-screen check now dies with no second chance on the table.
+
+## Seventy-fourth pass — the second chance that froze you, the bow's own ground, and three fixes
+
+**The second chance froze the hero.** Standing up cleared your poison, bleed and burn by setting
+them to `null` -- but the frame reads each of them as a live list, so every frame after the
+respawn threw half-way through the hero's update: you stood where you fell and could not move.
+They are cleared to empty lists now (chill and shock too, and any walk or target from before the
+fall), and a second death after it offers the fine and brings you back the same way.
+
+**Barbed Arrows** is Sharpened Blade's numbers **+0.5** (+1 / +1.5 / +3.5 / +5.5 / +8.5): it only
+feeds arrows, so it must beat the brick that feeds everything. The tree's two *Barbed* nodes are
++0.5 each.
+
+**Spell Suppression** was offered to a hero already at 100%: it asked whether *your own*
+suppression was under 100%, and never counted the share your weapon or shield gives. It asks of
+the whole chance now, and its card reads *85% → 100%, cap 100%*.
+
+**The bow's ground in the green.** The dexterity country had three bow minors scattered in it and
+no arrow at all. It has three clusters of its own -- **THE FLETCHERY** (Volley: +1 arrow on every
+shot), **THE SKEWER** (Skewer: +2 pierce) and **THE BARRAGE** (Barrage: +1 arrow, 8% less arrow
+damage) -- with pierce and flat arrow damage on their minors, and a new tree stat, *+1 arrow on
+every shot*, capped with Split Arrow at 9. Adding them was the hard part: the in-quad groups number
+themselves off how many sites came before them, so one more site anywhere re-seeded 262 nodes that
+saved trees own. These three are laid **after** every other site is numbered and measured
+(`after:true` on the template), and not one node of the round-71 snapshot moves.
+
+**+1 maximum golems.** THE FOUNDRY's *Golem Commander* reads **+1 maximum golems** and says what
+it is: room for one more, raising nothing until a golem brick picks which. (A golem at the start
+could not be reproduced from the node -- no path in the code raises a golem without a kind -- so
+the fix is the wording, and a test that the node alone raises nothing.)
+
+**The scepter's SHIFT, walking.** With point and click, holding the left button to walk and then
+pressing SHIFT did nothing -- Convocation is a *press*, and SHIFT coming down on a held button is
+not a new click. Starting a free attack is that press now, so SHIFT mid-walk calls the legion home.
+
+Tests: `r74` (Barbed = Sharpened +0.5 at every rarity and on the tree; suppression not offered at a
+whole 100% with a weapon's share, offered below with the cap in the text; three green bow clusters
+on the road with +1 arrow twice and pierce, the stat capped, buying a path to Volley starts the run
+with two arrows; a second chance that walks, keeps playing and survives a second death and a fine;
+the golem notable raises nothing, a golem brick then does; SHIFT on a held walk and SHIFT+click
+while walking are both Convocation). Breaks `barbold`, `treebarb`, `supown`, `noarrowN`, `uncapped`,
+`nobowland`, `nullail`, `golemfree`, `golemtext`, `noshiftconvo` caught; `sitesearly` caught by
+`zombie`, whose round-71 tree snapshot now carries the two *Barbed* nodes at +0.5.

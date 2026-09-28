@@ -270,7 +270,9 @@ back:
   armour and after suppression, so it takes its share of whatever got through rather than
   competing with armour for the same pool. It reaches poison, bleed and burn as readily as
   it reaches a hit.
-- **Spell suppression** — +25%, or **+30%** on a mace, on top of whatever you have bought.
+- **Spell suppression** — +25%, or **+30%** on a mace, on top of whatever you have bought. It
+  counts toward 100%: once what you hold and what you bought reach it, the *Spell Suppression*
+  brick is no longer offered (its card shows *now → after, cap 100%*).
 - **Lifesteal** — see below.
 
 The mace is the one that never leaves contact, so it carries the most of both.
@@ -3244,7 +3246,8 @@ water and rocks the way you do.
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
 - **Golems, PoE's six.** Each is a **rare** card, one per kind; you may keep **two** (a third from
-  **THE FOUNDRY**, the *Golem Commander* notable out in blue), never two alike — so the pair you
+  **THE FOUNDRY**, the *Golem Commander* notable out in blue: **+1 maximum golems** -- room for
+  one more, and it raises nothing by itself; a golem brick decides which), never two alike — so the pair you
   raise is a choice about the whole build. **While a golem stands it grants you its buff**; the
   moment it falls the buff goes with it, and it rises again 10s later. Golems are their own pool:
   they take no place in the legion.
@@ -3350,7 +3353,9 @@ Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own b
 - **Split Arrow** — +1 arrow a shot at uncommon, +2 at rare, +3 at epic; fanned, up to 9.
 - **Piercing Shot** — +1 pierce at common, +2 uncommon, +3 rare, +4 epic, up to 12; each body an
   arrow has gone through costs it 15%.
-- **Barbed Arrows** — flat physical to arrows only.
+- **Barbed Arrows** — flat physical to arrows only, and so it pays more than the brick that feeds
+  everything: **Sharpened Blade's numbers +0.5** (+1 common, +1.5 uncommon, +3.5 rare, +5.5 epic,
+  +8.5 legendary). The tree's *Barbed* nodes are +0.5 each.
 
 **An arrow shoots things down.** Cross a monster's shot — an arrow, a skull, a bolt, a frost
 bolt, a hex, a bat — and both are gone: the arrow is spent taking it out of the air. A thrown
@@ -3380,6 +3385,17 @@ BARREL is arrows now, and **THE RICOCHET** keystone in dexterity's country reads
 
 > **Ricochet** — *40% chance for an arrow that would stop to leap to the nearest body it has
 > not hit, up to twice · 15% LESS arrow damage.*
+
+**The bow's own ground in the green.** Three clusters of nothing but bow, laid on clear ground
+without moving a single node a saved tree owns:
+
+| cluster | where | the minors | the notable |
+|---|---|---|---|
+| **THE FLETCHERY** | a short walk off the green door | +0.4 to arrows, +1 pierce, +4% attack speed | **Volley** — **+1 arrow on every shot**, +4% attack speed |
+| **THE SKEWER** | the middle of the green | +1 pierce, +0.4 to arrows, +5% damage | **Skewer** — **+2 pierce**, +0.5 to arrows |
+| **THE BARRAGE** | far out in the green | +1 pierce, +0.5 to arrows (*Barbed*), +5% attack speed | **Barrage** — **+1 arrow on every shot**, 8% LESS arrow damage |
+
+Both arrows count against the same cap of 9 as Split Arrow; search the tree for *arrow* to find them.
 
 **The Brick Blaster is gone.** It was a physical projectile spell that fitted nothing; its
 flight code, pierce falloff and cards are the arrow's now.
@@ -3738,7 +3754,7 @@ right mouse button.
 | **Left-click the ground** | walk there, round whatever is in the way (the same A* the monsters use); **hold** to follow the cursor |
 | **Left-click a monster** (or a chest) | walk into range and **attack it once** — a sword walks into reach and swings, a bow or a staff walks into a comfortable shot (520 / 470px) and shoots; **hold** to keep attacking that one, wherever the cursor goes |
 | <kbd>Shift</kbd> + **left-click** | attack **where you stand**, at the cursor — a tap too quick for a frame still gets its one attack |
-| **Scepter** | a click walks (it attacks nothing itself); <kbd>Shift</kbd>+click is **Convocation** |
+| **Scepter** | a click walks (it attacks nothing itself); <kbd>Shift</kbd>+click is **Convocation** — and so is pressing <kbd>Shift</kbd> while you hold the button to walk |
 
 With the attack on the **right**, the **left button only ever walks**, even over a monster, and
 the **right** button attacks: on a monster it walks in and hits it, anywhere else it attacks from
