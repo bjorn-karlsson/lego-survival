@@ -1290,6 +1290,8 @@ const WHIRL_MAX = 2;                      /* ranks of Blademaster */
 const REAVE_MAX     = 2;     /* ranks */
 const REAVE_BOUNCES = 3;     /* bodies after the one that threw it */
 const REAVE_MUL     = 0.70;  /* of the critical that threw it, per body */
+function reaveMul(){ return REAVE_MUL + ((player && player.reavePlus) || 0); }      /* the tree's REAPER adds to both */
+function reaveLegs(){ return REAVE_BOUNCES + ((player && player.reaveLegs) || 0); }
 const REAVE_SPEED   = 760;
 const REAVE_SEEK    = 320;   /* how far it will reach for the next one */
 const REAVE_SOLO_PAST = 150; /* a lone throw's turning point, this far beyond its body */
@@ -1302,6 +1304,7 @@ const REAVE_LIFE    = 2.4;   /* a fuse, so a blade can never be lost */
 const WHIRL_SPIN = 13;                    /* rad/s the hero turns while whirling */
 const WHIRL_TICK = 0.18;                  /* per-foe cooldown inside the whirl */
 const WHIRL_MUL = 0.5;                    /* each tick lands for half a swing */
+function whirlShare(){ return WHIRL_MUL + ((player && player.whirlPlus) || 0); }   /* ...and the tree's DERVISH on top */
 /* Move speed while whirling, by rank. Rank 1 costs you nothing — a stance that
    halved your footing was a trap you stopped using. Rank 2 makes you FASTER
    than walking, which is the whole spin-to-win fantasy. */
@@ -1498,7 +1501,7 @@ function syncStats(){
   const i = p.inc;
   /* HEARTS OUT OF INTELLIGENCE. Flat, and into the same pool every other flat
      heart goes into, so every increase and every MORE still multiplies it. */
-  const intHp = (p.heartsPerInt||0) * Math.floor(intOf(p)/5);
+  const intHp = (p.heartsPerInt||0) * Math.floor(intOf(p)/(5*ATTR_K));
   p.maxHp = Math.max(1, Math.min(heartCap(),
     Math.round(pool(HP_BASE, p.hpFlat + intHp, i.hp + strOf(p)*ATTR_STR_HP, p.hpMore))));
   if(p.hp > p.maxHp) p.hp = p.maxHp;
@@ -2024,7 +2027,7 @@ const WEAPONS = {
     /* balanced, and the only weapon with a little of all three */
     /* the precise one: it finds what it is aimed at */
     acc:1.10,
-    attr:{ str:10, int:4, dex:8 } },
+    attr:{ str:20, int:8, dex:16 } },
   axe: { id:'axe', name:'AXE', col:'#e0a81a',
     blurb:'Crits far more often and far harder — but a clean cut barely bleeds.',
     dmg:1.15, rate:0.40, reach:54, spinReach:68, crit:0.10, critMult:210,
@@ -2032,7 +2035,7 @@ const WEAPONS = {
     lessTaken:0.45, suppress:0.25, leech:0.09, leechChance:0.20,
     /* a heavier arc, and a little wilder for it */
     acc:0.88,
-    attr:{ str:8, int:0, dex:16 } },
+    attr:{ str:16, int:0, dex:32 } },
   mace: { id:'mace', name:'MACE', col:'#b6532b',
     blurb:'Does not swing \u2014 it SLAMS. A fault of stone teeth opens in front of you.',
     dmg:1.70, rate:0.54, reach:52, spinReach:62, crit:0.03, critMult:120,
@@ -2040,7 +2043,7 @@ const WEAPONS = {
     lessTaken:0.60, suppress:0.30, leech:0.035, leechChance:0.10,
     /* a lump of iron on a stick. It hits hardest and least often */
     acc:0.66,
-    attr:{ str:20, int:0, dex:2 },
+    attr:{ str:40, int:0, dex:4 },
     /* THE MACE DOES NOT SWING. Its basic attack is the boss's own slam, turned
        around: it drives the head into the floor and a fan of stone tears up out
        of the ground in front of it. Reach, the spin combo and the whirl all go;
@@ -2061,7 +2064,7 @@ const WEAPONS = {
     res:0.08,
     /* a courtesy for the bare-handed opening of a caster’s run */
     acc:0.72,
-    attr:{ str:0, int:22, dex:4 },
+    attr:{ str:0, int:44, dex:8 },
     boltSpd:520, boltR:46 },
   /* THE BOW DOES NOT SWING EITHER. Its basic attack is an ARROW: physical, an
      ATTACK -- so it rolls accuracy, crits off the weapon, and can open a wound --
@@ -2079,7 +2082,7 @@ const WEAPONS = {
     acc:1.25,
     /* and the one weapon that starts with some evasion of its own */
     evaBase:120,
-    attr:{ str:2, int:0, dex:22 },
+    attr:{ str:4, int:0, dex:44 },
     arrowSpd:780 },
   /* THE SCEPTER DOES NOT SWING, CAST OR SHOOT. It RAISES THE DEAD: holding the
      attack button stands skeletons up out of the floor where you point, and
@@ -2096,7 +2099,7 @@ const WEAPONS = {
     bleed:0, spin:1.00, kb:0.80, hold:'scepter', throw:'blade',
     lessTaken:0, suppress:0.15, leech:0, leechChance:0,
     acc:0.80,
-    attr:{ str:2, int:22, dex:0 } }
+    attr:{ str:4, int:44, dex:0 } }
 };
 /* WHAT CARRYING A MELEE WEAPON IS WORTH DEFENSIVELY. The staff buys its safety
    with RANGE — it never has to be where the monsters are. A melee hero has no
@@ -2486,6 +2489,28 @@ const SOURCE_ELEM = { fire:'fire', burn:'fire', ember:'fire',
    the worst possible way to do it. */
 const ERES_CAP = 0.90;
 function frozenMarks(e){ return (e && e.frozen && e.frozen.t > 0) ? e.frozen.n : 0; }
+/* ============================ PENETRATION ============================
+   PoE's: "your hits PENETRATE 10% fire resistance" -- the resistance a body
+   holds counts that much lower against YOUR hits. Hits only (a burn, a bleed or
+   a poison was built when it was opened and meets the body's resistance as it
+   is), your own only (a minion's hit is the minion's), and it only strips what
+   is there: it takes a resistance down to nothing and no further -- turning a
+   body WEAK to fire is what exposure and the brands are for. Elemental
+   penetration is all three elements at once; chaos has its own. */
+const PEN_MAX = 0.60;                         /* per element, all sources together */
+const PEN_KEYS = ['fire', 'frost', 'shock', 'chaos'];
+const PEN_NAME = { fire:'Fire', frost:'Cold', shock:'Lightning', chaos:'Chaos' };
+function penOf(el){
+  const P = player && player.pen;
+  if(!P) return 0;
+  return clamp((P[el] || 0) + (el !== 'chaos' ? (P.elem || 0) : 0), 0, PEN_MAX);
+}
+/* the resistance a HIT of yours meets */
+function penRes(e, el, source){
+  const r = enemyRes(e, el);
+  if(!(r > 0) || MINION_SOURCES.has(source)) return r;
+  return Math.max(0, r - penOf(el));
+}
 function enemyRes(e, el){
   if(!e || !el) return 0;
   let r = Math.min(ERES_CAP, (e.res && e.res[el]) || 0);
@@ -4431,7 +4456,9 @@ function newPlayer(){
     orbit:{ n:0, dmg:2, spd:ORBIT_SPD_BASE, r:78, size:9, pos:[], aegis:0, twin:0, brk:[], brk2:[] },
     /* the bow's arrow: how many a shot, how far through, a flat bonus of its
        own, a LESS for the Ricochet keystone, and which of the three it became */
-    bow:{ n:1, pierce:0, flat:0, more:1, kind:null },
+    bow:{ n:1, pierce:0, flat:0, more:1, kind:null, forkPlus:0, blastInc:0 },
+    pen:{ fire:0, frost:0, shock:0, chaos:0, elem:0 },     /* resistance your hits PENETRATE (see penOf) */
+    whirlPlus:0, reavePlus:0, reaveLegs:0,                /* the tree's weapon skills (see whirlShare, reaveMul) */
     ricochet:0,
     /* THE LEGION. How many may stand, how many rise a cast, and the minions'
        OWN pools -- a minion's damage is not yours, and nothing you buy for your
@@ -6460,7 +6487,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
          weakness and multiplies UP, which is how a fire golem is soft to frost
          without needing a second rule. Chaos is not in the table at all. */
       const el = CONV_RESIST[k];
-      if(el) part *= (1 - enemyRes(e, el));
+      if(el) part *= (1 - penRes(e, el, source));
       /* a BURNT body takes every fire harder, whatever built the fire */
       if(k === 'fire') part *= burntMul(e);
       by[k] = part;
@@ -6483,7 +6510,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
      a bounce rolls its own critical and hits like one, but it cannot start a
      second blade or one crit would fill the screen with them. */
   if(crit && !opts.quiet && !opts.drain && !opts.reave && isReaver()
-     && MELEE_SOURCES.has(source)) throwReave(e, d * REAVE_MUL);
+     && MELEE_SOURCES.has(source)) throwReave(e, d * reaveMul());
   /* EVERY AILMENT, HERE, ONCE. They ride on what the hit ARRIVED as and on the
      damage that actually landed, so a swing that barely got through barely
      bleeds and a build converted into lightning shocks with all of it.
@@ -7241,16 +7268,16 @@ const GEAR_BASE_LVL_K = 0.6;
   B('rustic_sash',   'belt', 'Rustic Sash',   1,  null, [['incMelee', 0.08, 0.12]], '#9a7a4e');
   B('chain_belt',    'belt', 'Chain Belt',    1,  null, [['es', 2, 3]], '#a9b3bc');
   B('leather_belt',  'belt', 'Leather Belt',  8,  null, [['hearts', 1, 1]], '#7a4a2e');
-  B('heavy_belt',    'belt', 'Heavy Belt',    20, null, [['str', 12, 18]], '#6c6f73');
+  B('heavy_belt',    'belt', 'Heavy Belt',    20, null, [['str', 24, 36]], '#6c6f73');
   B('vanguard_belt', 'belt', 'Vanguard Belt', 45, null, [['armour', 30, 40]], '#6c6f73');
   B('crystal_belt',  'belt', 'Crystal Belt',  45, null, [['es', 6, 8]], '#9fd8ff');
   /* amulets */
   B('coral_amulet', 'amulet', 'Coral Amulet', 1,  null, [['regen', 0.03, 0.05]], '#ff7a6a');
-  B('amber_amulet', 'amulet', 'Amber Amulet', 3,  null, [['str', 12, 18]], '#ffb347');
-  B('jade_amulet',  'amulet', 'Jade Amulet',  3,  null, [['dex', 12, 18]], '#6ee06e');
-  B('lapis_amulet', 'amulet', 'Lapis Amulet', 3,  null, [['int', 12, 18]], '#5aa8ff');
+  B('amber_amulet', 'amulet', 'Amber Amulet', 3,  null, [['str', 24, 36]], '#ffb347');
+  B('jade_amulet',  'amulet', 'Jade Amulet',  3,  null, [['dex', 24, 36]], '#6ee06e');
+  B('lapis_amulet', 'amulet', 'Lapis Amulet', 3,  null, [['int', 24, 36]], '#5aa8ff');
   B('gold_amulet',  'amulet', 'Gold Amulet',  10, null, [['studs', 0.12, 0.20]], '#ffd23e');
-  B('onyx_amulet',  'amulet', 'Onyx Amulet',  20, null, [['allAttr', 6, 10]], '#3a3f48');
+  B('onyx_amulet',  'amulet', 'Onyx Amulet',  20, null, [['allAttr', 12, 20]], '#3a3f48');
   /* rings */
   B('iron_ring',      'ring', 'Iron Ring',      1,  null, [['flatPhys', 0.2, 0.4]], '#a9b3bc');
   B('coral_ring',     'ring', 'Coral Ring',     1,  null, [['hearts', 1, 1]], '#ff7a6a');
@@ -7346,10 +7373,10 @@ const GEAR_AFFIXES = [];
   A('chaosres', 'suf', 'chaosRes', GEAR_NONWEAP, 0.05, 0.24, ['of the Lost','of Banishment','of Eviction','of Expulsion'], 40, null, 6);
   A('allres', 'suf', 'allRes', ['ring','amulet','shield'], 0.03, 0.14, ['of the Crystal','of the Prism','of the Kaleidoscope','of Variegation'], 60, null, 7);
   const ALL = GEAR_NONWEAP.concat(GEAR_WEAP);
-  A('str', 'suf', 'str', ALL, 6, 40, ['of the Brute','of the Wrestler','of the Bear','of the Lion','of the Gorilla']);
-  A('dex', 'suf', 'dex', ALL, 6, 40, ['of the Mongoose','of the Lynx','of the Fox','of the Falcon','of the Panther']);
-  A('int', 'suf', 'int', ALL, 6, 40, ['of the Pupil','of the Student','of the Prodigy','of the Augur','of the Philosopher']);
-  A('allattr', 'suf', 'allAttr', ['amulet'], 3, 14, ['of the Clouds','of the Sky','of the Meteor','of the Comet'], 60, null, 7);
+  A('str', 'suf', 'str', ALL, 12, 80, ['of the Brute','of the Wrestler','of the Bear','of the Lion','of the Gorilla']);
+  A('dex', 'suf', 'dex', ALL, 12, 80, ['of the Mongoose','of the Lynx','of the Fox','of the Falcon','of the Panther']);
+  A('int', 'suf', 'int', ALL, 12, 80, ['of the Pupil','of the Student','of the Prodigy','of the Augur','of the Philosopher']);
+  A('allattr', 'suf', 'allAttr', ['amulet'], 6, 28, ['of the Clouds','of the Sky','of the Meteor','of the Comet'], 60, null, 7);
   A('atkspd', 'suf', 'incAtk', ['gloves','quiver','ring'].concat(GEAR_ATKW), 0.05, 0.22, ['of Skill','of Ease','of Mastery','of Renown','of Grandmastery']);
   A('castspd', 'suf', 'incCast', ['amulet','ring','staff','scepter','shield'], 0.05, 0.24, ['of Talent','of Nimbleness','of Expertise','of Legerdemain','of Prestidigitation']);
   A('crit', 'suf', 'incCrit', GEAR_WEAP.concat(['amulet','quiver','ring']), 0.10, 0.42, ['of Needling','of Stinging','of Piercing','of Puncturing','of Penetrating']);
@@ -7938,11 +7965,11 @@ function physDamage(more){ return calcDamage(physBase(), 'melee', more); }
 function chaosTaken(){ return 1 - Math.min(RES_CAP, (player && player.res && player.res.chaos) || 0); }
 const ATTRS = [
   { id:'str', name:'STRENGTH',     short:'STR', col:'#ff5a4a',
-    what:'+0.5% increased physical damage and +0.5% increased maximum hearts, each' },
+    what:'+0.25% increased physical damage and +0.25% increased maximum hearts, each' },
   { id:'int', name:'INTELLIGENCE', short:'INT', col:'#5aa8ff',
-    what:'+0.5% increased spell damage and +0.5% increased regeneration, each' },
+    what:'+0.25% increased spell damage and +0.25% increased regeneration, each' },
   { id:'dex', name:'DEXTERITY',    short:'DEX', col:'#6ee06e',
-    what:'+2 accuracy and +0.2% increased evasion, each — and +0.3% increased '+
+    what:'+1 accuracy and +0.1% increased evasion, each — and +0.15% increased '+
          'critical chance, critical damage and attack speed on top' },
 ];
 /* DEXTERITY IS NOW THE ACCURACY AND EVASION ATTRIBUTE, on top of everything it
@@ -7958,12 +7985,18 @@ const ATTRS = [
    everything it already did -- spell damage and regeneration -- and gains the
    defence that belongs to it, so a caster who has been stacking INT for damage
    finds it has quietly been buying survivability as well. */
-const ATTR_INT_ES    = 0.002;   /* INCREASED maximum energy shield, per point */
-const ATTR_DEX_ACC   = 2.0;     /* flat accuracy, per point: 20 per 10 DEX */
-const ATTR_DEX_EVA   = 0.002;   /* INCREASED evasion, per point */
-const ATTR_STR_DMG   = 0.005, ATTR_STR_HP    = 0.005;
-const ATTR_INT_SPELL = 0.005, ATTR_INT_REGEN = 0.005;
-const ATTR_DEX_CRIT  = 0.003, ATTR_DEX_CMULT = 0.003, ATTR_DEX_ATK = 0.003;
+/* ATTRIBUTE POINTS ARE PoE-SIZED: a small node of the tree is +10, a big one +30.
+   To get there every point does HALF what it used to, and everything else that
+   hands attributes over -- a weapon's own, a favourite, a brick, gear -- hands
+   over TWICE as many, so none of those changed at all; only the tree's got
+   bigger (a road node is five times what it was, an attribute stop three). */
+const ATTR_K         = 2;
+const ATTR_INT_ES    = 0.002/ATTR_K;   /* INCREASED maximum energy shield, per point */
+const ATTR_DEX_ACC   = 2.0/ATTR_K;     /* flat accuracy, per point: 10 per 10 DEX */
+const ATTR_DEX_EVA   = 0.002/ATTR_K;   /* INCREASED evasion, per point */
+const ATTR_STR_DMG   = 0.005/ATTR_K, ATTR_STR_HP    = 0.005/ATTR_K;
+const ATTR_INT_SPELL = 0.005/ATTR_K, ATTR_INT_REGEN = 0.005/ATTR_K;
+const ATTR_DEX_CRIT  = 0.003/ATTR_K, ATTR_DEX_CMULT = 0.003/ATTR_K, ATTR_DEX_ATK = 0.003/ATTR_K;
 /* the weapon's own attributes plus every one a brick or a node handed over */
 function attrOf(id, p, w){
   p = p || player; w = w || weapon;
@@ -7978,7 +8011,7 @@ function intOf(p, w){ return attrOf('int', p, w); }
    on keys will cost when they come (spendMana is their door).
      maximum  = (40 + 4 a level + 1 for every 2 INTELLIGENCE + flat) x (1 + increased)
      regen    = (1.75% of the maximum a second + flat) x (1 + increased regen) */
-const MANA_BASE = 40, MANA_PER_LVL = 4, MANA_PER_INT = 0.5, MANA_REGEN_PCT = 0.0175;
+const MANA_BASE = 40, MANA_PER_LVL = 4, MANA_PER_INT = 0.5/ATTR_K, MANA_REGEN_PCT = 0.0175;
 const MANA_COL = '#3f7bff';
 function spendMana(n){
   const p = player;
@@ -11362,8 +11395,8 @@ const FLAT_BOMB  = [1, 1.5, 3, 5, 8];
 const FLAT_FREEZE = [0.3, 0.6, 1.2, 2, 3.2];
 /* attributes are BORING BY DESIGN, so a common one has to be worth taking when
    there is nothing better on the screen and never worth taking when there is */
-const ATTR_CARD     = [6, 10, 16, 26, 40];
-const ATTR_ALL_CARD = [0, 0,  6,  10, 16];
+const ATTR_CARD     = [12, 20, 32, 52, 80];
+const ATTR_ALL_CARD = [0, 0,  12, 20, 32];
 /* five chill stacks freeze a body solid, so laying five at once would make
    every pulse a freeze and the stacking mean nothing. EVERYTHING that deepens
    the pulse meets this one number: the spell's own stacks and Deepening Winter
@@ -11659,6 +11692,23 @@ const UPGRADES = [
     desc:c=>`${Math.round(c.v*100)}% increased CHAOS damage — nothing else in the game reads `+
       `this pool, and nothing in the game resists what it scales`,
     apply:c=>{ player.inc.chaos += c.v; } },
+  /* PENETRATION, one per element, offered only to a hero whose hits carry it */
+  ...PEN_KEYS.map(el=>({ id:'pen'+el, name:PEN_NAME[el]+' Penetration',
+    icon:({ fire:'flame', frost:'icecube', shock:'chain', chaos:'bane' })[el], cls:'OFFENSE',
+    minRar: el === 'chaos' ? 'rare' : 'uncommon',
+    req:()=>!isSummoner() && !!dealtTypes()[el] && penOf(el) < PEN_MAX - 1e-9,
+    calc:m=>({v: byRar(m, [0.05, 0.06, 0.08, 0.11, 0.15])}),
+    desc:c=>{ const now = penOf(el), to = Math.min(PEN_MAX, now + c.v);
+      return `Your hits PENETRATE +${Math.round((to - now)*100)}% ${PEN_NAME[el].toUpperCase()} RESISTANCE `+
+        `(${Math.round(now*100)}% \u2192 ${Math.round(to*100)}%, cap ${Math.round(PEN_MAX*100)}%) \u2014 a body resisting `+
+        `${PEN_NAME[el].toLowerCase()} counts that much lower against you, down to nothing and no further`; },
+    apply:c=>{ player.pen[el] = Math.round((player.pen[el] + c.v)*1000)/1000; } })),
+  { id:'penelem', name:'Elemental Penetration', icon:'prism', cls:'OFFENSE', minRar:'rare',
+    req:()=>!isSummoner() && ['fire','frost','shock'].some(el=>dealtTypes()[el] && penOf(el) < PEN_MAX - 1e-9),
+    calc:m=>({v: byRar(m, [0.03, 0.04, 0.05, 0.07, 0.10])}),
+    desc:c=>`Your hits PENETRATE +${Math.round(c.v*100)}% of EVERY ELEMENTAL RESISTANCE \u2014 fire, cold and `+
+      `lightning (now ${['fire','frost','shock'].map(el=>Math.round(penOf(el)*100)+'%').join(' / ')}, cap ${Math.round(PEN_MAX*100)}% each)`,
+    apply:c=>{ player.pen.elem = Math.round((player.pen.elem + c.v)*1000)/1000; } },
   { id:'elemflat', name:'Elemental Core', icon:'prism', cls:'OFFENSE',
     req:()=>isCaster(),
     calc:m=>({v: byRar(m, FLAT_SPELL)}),
@@ -12632,6 +12682,11 @@ const META_POINT_MAX      = 120;
    BACK, because the nodes it chose are no longer where it left them. Nobody
    loses progress to a patch; they respec. */
 const META_TREE_VER = 4;
+/* what a node's DAMAGE INCREASE and ATTRIBUTE are worth, whatever its template
+   wrote (see step 10b of the build) */
+const META_INC_DMG = /^(incMelee|incSpell|incAll|incElem|incFire|incFrost|incShock|incChaos|incDot|minionDmg|inc_[a-z]+)$/;
+const META_INC_MINOR = 0.16, META_INC_NOTABLE = 0.30;
+const META_ATTR_MINOR = 10, META_ATTR_NOTABLE = 20;
 /* first time only, and per weapon — grinding a wave you have already beaten
    with that weapon pays nothing */
 /* ...and the achievements on top of it, which are the things a wave count
@@ -12743,7 +12798,7 @@ const META_STATS = {
   chaosRes:   { n:'chaos resistance',             pct:1, w:(p,v)=>{ p.resFlat.chaos += v; } },
   /* ---- THE STRANGE ONES. Not pools: switches, and each one is the reason a
      build exists rather than a number on top of one. ---- */
-  heartsPerInt:{ n:'heart for every 5 INTELLIGENCE',
+  heartsPerInt:{ n:'heart for every 10 INTELLIGENCE',
                 w:(p,v)=>{ p.heartsPerInt = (p.heartsPerInt||0) + v; } },
   noArmour:   { n:'NO armour at all, ever',              w:(p)=>{ p.noArmour = true; } },
   lessSpell:  { n:'LESS spell damage taken',      pct:1,
@@ -12853,6 +12908,18 @@ const META_STATS = {
   arrowPierce:{ n:'arrow pierce',                         w:(p,v)=>{ p.bow.pierce = Math.min(ARROW_MAX_PIERCE, p.bow.pierce + v); },
                 only:['bow'] },
   arrowN:     { n:'arrow on every shot',                  w:(p,v)=>{ p.bow.n = Math.min(ARROW_MAX_N, p.bow.n + v); }, only:['bow'] },
+  arrowFork:  { n:'body Lightning Arrow forks to',        w:(p,v)=>{ p.bow.forkPlus = (p.bow.forkPlus || 0) + v; }, only:['bow'] },
+  arrowBlast: { n:'increased Fire Arrow burst radius', pct:1, w:(p,v)=>{ p.bow.blastInc = (p.bow.blastInc || 0) + v; }, only:['bow'] },
+  /* ---- THE WEAPONS' OWN SKILLS ---- */
+  whirlShare: { n:'of a swing on every Blademaster whirl hit', pct:1, w:(p,v)=>{ p.whirlPlus = (p.whirlPlus || 0) + v; }, only:['sword','axe'] },
+  reaveShare: { n:'of the critical carried by every thrown axe', pct:1, w:(p,v)=>{ p.reavePlus = (p.reavePlus || 0) + v; }, only:['axe'] },
+  reaveBounce:{ n:'body a thrown axe reaps through',      w:(p,v)=>{ p.reaveLegs = (p.reaveLegs || 0) + v; }, only:['axe'] },
+  /* ---- PENETRATION (see penOf) ---- */
+  penFire:    { n:'fire resistance PENETRATED by your hits',      pct:1, w:(p,v)=>{ p.pen.fire  += v; } },
+  penFrost:   { n:'cold resistance PENETRATED by your hits',      pct:1, w:(p,v)=>{ p.pen.frost += v; } },
+  penShock:   { n:'lightning resistance PENETRATED by your hits', pct:1, w:(p,v)=>{ p.pen.shock += v; } },
+  penChaos:   { n:'chaos resistance PENETRATED by your hits',     pct:1, w:(p,v)=>{ p.pen.chaos += v; } },
+  penElem:    { n:'of every elemental resistance PENETRATED by your hits', pct:1, w:(p,v)=>{ p.pen.elem += v; } },
   ricochet:   { n:'chance for an arrow that would stop to RICOCHET to another body, up to twice', pct:1,
                 w:(p,v)=>{ p.ricochet = (p.ricochet||0) + v; }, only:['bow'] },
   arrowLess:  { n:'LESS arrow damage', pct:1, w:(p,v)=>{ p.bow.more *= (1 - v); }, only:['bow'] },
@@ -13001,7 +13068,7 @@ const META_ICON_EXACT = {
   /* exposure is resistance coming OFF, so it is the ward turned upside down */
   exposeChance:'prismdn', ailMag:'force',
   minionDmg:'skull', minionLife:'skull', minionSpd:'skull', minionMax:'skull', golemCap:'skull', minionProj:'split', minionZombies:'skull', minionLess:'skull', minionMirror:'skull', minionInstab:'skull',
-  prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', arrowN:'bow', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
+  prolif:'bane', lessDot:'bane', arrowFlat:'bow', arrowPierce:'bow', arrowN:'bow', arrowFork:'chain', arrowBlast:'flame', whirlShare:'spin', reaveShare:'boomerang', reaveBounce:'boomerang', penFire:'flame', penFrost:'icecube', penShock:'chain', penChaos:'bane', penElem:'prism', ricochet:'bow', arrowLess:'bow', chaosInoc:'ward', ghostReaver:'ward', zealot:'ward', critAilAll:'bane', noCrit:'nofav', ailFull:'icecube',
 };
 /* a conversion wears the type it ARRIVES as: that is the half of it you will
    spend the rest of the tree scaling */
@@ -13147,15 +13214,15 @@ const LANE_STEP = 560;
    on does NOT pay -- in the red, five DEXTERITY or five INTELLIGENCE -- for one
    point, off the road and back. It is how a build born in one country pays
    for what another asks of it without walking there. */
-const ATTR_BREAK_N = 5, ATTR_BREAK_R = 31, ATTR_BREAK_D = 150;
+const ATTR_BREAK_N = 30, ATTR_BREAK_R = 31, ATTR_BREAK_D = 150;
 const ATTR_COL = { str:'#ff5a4a', dex:'#6ee06e', int:'#5aa8ff' };
 const LANE_VARY = 0.46;   /* and how much that wanders, per lane */
 /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses. */
 const META_TRAVEL = {
-  str: ['Strength',     'str', 1],
-  dex: ['Dexterity',    'dex', 1],
-  int: ['Intelligence', 'int', 1],
-  core:['Resolve',      'str', 2],
+  str: ['Strength',     'str', 10],
+  dex: ['Dexterity',    'dex', 10],
+  int: ['Intelligence', 'int', 10],
+  core:['Resolve',      'str', 20],
 };
 /* WHAT A DOOR'S FOUR FIRST STEPS ARE. One per way out, and each one continues
    into the lattice rather than stopping — a dead end anywhere but the rim is a
@@ -13420,6 +13487,30 @@ const META_LATE = [
     after:true, spot:{ ring:3, rad:5000, deg:18 },         /* the widest clear ground left in green, far out */
     minors:[['Full Quiver','arrowPierce',1],['Barbed','arrowFlat',0.5],['Loose','incAtk',0.05]],
     notable:{ name:'Barrage', note:'one more arrow, each a little lighter', mods:[['arrowN',1],['arrowLess',0.08]] } },
+  /* THE WEAPONS' OWN SKILLS. Not "+1 to the axe" but the thing each weapon DOES:
+     the sword's whirl and its blades, the axe's thrown reaper and its wounds,
+     the mace's fault, the bow's two elemental arrows -- and, for every hit that
+     carries an element, a way through resistance. */
+  { id:'n_dervish', name:'THE DERVISH',    sp:'war',  home:'str', d:[2,3], shape:'ring',
+    after:true, spot:{ ring:1, rad:2700, deg:224 },   /* clear ground in red's inner quads */
+    minors:[['Whirling Edge','whirlShare',0.05],['Storm Edge','stormDmg',1],['Vortex Edge','vortexDmg',1]],
+    notable:{ name:'Dervish', note:'the whirl bites deeper, and the blades fly faster', mods:[['whirlShare',0.15],['stormRate',0.12],['vortexRate',0.12]] } },
+  { id:'n_reaper', name:'THE REAPER',      sp:'swift',home:'dex', d:[2,3], shape:'arc',
+    after:true, spot:{ ring:1, rad:2900, deg:42 },    /* clear ground in green's inner quads */
+    minors:[['Hurl','reaveShare',0.05],['Gutting','bleedShare',0.04],['Lacerate','bleedChance',0.05]],
+    notable:{ name:'Reaper', note:'the thrown axe reaps one body further, and harder', mods:[['reaveBounce',1],['reaveShare',0.10]] } },
+  { id:'n_quake', name:'THE EARTHSHAKER',  sp:'war',  home:'str', d:[2,3], shape:'chain',
+    after:true, spot:{ ring:1, rad:2500, deg:124 },   /* red's other clear ground */
+    minors:[['Tremor','slamDmg',0.5],['Fault','slamArc',8],['Rumble','slamRange',0.06]],
+    notable:{ name:'Earthshaker', note:'a wider, longer fault, and every tooth of it heavier', mods:[['slamDmg',1],['slamArc',15],['slamRange',0.10]] } },
+  { id:'n_tempest', name:'THE TEMPEST QUIVER', sp:'prec', home:'dex', d:[2,3], shape:'fan',
+    after:true, spot:{ ring:2, rad:4300, deg:86 },   /* green's outer clear ground */
+    minors:[['Stormhead','arrowBlast',0.10],['Ricochet','ricochet',0.05],['Fletching','arrowFlat',0.4]],
+    notable:{ name:'Tempest', note:'Lightning Arrow forks once more; Fire Arrow bursts wider', mods:[['arrowFork',1],['arrowBlast',0.25],['ricochet',0.10]] } },
+  { id:'n_sunder', name:'THE SUNDERING',   sp:'elem', home:'int', d:[2,3], shape:'ring',
+    after:true, spot:{ ring:1, rad:2500, deg:320 },   /* blue's inner clear ground */
+    minors:[['Searing','penFire',0.04],['Biting','penFrost',0.04],['Arcing','penShock',0.04]],
+    notable:{ name:'Sundering', note:'your hits go through every elemental resistance', mods:[['penElem',0.10],['incElem',0.30]] } },
 ];
 const META_NOTABLES = [
   /* red */
@@ -14952,6 +15043,23 @@ const RING_AT = [0, 5, 12, 22, 34];
     if(B.kind !== 'start' && B.req.indexOf(e[0]) < 0) B.req.push(e[0]);
   }
   META_TREE_UNPLACED = unplaced;
+  /* ---- 10b. PoE'S NUMBERS. Every DAMAGE INCREASE on a small node is 16% and on
+     a notable 30%, and an attribute on a small node is +10 (a notable +20) --
+     whatever the template wrote, which was 3% here and 7% there and read as
+     nothing worth walking to. Keystones keep their own trades; speed, crit,
+     life and defence keep theirs. The road's attributes are set where it is
+     laid (META_TRAVEL, ATTR_BREAK_N). Before the minion sisters, so theirs
+     follow. */
+  for(const n of META_NODES){
+    const minor = n.kind === 'minor', notable = n.kind === 'notable';
+    if(!minor && !notable) continue;
+    n.mods = n.mods.map(m=>{
+      if(!(typeof m[1] === 'number' && m[1] > 0)) return m;
+      if(META_INC_DMG.test(m[0])) return [m[0], minor ? META_INC_MINOR : META_INC_NOTABLE];
+      if(m[0] === 'str' || m[0] === 'dex' || m[0] === 'int') return [m[0], minor ? META_ATTR_MINOR : META_ATTR_NOTABLE];
+      return m;
+    });
+  }
   /* ---- 11. INTELLIGENCE FEEDS THE LEGION: every small node standing in blue,
      wherever it came from -- a cluster, a road, a weapon's door -- gets its
      minion sister (see MINION_SISTERS) */
@@ -15503,6 +15611,10 @@ const META_TAGS = {
   zealot:'defence energy shield es regeneration regen recovery',
   arrowFlat:'offence damage physical attack projectile arrow flat', arrowPierce:'offence attack projectile arrow pierce', arrowN:'offence attack projectile arrow multiple extra additional',
   ricochet:'offence attack projectile arrow', arrowLess:'attack projectile arrow damage',
+  arrowFork:'offence attack projectile arrow lightning fork', arrowBlast:'offence attack projectile arrow fire burst area radius',
+  whirlShare:'offence attack melee whirl spin blademaster damage', reaveShare:'offence attack melee axe reave throw damage', reaveBounce:'offence attack melee axe reave throw bounce',
+  penFire:'offence damage fire penetration resistance', penFrost:'offence damage cold frost penetration resistance', penShock:'offence damage lightning shock penetration resistance',
+  penChaos:'offence damage chaos penetration resistance', penElem:'offence damage elemental fire cold lightning penetration resistance',
   prolif:'offence ailment area ignite burn poison bleed damage over time',
   critAilAll:'offence critical crit ailment',  noCrit:'critical crit',
   ailFull:'offence ailment chill shock elemental',
@@ -16176,52 +16288,52 @@ function grantsNewSpell(u){
    all of that for a little of everything.
    `lines` is what the hover panel shows; `apply` is what actually happens. */
 const FAV_PERKS = {
-  none: { attr:{ str:4, dex:4, int:4 }, lines:['+0.5 flat physical damage', '+1 max heart', '+10 armour',
+  none: { attr:{ str:8, dex:8, int:8 }, lines:['+0.5 flat physical damage', '+1 max heart', '+10 armour',
                  '+5% increased damage', '+4% move speed', '+10% studs and XP'],
     apply(p){ p.flatPhys += 0.5; p.hpFlat += 1; p.hp += 1; p.armourFlat += 10;
       p.incAll += 0.05; p.inc.speed += 0.04; p.inc.studs += 0.10; p.xpInc += 0.10; } },
-  sword: { attr:{ str:8, dex:4, int:0 }, lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
+  sword: { attr:{ str:16, dex:8, int:0 }, lines:['+1 flat physical damage', '+8% swing rate', '+8 melee reach'],
     apply(p){ p.flatPhys += 1; p.inc.atk += 0.09;
       p.reachFlat += 8; } },
-  axe: { attr:{ str:4, dex:8, int:0 }, lines:['+40% increased critical chance', '+25% critical damage',
+  axe: { attr:{ str:8, dex:16, int:0 }, lines:['+40% increased critical chance', '+25% critical damage',
                 '+1 to the maximum stack of MOMENTUM'],
     apply(p){ p.incCrit += 0.40; p.critMultFlat += 25; p.stackMax.momentum += 1; } },
-  slam: { attr:{ str:12, dex:0, int:0 }, lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
+  slam: { attr:{ str:24, dex:0, int:0 }, lines:['+1 flat damage to every tooth of the slam', '+20\u00b0 wider fault',
                  '+15% slam range'],
     apply(p){ p.slam.flat += 1; p.slam.arcFlat += 20*Math.PI/180; p.slam.rangeInc += 0.15; } },
-  orbit: { attr:{ str:6, dex:0, int:6 }, grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
+  orbit: { attr:{ str:12, dex:0, int:12 }, grants:'orbit', lines:['Start with 1 guardian brick', '+1 to the guardian brick cap (16)',
                   '+10% ring reach'],
     apply(p){ p.capUp.orbit += 1; p.orbit.n = 1; p.orbit.r = Math.round(p.orbit.r*1.10); } },
-  chain: { attr:{ str:0, dex:4, int:8 }, grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
+  chain: { attr:{ str:0, dex:8, int:16 }, grants:'chain', lines:['Start with 1 storm brick', '+1 to the hovering-brick cap (6)',
                   'Its bolt already leaps to a second foe'],
     apply(p){ p.capUp.chain += 1; p.chain.n = 2; p.chain.zappers = 1; } },
-  storm: { attr:{ str:4, dex:8, int:0 }, grants:'storm', lines:['Start with 1 bladestorm', '+2 blades per burst',
+  storm: { attr:{ str:8, dex:16, int:0 }, grants:'storm', lines:['Start with 1 bladestorm', '+2 blades per burst',
                   '-10% bladestorm cooldown'],
     apply(p){ p.storm.n = 1; p.storm.count += 2; p.inc.stormRate += 0.11; } },
-  vortex: { attr:{ str:6, dex:6, int:0 }, grants:'vortex', lines:['Start with 1 blade vortex', '+20% vortex radius',
+  vortex: { attr:{ str:12, dex:12, int:0 }, grants:'vortex', lines:['Start with 1 blade vortex', '+20% vortex radius',
                    '-10% vortex cooldown'],
     apply(p){ p.vortex.n = 1; p.vortex.r = Math.round(p.vortex.r*1.20);
       p.inc.vortexRate += 0.11; } },
-  freeze: { attr:{ str:0, dex:0, int:12 }, grants:'freeze', lines:['Start with Block Freeze', '+20% freeze radius',
+  freeze: { attr:{ str:0, dex:0, int:24 }, grants:'freeze', lines:['Start with Block Freeze', '+20% freeze radius',
                    '+0.5s freeze duration'],
     apply(p){ p.freeze.n = 1; p.freeze.r = Math.round(p.freeze.r*1.20); p.freeze.dur += 0.5; } },
-  bomb: { attr:{ str:0, dex:6, int:6 }, grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
+  bomb: { attr:{ str:0, dex:12, int:12 }, grants:'bombplus', lines:['Start with 1 bomb', '+1 to the compass cap (9)', '+15% blast radius'],
     apply(p){ p.capUp.bomb += 1; p.bomb.n = 1; p.inc.bombR += 0.15; } },
-  bane: { attr:{ str:0, dex:8, int:4 }, grants:'bane', lines:['Start with Brickbane', 'The wedge opens to 90° already',
+  bane: { attr:{ str:0, dex:16, int:8 }, grants:'bane', lines:['Start with Brickbane', 'The wedge opens to 90° already',
                                 '+0.4 poison damage a second'],
     apply(p){ p.bane.n = 1; p.bane.arc = Math.max(p.bane.arc, 90*Math.PI/180);
       p.baneDotFlat += 0.4; } },
   /* THE BOW'S OPENING HAND */
-  necro: { attr:{ str:0, dex:0, int:12 }, lines:['+1 skeleton in your legion', '+15% increased minion damage',
+  necro: { attr:{ str:0, dex:0, int:24 }, lines:['+1 skeleton in your legion', '+15% increased minion damage',
                   '+20% increased minion life'],
     apply(p){ p.minions.max = Math.min(MINION_MAX_CAP, p.minions.max + 1); p.minions.inc += 0.15; p.minions.life += 0.20; } },
-  arrow: { attr:{ str:0, dex:12, int:0 }, lines:['+1 pierce on every arrow', '+10% attack speed',
+  arrow: { attr:{ str:0, dex:24, int:0 }, lines:['+1 pierce on every arrow', '+10% attack speed',
                   '+60 accuracy'],
     apply(p){ p.bow.pierce += 1; p.inc.atk += 0.10; p.accFlat += 60; } },
-  elem: { attr:{ str:0, dex:0, int:12 }, lines:['+1 flat elemental damage', '+12% increased elemental damage',
+  elem: { attr:{ str:0, dex:0, int:24 }, lines:['+1 flat elemental damage', '+12% increased elemental damage',
                  '+8% increased cast speed'],
     apply(p){ p.flatElem += 1; p.inc.elem += 0.12; p.inc.atk += 0.08; } },
-  tough: { attr:{ str:12, dex:0, int:0 }, lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
+  tough: { attr:{ str:24, dex:0, int:0 }, lines:['+2 max hearts', '+25 armour', '+8% to every resistance',
                   '+0.02 hearts/s regeneration'],
     apply(p){ p.hpFlat += 2; p.hp += 2; p.armourFlat += 25;
       for(const el of ELEMENTS) p.resFlat[el] += 0.08;
@@ -16234,7 +16346,7 @@ const FAV_PERKS = {
    differs is which of the three defences and damage lines they feed. Written
    as data and printed from the data, so the hover line cannot drift from what
    is applied. */
-const FAV_ATTR_TOTAL = 12;
+const FAV_ATTR_TOTAL = 24;
 function favAttrLine(f){
   const a = f && f.attr;
   if(!a) return '';
@@ -17842,6 +17954,10 @@ const STAT_PROBES = [
   { g:'ELEMENTAL', k:'Increased chaos',    get:()=> ((player&&player.inc.chaos)||0)*100, fmt:v=>Math.round(v)+'%', zero:true,
     why:'chaos only. Chaos is neither physical nor elemental — the elemental pool does not touch it, '+
         'and no monster in the game resists it' },
+  ...PEN_KEYS.map(el=>({ g:'ELEMENTAL', k:PEN_NAME[el]+' penetration', get:()=> penOf(el)*100, fmt:v=>Math.round(v)+'%', zero:true,
+    why:'how much of a body\'s '+PEN_NAME[el].toLowerCase()+' resistance your hits go straight through -- '+
+        'down to nothing and never below it, hits only (not burns, bleeds or poison), and never your minions\'. '+
+        (el === 'chaos' ? '' : 'Elemental penetration counts here too. ')+'Cap '+Math.round(PEN_MAX*100)+'%' })),
   /* WHAT A SWING IS MADE OF. Five rows, one per type, reading the same split
      the hit itself uses — so if the sheet and the monster ever disagree, one of
      them is wrong and you can see which. */
@@ -17860,7 +17976,7 @@ const STAT_PROBES = [
   { g:'PHYSICAL', k:'Sustained DPS', basic:'OFFENCE',  get:()=> isCaster() ? 0 : swordDps(),               fmt:v=>v.toFixed(1), zero:true,
     why:'one body, kept in reach, crits folded in. For a slammer it is a body standing in the fault and taking its full share of teeth; '+
         'for a bow it is one arrow a shot into one body' },
-  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && !isSlammer() && player.blademaster>0) ? physDamage([WHIRL_MUL])/WHIRL_TICK : 0,
+  { g:'PHYSICAL', k:'Whirl DPS',      get:()=> (!isCaster() && !isSlammer() && player.blademaster>0) ? physDamage([whirlShare()])/WHIRL_TICK : 0,
     fmt:v=>v.toFixed(1), zero:true },
   { g:'PHYSICAL', k:'Base + flat',    get:()=> isCaster() ? 0 : (isSlammer() ? slamBase() : physBase()), fmt:v=>v.toFixed(2), zero:true },
   { g:'PHYSICAL', k:'Swing rate', basic:'OFFENCE',     get:()=> 1/player.atkRate,         fmt:v=>v.toFixed(2)+'/s' },
@@ -18911,6 +19027,15 @@ function renderCharSheet(){
       `on what it was. GAIN AS EXTRA always pushes it up, because it never gives\n`+
       `anything back.\n\n`+
       `Yours: ×${csp.mul.toFixed(3)} on every hit, before mitigation.`)])) : '';
+  /* PENETRATION: only when there is any, like the conversion card */
+  const penAny = PEN_KEYS.some(el=>penOf(el) > 0);
+  const penBlock = penAny ? sBlock('PENETRATION', PEN_KEYS.filter(el=>penOf(el) > 0).map(el=>
+    sRow(PEN_NAME[el], pct(penOf(el)), 'of their resistance your hits go through',
+      `PENETRATION: a body's ${PEN_NAME[el].toLowerCase()} resistance counts this much lower against\n`+
+      `your HITS -- never below nothing, never your burns, bleeds or poison,\n`+
+      `never your minions'. Capped at ${Math.round(PEN_MAX*100)}%.\n\n`+
+      `Against a body resisting 50%, a 10-damage ${PEN_NAME[el].toLowerCase()} hit lands for `+
+      `${(10*(1 - Math.max(0, 0.5 - penOf(el)))).toFixed(1)} instead of 5.0.`))) : '';
   const resist = sBlock('ELEMENTAL RESISTANCE', [
     sRow('Fire', pct((1-elemTake('fire'))),
       p.curse.resist>0 ? `SUNDERED — cut from ${pct(p.res.fire)}` : 'burn damage and duration',
@@ -19059,7 +19184,7 @@ function renderCharSheet(){
   }
   document.getElementById('charBody').innerHTML =
     `<div class="seclabel">STATS</div>
-     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${resist}${ail}${curseBlock}${breachBlock}${loot}${run}</div>
+     <div class="sgrid">${vitals}${move}${sword}${crit}${power}${conversion}${penBlock}${resist}${ail}${curseBlock}${breachBlock}${loot}${run}</div>
      <div class="seclabel">SPELLS</div>
      <div class="spellgrid">${spellHtml}</div>
      <div class="seclabel">EVERY STAT &mdash; HOVER ANY ROW</div>
@@ -20328,14 +20453,18 @@ function updatePlayer(dt){
     /* the whirl READS momentum's reach but never builds it: a spin that fed
        the ramp it benefits from would sit at six stacks for ever */
     const reach = whirlReach();
-    const dmg = swordDamage([WHIRL_MUL]);
+    const dmg = swordDamage([whirlShare()]);
     for(const en of enemiesNear(p.x, p.y, reach + 80)){
       if(en.dead || en.state!=='active' || en.whirlCd>0) continue;
       if(dist(p,en) < reach + hitR(en)){
         en.whirlCd = WHIRL_TICK;
         hitEnemy(en, dmg, angTo(p,en), 90, 'sword', {spin:true});
+        /* RAGE, the swing's rule: a whirl's pass is one hit however many bodies
+           it goes through -- once a tick, never once a body */
+        if(p.rageOnHit > 0 && (p.whirlRageCd || 0) <= 0){ stackAdd('rage', p.rageOnHit); p.whirlRageCd = WHIRL_TICK; }
       }
     }
+    p.whirlRageCd = Math.max(0, (p.whirlRageCd || 0) - dt);
     /* THE BLADE IS IN THE WAY. A spinning sword turns aside some of what is
        thrown at it — not everything, or the stance would be a shield, but often
        enough that whirling into a volley is a real answer. Each missile gets
@@ -20952,14 +21081,18 @@ function fireArrow(aim){
 /* WHAT A LANDING DOES, beyond the hit itself -- the two legendaries that do
    something at the body: Fire Arrow bursts, Lightning Arrow forks. Both are
    arrow sources, so they carry the arrow's conversion and its ailment chance. */
+/* the tree's TEMPEST QUIVER on top of the two legendaries' own numbers */
+function arrowBlastR(){ return ARROW_BLAST_R * (1 + ((player && player.bow && player.bow.blastInc) || 0)); }
+function arrowForkN(){ return ARROW_FORK_N + ((player && player.bow && player.bow.forkPlus) || 0); }
 function arrowOnHit(pr, e, dmg){
   if(pr.el === 'fire'){
-    for(const o of enemiesNear(e.x, e.y, ARROW_BLAST_R + 60)){
+    const R = arrowBlastR();
+    for(const o of enemiesNear(e.x, e.y, R + 60)){
       if(o === e || o.dead || o.state !== 'active') continue;
-      if(dist(o, e) > ARROW_BLAST_R + hitR(o)) continue;
+      if(dist(o, e) > R + hitR(o)) continue;
       hitEnemy(o, dmg * (1 - ARROW_BLAST_LESS), angTo(e, o), 60, 'arrowblast', {});
     }
-    addRing(e.x, e.y - 10, 8, 320, ARROW_BLAST_R, ARROW_KINDS.fire.col, 5, 0.35);
+    addRing(e.x, e.y - 10, 8, 320, R, ARROW_KINDS.fire.col, 5, 0.35);
     addSparks(e.x, e.y - 16, 8, '#ffb07c');
   } else if(pr.el === 'light'){
     /* ONE TO MANY, never onward: the body the arrow found throws a bolt at each
@@ -20971,7 +21104,7 @@ function arrowOnHit(pr, e, dmg){
       if(d <= ARROW_FORK_R) near.push([d, o]);
     }
     near.sort((a, z)=>a[0] - z[0]);
-    for(const [, o] of near.slice(0, ARROW_FORK_N)){
+    for(const [, o] of near.slice(0, arrowForkN())){
       addZap(e.x, e.y - 18, o.x, o.y - 18, 0, false);
       hitEnemy(o, dmg * ARROW_FORK_SHARE, angTo(e, o), 40, 'arrowfork', {});
     }
@@ -24734,14 +24867,14 @@ function throwReave(from, dmg){
        finished still sees the axe fly its arc and come home. */
     const a = Math.atan2(from.y - p.y, from.x - p.x);
     const pr = { kind:'reave', x:p.x, y:p.y - 14, px:p.x, py:p.y - 14,
-                 dmg, legs:REAVE_BOUNCES, tgt:from, hit:new Set(), spin:rnd(TAU),
+                 dmg, legs:reaveLegs(), tgt:from, hit:new Set(), spin:rnd(TAU),
                  life:REAVE_LIFE, back:false, solo:true,
                  wx:from.x + Math.cos(a)*REAVE_SOLO_PAST, wy:from.y - 16 + Math.sin(a)*REAVE_SOLO_PAST };
     projectiles.push(pr);
     return pr;
   }
   const pr = { kind:'reave', x:from.x, y:from.y - 14, px:from.x, py:from.y - 14,
-               dmg, legs:REAVE_BOUNCES, tgt, hit:seen, spin:rnd(TAU),
+               dmg, legs:reaveLegs(), tgt, hit:seen, spin:rnd(TAU),
                life:REAVE_LIFE, back:false };
   projectiles.push(pr);
   return pr;
@@ -27020,9 +27153,10 @@ function drawProp(c, p){
     /* A MYSTERY CHEST wears no tier. It cycles every colour on the ladder, so
        what is inside is genuinely unknown until the lid comes off — and it is
        unmistakable across a field of ordinary brown ones. */
-    const R2 = p.wild
-      ? RARITY[RAR_ORDER[1 + (Math.floor(vtime*3 + p.seed) % 4)]]
-      : (RARITY[p.rar] || RARITY.common);
+    /* the cycle is kept in 0..3 whatever the clock reads: a negative or broken
+       time gave a negative index, an undefined rarity and a frame that threw */
+    const wi = (((Math.floor(vtime*3 + (p.seed || 0)) % 4) + 4) % 4) || 0;
+    const R2 = (p.wild ? RARITY[RAR_ORDER[1 + wi]] : RARITY[p.rar]) || RARITY.common;
     const rc = R2.col, rgb = prs(rc);
     const tier = p.wild ? 4 : ['common','uncommon','rare','epic'].indexOf(p.rar||'common');
     const glow = 0.5+0.5*Math.sin(vtime*3+p.seed);

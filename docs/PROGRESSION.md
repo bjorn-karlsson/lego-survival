@@ -4552,3 +4552,58 @@ the golem notable raises nothing, a golem brick then does; SHIFT on a held walk 
 while walking are both Convocation). Breaks `barbold`, `treebarb`, `supown`, `noarrowN`, `uncapped`,
 `nobowland`, `nullail`, `golemfree`, `golemtext`, `noshiftconvo` caught; `sitesearly` caught by
 `zombie`, whose round-71 tree snapshot now carries the two *Barbed* nodes at +0.5.
+
+## Seventy-fifth pass — PoE's numbers on the tree, the weapons' own ground, penetration
+
+**The whirl feeds rage.** A Blademaster whirl's hits never counted for *Rage on hit* -- only a
+swing did. A whirl's pass is one hit now, however many bodies it goes through: once every 0.18s
+while it is landing, the swing's own once-a-swing rule.
+
+**PoE's numbers.** A build step at the end of the tree's construction sets every **damage increase
+on a small node to 16%** and on a **notable to 30%** (physical, spell, elemental and each element,
+chaos, damage over time, minion, the weapon lanes) whatever the template wrote -- 3% here and 7%
+there read as nothing worth walking to. Keystones keep their trades; speed, crit, life and defences
+keep theirs. The minion sisters in blue follow (80% or 60% of the 16%).
+
+**Attributes are PoE-sized.** A road node is **+10**, the big stops off the junctions **+30**, an
+attribute on a small node +10 and a notable +20. To make room every point does **half** what it did
+(`ATTR_K = 2`: 0.25% physical and hearts a STR, 0.25% spell and regeneration an INT, 0.15% crit,
+crit damage and attack speed a DEX, 1 accuracy and 0.1% evasion, 0.1% energy shield, mana 1 per 4
+INT, a heart per 10 INT with Runeblood) and everything else that hands attributes over hands over
+**twice** as many -- weapons, favourites (24 each), the attribute bricks (12 / 20 / 32 / 52 / 80),
+gear -- so none of those moved. The tree's did: a road node is five times what it was.
+
+What that does, measured at the ceiling of 120 points: a stay-at-home red build's damage went from
+x2.25 to **x4.85**, its total power (damage x hearts) from x3.54 to **x11.77**; a straight build
+x2.6 to x12.1. `meta`'s budgets move with it (same ~4% slack over the measure), and the note there
+says why. If that is more than wanted, the knobs are `META_INC_MINOR` / `META_INC_NOTABLE` and
+`ATTR_K` -- or the hearts half alone, `ATTR_STR_HP`.
+
+**The weapons' own ground.** Five clusters, laid after every other site so nothing moves: **THE
+DERVISH** (red; the whirl's share of a swing, Bladestorm and Blade Vortex), **THE REAPER** (green;
+the thrown axe's share of the critical, **+1 body** it reaps, wounds), **THE EARTHSHAKER** (red;
+teeth, fault, range), **THE TEMPEST QUIVER** (green; Lightning Arrow **forks once more**, Fire
+Arrow bursts wider, ricochet) and **THE SUNDERING** (blue; penetration). New stats: `whirlShare`,
+`reaveShare`, `reaveBounce`, `arrowFork`, `arrowBlast`, and the five penetrations.
+
+**Penetration.** *Your hits PENETRATE 10% fire resistance*: `penRes` is the resistance a hit of
+yours meets -- the body's own (exposure and brands included) less your penetration, **down to
+nothing and no further**, hits only (burns, bleeds and poison were built when opened), never a
+minion's. 60% cap per element. Bricks: Fire / Cold / Lightning Penetration (uncommon+, +6 to +15%),
+Chaos Penetration (rare+), Elemental Penetration (rare+, all three); each offered only to a hero
+whose hits carry the element. The NERD sheet shows a PENETRATION card when there is any.
+
+**And a crash found on the way:** a mystery chest's colour cycle could read a rarity that is not
+there and throw the frame; its index is held in 0..3 now whatever the clock says. (`gear` had been
+failing on it one run in four, on the old build too.)
+
+Tests: `r75` (whirl rage once a pass, not once a body; every small-node increase 16% and notable
+30%; road +10, big +30, minor +10, notable +20; a sword's strength, a brick, a favourite worth what
+they were; +10 STR a node = +2.5%; the five clusters in their countries on the road; each skill stat
+doing what it says and reaching only its weapons; the Dervish's share raising the whirl's hit x2;
+penetration x1.4 at 50%/20%, never below nothing, the 60% cap against a 90% body, not for minions,
+not for burns, elemental counting; the bricks offered to the right heroes and applying; the sheet's
+card). 17 breaks caught. Updated for the new numbers: `meta` (budgets), `nodes` (heart per 10 INT),
+`es` (200 INT), `qol` (24 a hand), `pools` (1 mana per 4 INT), `r56` (+10 / +30), and the round-71
+tree snapshot's values (every position the same); `quiet` now lands its hit for certain -- a 10%
+MISS had been an old flake.

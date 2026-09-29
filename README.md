@@ -1993,12 +1993,18 @@ on the way to somewhere interesting:
 
 | | | |
 |---|---|--:|
-| 🔴 **STRENGTH** | +0.5% increased physical damage, +0.5% increased maximum hearts | *each* |
-| 🔵 **INTELLIGENCE** | +0.5% increased spell damage, +0.5% increased regeneration | *each* |
-| 🟢 **DEXTERITY** | +0.3% increased critical chance, critical damage and attack speed | *each* |
+| 🔴 **STRENGTH** | +0.25% increased physical damage, +0.25% increased maximum hearts | *each* |
+| 🔵 **INTELLIGENCE** | +0.25% increased spell damage, +0.25% increased regeneration | *each* |
+| 🟢 **DEXTERITY** | +0.15% increased critical chance, critical damage and attack speed | *each* |
 
-**Every weapon starts somewhere different on the three** — a mace opens on 20 strength, a
-staff on 22 intelligence, an axe on 16 dexterity, and the sword is the only one with a little
+**Attribute points are PoE-sized:** a road node of the tree is **+10**, the big attribute stops
+off the junctions **+30**, an attribute on a cluster's small node +10 and on a notable +20. Every
+point does half what it once did and everything else that hands attributes over hands over twice
+as many — so a weapon, a favourite, a brick and gear give exactly what they gave, and only the
+tree's are bigger (a road node is five times what it was).
+
+**Every weapon starts somewhere different on the three** — a mace opens on 40 strength, a
+staff on 44 intelligence, an axe on 32 dexterity, and the sword is the only one with a little
 of all three. Four bricks hand them over directly and **any weapon and any favourite can be
 offered all four**: `Ironbone`, `Runescript`, `Quicksilver`, and `The Whole Brick` for all
 three at once.
@@ -2316,8 +2322,8 @@ evasion is a property of *what it is*, so accuracy is a choice made once rather 
 this existed. It does nothing against a **spell**: armour and suppression are what stand in
 front of those.
 
-**Dexterity is the attribute for both**, on top of everything it already did: **+2 accuracy** and
-**+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
+**Dexterity is the attribute for both**, on top of everything it already did: **+1 accuracy** and
+**+0.1% increased evasion** per point, which is PoE's table in this game's units. It is the
 busiest of the three now, which is what it is in the game this borrows from.
 
 ### Energy shield — *the bar in front of the bar*
@@ -2367,7 +2373,7 @@ eaten. You do not need a chaos build to fight a shielded boss; you need some cha
 you have. The same rule runs the other way: a **poison** is chaos over time, so a dose walks
 through your own shield while a **burn** meets it.
 
-**Intelligence is the attribute for it** — **+0.2% increased maximum energy shield** per point,
+**Intelligence is the attribute for it** — **+0.1% increased maximum energy shield** per point,
 which is PoE's line in this game's units, and the reason the staff's attribute finally buys a
 defence. You start with **none**: `WARD BRICK` is what gives you a pool at all, `DEEP WARD`
 increases it, and two notables in the blue country (`THE WARDING`, `THE RESERVOIR OF WILL`) are
@@ -3397,6 +3403,47 @@ without moving a single node a saved tree owns:
 
 Both arrows count against the same cap of 9 as Split Arrow; search the tree for *arrow* to find them.
 
+### PoE's numbers on the tree
+
+**Every damage increase on a small node is 16%, and on a notable 30%** — physical, spell,
+elemental, fire, cold, lightning, chaos, damage over time, minion, *and* the weapon lanes — whatever
+the cluster's template once wrote (3% here and 7% there, which read as nothing worth walking to).
+Keystones keep their own trades; speed, crit, life and defences keep theirs. A small node in the
+blue that carries a minion "sister" gives its minions 80% (or 60%) of the 16%. Attributes are
+**+10** a node and **+30** on the big stops (see *attributes* above). Every increase still pours
+into the one pool capped at +400%.
+
+**Each weapon's own skill has ground of its own** — not "+1 to the axe" but the thing the weapon
+*does*. All five are laid after every other site, so no node a saved tree owns moves:
+
+| cluster | for | the minors | the notable |
+|---|---|---|---|
+| **THE DERVISH** (red) | sword, axe | +5% of a swing on every Blademaster whirl hit, +1 Bladestorm blade damage, +1 Blade Vortex damage | **Dervish** — +15% of a swing on every whirl hit, +12% Bladestorm and Blade Vortex rate |
+| **THE REAPER** (green) | axe | +5% of the critical carried by every thrown axe, +4% of the hit bleeds, +5% chance to wound | **Reaper** — the thrown axe reaps through **one more body**, +10% of the critical |
+| **THE EARTHSHAKER** (red) | mace | +0.5 to every tooth, +8° wider fault, +6% slam range | **Earthshaker** — +1 to every tooth, +15° wider, +10% range |
+| **THE TEMPEST QUIVER** (green) | bow | +10% Fire Arrow burst radius, +5% ricochet, +0.4 to arrows | **Tempest** — Lightning Arrow forks to **one more** body, +25% burst radius, +10% ricochet |
+| **THE SUNDERING** (blue) | any elemental hit | +4% fire / cold / lightning penetration | **Sundering** — +10% penetration of **every** elemental resistance, +30% elemental damage |
+
+**The whirl feeds rage like a swing.** A Blademaster whirl's pass is one hit however many bodies it
+goes through — once every 0.18s while it is landing, with *Rage on hit*.
+
+### Penetration
+
+PoE's line: *your hits PENETRATE 10% fire resistance* — a body's resistance counts that much
+lower against **your hits**. It only strips what is there: a resistance goes down to nothing and
+no further (making a body *weak* is what exposure and the brands do). It is for hits — a burn,
+bleed or poison was built when it was opened — and it is yours, not your minions'. Capped at
+**60%** per element, all sources together.
+
+| brick | rarity | per rarity | offered when |
+|---|---|---|---|
+| **Fire / Cold / Lightning Penetration** | uncommon+ | +6 / 8 / 11 / 15% | your hits carry that element |
+| **Chaos Penetration** | rare+ | +8 / 11 / 15% | your hits carry chaos |
+| **Elemental Penetration** | rare+ | +5 / 7 / 10% of all three | your hits carry any element |
+
+The tree has it in **THE SUNDERING**, and the character sheet (NERD) shows a **PENETRATION**
+card whenever you have any — hover a row for what a 10-damage hit does to a body resisting 50%.
+
 **The Brick Blaster is gone.** It was a physical projectile spell that fitted nothing; its
 flight code, pierce falloff and cards are the arrow's now.
 
@@ -3442,25 +3489,25 @@ that long — each rebuilds 2.4s after it breaks — which is exactly what the s
 
 ### Every hand carries attributes
 
-Every favourite hands over **twelve attribute points**, split by what the hand is — the same
-twelve for all of them, so no hand is ahead on attributes alone; what differs is which defence
+Every favourite hands over **twenty-four attribute points**, split by what the hand is — the same
+twenty-four for all of them, so no hand is ahead on attributes alone; what differs is which defence
 and which damage line they feed:
 
 | hand | STR | DEX | INT |
 |---|--:|--:|--:|
-| No Favourite | 4 | 4 | 4 |
-| Sword & Steel | 8 | 4 | |
-| Reaver's Edge | 4 | 8 | |
-| Earthshaker · Tough Bricks | 12 | | |
-| Guardian Brick | 6 | | 6 |
-| Brickbane | | 8 | 4 |
-| Deadeye | | 12 | |
-| Necromancer | | | 12 |
-| Storm Brick | | 4 | 8 |
-| Bladestorm | 4 | 8 | |
-| Blade Vortex | 6 | 6 | |
-| Block Freeze · Elemental Arts | | | 12 |
-| Bomb Volley | | 6 | 6 |
+| No Favourite | 8 | 8 | 8 |
+| Sword & Steel | 16 | 8 | |
+| Reaver's Edge | 8 | 16 | |
+| Earthshaker · Tough Bricks | 24 | | |
+| Guardian Brick | 12 | | 12 |
+| Brickbane | | 16 | 8 |
+| Deadeye | | 24 | |
+| Necromancer | | | 24 |
+| Storm Brick | | 8 | 16 |
+| Bladestorm | 8 | 16 | |
+| Blade Vortex | 12 | 12 | |
+| Block Freeze · Elemental Arts | | | 24 |
+| Bomb Volley | | 12 | 12 |
 
 The split is data on the card and the hover line is printed from it, so the two cannot drift.
 
