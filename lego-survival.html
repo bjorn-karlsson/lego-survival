@@ -629,6 +629,14 @@
   .rpggrid b{font-family:'Titan One',cursive;letter-spacing:1px;color:#ffd76e;font-weight:400}
   .rpggrid ul{margin:6px 0 0;padding-left:18px}
   .rpgnote{color:#8e9aa4;font-size:12px;margin:0}
+  .rpgchar{margin:6px 0 10px;font-size:14px;color:#cfe6ff}
+  .rpgchar b{color:#ffd76e}
+  .rpgreset{cursor:pointer;text-decoration:underline;opacity:.7}
+  .rpgreset:hover{opacity:1}
+  #rpgDeathScreen{z-index:40}
+  #rpgDeathScreen.peek{background:transparent;pointer-events:none;align-items:flex-end}
+  #rpgDeathScreen.peek .rpgwrap{pointer-events:auto;padding:10px 16px;margin-bottom:22px}
+  #rpgDeathScreen.peek .rpgwrap h2, #rpgDeathScreen.peek .rpgwrap p{display:none}
   .rpgbtns{display:flex;gap:8px;justify-content:flex-end}
   /* ---- the ritual's offer ---- */
   #ritualScreen{z-index:30;overflow:auto;padding:2vh 0}
@@ -883,16 +891,26 @@
   <div class="rpgwrap">
     <div class="rpgbadge">WORK IN PROGRESS</div>
     <h2>RPG</h2>
-    <p class="rpglede">The second way to play, and not playable yet. You make a character, start outside a town at
-      level 1, clear the fields to reach it, and from there take missions into dungeons. What you carry is
-      what makes you strong: gear with sockets, skill gems and support gems, a passive tree of its own and,
-      later, an ascendancy.</p>
+    <p class="rpglede">The second way to play, and the first stretch of it is walkable. You wake in THE OUTSKIRTS,
+      fight east through the packs standing in the field, break the GATEKEEPER and walk through the gate into
+      BRICKHAVEN &mdash; the town, safe ground: your home and its stash, the mission board, the waypoint back out.
+      No reward cards here: what makes you strong is what you find.</p>
+    <div id="rpgChar" class="rpgchar"></div>
     <div class="rpggrid">
-      <div><b>Here now</b><ul><li>Equipment, per class</li><li>Inventory and the shared stash</li><li>Item levels, tiers and affixes</li></ul></div>
-      <div><b>Planned</b><ul><li>Town, home and missions</li><li>Click to move, skills on keys, the Ctrl layer</li><li>Mana costs, five flasks</li><li>Gems, supports and sockets</li><li>RPG passive tree and ascendancies</li></ul></div>
+      <div><b>Here now</b><ul><li>The Outskirts &mdash; packs, rares, the Gatekeeper</li><li>Brickhaven, the town &mdash; an instance of its own</li><li>A character per class: level and progress saved</li><li>Gear drops, equipment and the shared stash</li></ul></div>
+      <div><b>Planned</b><ul><li>Missions and dungeons</li><li>Skills on keys, the Ctrl layer, mana costs</li><li>Five flasks</li><li>Gems, supports and sockets</li><li>RPG passive tree and ascendancies</li></ul></div>
     </div>
     <p class="rpgnote">The full plan is in <code>docs/RPG-BLUEPRINT.md</code>.</p>
-    <div class="rpgbtns"><button id="rpgGearBtn" class="tbtn">EQUIPMENT &amp; STASH</button><button id="rpgBackBtn" class="tbtn gray">BACK</button></div>
+    <div class="rpgbtns"><button id="rpgPlayBtn" class="tbtn">PLAY</button><button id="rpgGearBtn" class="tbtn">EQUIPMENT &amp; STASH</button><button id="rpgBackBtn" class="tbtn gray">BACK</button></div>
+    <p class="rpgnote"><span id="rpgResetBtn" class="rpgreset">start this class over</span></p>
+  </div>
+</div>
+<div id="rpgDeathScreen" class="overlay hidden">
+  <div class="rpgwrap">
+    <h2>YOU FELL</h2>
+    <p class="rpglede" id="rpgDeathWho"></p>
+    <p class="rpgnote">Your gear and your level stay with you. The zone does not: the next one is a fresh instance.</p>
+    <div class="rpgbtns"><button id="rpgDeathBtn" class="tbtn">STAND UP</button><button id="rpgDeathLogBtn" class="tbtn gray">COMBAT LOG</button><button id="rpgDeathTitleBtn" class="tbtn gray">TITLE</button></div>
   </div>
 </div>
 <div id="ritualScreen" class="overlay hidden">
@@ -3664,7 +3682,7 @@ function sfxLayerInit(){
   SFXL.curve = new Float32Array(1024);
   for(let i=0;i<1024;i++){ const x = i/512 - 1; SFXL.curve[i] = Math.tanh(2.2*x); }
 }
-function sfxLive(){ return !!(A.ctx && !A.muted && A.sfxOn !== false && SFXL.noise); }
+function sfxLive(){ return !!(A.ctx && !A.muted && A.sfxOn !== false && SFXL.noise) && !previewing; }   /* a card being tried for its preview makes no sound */
 /* WHERE A SOUND IS: the next one called after sfxAt(x) sits at that point of the screen */
 let sfxPanNext = null;
 function sfxAt(x){
@@ -3985,7 +4003,7 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyL' && (state==='play'||state==='pause')){ if(e.shiftKey) clogCycle(); else clogToggle(); }
   if(e.code==='Escape' && state==='char') toggleChar();
   if(e.code==='Escape' && treeOn) toggleTree();
-  else if(e.code==='KeyT' && (state==='play' || state==='tree')) toggleTree();
+  else if(e.code==='KeyT' && (state==='play' || state==='tree') && !rpgOn()) toggleTree();   /* the arcade's tree is not the RPG's */
   if(state==='play') cheatCode(e.code);
   if(e.code==='Escape' && state==='cheat') toggleCheat();
   /* a HELD number key must not pick on the screen that opens straight after */
@@ -4047,6 +4065,7 @@ let choices = [], taken = {};
 let upgradeMode = 'wave';
 let forcedRarity = null;   /* a chest promises the rarity its lid is painted */
 let pendingPicks = [];
+let previewing = false;   /* true while a reward card is TRIED for its hover preview (see previewPick) */
 let rerollsUsed = 0;
 /* ---- WHAT YOU THREW BACK ----------------------------------------------------
    Paying studs to get rid of three bricks and being shown one of them again on
@@ -4302,7 +4321,7 @@ function chainBrickPos(p, i, total){
   return { x: p.x + Math.cos(a)*50, y: p.y - 30 + Math.sin(a)*27 };
 }
 function schedule(delay, fn){ sched.push({t:delay, fn}); }
-function queuePick(mode, rar){ pendingPicks.push({mode, rar}); }
+function queuePick(mode, rar){ if(rpgOn()) return; pendingPicks.push({mode, rar}); }   /* the RPG has no reward cards */
 /* THE REWARD STASH. With AUTO-LOOT off (the default) a reward does not throw a
    card screen at you mid-fight: it goes on the pile, oldest first, and waits.
    R opens the oldest; holding R opens the next the moment you have picked, and
@@ -6395,7 +6414,7 @@ function hitEnemy(e, dmg, kdir, kb=220, source='sword', opts={}){
       if((e.rmNearT || 0) <= vtime){ e.rmNearT = vtime + 0.6; addHitNum(e.x, e.y - 44*(e.scale||1), 'INTANGIBLE', '#9fd4ff', 13); }
       return; } }
   /* a sleeping ritual guard wakes -- and its whole pack with it */
-  if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); e.dormant = false; }
+  if(e.dormant){ if(e.ritualGuard) ritualWake(e.ritualGuard); else if(e.rpgPack) rpgWakePack(e.rpgPack); e.dormant = false; }
   /* DOES THE SWING FIND IT? Accuracy against evasion, and ONLY for an attack:
      a swing has to catch a body that is moving, a fireball arrives where it was
      aimed. A tick or a drain is not a fresh swing and never re-rolls -- the
@@ -6944,6 +6963,7 @@ function poisonTick(e, dt){
 function killEnemy(e, source){
   e.dead = true; player.kills++;
   logKill(e);
+  if(rpgOn()) rpgOnKill(e);
   /* a death INSIDE an open breach feeds its clock, whoever it was; a breach
      body pays its lord's splinters wherever it falls */
   if(e.breach) breachOnKill(e);
@@ -7866,6 +7886,7 @@ function gainXp(n, fromMob){
   }
   /* a level is worth more MANA (and anything else that reads the level), so the
      pools are rebuilt -- and a level fills the mana pool, PoE's way */
+  if(p.level !== lv0 && rpgOn()) rpgCharSave();
   if(p.level !== lv0){ syncStats(); p.mana = p.maxMana;
     if(p.lvlHeal){ p.lvlHeal = false; p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax; } }
 }
@@ -8610,7 +8631,7 @@ function playerDie(){
   const p = player; p.dead = true; p.deadT = 0;
   spawnBricks(p.x, p.y, [HERO_COLORS.head, HERO_COLORS.torso, HERO_COLORS.legs, PAL.hyellow], 18, 280);
   SFX.brick(9); SFX.hurt(); addShake(0.55); tScale = 0.3;
-  schedule(1.6, ()=>{ showGameOver(); });
+  schedule(1.6, ()=>{ if(rpgOn()) rpgDeath(); else showGameOver(); });
 }
 
 /* =============================== WAVES =============================== */
@@ -10538,6 +10559,11 @@ function ritualWake(A){
 /* a sleeping guard does nothing at all, until something wakes its pack */
 function ritualDormantTick(e){
   const h = heroObj || player, A = e.ritualGuard;
+  /* a pack in an RPG zone wakes all together, at the zone's own distance */
+  if(e.rpgPack){
+    if(h && !h.dead && Math.hypot(h.x - e.x, h.y - e.y) < RPG_AGGRO_R){ rpgWakePack(e.rpgPack); return false; }
+    e.moving = false; collideWorld(e); return true;
+  }
   if(h && !h.dead && (Math.hypot(h.x - e.x, h.y - e.y) < RITUAL_WAKE_R ||
                       (A && Math.hypot(h.x - A.x, h.y - A.y) < RITUAL_WAKE_R))){
     if(A) ritualWake(A); else e.dormant = false;
@@ -17068,7 +17094,7 @@ function buildWeaponRow(){
    Every piece of gear code is still here, asked through modeHasGear(). */
 const GAME_MODES = {
   arcade: { name:'ARCADE', col:'#ffb900', blurb:'Waves, reward cards and the arcade skill tree. No gear: what you pick up in a run is bricks.' },
-  rpg:    { name:'RPG · W.I.P.', col:'#6fb6ff', blurb:'A character, a town, dungeons, gear with sockets and skill gems. Not playable yet: your equipment and stash live here.' },
+  rpg:    { name:'RPG · W.I.P.', col:'#6fb6ff', blurb:'A character per class, the Outskirts and the town of Brickhaven, gear that drops. Missions, gems and the RPG tree come next.' },
 };
 let GAME_MODE = 'arcade';
 function modeHasGear(){ return GAME_MODE === 'rpg'; }
@@ -17085,7 +17111,7 @@ function setGameMode(id){
   }
   const bl = document.getElementById('modeBlurb'); if(bl) bl.textContent = GAME_MODES[GAME_MODE].blurb;
   const rpg = GAME_MODE === 'rpg';
-  const sb = document.getElementById('startBtn'); if(sb) sb.textContent = rpg ? 'RPG — WORK IN PROGRESS' : 'START ADVENTURE';
+  const sb = document.getElementById('startBtn'); if(sb) sb.textContent = rpg ? 'RPG — CHARACTER' : 'START ADVENTURE';
   const gb = document.getElementById('gearBtn'); if(gb) gb.classList.toggle('hidden', !rpg);
   const pg = document.getElementById('pauseGearBtn'); if(pg) pg.classList.toggle('hidden', !rpg);
   const tb = document.getElementById('treeBtn'); if(tb) tb.classList.toggle('hidden', rpg);
@@ -17108,8 +17134,446 @@ function toggleRpgScreen(show){
 function rpgOpenGear(){ toggleRpgScreen(false); gearFromRpg = true; toggleGear(); if(!gearOn) gearFromRpg = false; }
 /* START: an arcade run, or -- in RPG -- the work-in-progress screen */
 function startPressed(){
-  if(GAME_MODE === 'rpg'){ try { SFX.click(); } catch(e){} toggleRpgScreen(true); return; }
+  if(GAME_MODE === 'rpg'){ try { SFX.click(); } catch(e){} rpgRenderScreen(); toggleRpgScreen(true); return; }
   startGame();
+}
+/* ============================ RPG: THE WORLD ============================
+   Phase one of docs/RPG-BLUEPRINT.md: you wake in THE OUTSKIRTS, a field with
+   its packs already standing in it, walk east through them to a palisade whose
+   gate a GATEKEEPER holds, and through it into BRICKHAVEN -- the town, an
+   INSTANCE of its own: no monsters, your home with the stash, a mission board
+   and a waypoint back out. Every visit to a zone is a fresh instance (new
+   packs, new ground); the town is always the same town.
+
+   A zone REPLACES the wave: `wave.state` is 'rpg' and `wave.n` is the zone's
+   level, so every monster built here is built at that level by the same code
+   that builds the arcade's. Packs stand DORMANT (the ritual's sleeping-guard
+   rule) until you come near or touch one, then the whole pack wakes. No reward
+   cards in the RPG: a level is +5% damage and a refill, and what you find is
+   GEAR -- a rare drops something more often than not, the Gatekeeper twice.
+
+   The CHARACTER is saved per class (the weapon you chose on the title): level,
+   experience and whether you have reached the town. Death sends you to the town
+   once you have reached it, back to the Outskirts' start before then. */
+const RPG_KEY = 'bb_rpg';
+const RPG_ZONES = {
+  outskirts: { name:'THE OUTSKIRTS', level:2, col:'#a5e06e', hostile:true,
+               sub:'a field outside the walls -- the town is east, past the gate' },
+  town:      { name:'BRICKHAVEN', level:1, col:'#ffd76e', hostile:false,
+               sub:'the town -- safe ground: your home, the board, the waypoint' },
+};
+const RPG_PACKS = 13;                          /* packs standing in the Outskirts */
+const RPG_PACK_N = [3, 6];                     /* bodies a pack */
+const RPG_PACK_GAP = 380;                      /* packs never closer than this */
+const RPG_AGGRO_R = 520;                       /* a pack wakes when you come this close */
+const RPG_MAGIC = 0.25, RPG_RARES = 2;         /* magic share of the packs; rare packs a zone */
+const RPG_ROSTER = [['imp',3],['zombie',3],['boneling',3],['archer',2],['skeleton',2],['spitter',1],['bloater',1]];
+const RPG_GATE_X = W.w - 330;                  /* the palisade's line, x */
+const RPG_GATE_HALF = 70;                      /* half the gate's width */
+const RPG_START = { x:330, y:CY };
+const RPG_BOSS_HP = 4;                         /* the Gatekeeper: a rare, four times the health */
+const RPG_USE_R = 92;                          /* how close F has to be */
+const RPG_DROP = { rare:0.6, magic:0.12, normal:0.025 };   /* gear a kill drops, by rarity */
+const RPG_TOWN = { x:CX - 120, y:CY + 40 };    /* where you stand up in town */
+let RPG = null;                                /* the live world: { zone, gate, gateOpen, boss, near, fLatch } */
+let rpgChar = null;                            /* the saved character for this class */
+function rpgOn(){ return GAME_MODE === 'rpg' && !!RPG; }
+
+/* ---- THE CHARACTER, one per class ---- */
+function rpgCharBlank(){ return { level:1, xp:0, town:false, deaths:0 }; }
+function rpgSaveAll(){ try { return JSON.parse(localStorage.getItem(RPG_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function rpgCharLoad(wid){
+  const all = rpgSaveAll(), c = all[wid || (weapon && weapon.id) || 'sword'];
+  rpgChar = Object.assign(rpgCharBlank(), c || {});
+  return rpgChar;
+}
+function rpgCharSave(){
+  if(!rpgChar) return;
+  if(player && rpgOn()){ rpgChar.level = player.level; rpgChar.xp = Math.floor(player.xp); }
+  const all = rpgSaveAll(); all[(weapon && weapon.id) || 'sword'] = rpgChar;
+  try { localStorage.setItem(RPG_KEY, JSON.stringify(all)); } catch(e){}
+}
+function rpgCharReset(wid){
+  const all = rpgSaveAll(); delete all[wid || (weapon && weapon.id) || 'sword'];
+  try { localStorage.setItem(RPG_KEY, JSON.stringify(all)); } catch(e){}
+  rpgChar = rpgCharBlank();
+}
+/* the saved level, walked up the same curve gainXp walks: the experience bar
+   and the +5% a level are exactly what the levels would have given */
+function rpgApplyLevel(p, lv, xp){
+  for(let l = 2; l <= lv; l++){ p.xpNext = Math.round(p.xpNext*xpStep(l)+5); p.incAll += 0.05; }
+  p.level = Math.max(1, lv | 0); p.xp = Math.max(0, Math.min(xp || 0, p.xpNext - 1));
+}
+
+/* ---- PROPS OF THE WORLD: the palisade, its gate, the town's buildings ---- */
+function rpgProp(type, x, y, r, extra){
+  const p = Object.assign({ type, x, y, r, flash:0, seed:(Math.random()*1000)|0, dead:false, hp:1, indestructible:true }, extra || {});
+  props.push(p);
+  if(p.solid !== false) solids.push(p);
+  return p;
+}
+const RPG_USES = { rstash:'STASH', rboard:'MISSIONS', rwaypoint:'WAYPOINT', rexit:'TO THE OUTSKIRTS', rhome:'HOME' };
+
+/* ---- ENTERING A ZONE: a fresh instance, the hero carried in ---- */
+function rpgEnter(id, at){
+  const Z = RPG_ZONES[id];
+  if(!Z) return false;
+  const p = player;
+  ctlReset();
+  enemies = []; projectiles = []; pickups = []; debris = []; particles = []; dmgTexts = []; sched = [];
+  hazards = []; spikes = []; pspikes = []; corpses = []; gearDrops = []; bloodOrbs = [];
+  breach = null; breachExtra = []; abyss = null; abyssExtra = []; sboxPending = []; ritualS = ritualBlank();
+  rmCores = []; legionEv = null; goblinPending = null; waveMods = [];
+  seed = (Math.random()*1e9)|0;
+  wave = { n:Z.level, state:'rpg', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
+  RPG.zone = id; RPG.gate = null; RPG.gateOpen = false; RPG.boss = null; RPG.near = null; RPG.packs = 0;
+  if(id === 'town') rpgBuildTown(); else rpgBuildOutskirts();
+  navBuild();
+  const to = at || (id === 'town' ? RPG_TOWN : RPG_START);
+  p.x = to.x; p.y = to.y; p.kx = 0; p.ky = 0; p.dash.t = 0;
+  /* the legion walks in with you */
+  for(const m of minions){ const a = rnd(TAU); m.x = p.x + Math.cos(a)*rnd(40, 90); m.y = p.y + Math.sin(a)*rnd(40, 90); m.spot = null; }
+  cam.x = p.x; cam.y = p.y; cam.shake = 0; reclampCam();
+  if(!Z.hostile){ p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax; p.mana = p.maxMana; }
+  if(id === 'town' && rpgChar && !rpgChar.town){ rpgChar.town = true; logEvent('BRICKHAVEN reached -- the waypoint will bring you back', '#ffd76e'); }
+  showBanner(Z.name, Z.hostile ? 'MONSTER LEVEL '+mobLevelRpg() : 'SAFE GROUND', Z.col, 2.2, 50);
+  logEvent('entered '+Z.name, Z.col);
+  rpgCharSave();
+  return true;
+}
+function mobLevelRpg(){ return Math.max(1, mobRank() || wave.n); }
+
+/* ---- THE OUTSKIRTS ---- */
+function rpgBuildOutskirts(){
+  buildGround();
+  runBiome = 'forest';
+  /* nothing wet where you wake, at the gate, or in the yard behind the palisade */
+  lakeGroups = lakeGroups.filter(g=>!g.some(q=>
+    Math.hypot(q.x+q.w/2 - RPG_START.x, q.y+q.h/2 - RPG_START.y) < 520 ||
+    q.x + q.w > RPG_GATE_X - 420));
+  waters = [].concat(...lakeGroups);
+  buildProps();
+  /* no card chests in the RPG, and the start, the gate and the yard are clear */
+  props = props.filter(q=>q.type !== 'chest' && q.type !== 'strongbox' && q.type !== 'torch' &&
+    Math.hypot(q.x - RPG_START.x, q.y - RPG_START.y) > 260 && q.x < RPG_GATE_X - 260);
+  solids = solids.filter(q=>props.includes(q));
+  /* THE PALISADE: a post every 42px from wall to wall, the gate in the middle */
+  for(let y = W.wall + 24; y < W.h - W.wall - 10; y += 42){
+    if(Math.abs(y - CY) < RPG_GATE_HALF + 20) continue;
+    rpgProp('rwall', RPG_GATE_X, y, 21);
+  }
+  RPG.gate = rpgProp('rgate', RPG_GATE_X, CY, RPG_GATE_HALF, { open:false });
+  rpgProp('torch', RPG_GATE_X - 70, CY - RPG_GATE_HALF - 40, 6, { solid:false });
+  rpgProp('torch', RPG_GATE_X - 70, CY + RPG_GATE_HALF + 40, 6, { solid:false });
+  /* a waypoint where you wake: once you have reached the town it takes you back */
+  rpgProp('rwaypoint', RPG_START.x - 110, RPG_START.y - 120, 34, { solid:false });
+  navBuild();
+  /* THE PACKS, standing where they are, asleep until you come */
+  const spots = [];
+  for(let tries = 0; tries < 900 && spots.length < RPG_PACKS; tries++){
+    /* never close enough to the start that a pack is awake the moment you are */
+    const x0 = RPG_START.x + RPG_AGGRO_R + 260;
+    const x = x0 + Math.random()*(RPG_GATE_X - 560 - x0), y = 280 + Math.random()*(W.h - 560);
+    if(spots.some(s=>Math.hypot(s.x - x, s.y - y) < RPG_PACK_GAP)) continue;
+    if(!floorClear(x, y, 60)) continue;
+    spots.push({ x, y });
+  }
+  const pick = ()=>{ let t = 0; for(const [, w] of RPG_ROSTER) t += w; let r = Math.random()*t;
+    for(const [k, w] of RPG_ROSTER){ r -= w; if(r <= 0) return k; } return RPG_ROSTER[0][0]; };
+  spots.forEach((s, i)=>{
+    const id = i + 1, type = pick();
+    const n = irnd(RPG_PACK_N[0], RPG_PACK_N[1]);
+    const before = enemies.length;
+    if(i < RPG_RARES){
+      spawnEnemy(type, s.x, s.y, true);
+      for(let k = 0; k < 3; k++){ const a = k/3*TAU; spawnEnemy(pick(), s.x + Math.cos(a)*70, s.y + Math.sin(a)*70); }
+    } else if(Math.random() < RPG_MAGIC) spawnMagicPack(type, s, n, false);
+    else for(let k = 0; k < n; k++){ const a = k/n*TAU + rnd(-0.3, 0.3), rr = rnd(30, 70);
+      spawnEnemy(type, s.x + Math.cos(a)*rr, s.y + Math.sin(a)*rr); }
+    for(const e of enemies.slice(before)){ e.dormant = true; e.rpgPack = id; e.faceA = rnd(TAU); }
+  });
+  RPG.packs = spots.length;
+  /* THE GATEKEEPER, and two at its side */
+  const gx = RPG_GATE_X - 240;
+  spawnEnemy('brute', gx, CY, true);
+  const b = enemies[enemies.length - 1];
+  b.maxHp *= RPG_BOSS_HP; b.hp = b.maxHp; b.scale = (b.scale || 1)*1.3; b.r = Math.round((b.r || 16)*1.3);
+  b.rpgBoss = true; b.rpgName = 'THE GATEKEEPER'; b.dormant = true; b.rpgPack = 99;
+  RPG.boss = b;
+  for(const dy of [-90, 90]){ spawnEnemy('skeleton', gx + 40, CY + dy); const g = enemies[enemies.length - 1]; g.dormant = true; g.rpgPack = 99; }
+}
+
+/* ---- BRICKHAVEN, the town: always the same town ---- */
+function rpgBuildTown(){
+  const keep = seed; seed = 7331;              /* the town's ground is the same every visit */
+  buildGround(); seed = keep;
+  runBiome = 'meadow'; CAVES = []; waters = []; lakeGroups = [];
+  flowers = flowers.filter(f=>Math.abs(f.x - CX) < 1100 && Math.abs(f.y - CY) < 760);
+  props = []; solids = [];
+  /* the town wall: a square of posts round the middle of the map, a gate west */
+  const L = CX - 1150, R = CX + 1150, T = CY - 800, B = CY + 800;
+  for(let x = L; x <= R; x += 42){ rpgProp('rwall', x, T, 21); rpgProp('rwall', x, B, 21); }
+  for(let y = T + 42; y < B; y += 42){
+    rpgProp('rwall', R, y, 21);
+    if(Math.abs(y - CY) > RPG_GATE_HALF + 20) rpgProp('rwall', L, y, 21);
+  }
+  rpgProp('rexit', L - 6, CY, 44, { solid:false, label:'TO THE OUTSKIRTS' });
+  /* the buildings: your home (the stash in front of it), and the rest of the street */
+  rpgProp('rhouse', CX + 520, CY - 420, 88, { col:'#c8553d', label:'YOUR HOME', home:true });
+  rpgProp('rstash', CX + 520, CY - 290, 24, { label:'STASH' });
+  rpgProp('rhouse', CX - 560, CY - 450, 80, { col:'#5a7fb5', label:'' });
+  rpgProp('rhouse', CX + 640, CY + 430, 80, { col:'#7d9c4a', label:'' });
+  rpgProp('rhouse', CX - 220, CY + 470, 74, { col:'#b08a3a', label:'' });
+  rpgProp('rboard', CX - 300, CY - 120, 26, { label:'MISSION BOARD' });
+  rpgProp('rwaypoint', CX + 60, CY + 60, 40, { solid:false, label:'WAYPOINT' });
+  for(const [tx, ty] of [[CX - 140, CY - 160], [CX + 260, CY - 160], [CX - 140, CY + 260], [CX + 260, CY + 260]])
+    rpgProp('torch', tx, ty, 6, { solid:false });
+}
+
+/* ---- EVERY FRAME, in a zone ---- */
+function rpgWakePack(id){
+  for(const e of enemies) if(e.rpgPack === id && e.dormant){ e.dormant = false; e.atkCd = Math.max(e.atkCd || 0, 0.3); }
+}
+function rpgTick(dt){
+  if(!rpgOn() || !player || player.dead) return;
+  const p = player, Z = RPG_ZONES[RPG.zone];
+  /* the gate: open once the Gatekeeper is down; walk through it and you are in town */
+  if(RPG.zone === 'outskirts' && RPG.gateOpen && p.x > RPG_GATE_X + 18 && Math.abs(p.y - CY) < RPG_GATE_HALF + 30){
+    rpgEnter('town', { x:CX - 1150 + 110, y:CY }); return;
+  }
+  /* the town's exit is a doorway: stepping into it is leaving */
+  if(RPG.zone === 'town' && p.x < CX - 1150 + 16 && Math.abs(p.y - CY) < RPG_GATE_HALF + 30){
+    rpgEnter('outskirts'); return;
+  }
+  /* what is close enough to use */
+  let near = null, nd = RPG_USE_R;
+  for(const q of props){
+    if(!RPG_USES[q.type] || q.type === 'rexit') continue;
+    if(q.type === 'rwaypoint' && RPG.zone === 'outskirts' && !(rpgChar && rpgChar.town)) continue;
+    const d = Math.hypot(q.x - p.x, q.y - p.y) - (q.r || 0);
+    if(d < nd){ nd = d; near = q; }
+  }
+  RPG.near = near;
+  const f = !!keys.KeyF;
+  if(f && !RPG.fLatch && near) rpgUse(near);
+  RPG.fLatch = f;
+}
+/* F on a thing */
+function rpgUse(q){
+  SFX.click();
+  if(q.type === 'rstash'){ toggleGear(); return 'stash'; }
+  if(q.type === 'rwaypoint'){
+    if(RPG.zone === 'town') rpgEnter('outskirts');
+    else if(rpgChar && rpgChar.town) rpgEnter('town');
+    return 'waypoint';
+  }
+  if(q.type === 'rboard'){
+    showBanner('MISSION BOARD', 'NO MISSIONS YET -- THE DUNGEONS OPEN IN A LATER UPDATE', '#ffd76e', 2.4, 40);
+    return 'board';
+  }
+  return null;
+}
+/* a death in a zone, a kill in a zone */
+function rpgOnKill(e){
+  if(!rpgOn()) return;
+  if(e.rpgPack) rpgWakePack(e.rpgPack);
+  rpgDrop(e);
+  if(e.rpgBoss){
+    RPG.gateOpen = true;
+    if(RPG.gate){ RPG.gate.open = true; solids = solids.filter(s=>s !== RPG.gate); navRefresh(RPG.gate.x, RPG.gate.y, RPG.gate.r + 40); }
+    showBanner('THE GATE IS OPEN', 'BRICKHAVEN IS THROUGH IT', '#ffd76e', 2.2, 44);
+    logEvent('the Gatekeeper falls -- the gate is open', '#ffd76e');
+    SFX.levelup();
+  }
+}
+function rpgDrop(e){
+  const ch = e.rpgBoss ? 1 : e.elite ? RPG_DROP.rare : e.magic ? RPG_DROP.magic : RPG_DROP.normal;
+  const n = e.rpgBoss ? 2 : (Math.random() < ch ? 1 : 0);
+  const lv = gearItemLevel(), out = [];
+  for(let i = 0; i < n; i++){
+    const B = gearRollBase(lv); if(!B) continue;
+    let r = gearRollRarity(e.rpgBoss || e.elite ? 1 : 0);
+    if((e.rpgBoss || e.elite) && r === 'normal') r = 'magic';
+    out.push(gearDropAt(gearMake(B.id, r, lv), e.x + (i ? 30 : -30), e.y + 20));
+  }
+  return out;
+}
+
+/* ---- DEATH: back to town (or the Outskirts' start before you have one) ---- */
+function rpgDeath(){
+  state = 'over'; cv.style.cursor = 'default';
+  if(rpgChar){ rpgChar.deaths = (rpgChar.deaths || 0) + 1; rpgCharSave(); }
+  const el = document.getElementById('rpgDeathScreen');
+  el.classList.remove('peek'); document.getElementById('rpgDeathLogBtn').textContent = 'COMBAT LOG';
+  const where = rpgChar && rpgChar.town ? 'BRICKHAVEN' : 'THE OUTSKIRTS';
+  const h = clogLastHit;
+  document.getElementById('rpgDeathWho').innerHTML = h ? 'KILLED BY <b>'+esc(String(h.who))+'</b>' : '';
+  document.getElementById('rpgDeathBtn').textContent = 'STAND UP IN '+where;
+  el.classList.remove('hidden');
+}
+function rpgResurrect(){
+  const p = player;
+  document.getElementById('rpgDeathScreen').classList.add('hidden', 'peek');
+  document.getElementById('rpgDeathScreen').classList.remove('peek');
+  p.dead = false; p.deadT = 0; p.invuln = 2; p.stunT = 0;
+  p.psn = { list:[], acc:0 }; p.pbleed = { list:[], acc:0 }; p.burn = { list:[], acc:0, brkCd:0 };
+  p.chill = { stacks:0, t:0 }; p.shock = { stacks:0, t:0 }; p.slowT = 0;
+  tScale = 1;
+  p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax; p.mana = p.maxMana;
+  rpgEnter(rpgChar && rpgChar.town ? 'town' : 'outskirts');
+  state = 'play'; cv.style.cursor = clickMode() ? 'default' : 'none';
+}
+
+/* ---- STARTING: a character, carried into its zone ---- */
+function rpgStart(){
+  audioInit(); closeBook();
+  for(const id of ['cheatScreen','charScreen','titleScreen','rpgScreen','rpgDeathScreen'])
+    { const el = document.getElementById(id); if(el) el.classList.add('hidden'); }
+  if(runLink){ runLink = null; }
+  resetRun(false);
+  rpgCharLoad();
+  rpgApplyLevel(player, rpgChar.level, rpgChar.xp);
+  syncStats(); player.hp = player.maxHp; player.mana = player.maxMana;
+  RPG = { zone:null };
+  rpgEnter(rpgChar.town ? 'town' : 'outskirts');
+  state = 'play'; cv.style.cursor = clickMode() ? 'default' : 'none';
+  if(OPT.autoLog && !clogOn) clogToggle();
+  try{ window.focus(); }catch(err){}
+  try{ cv.focus(); }catch(err){}
+}
+function rpgLeave(){ if(RPG){ rpgCharSave(); RPG = null; } }
+
+/* ---- THE SCREEN BEHIND START: the character and the way in ---- */
+function rpgRenderScreen(){
+  const c = rpgCharLoad();
+  const el = document.getElementById('rpgChar');
+  if(el) el.innerHTML = `<b>${esc(((weapon && weapon.name) || 'Sword').toUpperCase())}</b> · level ${c.level}`+
+    (c.town ? ' · has reached BRICKHAVEN' : ' · in THE OUTSKIRTS') + (c.deaths ? ' · '+c.deaths+' death'+(c.deaths>1?'s':'') : '');
+  const go = document.getElementById('rpgPlayBtn');
+  if(go) go.textContent = c.town ? 'PLAY — TO BRICKHAVEN' : 'PLAY — THE OUTSKIRTS';
+}
+
+/* ---- DRAWN: the header that stands where the wave number does, and the use prompt ---- */
+function drawRpgHud(){
+  if(!rpgOn()) return;
+  const Z = RPG_ZONES[RPG.zone];
+  ctx.textAlign = 'center'; ctx.font = '700 20px "Titan One"';
+  ctx.strokeStyle = 'rgba(15,20,25,0.8)'; ctx.lineWidth = 4;
+  ctx.strokeText(Z.name, cw/2, 32); ctx.fillStyle = Z.col; ctx.fillText(Z.name, cw/2, 32);
+  ctx.font = '600 13px Fredoka'; ctx.fillStyle = '#c9d2ce';
+  let line;
+  if(RPG.zone === 'outskirts'){
+    const awake = enemies.filter(e=>!e.dead && !e.dormant && e.state === 'active').length;
+    line = RPG.gateOpen ? 'THE GATE IS OPEN — walk east into Brickhaven'
+      : (RPG.boss && !RPG.boss.dormant ? 'THE GATEKEEPER — break it to open the gate'
+      : 'monster level '+mobLevelRpg()+' · the town is east, past the gate'+(awake ? ' · '+awake+' awake' : ''));
+  } else line = 'safe ground · F at the stash, the board or the waypoint · the gate west leads out';
+  ctx.fillText(line, cw/2, 52);
+}
+function drawRpgWorld(c){
+  if(!rpgOn()) return;
+  const q = RPG.near;
+  for(const p of props){
+    if(!p.label || p === q || !RPG_USES[p.type] && !p.home) continue;
+    if(Math.hypot(p.x - player.x, p.y - player.y) > 520) continue;
+    c.font = '700 13px "Titan One"'; c.textAlign = 'center';
+    c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 4;
+    const y = p.y - (p.type === 'rhouse' ? p.r*1.55 : p.r + 40);
+    c.strokeText(p.label, p.x, y); c.fillStyle = p === q ? '#ffd76e' : '#f2f3f2'; c.fillText(p.label, p.x, y);
+  }
+  if(q){
+    const y = q.y - (q.type === 'rhouse' ? q.r*1.55 : q.r + 40) - 20;
+    c.font = '700 12px Fredoka'; c.textAlign = 'center';
+    const t = 'F · '+(RPG_USES[q.type] || 'USE');
+    const w = c.measureText(t).width + 16;
+    c.fillStyle = 'rgba(12,16,20,0.75)'; roundRect(c, q.x - w/2, y - 13, w, 19, 6); c.fill();
+    c.strokeStyle = '#ffd76e'; c.lineWidth = 1.4; roundRect(c, q.x - w/2, y - 13, w, 19, 6); c.stroke();
+    c.fillStyle = '#ffd76e'; c.fillText(t, q.x, y + 1);
+  }
+  /* the Gatekeeper's name */
+  const b = RPG.boss;
+  if(b && !b.dead){
+    c.font = '700 14px "Titan One"'; c.textAlign = 'center';
+    c.strokeStyle = 'rgba(15,20,25,0.85)'; c.lineWidth = 4;
+    const y = b.y - 70*(b.scale || 1);
+    c.strokeText(b.rpgName, b.x, y); c.fillStyle = '#ff8a4a'; c.fillText(b.rpgName, b.x, y);
+  }
+}
+/* the world's own pieces: a palisade post, the gate, a house, the stash, the
+   board, the waypoint, the way out */
+function drawRpgProp(c, p){
+  const OL = 'rgba(20,30,40,0.55)';
+  if(p.type === 'rwall'){
+    const wood = sh('#8a5a3a', (hash2(p.seed|0, 3) - 0.5)*0.16);
+    c.strokeStyle = OL; c.lineWidth = 2;
+    for(let i = 0; i < 3; i++){
+      c.fillStyle = sh(wood, i ? 0.05*i : -0.08);
+      roundRect(c, -p.r*0.8, -10 - i*16, p.r*1.6, 17, 3); c.fill(); c.stroke();
+    }
+    c.fillStyle = sh(wood, 0.12);
+    c.beginPath(); c.moveTo(-p.r*0.8, -42); c.lineTo(0, -56); c.lineTo(p.r*0.8, -42); c.closePath(); c.fill(); c.stroke();
+  } else if(p.type === 'rgate'){
+    const h = p.r;
+    c.strokeStyle = OL; c.lineWidth = 2.5;
+    for(const s of [-1, 1]){
+      c.fillStyle = '#6d4a2e'; roundRect(c, -14, s*h - 12, 28, 24, 4); c.fill(); c.stroke();
+      c.fillStyle = '#5a3a24'; roundRect(c, -11, s*h - 70, 22, 60, 3); c.fill(); c.stroke();
+      drawStudG(c, 0, s*h - 70, 4, '#6d4a2e');
+    }
+    if(!p.open){
+      /* two doors of planks across the gap, banded in iron, barred in the middle */
+      for(const s of [-1, 1]){
+        c.fillStyle = '#a06a40';
+        roundRect(c, -14, s < 0 ? -h + 10 : 2, 28, h - 12, 3); c.fill(); c.stroke();
+        c.strokeStyle = 'rgba(60,35,20,0.55)'; c.lineWidth = 1.5;
+        for(let k = 1; k < 3; k++){ c.beginPath(); c.moveTo(-14 + k*9.3, s < 0 ? -h + 12 : 4); c.lineTo(-14 + k*9.3, s < 0 ? -2 : h - 12); c.stroke(); }
+        c.strokeStyle = OL; c.lineWidth = 2.5;
+        c.fillStyle = '#4a4f55';
+        roundRect(c, -16, s*h*0.62 - 4, 32, 8, 2); c.fill(); c.stroke();
+      }
+      c.fillStyle = '#5a3a24'; roundRect(c, -20, -6, 40, 12, 3); c.fill(); c.stroke();
+      drawStudG(c, 0, 0, 3.5, '#5a3a24');
+    } else {
+      c.fillStyle = 'rgba(255,215,110,0.18)'; c.beginPath(); c.ellipse(26, 0, 40, h*0.9, 0, 0, TAU); c.fill();
+    }
+  } else if(p.type === 'rhouse'){
+    const r = p.r, w = r*2, hh = r*1.05, col = p.col || '#c8553d';
+    c.strokeStyle = OL; c.lineWidth = 2.5;
+    c.fillStyle = sh('#d9d2c2', -0.08); roundRect(c, -r, -hh, w, hh + 8, 4); c.fill(); c.stroke();
+    for(let i = 0; i < 3; i++){ c.fillStyle = sh('#d9d2c2', i%2 ? 0.04 : -0.02); c.fillRect(-r + 4, -hh + 6 + i*hh/3, w - 8, hh/3 - 4); }
+    c.fillStyle = '#5a3a24'; roundRect(c, -r*0.18, -hh*0.62, r*0.36, hh*0.62 + 8, 3); c.fill(); c.stroke();
+    c.fillStyle = '#9fd4ff'; for(const s of [-1, 1]){ roundRect(c, s*r*0.55 - r*0.16, -hh*0.72, r*0.32, r*0.28, 2); c.fill(); c.stroke(); }
+    c.fillStyle = col;
+    c.beginPath(); c.moveTo(-r - 12, -hh); c.lineTo(0, -hh - r*0.75); c.lineTo(r + 12, -hh); c.closePath(); c.fill(); c.stroke();
+    for(let i = -2; i <= 2; i++) drawStudG(c, i*r*0.32, -hh - r*0.75*(1 - Math.abs(i)/3) + 8, 4.5, col);
+  } else if(p.type === 'rstash'){
+    c.strokeStyle = OL; c.lineWidth = 2.2;
+    c.fillStyle = '#7b5132'; roundRect(c, -24, -26, 48, 30, 4); c.fill(); c.stroke();
+    c.fillStyle = '#ffd76e'; roundRect(c, -26, -34, 52, 12, 4); c.fill(); c.stroke();
+    c.fillStyle = '#ffb900'; roundRect(c, -5, -24, 10, 12, 2); c.fill(); c.stroke();
+    drawStudG(c, -14, -30, 3.5, '#ffd76e'); drawStudG(c, 14, -30, 3.5, '#ffd76e');
+  } else if(p.type === 'rboard'){
+    c.strokeStyle = OL; c.lineWidth = 2;
+    c.fillStyle = '#6d4a2e'; for(const s of [-1, 1]){ roundRect(c, s*22 - 3, -40, 6, 44, 2); c.fill(); c.stroke(); }
+    c.fillStyle = '#9c6a45'; roundRect(c, -30, -56, 60, 34, 3); c.fill(); c.stroke();
+    c.fillStyle = '#f2ead6'; for(const [x, y] of [[-22, -50], [-4, -52], [12, -48]]) { c.fillRect(x, y, 13, 16); }
+    c.fillStyle = '#c8553d'; for(const [x, y] of [[-16, -50], [2, -52], [18, -48]]) { c.beginPath(); c.arc(x, y, 1.8, 0, TAU); c.fill(); }
+  } else if(p.type === 'rwaypoint'){
+    const g = 0.5 + 0.5*Math.sin(vtime*2.4 + p.seed);
+    c.fillStyle = '#5a6d82'; c.strokeStyle = OL; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(0, 0, p.r, p.r*0.45, 0, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = `rgba(111,182,255,${0.35 + 0.35*g})`;
+    c.beginPath(); c.ellipse(0, -2, p.r*0.72, p.r*0.32, 0, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(200,230,255,${0.5 + 0.4*g})`; c.lineWidth = 2;
+    c.save(); c.scale(1, 0.45); c.rotate(vtime*0.8); c.beginPath();
+    for(let i = 0; i < 6; i++){ const a = i/6*TAU; c.moveTo(Math.cos(a)*p.r*0.3, Math.sin(a)*p.r*0.3); c.lineTo(Math.cos(a)*p.r*0.62, Math.sin(a)*p.r*0.62); }
+    c.stroke(); c.restore();
+  } else if(p.type === 'rexit'){
+    const g = 0.5 + 0.5*Math.sin(vtime*3 + p.seed);
+    c.fillStyle = `rgba(165,224,110,${0.18 + 0.2*g})`;
+    c.beginPath(); c.ellipse(0, 0, 38, p.r*1.4, 0, 0, TAU); c.fill();
+    c.fillStyle = '#a5e06e'; c.font = '700 22px "Titan One"'; c.textAlign = 'center'; c.fillText('←', 0, 8);
+  }
 }
 function buildDiffRow(){
   const row = document.getElementById('diffRow');
@@ -18376,9 +18840,25 @@ function previewPick(u, c){
   const before = statSnapshot();
   const save = heroClone();
   if(!save) return [];
+  /* THE WORLD IS PUT BACK TOO, not only the hero. A card's apply can reach past
+     the hero -- a golem brick RAISES its golem, Skeleton Mages turns the legion
+     it finds into mages -- and hovering a card you then did not take left that
+     golem standing. Every list a card can add to is restored, and every minion
+     standing gets its own fields back. */
+  const world = { minions:minions.slice(), props:props.slice(), projectiles:projectiles.slice(), pickups:pickups.slice(),
+                  enemies:enemies.slice(), corpses:corpses.slice(), pendingPicks:pendingPicks.slice(), sched:sched.slice(),
+                  hazards:hazards.slice(), bloodOrbs:bloodOrbs.slice() };
+  const mins = minions.map(m=>[m, Object.assign({}, m)]);
   let after = before;
+  previewing = true;
   try { u.apply(c); syncStats(); after = statSnapshot(); } catch(e){}
+  previewing = false;
   Object.assign(player, save);
+  minions = world.minions; props = world.props; projectiles = world.projectiles; pickups = world.pickups;
+  enemies = world.enemies; corpses = world.corpses; pendingPicks = world.pendingPicks; sched = world.sched;
+  hazards = world.hazards; bloodOrbs = world.bloodOrbs;
+  for(const [m, was] of mins){ for(const k of Object.keys(m)) if(!(k in was)) delete m[k]; Object.assign(m, was); }
+  syncStats();
   const rows = [];
   for(let i=0;i<STAT_PROBES.length;i++){
     const s = STAT_PROBES[i], a = before[i], b = after[i];
@@ -27200,6 +27680,8 @@ function drawProp(c, p){
       }
     }
   }
+  else if(p.type==='rwall' || p.type==='rgate' || p.type==='rhouse' || p.type==='rstash' ||
+          p.type==='rboard' || p.type==='rwaypoint' || p.type==='rexit') drawRpgProp(c, p);
   else if(p.type==='torch'){
     c.fillStyle = '#6d6e68'; c.strokeStyle='rgba(20,30,40,0.5)'; c.lineWidth=2;
     roundRect(c,-3.5,-26,7,28,2); c.fill(); c.stroke();
@@ -28654,6 +29136,7 @@ function render(){
   drawLegionIce();
   drawBloodOrbs();
   drawMonsterMods();
+  drawRpgWorld(ctx);
   drawGearLabels();
   ctx.restore();
   renderHUD();
@@ -30241,7 +30724,7 @@ function renderHUD(){
   ctx.fillStyle = '#1b2a34'; ctx.font='700 15px "Titan One"'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(p.level, bx+10, xpY+7);
   /* ...and under the bar, which level pays the next skill point */
-  { const nl = metaNextLevelPoint();
+  { const nl = rpgOn() ? 0 : metaNextLevelPoint();
     if(nl){
       const soon = nl === p.level + 1;
       ctx.font = '700 10px Fredoka'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -30279,7 +30762,8 @@ function renderHUD(){
   ctx.font='700 26px "Titan One"'; ctx.textAlign='left';
   ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=5;
   ctx.strokeText(p.studs, cw-90, 38); ctx.fillStyle='#ffd76e'; ctx.fillText(p.studs, cw-90, 38);
-  if(wave.n>0){
+  if(rpgOn()) drawRpgHud();
+  else if(wave.n>0){
     ctx.textAlign='center'; ctx.font='700 20px "Titan One"';
     ctx.strokeStyle='rgba(15,20,25,0.8)'; ctx.lineWidth=4;
     const left = enemies.filter(e=>!e.dead&&e.state==='active'&&!e.dormant&&!isBanner(e)).length + wave.queue.length;
@@ -30791,11 +31275,12 @@ function resetRun(demo){
   player = newPlayer(); heroObj = player;
   syncStats();
   if(!demo){
-    applyMetaTree(player); applyFavPerks();
+    /* the arcade's tree and favourite are the arcade's: the RPG's power is its gear */
+    if(GAME_MODE !== 'rpg'){ applyMetaTree(player); applyFavPerks(); }
     /* WHAT THE TREE STARTED YOU WITH. A legendary node does not hand over a
        number, it hands over a BRICK — so it is applied here, once, where a real
        run begins, and never in newPlayer or on the bench's preview heroes. */
-    metaGrantBricks(player.metaGrants || []);
+    if(GAME_MODE !== 'rpg') metaGrantBricks(player.metaGrants || []);
     /* ...and WHAT YOU ARE WEARING, which is the one thing a death leaves you --
        in RPG. An ARCADE run wears nothing. */
     if(modeHasGear()) gearApply(player, true);
@@ -30805,7 +31290,8 @@ function resetRun(demo){
   /* the records as this run found them -- see metaLiveBank */
   if(!META) metaLoad();
   { const m0 = metaCur();
-    metaRun = (!demo && META.on && !runLink) ? { wave:m0.best.wave||0, level:m0.best.level||0,
+    /* an RPG level is the RPG's: it never feeds the arcade tree */
+    metaRun = (!demo && META.on && !runLink && GAME_MODE !== 'rpg') ? { wave:m0.best.wave||0, level:m0.best.level||0,
                                      earned:metaPointsEarned(m0) } : null; }
   wave = { n:0, state:'idle', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   waveMods = [];
@@ -31073,6 +31559,8 @@ function closeOptions(){
 function toggleOptions(from){ if(optOn) closeOptions(); else openOptions(from); }
 
 function backToTitle(){
+  rpgLeave();
+  const rd = document.getElementById('rpgDeathScreen'); if(rd) rd.classList.add('hidden');
   /* leaving a linked run: the next run is your own again */
   if(runLink){ runLink = null; try { history.replaceState(null, '', location.href.split('#')[0]); } catch(e){} }
   closeBook();
@@ -31096,6 +31584,18 @@ function showBest(){
 }
 document.getElementById('startBtn').addEventListener('click', startPressed);
 document.getElementById('rpgBackBtn').addEventListener('click', ()=>{ SFX.click(); toggleRpgScreen(false); });
+document.getElementById('rpgPlayBtn').addEventListener('click', ()=>{ SFX.click(); rpgStart(); });
+document.getElementById('rpgResetBtn').addEventListener('click', ()=>{
+  if(!confirm('Start this class over at level 1, in the Outskirts? Your gear and the stash are kept.')) return;
+  rpgCharReset(); rpgRenderScreen(); });
+document.getElementById('rpgDeathBtn').addEventListener('click', ()=>{ SFX.click(); rpgResurrect(); });
+document.getElementById('rpgDeathLogBtn').addEventListener('click', ()=>{
+  SFX.click();
+  const el = document.getElementById('rpgDeathScreen'), on = !el.classList.contains('peek');
+  el.classList.toggle('peek', on);
+  document.getElementById('rpgDeathLogBtn').textContent = on ? 'BACK' : 'COMBAT LOG';
+  if(on){ if(!clogOn) clogToggle(); clogView = CLOG_IN; } });
+document.getElementById('rpgDeathTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
 document.getElementById('rpgGearBtn').addEventListener('click', rpgOpenGear);
 document.getElementById('treeBtn').addEventListener('click', ()=>{ SFX.click(); toggleTree(); });
 /* audioInit() FIRST on both: a browser will not start an audio context until
@@ -31161,7 +31661,7 @@ document.getElementById('overLogBtn').addEventListener('click', ()=>{ SFX.click(
 document.getElementById('overBackBtn').addEventListener('click', ()=>{ SFX.click(); overPeek(false); });
 document.getElementById('resumeBtn').addEventListener('click', ()=>{ SFX.click(); togglePause(); });
 document.getElementById('restartBtn').addEventListener('click', ()=>{ SFX.click();
-  document.getElementById('pauseScreen').classList.add('hidden'); startGame(); });
+  document.getElementById('pauseScreen').classList.add('hidden'); if(rpgOn()) rpgStart(); else startGame(); });
 document.getElementById('pauseTitleBtn').addEventListener('click', ()=>{ SFX.click(); backToTitle(); });
 document.getElementById('gearBtn').addEventListener('click', ()=>{ SFX.click(); toggleGear(); });
 document.getElementById('pauseGearBtn').addEventListener('click', ()=>{ toggleGear(); });
@@ -31196,7 +31696,7 @@ function update(dt, raw){
     updateMinions(dt);
     updateCorpses(dt);
     updateProjectiles(dt);
-    updateWave(dt);
+    if(rpgOn()) rpgTick(dt); else updateWave(dt);
     updateBreach(dt);
     updateAbyss(dt);
     updateStrongboxes(dt);

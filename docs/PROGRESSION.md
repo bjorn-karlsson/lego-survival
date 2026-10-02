@@ -4607,3 +4607,48 @@ card). 17 breaks caught. Updated for the new numbers: `meta` (budgets), `nodes` 
 `es` (200 INT), `qol` (24 a hand), `pools` (1 mana per 4 INT), `r56` (+10 / +30), and the round-71
 tree snapshot's values (every position the same); `quiet` now lands its hit for certain -- a 10%
 MISS had been an old flake.
+
+## Seventy-sixth pass — the golem nobody chose, and the RPG's first stretch
+
+**The golem you did not pick.** Hovering a reward card shows what it would change, and it does that
+by *trying* the card on the hero and putting the hero back. The hero came back; the world did not.
+A golem brick's apply **raises** its golem, so hovering *Ice Golem* and picking something else left
+an ice golem standing -- and the same with the +1-golem node's extra room, which is why it looked
+like the node had handed one over. The preview now restores every list a card can add to (minions,
+props, projectiles, pickups, monsters, corpses, the pick queue, the scheduler, hazards, orbs) and
+every standing minion's own fields (Skeleton Mages turns the legion it finds into mages), and is
+silent while it tries (`previewing`).
+
+**The RPG walks.** Phase 1 of the blueprint, most of it:
+
+- **A character per class**, saved in `bb_rpg` (level, experience, reached town, deaths), shown on
+  the RPG screen with PLAY and *start this class over*. Its level is walked back up the same curve
+  `gainXp` uses, so the bar and the +5% a level are exact.
+- **A zone replaces the wave.** `wave.state` is `'rpg'` and `wave.n` the zone's level, so every
+  monster is built at that level by the arcade's own code; the frame runs `rpgTick` where it ran
+  `updateWave`; the HUD draws the zone where the wave number was. No reward cards (`queuePick`
+  refuses in RPG), no arcade tree, favourite or tree points (`metaRun` is null in RPG).
+- **THE OUTSKIRTS**: the arena's ground and props with the card chests taken out, a palisade of
+  posts down the east edge with a **gate**, thirteen packs placed in the field and **dormant** -- the
+  ritual guards' rule, given a pack id and the zone's own 520px -- so a pack wakes whole when you
+  come close or touch it. Two rare packs; a quarter magic. **THE GATEKEEPER** (a rare brute at
+  four times the health, two skeleton guards) holds the gate; its death opens it (out of the solids,
+  the nav refreshed), and walking through is the town.
+- **BRICKHAVEN**, an instance of its own on a fixed seed: a walled square, your home and its
+  **stash**, the **mission board** (empty), the **waypoint** (to a fresh Outskirts, and back from the
+  Outskirts' own waypoint once you have been to town) and the west gate out. **F** uses what you
+  stand by; the label turns into the prompt.
+- **Gear** from kills: rares 60%, magic 12%, plain 2.5%, the Gatekeeper two pieces.
+- **Death** is the RPG's: *YOU FELL*, the killer, COMBAT LOG (the plate steps aside), and STAND UP in
+  Brickhaven -- or the Outskirts before you have reached it -- whole, gear and level kept, the zone
+  gone.
+- The pause menu's RESTART reloads the character; T does nothing in RPG.
+
+Tests: `r76` (a golem card hovered raises nothing and leaves the golem types alone, Skeleton Mages
+hovered changes no standing skeleton, the card taken still raises its golem; the RPG screen and its
+PLAY; the Outskirts asleep, rares, the Gatekeeper, no chests, the gate solid; a pack waking whole
+and the far ones not; a level with no card, saved, and not feeding the arcade tree; the Gatekeeper
+opening the gate and dropping two, the gate leading to town and saving it; the town's stash, board,
+waypoint and exit, F at the stash opening it; the waypoint to a fresh Outskirts and back to the same
+town; the town's gate leading out; death to town, whole, the log a click away; the character kept
+at its level and another class its own; the arcade untouched). 15 breaks caught.

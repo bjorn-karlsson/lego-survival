@@ -1,11 +1,11 @@
 # RPG mode — blueprint
 
-> **Status: work in progress, not playable.** This is the plan for BRICKBLADE's second game mode.
-> What exists today is the mode switch on the title screen, a W.I.P. screen behind **START**, and
-> the equipment, inventory and stash moved behind it. Nothing below is built yet unless it says
-> **exists**.
+> **Status: work in progress — the first stretch is walkable.** This is the plan for BRICKBLADE's
+> second game mode. What exists: the mode switch, a character per class, **THE OUTSKIRTS** and the
+> town of **BRICKHAVEN** (phase 1, below), gear drops, the equipment, inventory and stash. Nothing
+> below is built yet unless it says **exists**.
 
-![The RPG W.I.P. screen](rpg-wip.png)
+![The RPG character screen](rpg-screen.png)
 
 ---
 
@@ -95,9 +95,17 @@ Placeholder names, one per attribute corner, like Path of Exile:
 - **Zones replace waves.** A zone is a map with packs already placed (the arena's pack spawner
   and monster levels are reused), rare and magic monsters, a mini-boss, props and chests.
   Monster level is the zone's level, not the wave number (`mobRank()` becomes a zone property).
-- **The Outskirts** (level 1–4): the tutorial field outside the gate.
+- **The Outskirts** (level 1–4): the tutorial field outside the gate. **Exists** (monster level 2):
+  thirteen dormant packs that wake together within 520px, a quarter magic, two rare; the
+  **Gatekeeper** (a rare brute, ×4 health, two guards) holds a shut gate in a palisade on the east
+  edge; break it, walk through, and you are in town. A fresh instance every entry; a waypoint by
+  the start once the town is reached. Gear drops from rares (60%), magic (12%), plain (2.5%), the
+  Gatekeeper twice; no card chests.
 - **Town** (no combat): home with the stash, the mission board, a vendor (sells flasks and
-  low gems, buys items for studs), a waypoint.
+  low gems, buys items for studs), a waypoint. **Exists** as **BRICKHAVEN**, an instance of its own
+  (the same town every visit, inside its own wall): your home with the **stash** in front of it, the
+  **mission board** (empty until phase 6), the **waypoint** to a fresh Outskirts, and the west gate.
+  **F** uses what you stand by. No vendor yet.
 - **Missions** from the board: a dungeon (a few rooms, a boss), a zone clear, a named boss,
   a league encounter. Each has a level band and a reward (XP, a chest, a gem, studs).
 - **Leagues come along.** Breach, abyss, ritual and strongboxes already work as encounters;
@@ -249,7 +257,12 @@ Placeholder examples, to show the flavour:
 - **Equipment becomes per-character**, replacing today's six per-weapon sets. A migration moves
   each weapon set into the stash on first load, so nothing is lost.
 - **Death** sends you back to town and costs a slice of the XP into the level (PoE's penalty),
-  from level 10 on. The instance is lost; the gear is not.
+  from level 10 on. The instance is lost; the gear is not. **Exists**, without the XP penalty yet:
+  *YOU FELL*, the killer, the combat log, and STAND UP in Brickhaven (in the Outskirts before you
+  have reached it).
+- **Exists, small:** a character is saved **per class** (the weapon chosen on the title) in
+  `localStorage` `bb_rpg`: level, experience, whether it has reached town, deaths. Gear is the
+  per-class set it already was.
 - Later: an optional hardcore flag.
 
 ## 13. What carries over from arcade
@@ -287,7 +300,7 @@ Still one HTML file. The split is a flag, not a fork:
 | Phase | What | Playable after it? |
 |---|---|---|
 | **0 — done** | Mode switch, W.I.P. screen, gear moved out of arcade, mana pool, globes | no |
-| **1 — walk around** | Character creation and save slots · the Outskirts and a static town · click to move · <kbd>Left mouse</kbd> attack · XP and levels · zone monsters | a slice: kill things, walk into town |
+| **1 — walk around** | Character creation and save slots · the Outskirts and a static town · click to move · <kbd>Left mouse</kbd> attack · XP and levels · zone monsters | a slice: kill things, walk into town — **mostly done**: a character per class (no names yet), the Outskirts, Brickhaven, dormant packs, the Gatekeeper and its gate, gear drops, RPG death, levels saved |
 | **2 — the bar** | Input layer and rebinding · the skill bar with the Ctrl layer · the first skill gems (from existing bricks) · mana costs | yes, with a few skills |
 | **3 — the build** | Sockets and links · support gems · gem levels and colours · attribute requirements | the core loop |
 | **4 — flasks** | Five flask slots, charges, flask items | |

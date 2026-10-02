@@ -59,13 +59,57 @@ The title screen asks first **how** you want to play.
   levels into the arcade skill tree, reward cards, bosses and leagues. **An arcade run has no
   gear** — nothing is worn, nothing drops, the ritual sells cards instead, and there is no
   equipment screen. What you pick up in a run is bricks.
-- **RPG · W.I.P.** is the second way to play, and **not playable yet**: START opens a work-in-progress
-  screen. The plan is a character and class, a start outside a town at level 1, a town with your
-  home, stash and a mission board, dungeons, and power that comes from **gear with sockets,
-  skill gems and support gems**, an RPG passive tree and ascendancies — with mana costs, five
-  flasks and Path of Exile's key layout. The [equipment](#equipment), the bag and the stash
-  live here now, behind the screen's **EQUIPMENT & STASH** button.
-  The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+- **RPG · W.I.P.** is the second way to play, and **its first stretch is walkable** (see
+  [The RPG: the Outskirts and Brickhaven](#the-rpg-the-outskirts-and-brickhaven)): a character per
+  class, THE OUTSKIRTS outside the walls, and BRICKHAVEN, the town, through the gate. Still to come:
+  missions and dungeons, and power from **gear with sockets, skill gems and support gems**, an RPG
+  passive tree and ascendancies — with mana costs, five flasks and Path of Exile's key layout.
+  The [equipment](#equipment), the bag and the stash live here, behind the screen's **EQUIPMENT &
+  STASH** button and the stash in town. The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+
+### The RPG: the Outskirts and Brickhaven
+
+![The RPG screen: the character and the way in](docs/rpg-screen.png)
+
+**START** in RPG opens the character screen: the class you have chosen on the title (its weapon),
+its level, how far it has got, and **PLAY**. *Start this class over* resets it (gear and the stash
+stay). **Each class is its own character**, saved in the browser.
+
+![The Outskirts: the Gatekeeper at the shut gate](docs/rpg-outskirts.png)
+
+**THE OUTSKIRTS** (monster level 2) is a field outside the walls — a fresh instance every time you
+enter it: new ground, new packs. You wake at its west end; the town is east, behind a **palisade**
+whose **gate is shut**.
+
+- **Thirteen packs stand in the field, asleep.** A pack wakes **all together** when you come within
+  520px of it or hit one of it — never the whole field at once. About a quarter are **magic** packs;
+  **two are rare** monsters (with their modifiers) and a few of their friends.
+- **THE GATEKEEPER** — a rare brute at four times the health, with two skeleton guards — stands
+  before the gate. Break it and **the gate opens**; walk through and you are in town.
+- **No reward cards.** A level is +5% damage, a refill of mana, and progress saved; what makes you
+  stronger is **gear**: a rare drops something more often than not (60%), a magic monster
+  sometimes (12%), a plain one rarely, the Gatekeeper **two pieces**. No card chests stand in the
+  field.
+
+![Brickhaven: your home and the stash](docs/rpg-town.png)
+
+**BRICKHAVEN** is the town, and **an instance of its own**: the same town every visit, inside its own
+wall, with no monsters in it. **F** uses what you are standing by:
+
+| | |
+|---|---|
+| **STASH** (in front of *your home*) | opens the equipment screen with the stash |
+| **MISSION BOARD** | where missions will be posted — none yet (dungeons are the next phase) |
+| **WAYPOINT** | out to a **fresh** Outskirts; the Outskirts' own waypoint (by where you wake) brings you back once you have been to town |
+| **the gate west** | walk into it to leave for the Outskirts |
+
+**Death** is the RPG's, not the arcade's: *YOU FELL*, what killed you, **COMBAT LOG** a click away,
+and **STAND UP IN BRICKHAVEN** (or in the Outskirts, before you have reached the town) — whole,
+with your gear and your level. The zone you died in is gone; the next is a fresh instance.
+
+The RPG keeps the arcade's combat, monsters, rares and their modifiers, minions, gear, the log and
+the sheet. It leaves behind the arcade tree (T does nothing in RPG, and RPG levels never feed it),
+the favourite's kit, and reward cards. The pause menu's RESTART reloads the character.
 
 The mode you pick is remembered. A run link always opens an arcade run.
 
