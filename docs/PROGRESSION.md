@@ -4701,3 +4701,72 @@ Tests: `r77`.
 
 14 breaks caught.
 
+## Seventy-eighth pass — the map, a cave that lives, and the stash at home
+
+**TAB, the map.** PoE's overlay, drawn between the world and the HUD (`drawMapOverlay`). The overlay
+is laid out so that the hero's world position lands on the hero's screen position; its scale is
+`MAP_BASE` × MAP SIZE. The still part (ground and its edges, water, solid props, the town walls) is
+painted once per zone into a canvas at 0.16 px per world px (`mapPaint`), with a dark underlay
+under every line and dot so it reads on bright grass. It is masked by what you have seen and
+recomposited only when that changes.
+
+- **Fog.** In an RPG zone other than town (`mapFogged`), `mapReveal` marks the 80px cells within
+  `MAP_REVEAL` (960px) of you every 0.12s. In town and the arcade everything is known.
+- **Markers.** Drawn live: portals, the waypoint, stash, board, cave stone, gate (red shut, green
+  open), the way out, chests and strongboxes, gear drops, minions, the hero, and monsters within
+  1400px (red, blue magic, yellow rare, pink boss; dimmer while dormant).
+- **Input.** TAB toggles it in play, pause and the spellbook. The key's default is prevented, so
+  focus never leaves the canvas.
+- **Options.** The options gained **sliders**: an `OPT_DEFS` entry with `range:[min, max, step]` and a
+  `unit` is drawn as one, saved as a number, and clamped and stepped by `optSet`. MAP OPACITY
+  (default 70%) and MAP SIZE (default 100%).
+
+**The cave, drawn.**
+
+- **Outline.** `caveLoops` traces the boundary between rock and floor as closed loops along cell
+  edges, with the rock on the right. At a diagonal touch it takes the right turn. Each loop is cut
+  into 20px steps, nudged by noise across the line and smoothed seven times with a [1,2,1] filter.
+- **Painting.** `caveArtBuild` makes floor and rock `Path2D`s (rock is evenodd against a rect) and
+  scatters the dressing: rim studs, moss, pebbles, crystal veins (only in faces you can see),
+  mushroom clusters, puddles, dirt, cracks, bones and boulders on the rock top. `caveTile` paints
+  a 384px tile in order: floor dressing, the shadow (`shadowBlur` on the rock fill), the face
+  (layered stone clipped to the rock), crystal veins, then the top (the rock lifted
+  `CAVE_TOP_H` = 22px, boulders, and bands of lighter stone toward the rim), the rim line, studs
+  and moss.
+- **Tile cache.** Tiles are cached up to 48 and evicted least recently used. One extra tile a
+  frame is painted just past the view. The tile scale follows zoom × dpr up to 1.5.
+- **Per frame.** `drawCaveLife` draws drips and ripples in the puddles and the mushrooms
+  breathing. `drawCaveLight` (before the damage numbers) draws:
+  - a dark layer with holes cut for the hero (560px, flickering), the veins, mushrooms, crystals,
+    portals, minions and projectiles
+  - additive coloured glows
+  - spores (not over rock)
+  - bat flocks every 9–23s
+- **Floor and obstacles.** The floor mottles stud by stud in the cave (`cellColorKey`), with no
+  town-square sand. Up to 18 solid **stalagmites** stand on open floor at least 5 cells' walk in,
+  260px apart, and before `navBuild`.
+- Leaving the RPG clears the cave (`rpgLeave`), so the arcade's map never paints it.
+
+**The stash is in Brickhaven.** Out in an RPG zone, I opens **INVENTORY**: your bag and what you
+wear. The stash panel and STASH ALL are hidden, and `gearTransfer` and `gearStashAll` refuse with
+*THE STASH IS IN BRICKHAVEN*. In town (I or F at the stash), between runs on the title, and in the
+arcade's old path, it is the full equipment screen.
+
+Tests: `r78`.
+
+- **TAB.** It toggles the map in play without moving the focus.
+- **Fog.** It is fogged in the Outskirts and filled in by walking; town is fully known.
+- **Drawing.** The hero's map dot lands on the hero to the pixel. Opacity and size follow the
+  options, and nothing is drawn when the map is shut.
+- **Sliders.** Both are present, saved, labelled and clamped.
+- **Stash.** In town and on the title you get EQUIPMENT with the stash. In the field you get
+  INVENTORY without it, and transfers and STASH ALL are refused.
+- **Cave outline.** Every loop point is within 40px of a rock–floor cell edge, with rock on the
+  right and floor on the left.
+- **Cave contents.** Tiles, lights, puddles, and solid stalagmites clear of the entrance.
+- **Clean-up.** The art is dropped on leaving.
+- **Speed.** The frame rate stays usable.
+- **Arcade.** Its map is unfogged, and TAB works there.
+
+14 breaks caught.
+

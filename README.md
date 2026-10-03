@@ -98,7 +98,7 @@ wall, with no monsters in it. **F** uses what you are standing by:
 
 | | |
 |---|---|
-| **STASH** (in front of *your home*) | opens the equipment screen with the stash |
+| **STASH** (in front of *your home*) | opens the equipment screen with the stash. **I** anywhere in town does the same; out in a zone, **I** opens only your bag and what you wear (*INVENTORY*), because the stash stays at home |
 | **MISSION BOARD** | where missions will be posted — none yet (dungeons are the next phase) |
 | **WAYPOINT** | out to a **fresh** Outskirts; the Outskirts' own waypoint (by where you wake) brings you back once you have been to town |
 | **the gate west** | walk into it to leave for the Outskirts |
@@ -128,6 +128,40 @@ open floor, none within waking range of where you come in, and packs deeper in a
 **THE CAVE WARDEN** (a rare knight at 2.5× health) waits at the far end beside a **portal home**,
 and a second portal stands where you come in. The HUD shows the seed, the fill, the passes and how
 much of the map is open. Dying in the cave wakes you in Brickhaven.
+
+**What it looks like.** The rock's edge is traced off the grid as closed loops, cut into 20px steps,
+nudged with noise and smoothed, so the 80px blocks read as a worn cave wall. The rock is drawn in a
+three-quarter view:
+
+- a **cliff face** in layered stone where it drops to the floor
+- a raised **top** with boulders and a lit rim of studs and moss
+- a soft **shadow** pooled at its foot
+
+The floor is mottled stone with cracks, dirt, pebbles, bones and puddles. Drops fall into the
+puddles and ripple. **Glowing mushrooms** grow at the foot of the walls, and **crystal veins**
+glint in the faces. **Stalagmites** stand in the open: they are solid, so you and the monsters walk
+round them. The cave is **dark**: you carry a pool of light, and the crystals, mushrooms, portals,
+your minions and every projectile light their own patch. Spores drift through the air, and now and
+then a **flock of bats** crosses the screen. The rock is painted once into 384px tiles and cached;
+only what moves is drawn each frame.
+
+### The map (TAB)
+
+![TAB over the cave: what you have explored, the portal, the monsters near you](docs/rpg-map.png)
+
+**TAB** lays the map over the whole field, as in PoE. It is centred on you, so your dot sits on your
+hero, and it is drawn in lines and dots so it covers nothing you need to see. It takes no clicks and
+the game keeps running. It shows:
+
+- the ground's edges, water and what blocks
+- portals, the waypoint, the stash, the board, the gate and the way out
+- chests and gear on the ground
+- the monsters within 1400px: red, **blue** for magic, **yellow** for rares, **pink** for a boss
+- your minions
+
+Out in an RPG zone it starts dark and **fills in as you walk**, revealing about 960px around you.
+Brickhaven and the arcade's arena are known from the start. **Options → MAP OPACITY** (20–100%) and
+**MAP SIZE** (50–200%) are sliders, and both are remembered.
 
 **Death** is the RPG's, not the arcade's: *YOU FELL*, what killed you, **COMBAT LOG** a click away,
 and **STAND UP IN BRICKHAVEN** (or in the Outskirts, before you have reached the town) — whole,
@@ -3852,7 +3886,8 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag. The run waits while it is open |
+| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag, plus the stash in Brickhaven. The run waits while it is open |
+| <kbd>Tab</kbd> | **the map**, laid over the field and centred on you; opacity and size in Options |
 | <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |

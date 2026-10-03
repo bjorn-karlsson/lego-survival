@@ -679,6 +679,7 @@
   .gstashview{height:calc(var(--gc)*12);width:calc(var(--gc)*12 + 12px);overflow-y:scroll;overflow-x:hidden;
     border:2px solid rgba(255,255,255,.14);border-radius:4px;scrollbar-width:thin;scrollbar-color:#5a6470 rgba(0,0,0,.3)}
   .gearstashwrap{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  #gearScreen.nostash .gearstashwrap, #gearScreen.nostash #gearStashAllBtn{display:none}
   .gstashhead{display:flex;align-items:center;gap:10px;font-family:'Titan One',cursive;font-size:13px;letter-spacing:2px;color:#ffd76e}
   .gstashhead #gearStashCount{flex:1;font-family:'Fredoka',sans-serif;font-size:11.5px;letter-spacing:0;color:#8e9aa4}
   .gtmod i.top{color:#ffd76e}
@@ -3459,6 +3460,11 @@ const OPT_DEFS = [
          'you keep walking — hold both to walk and fight at once. Standing still, a right-click on a '+
          'monster walks up to it and hits it' },
   /* a CHOICE rather than a switch: its value is one of `choices` */
+  /* SLIDERS: a number between range[0] and range[1], in steps of range[2] */
+  { id:'mapAlpha', def:70, range:[20, 100, 5], unit:'%', name:'MAP OPACITY',
+    note:'how solid the map is when TAB lays it over the field. Low, and you fight straight through it' },
+  { id:'mapSize', def:100, range:[50, 200, 10], unit:'%', name:'MAP SIZE',
+    note:'how big TAB draws the map. It is always centred on you, so the dot that is you sits on your hero' },
   { id:'textSize', def:'normal', name:'TEXT SIZE', choices:['small','normal','large','xlarge'],
     note:'every word in the menus, the sheets, the cards and the log, and the text drawn in the '+
          'field -- the HUD, damage numbers, names over monsters' },
@@ -3481,17 +3487,19 @@ function optLoad(){
   for(const d of OPT_DEFS){
     const v = o && typeof o === 'object' ? o[d.id] : undefined;
     OPT[d.id] = d.choices ? (d.choices.includes(v) ? v : d.def)
+              : d.range ? (typeof v === 'number' && isFinite(v) ? clamp(v, d.range[0], d.range[1]) : d.def)
                           : (typeof v === 'boolean' ? v : d.def);
   }
 }
 function optSave(){
   const o = {};
-  for(const d of OPT_DEFS) o[d.id] = d.choices ? OPT[d.id] : !!OPT[d.id];
+  for(const d of OPT_DEFS) o[d.id] = d.choices || d.range ? OPT[d.id] : !!OPT[d.id];
   try { localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch(e){}
 }
 function optSet(id, v){
   const d = OPT_DEFS.find(q=>q.id === id);
-  OPT[id] = d && d.choices ? (d.choices.includes(v) ? v : d.def) : !!v;
+  OPT[id] = d && d.choices ? (d.choices.includes(v) ? v : d.def)
+          : d && d.range ? (isFinite(+v) ? clamp(Math.round(+v/d.range[2])*d.range[2], d.range[0], d.range[1]) : d.def) : !!v;
   optSave();
   if(id === 'textSize') applyTextSize();
   return OPT[id];
@@ -3978,7 +3986,8 @@ window.addEventListener('keydown', e=>{
     if(inp){ e.preventDefault(); inp.focus(); inp.select(); return; }
   }
   everInput = true;
-  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code)) e.preventDefault();
+  if(e.code === 'Tab' && !e.repeat && ['play','pause','book'].includes(state)) mapToggle();
   keys[e.code] = true;
   if(e.code==='KeyF' && !e.repeat && state==='play' && wave.state==='ready') waveSkip();
   else if(e.code==='KeyF' && !e.repeat && state==='play' && wave.state==='cleared' && wave.hold) waveGoOn();
@@ -4623,6 +4632,8 @@ function cellSprite(col){
 }
 function cellColorKey(ix,iy){
   const cxw = ix*CS+20, cyw = iy*CS+20;
+  /* the cave floor is mottled stud by stud, not in big squares, and has no sand in the middle */
+  if(caveMap && RPG && RPG.zone === 'cave'){ const pal = BIOMES.stone; return pal[(hash2(ix*7 + 3, iy*5 + 1)*pal.length)|0]; }
   if(Math.hypot(cxw-CX, cyw-CY) < 260) return ['#e4cd9e','#dcc795','#ecd4a7'][(hash2(ix,iy)*3)|0];
   const pal = BIOMES[biomeAt(cxw,cyw)];
   return pal[(hash2(ix>>2, iy>>2)*pal.length)|0];
@@ -17229,7 +17240,7 @@ function rpgEnter(id, at){
   seed = (Math.random()*1e9)|0;
   wave = { n:Z.level, state:'rpg', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   RPG.zone = id; RPG.gate = null; RPG.gateOpen = false; RPG.boss = null; RPG.near = null; RPG.packs = 0;
-  caveMap = null;
+  caveMap = null; caveArt = null;
   if(id === 'town') rpgBuildTown(); else if(id === 'cave') rpgBuildCave(); else rpgBuildOutskirts();
   navBuild();
   const to = at || (id === 'town' ? RPG_TOWN : id === 'cave' ? RPG.caveIn : RPG_START);
@@ -17451,7 +17462,7 @@ function rpgStart(){
   try{ window.focus(); }catch(err){}
   try{ cv.focus(); }catch(err){}
 }
-function rpgLeave(){ if(RPG){ rpgCharSave(); RPG = null; } }
+function rpgLeave(){ if(RPG){ rpgCharSave(); RPG = null; } caveMap = null; caveArt = null; }
 
 /* ---- THE SCREEN BEHIND START: the character and the way in ---- */
 function rpgRenderScreen(){
@@ -17577,6 +17588,15 @@ function rpgBuildCave(){
     if(Math.hypot(p.x - A.x, p.y - A.y) < 260) continue;
     rpgProp('crystal', p.x + rnd(-20, 20), p.y + rnd(-20, 20), 12, { solid:false }); k++;
   }
+  /* stalagmites out in the open, to walk round and fight among */
+  for(let i = 0, k = 0; i < 600 && k < 18; i++){
+    const c = (Math.random()*M.g.length) | 0, x = c % M.cols, y = (c / M.cols) | 0;
+    if(M.g[c] || M.dist[c] < 5 || x < 1 || y < 1 || x >= M.cols - 1 || y >= M.rows - 1) continue;
+    let open = true; for(let dy = -1; dy <= 1 && open; dy++) for(let dx = -1; dx <= 1; dx++) if(M.g[(y+dy)*M.cols + x+dx]){ open = false; break; }
+    if(!open) continue;
+    const p = caveXY(M, c); if(Math.hypot(p.x - B.x, p.y - B.y) < 320 || props.some(q=>q.type === 'rstalag' && Math.hypot(q.x - p.x, q.y - p.y) < 260)) continue;
+    rpgProp('rstalag', p.x + rnd(-18, 18), p.y + rnd(-18, 18), rnd(15, 23)); k++;
+  }
   navBuild();
   /* the packs: dormant, on roomy floor, the further in the more of them rare */
   const floor = [];
@@ -17611,39 +17631,416 @@ function rpgBuildCave(){
   b.dormant = true; b.rpgPack = 199; b.rpgCave = true;
   RPG.boss = b; RPG.packs = spots.length;
 }
-/* the walls, drawn as stacked dark bricks with studs on top; only the visible ones */
+/* ---- THE CAVE, DRAWN ----
+   The grid is what the cave IS (collision, paths, spawns); this is what it
+   LOOKS like. The rock's edge is traced off the grid as closed loops, cut into
+   20px steps, nudged by noise and smoothed, so the 80px staircase reads as a
+   worn rock face instead of stacked blocks. Each loop has the rock on its
+   right. The rock is drawn in 3/4 view: a cliff FACE where it drops to the
+   floor below, a TOP lifted CAVE_TOP_H above it, studs and moss along the lit
+   rim, soft shadow pooled at its foot. All of that is painted once into tiles
+   and cached; what moves (drips, spores, bats, the light) is drawn per frame. */
+const CAVE_TILE = 384, CAVE_TOP_H = 22, CAVE_TILE_MAX = 48;
+let caveArt = null, caveLightCv = null;
+function caveLoops(M){
+  const C = M.cols, R = M.rows, G = M.g, S = CAVE_CELL, V = C + 1;
+  const wall = (x, y)=> x < 0 || y < 0 || x >= C || y >= R ? 1 : G[y*C + x];
+  const out = new Map(), edges = [];
+  const add = (ax, ay, bx, by)=>{ const e = { ax, ay, bx, by, dx:bx - ax, dy:by - ay, used:false };
+    const id = ay*V + ax; if(!out.has(id)) out.set(id, []); out.get(id).push(e); edges.push(e); };
+  for(let y = 0; y < R; y++) for(let x = 0; x < C; x++){
+    if(!G[y*C + x]) continue;
+    if(!wall(x, y-1)) add(x, y, x+1, y);
+    if(!wall(x+1, y)) add(x+1, y, x+1, y+1);
+    if(!wall(x, y+1)) add(x+1, y+1, x, y+1);
+    if(!wall(x-1, y)) add(x, y+1, x, y);
+  }
+  const loops = [];
+  for(const e0 of edges){
+    if(e0.used) continue;
+    const pts = []; let e = e0;
+    while(e && !e.used){
+      e.used = true; pts.push(e.ax, e.ay);
+      const cand = (out.get(e.by*V + e.bx) || []).filter(q=>!q.used);
+      e = cand.length > 1 ? (cand.find(q=>q.dx === -e.dy && q.dy === e.dx) || cand[0]) : cand[0];
+    }
+    if(pts.length < 6) continue;
+    /* 20px steps, a nudge of noise across the line, then smoothing */
+    const n = pts.length/2, xs = [], ys = [];
+    for(let i = 0; i < n; i++){
+      const ax = pts[i*2]*S, ay = pts[i*2+1]*S, bx = pts[((i+1)%n)*2]*S, by = pts[((i+1)%n)*2+1]*S;
+      const tx = (bx - ax)/S, ty = (by - ay)/S;
+      for(let k = 0; k < 4; k++){
+        const px = ax + (bx - ax)*k/4, py = ay + (by - ay)*k/4;
+        const j = (hash2(px*0.37|0, py*0.53|0) - 0.5)*12 + Math.sin(px*0.021 + py*0.017)*5;
+        xs.push(px - ty*j); ys.push(py + tx*j);
+      }
+    }
+    const m = xs.length;
+    for(let pass = 0; pass < 7; pass++){
+      const x2 = xs.slice(), y2 = ys.slice();
+      for(let i = 0; i < m; i++){ const a = (i - 1 + m) % m, b = (i + 1) % m;
+        xs[i] = (x2[a] + 2*x2[i] + x2[b])/4; ys[i] = (y2[a] + 2*y2[i] + y2[b])/4; }
+    }
+    /* the normal into the rock: the rock is on the right of the walk */
+    const nx = new Float32Array(m), ny = new Float32Array(m);
+    for(let i = 0; i < m; i++){ const a = (i - 1 + m) % m, b = (i + 1) % m;
+      let tx = xs[b] - xs[a], ty = ys[b] - ys[a]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+      nx[i] = -ty; ny[i] = tx; }
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for(let i = 0; i < m; i++){ minX = Math.min(minX, xs[i]); maxX = Math.max(maxX, xs[i]); minY = Math.min(minY, ys[i]); maxY = Math.max(maxY, ys[i]); }
+    loops.push({ xs:Float32Array.from(xs), ys:Float32Array.from(ys), nx, ny, n:m, box:[minX, minY, maxX, maxY] });
+  }
+  return loops;
+}
+function caveArtBuild(M){
+  const rng = mulberry32((M.seed ^ 0x5bd1e995) >>> 0), r = (a, b)=> a + rng()*(b - a);
+  const loops = caveLoops(M);
+  const floor = new Path2D();
+  for(const L of loops){ floor.moveTo(L.xs[0], L.ys[0]); for(let i = 1; i < L.n; i++) floor.lineTo(L.xs[i], L.ys[i]); floor.closePath(); }
+  const rock = new Path2D(); rock.rect(-400, -400, W.w + 800, W.h + 800); rock.addPath(floor);
+  const A = { M, loops, floor, rock, tiles:new Map(), k:1, frame:0,
+    studs:[], lumps:[], cracks:[], moss:[], pebbles:[], shrooms:[], shards:[], puddles:[], patches:[], bones:[], lights:[], bats:[], batT:r(3, 8) };
+  const SHROOM = ['#5ff0d0', '#c08bff', '#ffb45a', '#8fd4ff'], SHARD = ['#b48cff', '#7fe8ff', '#ff8fd0', '#9dffb0'];
+  const mossy = (x, y)=> Math.sin(x*0.009 + 1.3) + Math.sin(y*0.011 - 0.4) + Math.sin((x + y)*0.006) > 0.9;
+  for(const L of loops){
+    for(let i = 0; i < L.n; i++){
+      const x = L.xs[i], y = L.ys[i], nx = L.nx[i], ny = L.ny[i], h = hash2(x|0, y|0);
+      /* studs on the lit rim of the rock top, two broken rows */
+      if(h > 0.38) A.studs.push({ x:x + nx*15, y:y + ny*15 - CAVE_TOP_H, r:5.5 + (h > 0.9 ? 1.5 : 0) });
+      if(i % 2 === 0 && hash2(y|0, x|0) > 0.62) A.studs.push({ x:x + nx*36, y:y + ny*36 - CAVE_TOP_H, r:5 });
+      if(mossy(x, y) && h < 0.55) A.moss.push({ x:x + nx*r(4, 20), y:y + ny*r(4, 20) - CAVE_TOP_H, r:r(6, 14), top:true });
+      if(mossy(x, y) && h > 0.5) A.moss.push({ x:x - nx*r(14, 40), y:y - ny*r(14, 40), r:r(10, 22), top:false });
+      if(rng() < 0.16) A.pebbles.push({ x:x - nx*r(16, 60), y:y - ny*r(16, 60), r:r(3, 7), c:sh('#6b6274', r(-0.15, 0.12)) });
+      /* a crystal vein in a face you can see: rock to the north */
+      if(ny < -0.6 && rng() < 0.03){ const col = SHARD[(rng()*SHARD.length)|0];
+        A.shards.push({ x, y:y - CAVE_TOP_H*0.45, col, n:2 + ((rng()*3)|0), s:r(0.8, 1.3), ph:rng()*TAU });
+        A.lights.push({ x, y:y - 6, r:170, col, a:0.75, ph:rng()*TAU }); }
+      /* glowing mushrooms at the foot of the rock */
+      if(rng() < 0.022){ const col = SHROOM[(rng()*SHROOM.length)|0], cx = x - nx*26, cy = y - ny*26, caps = [];
+        for(let k = 0, kn = 3 + ((rng()*4)|0); k < kn; k++) caps.push({ dx:r(-18, 18), dy:r(-10, 10), s:r(0.6, 1.25) });
+        A.shrooms.push({ x:cx, y:cy, col, caps, ph:rng()*TAU });
+        A.lights.push({ x:cx, y:cy, r:120, col, a:0.6, ph:rng()*TAU }); }
+    }
+  }
+  /* puddles, dirt and bones out on the floor */
+  const roomy = [];
+  for(let y = 1; y < M.rows - 1; y++) for(let x = 1; x < M.cols - 1; x++){
+    let ok = true; for(let dy = -1; dy <= 1 && ok; dy++) for(let dx = -1; dx <= 1; dx++) if(M.g[(y+dy)*M.cols + x+dx]){ ok = false; break; }
+    if(ok) roomy.push(y*M.cols + x);
+  }
+  for(let k = 0; k < 16 && roomy.length; k++){ const p = caveXY(M, roomy[(rng()*roomy.length)|0]);
+    A.puddles.push({ x:p.x + r(-20, 20), y:p.y + r(-20, 20), rx:r(26, 62), ph:rng()*10, per:r(2.6, 5.5) }); }
+  for(let y = 0; y < M.rows; y++) for(let x = 0; x < M.cols; x++){
+    if(!M.g[y*M.cols + x] || rng() < 0.45) continue;
+    A.lumps.push({ x:x*CAVE_CELL + r(0, CAVE_CELL), y:y*CAVE_CELL + r(0, CAVE_CELL) - CAVE_TOP_H, r:r(18, 40), a:r(0, TAU),
+      c:sh('#3a3342', r(-0.12, 0.14)), stud:rng() < 0.3 }); }
+  for(let k = 0; k < 150 && roomy.length; k++){ const p = caveXY(M, roomy[(rng()*roomy.length)|0]);
+    A.patches.push({ x:p.x + r(-60, 60), y:p.y + r(-60, 60), rx:r(50, 140), ry:r(30, 80), a:r(0, TAU),
+      c:['rgba(70,52,40,0.16)', 'rgba(36,30,52,0.16)', 'rgba(52,60,48,0.14)', 'rgba(20,16,30,0.14)'][(rng()*4)|0] }); }
+  for(let k = 0; k < 120 && roomy.length; k++){ const p = caveXY(M, roomy[(rng()*roomy.length)|0]);
+    A.cracks.push({ x:p.x + r(-40, 40), y:p.y + r(-40, 40), a:r(0, TAU) }); }
+  for(let k = 0; k < 10 && roomy.length; k++){ const p = caveXY(M, roomy[(rng()*roomy.length)|0]);
+    A.bones.push({ x:p.x + r(-30, 30), y:p.y + r(-30, 30), a:r(0, TAU), skull:rng() < 0.4 }); }
+  return A;
+}
+/* one tile of the painted cave: floor dressing, the shadow, the face, the top */
+function caveTile(A, tx, ty){
+  const S = CAVE_TILE, k = A.k, x0 = tx*S, y0 = ty*S;
+  const c = document.createElement('canvas'); c.width = c.height = Math.ceil(S*k);
+  const g = c.getContext('2d'); g.scale(k, k); g.translate(-x0, -y0);
+  const near = (x, y, m)=> x > x0 - m && x < x0 + S + m && y > y0 - m && y < y0 + S + m;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  /* the floor: darker, cooler, with patches of dirt */
+  g.fillStyle = 'rgba(26,18,40,0.36)'; g.fill(A.floor, 'evenodd');
+  /* hairline cracks across the floor, so the plate does not read as tiles */
+  g.strokeStyle = 'rgba(12,8,20,0.35)'; g.lineWidth = 1.6;
+  for(const d of A.cracks) if(near(d.x, d.y, 90)){ g.beginPath(); g.moveTo(d.x, d.y); let x = d.x, y = d.y, a = d.a;
+    for(let i = 0; i < 6; i++){ a += Math.sin(d.x*0.1 + i*2.3)*0.7; x += Math.cos(a)*14; y += Math.sin(a)*14; g.lineTo(x, y); } g.stroke(); }
+  for(const d of A.patches) if(near(d.x, d.y, 120)){ g.fillStyle = d.c; g.beginPath(); g.ellipse(d.x, d.y, d.rx, d.ry, d.a, 0, TAU); g.fill(); }
+  for(const d of A.moss) if(!d.top && near(d.x, d.y, 30)){ g.fillStyle = 'rgba(92,140,70,0.38)'; g.beginPath(); g.ellipse(d.x, d.y, d.r*1.4, d.r*0.8, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(140,190,90,0.35)'; g.beginPath(); g.arc(d.x - d.r*0.3, d.y - 2, d.r*0.45, 0, TAU); g.fill(); }
+  for(const d of A.puddles) if(near(d.x, d.y, 80)){
+    g.fillStyle = 'rgba(20,30,50,0.55)'; g.beginPath(); g.ellipse(d.x, d.y, d.rx, d.rx*0.5, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(60,90,130,0.45)'; g.beginPath(); g.ellipse(d.x, d.y - 2, d.rx*0.86, d.rx*0.4, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(170,200,240,0.35)'; g.lineWidth = 2; g.beginPath(); g.ellipse(d.x - d.rx*0.2, d.y - d.rx*0.14, d.rx*0.45, d.rx*0.14, 0, Math.PI*1.05, Math.PI*1.6); g.stroke(); }
+  for(const d of A.bones) if(near(d.x, d.y, 30)){
+    g.save(); g.translate(d.x, d.y); g.rotate(d.a); g.fillStyle = '#d9d2bf'; g.strokeStyle = 'rgba(40,30,30,0.5)'; g.lineWidth = 1.5;
+    if(d.skull){ g.beginPath(); g.arc(0, 0, 8, 0, TAU); g.fill(); g.stroke(); g.fillStyle = '#2a2326'; g.beginPath(); g.arc(-3, -1, 2, 0, TAU); g.arc(3, -1, 2, 0, TAU); g.fill(); }
+    else { roundRect(g, -12, -2.5, 24, 5, 2.5); g.fill(); g.stroke(); g.beginPath(); g.arc(-12, 0, 3.5, 0, TAU); g.arc(12, 0, 3.5, 0, TAU); g.fill(); }
+    g.restore(); }
+  for(const d of A.pebbles) if(near(d.x, d.y, 10)){ g.fillStyle = 'rgba(10,6,16,0.35)'; g.beginPath(); g.ellipse(d.x + 1, d.y + 2, d.r, d.r*0.6, 0, 0, TAU); g.fill();
+    g.fillStyle = d.c; g.beginPath(); g.ellipse(d.x, d.y, d.r, d.r*0.75, 0, 0, TAU); g.fill(); }
+  /* the shadow pooled at the rock's foot */
+  g.save(); g.shadowColor = 'rgba(4,2,10,0.8)'; g.shadowBlur = 34*k; g.shadowOffsetY = 14*k;
+  g.fillStyle = '#16121c'; g.fill(A.rock, 'evenodd'); g.restore();
+  /* the face: layered stone, darker at its foot */
+  g.save(); g.clip(A.rock, 'evenodd');
+  g.fillStyle = '#3a3242'; g.fillRect(x0, y0, S, S);
+  for(let y = Math.floor(y0/9)*9; y < y0 + S; y += 9){
+    g.strokeStyle = (y/9) % 2 ? 'rgba(0,0,0,0.22)' : 'rgba(255,240,255,0.05)'; g.lineWidth = 2;
+    g.beginPath(); for(let x = x0 - 10; x <= x0 + S + 10; x += 24) g.lineTo(x, y + Math.sin(x*0.05 + y*0.3)*2.5); g.stroke(); }
+  g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 10; g.stroke(A.floor);
+  g.restore();
+  /* crystal veins in the face */
+  for(const d of A.shards) if(near(d.x, d.y, 40)){
+    for(let i = 0; i < d.n; i++){ const a = -0.5 + i/(Math.max(1, d.n - 1)) - 0.5*0, h = (10 + i*5)*d.s, w = 4.5*d.s;
+      g.save(); g.translate(d.x + (i - (d.n - 1)/2)*7*d.s, d.y + 6); g.rotate(a*0.8);
+      const gr = g.createLinearGradient(0, 0, 0, -h); gr.addColorStop(0, sh(d.col, -0.45)); gr.addColorStop(1, '#ffffff');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(-w, 0); g.lineTo(0, -h); g.lineTo(w, 0); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1; g.stroke(); g.restore(); } }
+  /* the top: deep rock dark, the rim lit, studs and moss along it */
+  g.save(); g.translate(0, -CAVE_TOP_H); g.clip(A.rock, 'evenodd');
+  g.fillStyle = '#332d3a'; g.fillRect(x0, y0 + CAVE_TOP_H, S, S);
+  /* the deep rock is not flat: boulders of it, lit from above */
+  for(const d of A.lumps) if(near(d.x, d.y + CAVE_TOP_H, d.r + 10)){
+    g.fillStyle = d.c; g.beginPath(); g.ellipse(d.x, d.y + CAVE_TOP_H, d.r, d.r*0.8, d.a, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,245,255,0.06)'; g.beginPath(); g.ellipse(d.x - d.r*0.25, d.y + CAVE_TOP_H - d.r*0.3, d.r*0.55, d.r*0.35, d.a, 0, TAU); g.fill();
+    if(d.stud) drawStudG(g, d.x, d.y + CAVE_TOP_H - d.r*0.2, 5, d.c); }
+  g.strokeStyle = 'rgba(58,51,68,0.85)'; g.lineWidth = 72; g.stroke(A.floor);
+  g.strokeStyle = '#4b4455'; g.lineWidth = 36; g.stroke(A.floor);
+  g.strokeStyle = '#5d5568'; g.lineWidth = 12; g.stroke(A.floor);
+  g.restore();
+  g.save(); g.translate(0, -CAVE_TOP_H);
+  g.strokeStyle = 'rgba(235,225,250,0.45)'; g.lineWidth = 2.5; g.stroke(A.floor);
+  g.restore();
+  for(const d of A.studs) if(near(d.x, d.y, 12)) drawStudG(g, d.x, d.y, d.r, '#4f4859');
+  for(const d of A.moss) if(d.top && near(d.x, d.y, 20)){ g.fillStyle = 'rgba(96,150,72,0.75)'; g.beginPath(); g.arc(d.x, d.y, d.r, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(150,200,100,0.6)'; g.beginPath(); g.arc(d.x - d.r*0.3, d.y - d.r*0.3, d.r*0.45, 0, TAU); g.fill(); }
+  return c;
+}
 function drawCaveWalls(vx, vy, vw, vh){
   const M = caveMap; if(!M || !rpgOn() || RPG.zone !== 'cave') return;
-  const S = CAVE_CELL;
-  const x0 = Math.max(0, Math.floor(vx/S)), x1 = Math.min(M.cols-1, Math.floor((vx+vw)/S));
-  const y0 = Math.max(0, Math.floor(vy/S)), y1 = Math.min(M.rows-1, Math.floor((vy+vh)/S));
-  const open = (xx, yy)=> xx >= 0 && yy >= 0 && xx < M.cols && yy < M.rows && !M.g[yy*M.cols + xx];
-  for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++){
-    if(!M.g[y*M.cols + x]) continue;
-    const px = x*S, py = y*S, k = hash2(x, y);
-    const edge = open(x-1, y) || open(x+1, y) || open(x, y-1) || open(x, y+1);
-    if(!edge){
-      /* the deep rock: dark, no studs, only the seams of the bricks */
-      ctx.fillStyle = sh('#1d1b21', (k - 0.5)*0.2); ctx.fillRect(px, py, S + 1, S + 1);
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, S - 2, S - 2);
-      continue;
-    }
-    /* the rim: a raised brick, studs up, a lit face where it drops to the floor below */
-    const col = sh('#4b4652', (k - 0.5)*0.16), face = open(x, y + 1);
-    ctx.fillStyle = sh(col, -0.45); ctx.fillRect(px, py, S + 1, S + 1);
-    ctx.fillStyle = col; ctx.fillRect(px + 2, py + 2, S - 3, face ? S - 18 : S - 4);
-    if(face){
-      ctx.fillStyle = sh(col, 0.22); ctx.fillRect(px, py + S - 16, S + 1, 16);
-      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(px, py + S - 16, S + 1, 2);
-      /* and its shadow on the floor */
-      const gr = ctx.createLinearGradient(0, py + S, 0, py + S + 16);
-      gr.addColorStop(0, 'rgba(10,8,14,0.35)'); gr.addColorStop(1, 'rgba(10,8,14,0)');
-      ctx.fillStyle = gr; ctx.fillRect(px, py + S, S + 1, 16);
-    }
-    const sy = face ? 0.26 : 0.3, sy2 = face ? 0.56 : 0.7;
-    drawStudG(ctx, px + S*0.3, py + S*sy, 7, col); drawStudG(ctx, px + S*0.7, py + S*sy, 7, col);
-    drawStudG(ctx, px + S*0.3, py + S*sy2, 7, col); drawStudG(ctx, px + S*0.7, py + S*sy2, 7, col);
+  if(!caveArt || caveArt.M !== M) caveArt = caveArtBuild(M);
+  const A = caveArt, k = clamp(zoom*dpr, 1, 1.5);
+  if(Math.abs(A.k - k) > 0.01){ A.k = k; A.tiles.clear(); }
+  A.frame++;
+  const S = CAVE_TILE, t0x = Math.floor(vx/S), t1x = Math.floor((vx + vw)/S), t0y = Math.floor(vy/S), t1y = Math.floor((vy + vh)/S);
+  for(let ty = t0y; ty <= t1y; ty++) for(let tx = t0x; tx <= t1x; tx++){
+    const key = tx + ',' + ty; let T = A.tiles.get(key);
+    if(!T){ T = { c:caveTile(A, tx, ty), used:0 }; A.tiles.set(key, T); }
+    T.used = A.frame; ctx.drawImage(T.c, tx*S, ty*S, S, S);
   }
+  /* one more tile a frame, just past the view, so walking never waits on paint */
+  outer: for(let ty = t0y - 1; ty <= t1y + 1; ty++) for(let tx = t0x - 1; tx <= t1x + 1; tx++){
+    if(tx < -1 || ty < -1 || tx*S > W.w || ty*S > W.h || A.tiles.has(tx + ',' + ty)) continue;
+    A.tiles.set(tx + ',' + ty, { c:caveTile(A, tx, ty), used:A.frame }); break outer;
+  }
+  if(A.tiles.size > CAVE_TILE_MAX){
+    const old = [...A.tiles.entries()].sort((a, b)=>a[1].used - b[1].used);
+    for(let i = 0; i < old.length - CAVE_TILE_MAX; i++) A.tiles.delete(old[i][0]);
+  }
+  drawCaveLife(vx, vy, vw, vh);
+}
+/* what lives on the floor: mushrooms breathing light, drops falling into puddles */
+function drawCaveLife(vx, vy, vw, vh){
+  const A = caveArt; if(!A) return;
+  const vis = (x, y, m)=> x > vx - m && x < vx + vw + m && y > vy - m && y < vy + vh + m;
+  for(const d of A.puddles){
+    if(!vis(d.x, d.y, 150)) continue;
+    const t = (vtime + d.ph) % d.per, fall = 0.45;
+    if(t < fall){ const f = t/fall; ctx.fillStyle = 'rgba(190,220,255,0.8)';
+      ctx.beginPath(); ctx.ellipse(d.x + d.rx*0.15, d.y - 130*(1 - f*f), 2, 4, 0, 0, TAU); ctx.fill(); }
+    else { const f = (t - fall)/1.1; if(f < 1) for(let q = 0; q < 2; q++){ const ff = f - q*0.25; if(ff <= 0) continue;
+      ctx.strokeStyle = `rgba(190,220,255,${0.55*(1 - ff)})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(d.x + d.rx*0.15, d.y, 4 + ff*d.rx*0.6, (4 + ff*d.rx*0.6)*0.45, 0, 0, TAU); ctx.stroke(); } }
+  }
+  for(const d of A.shrooms){
+    if(!vis(d.x, d.y, 40)) continue;
+    const pulse = 0.6 + 0.4*Math.sin(vtime*1.6 + d.ph);
+    for(const c of d.caps){
+      const x = d.x + c.dx, y = d.y + c.dy, s = c.s;
+      ctx.fillStyle = '#e8e0d0'; roundRect(ctx, x - 2*s, y - 9*s, 4*s, 9*s, 1.5*s); ctx.fill();
+      ctx.fillStyle = sh(d.col, -0.25 + 0.25*pulse);
+      ctx.beginPath(); ctx.ellipse(x, y - 9*s, 7*s, 4.5*s, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${0.35*pulse})`; ctx.beginPath(); ctx.arc(x - 2*s, y - 11*s, 1.4*s, 0, TAU); ctx.fill();
+    }
+  }
+}
+/* the air: darkness with your light in it, the glows, spores, and bats */
+function drawCaveLight(){
+  const A = caveArt; if(!A || !rpgOn() || RPG.zone !== 'cave' || !player) return;
+  const p = player, Z = zoom*dpr, hw = cv.width/2, hh = cv.height/2;
+  const S = (x, y)=>[(x - cam.x)*Z + hw, (y - cam.y)*Z + hh];
+  const on = (sx, sy, R)=> sx > -R && sy > -R && sx < cv.width + R && sy < cv.height + R;
+  /* the bats: a flock now and then, across the view */
+  const dt = Math.min(0.05, frameRaw || 1/60);
+  A.batT -= dt;
+  if(A.batT <= 0){ A.batT = 9 + Math.random()*14;
+    const from = Math.random() < 0.5 ? -1 : 1, y0 = cam.y + (Math.random() - 0.5)*ch/zoom*0.7, n = 3 + ((Math.random()*5)|0);
+    for(let i = 0; i < n; i++) A.bats.push({ x:cam.x - from*(cw/zoom/2 + 60 + Math.random()*160), y:y0 + (Math.random() - 0.5)*160,
+      vx:from*(260 + Math.random()*120), vy:(Math.random() - 0.5)*60, ph:Math.random()*TAU, life:9 }); }
+  for(const b of A.bats){ b.x += b.vx*dt; b.y += (b.vy + Math.sin(vtime*3 + b.ph)*40)*dt; b.life -= dt; }
+  A.bats = A.bats.filter(b=>b.life > 0);
+  for(const b of A.bats){
+    const fl = Math.sin(vtime*22 + b.ph), d = Math.sign(b.vx);
+    ctx.fillStyle = '#0d0a12';
+    ctx.beginPath(); ctx.moveTo(b.x - 14, b.y - 6*fl); ctx.quadraticCurveTo(b.x - 6, b.y - 2, b.x, b.y);
+    ctx.quadraticCurveTo(b.x + 6, b.y - 2, b.x + 14, b.y - 6*fl); ctx.lineTo(b.x + 6, b.y + 2); ctx.lineTo(b.x - 6, b.y + 2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x, b.y + 1, 3.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ff4a5a'; ctx.fillRect(b.x + d*1.5 - 0.8, b.y, 1.6, 1.6);
+  }
+  /* the dark, with holes cut where there is light */
+  const L = caveLightCv || (caveLightCv = document.createElement('canvas'));
+  if(L.width !== cv.width || L.height !== cv.height){ L.width = cv.width; L.height = cv.height; }
+  const g = L.getContext('2d');
+  g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, L.width, L.height);
+  g.fillStyle = 'rgba(7,4,16,0.64)'; g.fillRect(0, 0, L.width, L.height);
+  g.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, a)=>{ const [sx, sy] = S(x, y), R = r*Z; if(!on(sx, sy, R)) return;
+    const gr = g.createRadialGradient(sx, sy, 0, sx, sy, R);
+    gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(0.5, `rgba(0,0,0,${a*0.7})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(sx - R, sy - R, R*2, R*2); };
+  hole(p.x, p.y - 10, 560 + Math.sin(vtime*7)*6 + Math.sin(vtime*13)*4, 1);
+  for(const l of A.lights) hole(l.x, l.y, l.r, l.a*(0.8 + 0.2*Math.sin(vtime*1.6 + l.ph)));
+  for(const q of props) if(!q.dead && (q.type === 'crystal' || q.type === 'rportal')) hole(q.x, q.y - 20, q.type === 'rportal' ? 260 : 150, 0.8);
+  for(const pr of projectiles) if(!pr.dead) hole(pr.x, pr.y, 70, 0.55);
+  for(const m of minions) if(!m.dead) hole(m.x, m.y, 110, 0.35);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(L, 0, 0);
+  /* the coloured glows, added on top */
+  ctx.globalCompositeOperation = 'lighter';
+  const glow = (x, y, r, col, a)=>{ const [sx, sy] = S(x, y), R = r*Z; if(!on(sx, sy, R)) return;
+    const gr = ctx.createRadialGradient(sx, sy, 0, sx, sy, R); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(sx - R, sy - R, R*2, R*2); };
+  for(const l of A.lights) glow(l.x, l.y, l.r*0.7, l.col, 0.22*(0.7 + 0.3*Math.sin(vtime*1.6 + l.ph)));
+  for(const q of props) if(!q.dead && q.type === 'crystal') glow(q.x, q.y - 16, 110, '#3ddc84', 0.2);
+  glow(p.x, p.y - 10, 300, '#ffcf8a', 0.08);
+  /* spores drifting through the light */
+  ctx.globalAlpha = 1;
+  const span = 1800;
+  for(let i = 0; i < 70; i++){
+    const hx = hash2(i, 17), hy = hash2(i, 71), sp = 8 + hash2(i, 5)*14;
+    const wx = cam.x - span/2 + (((hx*span + vtime*sp*(hash2(i, 9) - 0.5)*2 + Math.sin(vtime*0.4 + i)*30) % span) + span) % span;
+    const wy = cam.y - span/2 + (((hy*span - vtime*sp) % span) + span) % span;
+    const [sx, sy] = S(wx, wy); if(!on(sx, sy, 4) || caveWallAt(wx, wy + CAVE_TOP_H)) continue;
+    const tw = 0.5 + 0.5*Math.sin(vtime*2 + i*1.7);
+    ctx.fillStyle = i % 3 ? `rgba(170,255,220,${0.35*tw})` : `rgba(220,190,255,${0.4*tw})`;
+    ctx.beginPath(); ctx.arc(sx, sy, (1 + hash2(i, 3)*1.6)*Z, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---- THE MAP (TAB) ----
+   PoE's overlay: TAB lays the map over the whole field, centred on you, drawn
+   in lines and dots so it covers nothing you need to see -- and it takes no
+   clicks. How solid and how big it is are in the options. Out in an RPG zone
+   it fills in as you walk (MAP_REVEAL around you); the town and the arcade's
+   arena are known from the start. */
+const MAP_CELL = 80, MAP_REVEAL = 960, MAP_K = 0.16, MAP_BASE = 0.15, MAP_NEAR = 1400;
+let mapOn = false, mapSeen = null, mapKey = null, mapArtCv = null, mapMaskCv = null, mapCompCv = null, mapDirty = true, mapRevealT = 0;
+function mapToggle(){ mapOn = !mapOn; try { SFX.click(); } catch(e){} return mapOn; }
+function mapFogged(){ return rpgOn() && RPG.zone !== 'town'; }
+function mapCanvas(){ const c = document.createElement('canvas'); c.width = Math.ceil(W.w*MAP_K); c.height = Math.ceil(W.h*MAP_K); return c; }
+function mapEnsure(){
+  const key = (rpgOn() ? RPG.zone : 'arcade') + ':' + seed + ':' + (caveMap ? caveMap.seed : 0);
+  if(key !== mapKey){ mapKey = key; mapSeen = null; mapArtCv = null; }
+  if(!mapSeen){
+    const C = Math.ceil(W.w/MAP_CELL), R = Math.ceil(W.h/MAP_CELL);
+    mapSeen = new Uint8Array(C*R); mapMaskCv = mapCanvas(); mapCompCv = mapCanvas(); mapDirty = true;
+    if(!mapFogged()){ mapSeen.fill(1); const g = mapMaskCv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, mapMaskCv.width, mapMaskCv.height); }
+  }
+  if(!mapArtCv){ mapArtCv = mapPaint(); mapDirty = true; }
+}
+/* the still part of the map: the ground you can stand on, its edges, water, what blocks */
+function mapPaint(){
+  const c = mapCanvas(), g = c.getContext('2d');
+  g.scale(MAP_K, MAP_K); g.lineJoin = 'round'; g.lineCap = 'round';
+  if(caveMap && rpgOn() && RPG.zone === 'cave'){
+    if(!caveArt || caveArt.M !== caveMap) caveArt = caveArtBuild(caveMap);
+    g.fillStyle = 'rgba(12,10,26,0.42)'; g.fill(caveArt.floor, 'evenodd');
+    g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 34; g.stroke(caveArt.floor);
+    g.strokeStyle = 'rgba(228,218,255,0.95)'; g.lineWidth = 14; g.stroke(caveArt.floor);
+  } else {
+    const w = W.wall;
+    g.fillStyle = 'rgba(10,16,24,0.34)'; g.fillRect(w, w, W.w - 2*w, W.h - 2*w);
+    g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 34; g.strokeRect(w, w, W.w - 2*w, W.h - 2*w);
+    g.strokeStyle = 'rgba(232,232,220,0.95)'; g.lineWidth = 14; g.strokeRect(w, w, W.w - 2*w, W.h - 2*w);
+    for(const r of waters) if(!r.cave){ g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20); }
+    g.fillStyle = 'rgba(90,160,245,0.9)';
+    for(const r of waters) if(!r.cave) g.fillRect(r.x, r.y, r.w, r.h);
+  }
+  for(const q of props){
+    if(q.dead || q.solid === false || !solids.includes(q)) continue;
+    if(q.type === 'rwall' || q.type === 'rhouse'){ const r = Math.max(q.r, 30);
+      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(q.x - r - 10, q.y - r - 10, r*2 + 20, r*2 + 20);
+      g.fillStyle = 'rgba(240,215,170,0.95)'; g.fillRect(q.x - r, q.y - r, r*2, r*2); continue; }
+    if(q.type === 'rgate' || /^r(stash|board|waypoint|cave|portal|exit)$/.test(q.type)) continue;     /* drawn live, as markers */
+    g.fillStyle = 'rgba(0,0,0,0.65)'; g.beginPath(); g.arc(q.x, q.y, Math.max(22, q.r) + 9, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(215,215,205,0.9)'; g.beginPath(); g.arc(q.x, q.y, Math.max(22, q.r), 0, TAU); g.fill();
+  }
+  return c;
+}
+/* fill in what you have walked near */
+function mapReveal(force){
+  if(!mapSeen || !player || !mapFogged()) return;
+  mapRevealT -= frameRaw || 1/60; if(mapRevealT > 0 && !force) return; mapRevealT = 0.12;
+  const C = Math.ceil(W.w/MAP_CELL), R = Math.ceil(W.h/MAP_CELL), p = player, n = Math.ceil(MAP_REVEAL/MAP_CELL);
+  const cx = Math.floor(p.x/MAP_CELL), cy = Math.floor(p.y/MAP_CELL), g = mapMaskCv.getContext('2d');
+  g.fillStyle = '#fff'; const s = MAP_CELL*MAP_K;
+  for(let y = Math.max(0, cy - n); y <= Math.min(R - 1, cy + n); y++) for(let x = Math.max(0, cx - n); x <= Math.min(C - 1, cx + n); x++){
+    const i = y*C + x; if(mapSeen[i]) continue;
+    if(Math.hypot((x + 0.5)*MAP_CELL - p.x, (y + 0.5)*MAP_CELL - p.y) > MAP_REVEAL) continue;
+    mapSeen[i] = 1; g.fillRect(x*s - 0.5, y*s - 0.5, s + 1, s + 1); mapDirty = true;
+  }
+}
+function mapSeenAt(x, y){
+  if(!mapSeen) return false;
+  const C = Math.ceil(W.w/MAP_CELL), cx = Math.floor(x/MAP_CELL), cy = Math.floor(y/MAP_CELL);
+  return cx >= 0 && cy >= 0 && cx < C && !!mapSeen[cy*C + cx];
+}
+function mapScale(){ return MAP_BASE*clamp(+OPT.mapSize || 100, 50, 200)/100; }
+function drawMapOverlay(){
+  if(!player || state === 'title' || !W) return;
+  mapEnsure(); mapReveal();
+  if(!mapOn || !['play', 'pause', 'book'].includes(state)) return;
+  if(mapDirty){ const g = mapCompCv.getContext('2d');
+    g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, mapCompCv.width, mapCompCv.height);
+    g.drawImage(mapMaskCv, 0, 0); g.globalCompositeOperation = 'source-in'; g.drawImage(mapArtCv, 0, 0);
+    g.globalCompositeOperation = 'source-over'; mapDirty = false; }
+  const s = mapScale(), p = player;
+  const psx = (p.x - cam.x)*zoom + cw/2, psy = (p.y - cam.y)*zoom + ch/2, ox = psx - p.x*s, oy = psy - p.y*s;
+  const at = (x, y)=>[ox + x*s, oy + y*s];
+  ctx.save(); ctx.globalAlpha = clamp(+OPT.mapAlpha || 70, 10, 100)/100;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(mapCompCv, ox, oy, W.w*s, W.h*s);
+  const dot = (x, y, r, col, ring)=>{ const [sx, sy] = at(x, y); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(sx, sy, r, 0, TAU); ctx.fill();
+    if(ring){ ctx.strokeStyle = ring; ctx.lineWidth = 1.5; ctx.stroke(); } };
+  const box = (x, y, r, col)=>{ const [sx, sy] = at(x, y); ctx.fillStyle = col; ctx.fillRect(sx - r, sy - r, r*2, r*2);
+    ctx.strokeStyle = 'rgba(10,10,15,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(sx - r, sy - r, r*2, r*2); };
+  /* the places: portals and waypoints, the stash, the board, the gate, the way out, chests */
+  for(const q of props){
+    if(q.dead || !mapSeenAt(q.x, q.y)) continue;
+    if(q.type === 'rportal' || q.type === 'rwaypoint'){ const [sx, sy] = at(q.x, q.y);
+      ctx.strokeStyle = q.type === 'rportal' ? '#ffd76e' : '#8fd4ff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TAU); ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, TAU); ctx.fill(); }
+    else if(q.type === 'rstash') box(q.x, q.y, 5, '#ffd76e');
+    else if(q.type === 'rboard') box(q.x, q.y, 4.5, '#c9905a');
+    else if(q.type === 'rcave') box(q.x, q.y, 5, '#c9a6ff');
+    else if(q.type === 'rexit'){ const [sx, sy] = at(q.x, q.y); ctx.fillStyle = '#a5e06e'; ctx.beginPath(); ctx.moveTo(sx - 7, sy); ctx.lineTo(sx + 3, sy - 6); ctx.lineTo(sx + 3, sy + 6); ctx.closePath(); ctx.fill(); }
+    else if(q.type === 'rgate'){ const [sx, sy] = at(q.x, q.y); ctx.fillStyle = q.open ? '#a5e06e' : '#ff5a4a'; ctx.fillRect(sx - 2.5, sy - q.r*s, 5, q.r*s*2); }
+    else if(q.type === 'chest') box(q.x, q.y, 3.5, '#ffd76e');
+    else if(q.type === 'strongbox') box(q.x, q.y, 4, '#fe8a18');
+  }
+  for(const d of gearDrops) if(mapSeenAt(d.x, d.y)){ const [sx, sy] = at(d.x, d.y);
+    ctx.fillStyle = '#ffb45a'; ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy); ctx.lineTo(sx, sy + 4); ctx.lineTo(sx - 4, sy); ctx.closePath(); ctx.fill(); }
+  /* the monsters near you, as PoE shows them: red, blue for magic, yellow for rares */
+  for(const e of enemies){
+    if(e.dead || e.state !== 'active' || !mapSeenAt(e.x, e.y)) continue;
+    const boss = e.rpgBoss || e.boss;
+    if(!boss && Math.hypot(e.x - p.x, e.y - p.y) > MAP_NEAR) continue;
+    const a = e.dormant ? 0.55 : 1;
+    ctx.globalAlpha *= a;
+    if(boss) dot(e.x, e.y, 6, '#ff6ad5', 'rgba(20,0,20,0.9)');
+    else if(e.elite) dot(e.x, e.y, 4.5, '#ffd23a', 'rgba(30,20,0,0.85)');
+    else if(e.magic) dot(e.x, e.y, 3.8, '#6aa8ff', 'rgba(0,10,30,0.8)');
+    else dot(e.x, e.y, 3.2, '#ff4a3a', 'rgba(30,0,0,0.8)');
+    ctx.globalAlpha /= a;
+  }
+  for(const m of minions) if(!m.dead) dot(m.x, m.y, 2, '#7fe07a');
+  /* and you */
+  dot(p.x, p.y, 4.5, '#ffd76e', 'rgba(20,15,5,0.95)');
+  ctx.restore();
 }
 
 /* ---- DRAWN: the header that stands where the wave number does, and the use prompt ---- */
@@ -17779,6 +18176,20 @@ function drawRpgProp(c, p){
     c.fillStyle = '#6d4a2e'; roundRect(c, p.r + 6, -30, 5, 30, 1); c.fill();
     c.fillStyle = '#ffd76e'; roundRect(c, p.r - 6, -42, 30, 14, 2); c.fill(); c.stroke();
     c.fillStyle = '#20160a'; c.font = '700 8px Fredoka'; c.textAlign = 'center'; c.fillText('TEST', p.r + 9, -32);
+  } else if(p.type === 'rstalag'){
+    /* a stalagmite: round bricks stacked narrowing up, a drip of light on its tip */
+    const col = sh('#5a5266', (hash2(p.seed|0, 5) - 0.5)*0.2), n = 4, r0 = p.r;
+    c.fillStyle = 'rgba(6,4,12,0.4)'; c.beginPath(); c.ellipse(0, 3, r0*1.15, r0*0.45, 0, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(15,10,20,0.6)'; c.lineWidth = 1.5;
+    for(let i = 0; i < n; i++){
+      const rr = r0*(1 - i*0.2), y = -i*r0*0.62;
+      c.fillStyle = sh(col, -0.25); c.beginPath(); c.ellipse(0, y, rr, rr*0.42, 0, 0, Math.PI); c.lineTo(-rr, y - r0*0.5);
+      c.ellipse(0, y - r0*0.5, rr, rr*0.42, 0, Math.PI, 0, true); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = sh(col, 0.08 + i*0.04); c.beginPath(); c.ellipse(0, y - r0*0.5, rr, rr*0.42, 0, 0, TAU); c.fill(); c.stroke();
+    }
+    const tipY = -n*r0*0.62 - r0*0.2;
+    c.fillStyle = sh(col, 0.15); c.beginPath(); c.moveTo(-r0*0.3, tipY + r0*0.35); c.lineTo(0, tipY - r0*0.7); c.lineTo(r0*0.3, tipY + r0*0.35); c.closePath(); c.fill(); c.stroke();
+    drawStudG(c, 0, -(n - 1)*r0*0.62 - r0*0.5, r0*0.22, col);
   } else if(p.type === 'rportal'){
     const g = 0.5 + 0.5*Math.sin(vtime*3 + p.seed);
     c.strokeStyle = OL; c.lineWidth = 2;
@@ -20198,6 +20609,10 @@ function gearFit(){
   const gc = Math.floor(clamp(Math.min((vw - 400) / 24.5, (vh - 230) / 13.6), 22, 40));
   el.style.setProperty('--gc', gc + 'px');
 }
+/* THE STASH IS IN TOWN. Between runs (the title) and in the arcade's old way it
+   is always there; in the RPG, out in a zone, I opens the bag and what you wear
+   and nothing else -- the stash waits at home. */
+function gearStashHere(){ return gearFrom === 'title' || !rpgOn() || RPG.zone === 'town'; }
 function toggleGear(){
   const el = document.getElementById('gearScreen');
   if(!el) return;
@@ -20215,6 +20630,7 @@ function toggleGear(){
   if(!['play','title','pause'].includes(state)) return;
   if(!GEAR) gearLoad();
   gearFrom = state; gearOn = true; state = 'gear';
+  el.classList.toggle('nostash', !gearStashHere());
   el.classList.remove('hidden');
   cv.style.cursor = 'default';
   gearFit();
@@ -20429,6 +20845,7 @@ function gearMove(entry, x, y, to){
 }
 /* CTRL-CLICK: across to the other grid, wherever it first fits */
 function gearTransfer(entry){
+  if(!gearStashHere()){ gearNote('THE STASH IS IN BRICKHAVEN', true); return false; }
   const from = gearListOf(entry), dest = from === GEAR.stash ? GEAR.inv : GEAR.stash;
   const at = gearFreeSpot(dest, entry.it);
   if(!at){ gearNote(dest === GEAR.stash ? 'THE STASH IS FULL' : 'THE BAG IS FULL', true); return false; }
@@ -20440,6 +20857,7 @@ function gearTransfer(entry){
 /* THE BUTTON: everything in the bag into the stash, biggest first so the big
    pieces find room before the rings fill the gaps. Returns how many moved. */
 function gearStashAll(){
+  if(!gearStashHere()){ gearNote('THE STASH IS IN BRICKHAVEN', true); return 0; }
   const list = GEAR.inv.slice().sort((a, b)=>{ const A = gearSize(a.it), B = gearSize(b.it); return B.w*B.h - A.w*A.h; });
   let n = 0;
   for(const e of list){
@@ -20489,7 +20907,12 @@ function renderGear(){
   const linked = gearLinked();
   const sub = document.getElementById('gearSub');
   if(sub) sub.textContent = linked ? 'A RUN LINK WEARS THE GEAR IT WAS COPIED WITH — your own bag and stash are below'
+    : !gearStashHere() ? 'Your bag and what you wear. The stash is at home, in Brickhaven.'
     : 'Each hero wears its own gear; the bag and stash are shared. Saved as it changes — dying keeps it all.';
+  const h2 = document.querySelector('#gearScreen h2'); if(h2) h2.textContent = gearStashHere() ? 'EQUIPMENT' : 'INVENTORY';
+  const foot = document.querySelector('#gearScreen .sheetfoot');
+  if(foot) foot.innerHTML = gearStashHere() ? 'I or ESC to close &middot; click to wear or take off &middot; Ctrl-click to send between bag and stash &middot; drag anywhere it fits &middot; drop in the bin to destroy'
+    : 'I or ESC to close &middot; click to wear or take off &middot; drag anywhere it fits &middot; drop in the bin to destroy &middot; the stash is in Brickhaven';
   let h = '';
   for(const s of GEAR_SLOTS){
     const D = GEAR_DOLL[s], it = eq[s];
@@ -27901,7 +28324,7 @@ function drawProp(c, p){
     }
   }
   else if(p.type==='rwall' || p.type==='rgate' || p.type==='rhouse' || p.type==='rstash' ||
-          p.type==='rboard' || p.type==='rwaypoint' || p.type==='rexit' || p.type==='rcave' || p.type==='rportal') drawRpgProp(c, p);
+          p.type==='rboard' || p.type==='rwaypoint' || p.type==='rexit' || p.type==='rcave' || p.type==='rportal' || p.type==='rstalag') drawRpgProp(c, p);
   else if(p.type==='torch'){
     c.fillStyle = '#6d6e68'; c.strokeStyle='rgba(20,30,40,0.5)'; c.lineWidth=2;
     roundRect(c,-3.5,-26,7,28,2); c.fill(); c.stroke();
@@ -29344,6 +29767,7 @@ function render(){
       ctx.globalAlpha = 1;
     }
   }
+  drawCaveLight();
   drawRitualFog();
   ctx.textAlign='center';
   for(const t of dmgTexts){
@@ -29361,6 +29785,7 @@ function render(){
   drawRpgWorld(ctx);
   drawGearLabels();
   ctx.restore();
+  drawMapOverlay();
   renderHUD();
   if(state==='play' && player && !player.dead){
     if(markFew) for(const e of aliveList)
@@ -31678,7 +32103,7 @@ function optRows(){
     { key:'sfx', name:'SOUND', on:()=>A.sfxOn && !A.muted,
       note:'every hit, pickup, cast and smash',
       vol:'sfxVol', hit:()=>{ audioInit(); toggleSfx(); } },
-    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices, names:d.names,
+    ...OPT_DEFS.map(d=>({ key:d.id, name:d.name, note:d.note, choices:d.choices, names:d.names, range:d.range, unit:d.unit,
       on:()=>!!OPT[d.id], hit:()=>optToggle(d.id) })),
   ];
 }
@@ -31690,6 +32115,10 @@ function optRender(){
     if(r.choices) return `<div class="optrow choice"><div class="otext"><b>${r.name}</b><i>${r.note}</i>`+
       `<div class="ochoices">${r.choices.map(c=>`<button class="ochoice${OPT[r.key] === c ? ' on' : ''}" data-choice="${r.key}" data-val="${c}">${
         (r.names && r.names[c]) || (TEXT_SIZES[c] || { name:c }).name}</button>`).join('')}</div></div></div>`;
+    /* a slider of its own, with its value beside it */
+    if(r.range) return `<div class="optrow"><div class="otext"><b>${r.name}</b><i>${r.note}</i></div>`+
+      `<div class="ovol"><input type="range" min="${r.range[0]}" max="${r.range[1]}" step="${r.range[2]}" value="${OPT[r.key]}" data-optr="${r.key}" aria-label="${r.name}">`+
+      `<span class="ovoln">${OPT[r.key]}${r.unit || ''}</span></div></div>`;
     /* a switch, and -- for music and sound -- a volume slider beside it */
     const vol = r.vol ? `<div class="ovol"><input type="range" min="0" max="100" step="1" value="${Math.round(A[r.vol]*100)}" data-vol="${r.vol}" aria-label="${r.name} volume">`+
       `<span class="ovoln">${Math.round(A[r.vol]*100)}%</span></div>` : '';
@@ -31717,6 +32146,13 @@ function optRender(){
       optSay(OPT_DEFS.find(d=>d.id === b.dataset.choice).name + ' is now ' + (TEXT_SIZES[b.dataset.val] || { name:b.dataset.val }).name);
       optRender();
     });
+  for(const inp of list.querySelectorAll('input[data-optr]')){
+    const d = OPT_DEFS.find(q=>q.id === inp.dataset.optr), lab = inp.parentNode.querySelector('.ovoln');
+    const fill = ()=>{ const f = (inp.value - d.range[0])/(d.range[1] - d.range[0])*100;
+      inp.style.background = `linear-gradient(90deg, #ffb900 ${f}%, rgba(0,0,0,.35) ${f}%)`; };
+    fill();
+    inp.addEventListener('input', ()=>{ optSet(d.id, +inp.value); if(lab) lab.textContent = OPT[d.id] + (d.unit || ''); fill(); });
+  }
   for(const inp of list.querySelectorAll('input[data-vol]')){
     const lab = inp.parentNode.querySelector('.ovoln');
     /* the track fills gold up to the thumb */

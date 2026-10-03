@@ -120,6 +120,13 @@ Placeholder names, one per attribute corner, like Path of Exile:
 - **Later:** an endgame of item-like **maps** that roll their own level and modifiers — the
   arcade's wave modifiers are the start of that list.
 
+## 4b. The map
+
+**Exists**: TAB overlays the map, centred on you, as in PoE. It fills in as you explore a zone and
+shows portals, the waypoint, the stash, gates, items, minions and nearby monsters (coloured by
+rarity). The town is fully known. Opacity and size are sliders in the options. Later: a corner
+minimap mode and the waypoint list on it.
+
 ## 5. Controls and the skill bar
 
 Path of Exile's layout. Movement is **click to move**; <kbd>Left mouse</kbd> is also the basic
@@ -260,6 +267,8 @@ Placeholder examples, to show the flavour:
 - **Characters** are save slots in `localStorage` (name, class, level, XP, tree, ascendancy,
   gear, gems, flasks, zone, missions done). Several characters per browser.
 - **The stash is account-wide** (every character on this browser) — it already is shared today.
+- **The stash is at home.** **Exists**: out in a zone, I opens only the bag and the worn gear (INVENTORY); the
+  stash opens in Brickhaven (I, or F at the stash) and between runs.
 - **Equipment becomes per-character**, replacing today's six per-weapon sets. A migration moves
   each weapon set into the stash on first load, so nothing is lost.
 - **Death** sends you back to town and costs a slice of the XP into the level (PoE's penalty),
