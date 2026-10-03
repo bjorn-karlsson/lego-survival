@@ -106,6 +106,12 @@ Placeholder names, one per attribute corner, like Path of Exile:
   (the same town every visit, inside its own wall): your home with the **stash** in front of it, the
   **mission board** (empty until phase 6), the **waypoint** to a fresh Outskirts, and the west gate.
   **F** uses what you stand by. No vendor yet.
+- **Generated instances (test).** A **CAVE GENERATOR** stone in Brickhaven (not canon) opens a
+  fresh cellular-automata cave on every use: random fill, five 4-5 smoothing passes, the largest
+  connected region kept, the far end found by walking distance, dormant packs and a Warden. It
+  shows that a generated layout fits the existing collision, pathfinding and spawning as rock
+  rectangles. Dungeons from the mission board can be built the same way, with rooms and
+  corridors or caves.
 - **Missions** from the board: a dungeon (a few rooms, a boss), a zone clear, a named boss,
   a league encounter. Each has a level band and a reward (XP, a chest, a gem, studs).
 - **Leagues come along.** Breach, abyss, ritual and strongboxes already work as encounters;

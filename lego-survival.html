@@ -17161,6 +17161,8 @@ const RPG_ZONES = {
                sub:'a field outside the walls -- the town is east, past the gate' },
   town:      { name:'BRICKHAVEN', level:1, col:'#ffd76e', hostile:false,
                sub:'the town -- safe ground: your home, the board, the waypoint' },
+  cave:      { name:'THE TEST CAVE', level:3, col:'#c9a6ff', hostile:true, test:true,
+               sub:'not canon -- a cave grown by cellular automata, new every time' },
 };
 const RPG_PACKS = 13;                          /* packs standing in the Outskirts */
 const RPG_PACK_N = [3, 6];                     /* bodies a pack */
@@ -17212,7 +17214,7 @@ function rpgProp(type, x, y, r, extra){
   if(p.solid !== false) solids.push(p);
   return p;
 }
-const RPG_USES = { rstash:'STASH', rboard:'MISSIONS', rwaypoint:'WAYPOINT', rexit:'TO THE OUTSKIRTS', rhome:'HOME' };
+const RPG_USES = { rstash:'STASH', rboard:'MISSIONS', rwaypoint:'WAYPOINT', rexit:'TO THE OUTSKIRTS', rhome:'HOME', rcave:'NEW CAVE', rportal:'TO BRICKHAVEN' };
 
 /* ---- ENTERING A ZONE: a fresh instance, the hero carried in ---- */
 function rpgEnter(id, at){
@@ -17227,12 +17229,13 @@ function rpgEnter(id, at){
   seed = (Math.random()*1e9)|0;
   wave = { n:Z.level, state:'rpg', t:0, queue:[], spawnT:0, readyT:0, readyMax:0, done:0 };
   RPG.zone = id; RPG.gate = null; RPG.gateOpen = false; RPG.boss = null; RPG.near = null; RPG.packs = 0;
-  if(id === 'town') rpgBuildTown(); else rpgBuildOutskirts();
+  caveMap = null;
+  if(id === 'town') rpgBuildTown(); else if(id === 'cave') rpgBuildCave(); else rpgBuildOutskirts();
   navBuild();
-  const to = at || (id === 'town' ? RPG_TOWN : RPG_START);
+  const to = at || (id === 'town' ? RPG_TOWN : id === 'cave' ? RPG.caveIn : RPG_START);
   p.x = to.x; p.y = to.y; p.kx = 0; p.ky = 0; p.dash.t = 0;
   /* the legion walks in with you */
-  for(const m of minions){ const a = rnd(TAU); m.x = p.x + Math.cos(a)*rnd(40, 90); m.y = p.y + Math.sin(a)*rnd(40, 90); m.spot = null; }
+  for(const m of minions){ const a = rnd(TAU); const q = floorAt(p.x + Math.cos(a)*rnd(40, 90), p.y + Math.sin(a)*rnd(40, 90), (m.r || 12) + 2); m.x = q.x; m.y = q.y; m.spot = null; }
   cam.x = p.x; cam.y = p.y; cam.shake = 0; reclampCam();
   if(!Z.hostile){ p.hp = p.maxHp; if(p.esMax > 0) p.es = p.esMax; p.mana = p.maxMana; }
   if(id === 'town' && rpgChar && !rpgChar.town){ rpgChar.town = true; logEvent('BRICKHAVEN reached -- the waypoint will bring you back', '#ffd76e'); }
@@ -17326,6 +17329,7 @@ function rpgBuildTown(){
   rpgProp('rhouse', CX - 220, CY + 470, 74, { col:'#b08a3a', label:'' });
   rpgProp('rboard', CX - 300, CY - 120, 26, { label:'MISSION BOARD' });
   rpgProp('rwaypoint', CX + 60, CY + 60, 40, { solid:false, label:'WAYPOINT' });
+  rpgProp('rcave', CX - 720, CY + 200, 34, { label:'CAVE GENERATOR \u00b7 TEST' });
   for(const [tx, ty] of [[CX - 140, CY - 160], [CX + 260, CY - 160], [CX - 140, CY + 260], [CX + 260, CY + 260]])
     rpgProp('torch', tx, ty, 6, { solid:false });
 }
@@ -17354,6 +17358,7 @@ function rpgTick(dt){
     if(d < nd){ nd = d; near = q; }
   }
   RPG.near = near;
+  if(RPG.zone === 'cave') for(const pr of projectiles) if(!pr.dead && caveWallAt(pr.x, pr.y)){ pr.dead = true; addDust(pr.x, pr.y, 1); }
   const f = !!keys.KeyF;
   if(f && !RPG.fLatch && near) rpgUse(near);
   RPG.fLatch = f;
@@ -17367,6 +17372,8 @@ function rpgUse(q){
     else if(rpgChar && rpgChar.town) rpgEnter('town');
     return 'waypoint';
   }
+  if(q.type === 'rcave'){ rpgEnter('cave'); return 'cave'; }
+  if(q.type === 'rportal'){ rpgEnter('town'); return 'portal'; }
   if(q.type === 'rboard'){
     showBanner('MISSION BOARD', 'NO MISSIONS YET -- THE DUNGEONS OPEN IN A LATER UPDATE', '#ffd76e', 2.4, 40);
     return 'board';
@@ -17378,7 +17385,10 @@ function rpgOnKill(e){
   if(!rpgOn()) return;
   if(e.rpgPack) rpgWakePack(e.rpgPack);
   rpgDrop(e);
-  if(e.rpgBoss){
+  if(e.rpgBoss && e.rpgCave){
+    showBanner('THE WARDEN FALLS', 'THE PORTAL HOME IS BY IT', '#c9a6ff', 2.0, 40);
+    SFX.levelup();
+  } else if(e.rpgBoss){
     RPG.gateOpen = true;
     if(RPG.gate){ RPG.gate.open = true; solids = solids.filter(s=>s !== RPG.gate); navRefresh(RPG.gate.x, RPG.gate.y, RPG.gate.r + 40); }
     showBanner('THE GATE IS OPEN', 'BRICKHAVEN IS THROUGH IT', '#ffd76e', 2.2, 44);
@@ -17453,6 +17463,189 @@ function rpgRenderScreen(){
   if(go) go.textContent = c.town ? 'PLAY — TO BRICKHAVEN' : 'PLAY — THE OUTSKIRTS';
 }
 
+
+/* ======================= THE TEST CAVE (not canon) =======================
+   A playground for generated instances, reached from a stone in Brickhaven.
+   The cave is CELLULAR AUTOMATA, the RogueBasin recipe:
+     1. every cell of a coarse grid is wall with chance CAVE_FILL, the rim always;
+     2. CAVE_STEPS smoothing passes: a cell becomes WALL when 5 or more of its 8
+        neighbours are wall and FLOOR when fewer than 4 are; on the first
+        CAVE_OPEN passes a cell with at most 2 walls within two cells also turns
+        wall, which breaks up the big empty halls the plain rule leaves;
+     3. a flood fill keeps the LARGEST connected cave and fills every other
+        pocket in, so everything you can see you can walk to -- and a cave too
+        small (under CAVE_MIN of the map) is thrown away and rolled again.
+   You come in at the westmost roomy cell and the far end is the floor cell
+   farthest from it by WALKING distance (a breadth-first search over the same
+   grid), where a rare waits by a second portal. The walls are rectangles in
+   `waters` -- one per horizontal run of wall cells -- so the collision, the
+   nav grid, the spawners and every line-of-sight test already know them;
+   only their drawing is their own, and they stop every missile. */
+const CAVE_CELL = 80, CAVE_FILL = 0.47, CAVE_STEPS = 5, CAVE_OPEN = 3, CAVE_MIN = 0.28;
+const CAVE_PACKS = 14;
+let caveMap = null;                            /* { cols, rows, g, seed, fill, open, tries, from, to } */
+function caveGenerate(seed0){
+  const cols = Math.floor(W.w/CAVE_CELL), rows = Math.floor(W.h/CAVE_CELL);
+  let seedv = seed0 >>> 0, best = null;
+  for(let tries = 1; tries <= 12; tries++, seedv = (seedv*1103515245 + 12345) >>> 0){
+    const rng = mulberry32(seedv);
+    let g = new Uint8Array(cols*rows);
+    const rim = (x, y)=> x < 1 || y < 1 || x >= cols-1 || y >= rows-1;
+    for(let y = 0; y < rows; y++) for(let x = 0; x < cols; x++) g[y*cols + x] = rim(x, y) || rng() < CAVE_FILL ? 1 : 0;
+    const at = (gg, x, y)=> (x < 0 || y < 0 || x >= cols || y >= rows) ? 1 : gg[y*cols + x];
+    for(let step = 0; step < CAVE_STEPS; step++){
+      const n = new Uint8Array(cols*rows);
+      for(let y = 0; y < rows; y++) for(let x = 0; x < cols; x++){
+        if(rim(x, y)){ n[y*cols + x] = 1; continue; }
+        let w1 = 0, w2 = 0;
+        for(let dy = -2; dy <= 2; dy++) for(let dx = -2; dx <= 2; dx++){
+          if(!dx && !dy) continue;
+          const v = at(g, x + dx, y + dy);
+          if(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) w1 += v; else w2 += v;
+        }
+        const cur = g[y*cols + x];
+        let v = w1 >= 5 ? 1 : w1 < 4 ? 0 : cur;
+        if(step < CAVE_OPEN && w1 + w2 <= 2) v = 1;
+        n[y*cols + x] = v;
+      }
+      g = n;
+    }
+    /* the regions, 4-connected, and the largest kept */
+    const reg = new Int32Array(cols*rows).fill(-1), sizes = [];
+    for(let i = 0; i < g.length; i++){
+      if(g[i] || reg[i] >= 0) continue;
+      const id = sizes.length; let n = 0; const q = [i]; reg[i] = id;
+      while(q.length){ const c = q.pop(); n++; const x = c % cols, y = (c / cols) | 0;
+        for(const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const xx = x+dx, yy = y+dy;
+          if(xx < 0 || yy < 0 || xx >= cols || yy >= rows) continue; const j = yy*cols + xx;
+          if(!g[j] && reg[j] < 0){ reg[j] = id; q.push(j); } } }
+      sizes.push(n);
+    }
+    if(!sizes.length) continue;
+    const big = sizes.indexOf(Math.max(...sizes)), open = sizes[big] / (cols*rows);
+    for(let i = 0; i < g.length; i++) if(!g[i] && reg[i] !== big) g[i] = 1;
+    const cand = { cols, rows, g, seed:seedv, fill:CAVE_FILL, open, tries, regions:sizes.length };
+    if(!best || open > best.open) best = cand;
+    if(open >= CAVE_MIN) break;
+  }
+  const M = best, { cols:C, rows:R, g:G } = M;
+  /* a ROOMY cell: floor with floor all round it */
+  const roomy = i=>{ const x = i % C, y = (i / C) | 0; if(G[i]) return false;
+    for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++){ const xx = x+dx, yy = y+dy;
+      if(xx < 0 || yy < 0 || xx >= C || yy >= R || G[yy*C + xx]) return false; } return true; };
+  let from = -1;
+  for(let x = 1; x < C-1 && from < 0; x++) for(let y = 1; y < R-1; y++) if(roomy(y*C + x)){ from = y*C + x; break; }
+  if(from < 0) for(let i = 0; i < G.length; i++) if(!G[i]){ from = i; break; }
+  /* walking distance from the way in, over the grid */
+  const d = new Int32Array(C*R).fill(-1); d[from] = 0; const q = [from];
+  for(let h = 0; h < q.length; h++){ const c = q[h], x = c % C, y = (c / C) | 0;
+    for(const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const xx = x+dx, yy = y+dy; if(xx < 0 || yy < 0 || xx >= C || yy >= R) continue;
+      const j = yy*C + xx; if(!G[j] && d[j] < 0){ d[j] = d[c] + 1; q.push(j); } } }
+  let to = from;
+  for(let i = 0; i < G.length; i++) if(d[i] > d[to] && roomy(i)) to = i;
+  M.from = from; M.to = to; M.dist = d; M.walk = d[to];
+  return M;
+}
+const caveXY = (M, i)=>({ x:(i % M.cols)*CAVE_CELL + CAVE_CELL/2, y:((i / M.cols) | 0)*CAVE_CELL + CAVE_CELL/2 });
+function caveWallAt(x, y){
+  const M = caveMap; if(!M) return false;
+  const cx = Math.floor(x/CAVE_CELL), cy = Math.floor(y/CAVE_CELL);
+  if(cx < 0 || cy < 0 || cx >= M.cols || cy >= M.rows) return true;
+  return !!M.g[cy*M.cols + cx];
+}
+function rpgBuildCave(){
+  const M = caveMap = caveGenerate(seed);
+  runBiome = 'stone'; CAVES = []; lakeGroups = []; flowers = []; props = []; solids = []; waters = [];
+  /* the walls: one rectangle a horizontal run */
+  for(let y = 0; y < M.rows; y++){
+    let x = 0;
+    while(x < M.cols){
+      if(!M.g[y*M.cols + x]){ x++; continue; }
+      const x0 = x; while(x < M.cols && M.g[y*M.cols + x]) x++;
+      waters.push({ x:x0*CAVE_CELL, y:y*CAVE_CELL, w:(x - x0)*CAVE_CELL, h:CAVE_CELL, cave:true });
+    }
+  }
+  const A = caveXY(M, M.from), B = caveXY(M, M.to);
+  RPG.caveIn = A; RPG.caveOut = B;
+  rpgProp('rportal', A.x, A.y - 50, 30, { solid:false, label:'TO BRICKHAVEN' });
+  rpgProp('rportal', B.x, B.y - 50, 30, { solid:false, label:'TO BRICKHAVEN' });
+  /* crystals for light, on floor away from the walls */
+  for(let i = 0, k = 0; i < M.g.length && k < 40; i += 37){
+    const c = (i * 7919) % M.g.length;
+    if(M.g[c] || Math.random() < 0.6) continue;
+    const p = caveXY(M, c);
+    if(Math.hypot(p.x - A.x, p.y - A.y) < 260) continue;
+    rpgProp('crystal', p.x + rnd(-20, 20), p.y + rnd(-20, 20), 12, { solid:false }); k++;
+  }
+  navBuild();
+  /* the packs: dormant, on roomy floor, the further in the more of them rare */
+  const floor = [];
+  for(let i = 0; i < M.g.length; i++){
+    if(M.g[i] || M.dist[i] < 8) continue;
+    const x = i % M.cols, y = (i / M.cols) | 0;
+    let ok = true; for(let dy = -1; dy <= 1 && ok; dy++) for(let dx = -1; dx <= 1; dx++) if(M.g[(y+dy)*M.cols + x+dx]) { ok = false; break; }
+    if(ok) floor.push(i);
+  }
+  const spots = [];
+  for(let tries = 0; tries < 600 && spots.length < CAVE_PACKS && floor.length; tries++){
+    const c = floor[(Math.random()*floor.length) | 0], p = caveXY(M, c);
+    if(spots.some(s=>Math.hypot(s.x - p.x, s.y - p.y) < 420)) continue;
+    if(Math.hypot(p.x - B.x, p.y - B.y) < 300) continue;
+    if(Math.hypot(p.x - A.x, p.y - A.y) < RPG_AGGRO_R + 260) continue;   /* none wakes as you arrive, rock or no rock */
+    spots.push(Object.assign(p, { depth:M.dist[c] / Math.max(1, M.walk) }));
+  }
+  const cave = [['cryptbat',3],['shade',2],['skeleton',3],['boneling',3],['zombie',2],['spitter',1],['archer',1]];
+  const pick = ()=>{ let t = 0; for(const [, w] of cave) t += w; let r = Math.random()*t;
+    for(const [k, w] of cave){ r -= w; if(r <= 0) return k; } return cave[0][0]; };
+  spots.forEach((s, i)=>{
+    const id = 200 + i, before = enemies.length, type = pick(), n = irnd(3, 6);
+    if(s.depth > 0.6 && Math.random() < 0.5) spawnEnemy(type, s.x, s.y, true);
+    else if(Math.random() < RPG_MAGIC) spawnMagicPack(type, s, n, false);
+    else for(let k = 0; k < n; k++){ const a = k/n*TAU, rr = rnd(24, 60); const at = floorAt(s.x + Math.cos(a)*rr, s.y + Math.sin(a)*rr, 16);
+      spawnEnemy(type, at.x, at.y); }
+    for(const e of enemies.slice(before)){ e.faceA = rnd(TAU); e.dormant = true; e.rpgPack = id; }
+  });
+  /* and at the far end, a rare by the way out */
+  spawnEnemy('knight', B.x + 70, B.y + 40, true);
+  const b = enemies[enemies.length - 1]; b.maxHp *= 2.5; b.hp = b.maxHp; b.rpgBoss = true; b.rpgName = 'THE CAVE WARDEN';
+  b.dormant = true; b.rpgPack = 199; b.rpgCave = true;
+  RPG.boss = b; RPG.packs = spots.length;
+}
+/* the walls, drawn as stacked dark bricks with studs on top; only the visible ones */
+function drawCaveWalls(vx, vy, vw, vh){
+  const M = caveMap; if(!M || !rpgOn() || RPG.zone !== 'cave') return;
+  const S = CAVE_CELL;
+  const x0 = Math.max(0, Math.floor(vx/S)), x1 = Math.min(M.cols-1, Math.floor((vx+vw)/S));
+  const y0 = Math.max(0, Math.floor(vy/S)), y1 = Math.min(M.rows-1, Math.floor((vy+vh)/S));
+  const open = (xx, yy)=> xx >= 0 && yy >= 0 && xx < M.cols && yy < M.rows && !M.g[yy*M.cols + xx];
+  for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++){
+    if(!M.g[y*M.cols + x]) continue;
+    const px = x*S, py = y*S, k = hash2(x, y);
+    const edge = open(x-1, y) || open(x+1, y) || open(x, y-1) || open(x, y+1);
+    if(!edge){
+      /* the deep rock: dark, no studs, only the seams of the bricks */
+      ctx.fillStyle = sh('#1d1b21', (k - 0.5)*0.2); ctx.fillRect(px, py, S + 1, S + 1);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, S - 2, S - 2);
+      continue;
+    }
+    /* the rim: a raised brick, studs up, a lit face where it drops to the floor below */
+    const col = sh('#4b4652', (k - 0.5)*0.16), face = open(x, y + 1);
+    ctx.fillStyle = sh(col, -0.45); ctx.fillRect(px, py, S + 1, S + 1);
+    ctx.fillStyle = col; ctx.fillRect(px + 2, py + 2, S - 3, face ? S - 18 : S - 4);
+    if(face){
+      ctx.fillStyle = sh(col, 0.22); ctx.fillRect(px, py + S - 16, S + 1, 16);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(px, py + S - 16, S + 1, 2);
+      /* and its shadow on the floor */
+      const gr = ctx.createLinearGradient(0, py + S, 0, py + S + 16);
+      gr.addColorStop(0, 'rgba(10,8,14,0.35)'); gr.addColorStop(1, 'rgba(10,8,14,0)');
+      ctx.fillStyle = gr; ctx.fillRect(px, py + S, S + 1, 16);
+    }
+    const sy = face ? 0.26 : 0.3, sy2 = face ? 0.56 : 0.7;
+    drawStudG(ctx, px + S*0.3, py + S*sy, 7, col); drawStudG(ctx, px + S*0.7, py + S*sy, 7, col);
+    drawStudG(ctx, px + S*0.3, py + S*sy2, 7, col); drawStudG(ctx, px + S*0.7, py + S*sy2, 7, col);
+  }
+}
+
 /* ---- DRAWN: the header that stands where the wave number does, and the use prompt ---- */
 function drawRpgHud(){
   if(!rpgOn()) return;
@@ -17467,6 +17660,11 @@ function drawRpgHud(){
     line = RPG.gateOpen ? 'THE GATE IS OPEN — walk east into Brickhaven'
       : (RPG.boss && !RPG.boss.dormant ? 'THE GATEKEEPER — break it to open the gate'
       : 'monster level '+mobLevelRpg()+' · the town is east, past the gate'+(awake ? ' · '+awake+' awake' : ''));
+  } else if(RPG.zone === 'cave' && caveMap){
+    const M = caveMap, awake = enemies.filter(e=>!e.dead && !e.dormant && e.state === 'active').length;
+    line = 'NOT CANON · cellular automata: seed '+M.seed+' · fill '+Math.round(M.fill*100)+'% · '+CAVE_STEPS+' passes · '+
+      Math.round(M.open*100)+'% open'+(M.tries > 1 ? ' · try '+M.tries : '')+' · '+(RPG.boss && !RPG.boss.dead ? 'the Warden waits at the far end' : 'the Warden is down')+
+      (awake ? ' · '+awake+' awake' : '');
   } else line = 'safe ground · F at the stash, the board or the waypoint · the gate west leads out';
   ctx.fillText(line, cw/2, 52);
 }
@@ -17568,6 +17766,28 @@ function drawRpgProp(c, p){
     c.save(); c.scale(1, 0.45); c.rotate(vtime*0.8); c.beginPath();
     for(let i = 0; i < 6; i++){ const a = i/6*TAU; c.moveTo(Math.cos(a)*p.r*0.3, Math.sin(a)*p.r*0.3); c.lineTo(Math.cos(a)*p.r*0.62, Math.sin(a)*p.r*0.62); }
     c.stroke(); c.restore();
+  } else if(p.type === 'rcave'){
+    /* a mouth in a heap of dark stone, a TEST sign on a post */
+    c.strokeStyle = OL; c.lineWidth = 2.2;
+    c.fillStyle = '#4a4650';
+    c.beginPath(); c.ellipse(0, -18, p.r + 12, p.r + 4, 0, Math.PI, 0); c.lineTo(p.r + 12, 0); c.lineTo(-p.r - 12, 0); c.closePath(); c.fill(); c.stroke();
+    for(const [x, y] of [[-22, -34], [0, -46], [22, -34]]) drawStudG(c, x, y, 5, '#4a4650');
+    c.fillStyle = '#120f16';
+    c.beginPath(); c.ellipse(0, -6, p.r*0.55, p.r*0.62, 0, Math.PI, 0); c.lineTo(p.r*0.55, 0); c.lineTo(-p.r*0.55, 0); c.closePath(); c.fill();
+    const g = 0.5 + 0.5*Math.sin(vtime*2 + p.seed);
+    c.fillStyle = `rgba(201,166,255,${0.25 + 0.3*g})`; c.beginPath(); c.ellipse(0, -10, p.r*0.3, p.r*0.36, 0, 0, TAU); c.fill();
+    c.fillStyle = '#6d4a2e'; roundRect(c, p.r + 6, -30, 5, 30, 1); c.fill();
+    c.fillStyle = '#ffd76e'; roundRect(c, p.r - 6, -42, 30, 14, 2); c.fill(); c.stroke();
+    c.fillStyle = '#20160a'; c.font = '700 8px Fredoka'; c.textAlign = 'center'; c.fillText('TEST', p.r + 9, -32);
+  } else if(p.type === 'rportal'){
+    const g = 0.5 + 0.5*Math.sin(vtime*3 + p.seed);
+    c.strokeStyle = OL; c.lineWidth = 2;
+    c.fillStyle = '#5a5662'; roundRect(c, -p.r - 6, -66, 10, 66, 3); c.fill(); c.stroke(); roundRect(c, p.r - 4, -66, 10, 66, 3); c.fill(); c.stroke();
+    c.fillStyle = '#6d6977'; roundRect(c, -p.r - 10, -76, p.r*2 + 20, 12, 3); c.fill(); c.stroke();
+    c.fillStyle = `rgba(255,215,110,${0.35 + 0.35*g})`;
+    c.beginPath(); c.ellipse(0, -32, p.r - 6, 30, 0, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(255,240,190,${0.5 + 0.4*g})`; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(0, -32, (p.r - 6)*0.6, 18, vtime*0.6, 0, TAU); c.stroke();
   } else if(p.type === 'rexit'){
     const g = 0.5 + 0.5*Math.sin(vtime*3 + p.seed);
     c.fillStyle = `rgba(165,224,110,${0.18 + 0.2*g})`;
@@ -27681,7 +27901,7 @@ function drawProp(c, p){
     }
   }
   else if(p.type==='rwall' || p.type==='rgate' || p.type==='rhouse' || p.type==='rstash' ||
-          p.type==='rboard' || p.type==='rwaypoint' || p.type==='rexit') drawRpgProp(c, p);
+          p.type==='rboard' || p.type==='rwaypoint' || p.type==='rexit' || p.type==='rcave' || p.type==='rportal') drawRpgProp(c, p);
   else if(p.type==='torch'){
     c.fillStyle = '#6d6e68'; c.strokeStyle='rgba(20,30,40,0.5)'; c.lineWidth=2;
     roundRect(c,-3.5,-26,7,28,2); c.fill(); c.stroke();
@@ -28078,7 +28298,9 @@ function render(){
   const vw = Math.min(cw/zoom+80, W.w-vx), vh = Math.min(ch/zoom+80, W.h-vy);
   viewSet(vx, vy, vw, vh);
   drawGround(vx, vy, Math.max(1,vw), Math.max(1,vh));
+  drawCaveWalls(vx, vy, Math.max(1,vw), Math.max(1,vh));
   for(const w of waters){
+    if(w.cave) continue;
     for(let i=0;i<4;i++){
       const a = Math.sin(vtime*2.2 + i*1.7 + w.x)*0.5+0.5;
       if(a>0.55){

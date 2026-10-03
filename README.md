@@ -103,6 +103,32 @@ wall, with no monsters in it. **F** uses what you are standing by:
 | **WAYPOINT** | out to a **fresh** Outskirts; the Outskirts' own waypoint (by where you wake) brings you back once you have been to town |
 | **the gate west** | walk into it to leave for the Outskirts |
 
+#### The test cave (not canon)
+
+![A generated cave: the Warden by the portal home](docs/rpg-cave.png)
+
+A stone mouth west of the square, **CAVE GENERATOR · TEST**, opens **a new cave every time** you
+press **F** at it. It is a test bed for generated instances and **not part of the story**. The cave
+is carved by **cellular automata**:
+
+1. **Fill.** A 67×50 grid of 80px cells, each rock with a 47% chance, with a rim of rock all round.
+2. **Smooth, five passes.** A cell becomes rock when 5 or more of its 8 neighbours are rock, and
+   floor when fewer than 4 are; at exactly 4 it stays as it was. In the first three passes, a cell
+   with almost no rock within two cells (at most 2 of 24) also becomes rock, which raises pillars
+   in what would otherwise be empty halls.
+3. **One cave.** Floor regions are flood-filled (4-connected), the largest is kept, and the rest is
+   filled in. If less than 28% of the map is floor, it tries again, up to 12 times.
+4. **Ends.** You come in at the westmost roomy cell (floor all round it). The way out is the roomy
+   cell farthest from it **by walking**, found with a breadth-first search over the grid.
+
+Rock is collision for everything: each horizontal run of rock cells becomes one rectangle that
+the movement, pathfinding and spawners already treat as an obstacle. Arrows and bolts stop in it.
+Fourteen **dormant packs** (bats, shades, skeletons, bonelings, zombies, spitters, archers) sit on
+open floor, none within waking range of where you come in, and packs deeper in are more often rare.
+**THE CAVE WARDEN** (a rare knight at 2.5× health) waits at the far end beside a **portal home**,
+and a second portal stands where you come in. The HUD shows the seed, the fill, the passes and how
+much of the map is open. Dying in the cave wakes you in Brickhaven.
+
 **Death** is the RPG's, not the arcade's: *YOU FELL*, what killed you, **COMBAT LOG** a click away,
 and **STAND UP IN BRICKHAVEN** (or in the Outskirts, before you have reached the town) — whole,
 with your gear and your level. The zone you died in is gone; the next is a fresh instance.

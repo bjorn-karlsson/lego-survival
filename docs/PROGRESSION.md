@@ -4652,3 +4652,52 @@ opening the gate and dropping two, the gate leading to town and saving it; the t
 waypoint and exit, F at the stash opening it; the waypoint to a fresh Outskirts and back to the same
 town; the town's gate leading out; death to town, whole, the log a click away; the character kept
 at its level and another class its own; the arcade untouched). 15 breaks caught.
+
+## Seventy-seventh pass — a cave generator in town (not canon)
+
+**A test instance.** Brickhaven gets a stone mouth, **CAVE GENERATOR · TEST**: F at it opens a
+fresh cave (zone `cave`, monster level 3, flagged `test`), carved by cellular automata in
+`caveGenerate(seed)`:
+
+- **Fill**: 67×50 cells of 80px, rock at 47% (`CAVE_FILL`), a rim of rock.
+- **Smooth**: five passes (`CAVE_STEPS`) of the 4-5 rule. Rock if at least 5 of the 8 neighbours are
+  rock, floor if fewer than 4, unchanged at 4. In the first three passes (`CAVE_OPEN`), a cell with
+  at most 2 rock cells in the 24 around it turns to rock, so wide halls get pillars instead of
+  staying empty.
+- **Connect**: 4-connected flood fill, keep the largest region, fill the rest. Below 28% open
+  (`CAVE_MIN`), try again on the next seed, up to 12 times, keeping the best.
+- **Ends**: in at the westmost *roomy* cell (open all round); out at the roomy cell with the
+  longest **walk** from it (BFS distances in `M.dist`).
+
+The cave lives in the world as it already is. Each horizontal run of rock becomes one rectangle in
+`waters` (flagged `cave`, so it is never drawn as water). Collision, `navBuild`, `floorAt`, the
+spawners and `segHitsWater` all handle it with no new code. `drawCaveWalls` draws only the visible
+cells: deep rock dark with seams, the rim as raised studded bricks with a lit face and a shadow
+where floor lies below. In the cave, `rpgTick` kills any projectile inside rock.
+
+Fourteen dormant packs are placed on roomy floor that is at least 8 cells' walk from the entrance
+and more than the wake radius plus 260px from it in a straight line, so none wakes through the rock
+as you arrive. Each is a random cave monster; past 60% of the walk, half are rare. **THE CAVE
+WARDEN** (a rare knight at 2.5× health) stands at the far end with a portal home, and another
+portal is at the entrance. Its death is a banner, not a gate. Leaving drops the cave
+(`caveMap = null`); dying in it wakes you in Brickhaven. The HUD line reads *NOT CANON · cellular
+automata: seed · fill · passes · open*.
+
+Tests: `r77`.
+
+- **Generator.** Same seed gives the same cave, different seeds differ. Over 30 seeds: right size,
+  rock rim, one connected region, `open` honest, at least 28% open, almost no crumbs of rock (at
+  most 2% of rock cells with 2 or fewer rock neighbours), ends on floor, the way out the farthest
+  walk. About 3ms a cave.
+- **Entering and leaving.** The stone in town and F; a sleeping cave whose packs are all out of
+  wake range; the Warden far off; two portals; rock rectangles matching the grid cell for cell; the
+  HUD line. A second visit is a different cave, and leaving clears it.
+- **Rock.** An arrow dies in it; the hero walking into it stops at it.
+- **Pathing.** Every pack, woken, walks toward you by the grid's walking distance, none inside rock
+  over 30s.
+- **Endings.** The Warden's banner, no gate, its drops, the portal by it home; death in the cave
+  wakes you in Brickhaven.
+- **Arcade.** It never has a cave.
+
+14 breaks caught.
+
