@@ -229,7 +229,7 @@ public static partial class G
             $"every body in its line without losing anything.\n\n"
         : "")+
         (p.ricochet > 0 ? $"RICOCHET: {S(Math.round(p.ricochet*100))}% for an arrow that would stop to leap on, up to {S(RICO_MAX)} times." : ""))
-    } : isSlammer() ? new string[] {
+    } : isSlammer() ? Cat(
       sRow("One tooth", slamSpikeDamage().toFixed(1)+" dmg",
         $"{S(Math.round(p.slamArc*57.3))}\u00b0 fault \u00b7 {S(Math.round(p.slamRange))} px \u00b7 "+
         $"{S(slamRays(p.slamArc)*Math.max(2,Math.round(p.slamRange/SLAM_STEP)))} teeth a slam",
@@ -241,7 +241,7 @@ public static partial class G
         $"ONE BODY may be bitten by at most {S(SLAM_MAX_HITS)} teeth of the same slam, so standing in\n"+
         $"the middle of the fault is a reward and not an execution.\n\n"+
         $"Ceilings: {S(Math.round(slamArcCap()*57.3))}\u00b0 wide, {S(SLAM_RANGE_MAX)} px deep, {S(SLAM_SPEED_MAX)} px/s."),
-      ..(p.slam.elem>0 ? new string[] {sRow("Slam of the Elements", "\u00d7"+p.slam.elem,
+      (p.slam.elem>0 ? new string[] {sRow("Slam of the Elements", "\u00d7"+S(p.slam.elem),
         $"next: {S(SLAM_AIL[slamElement()])} \u00b7 {S(Math.round(SLAM_ELEM_SHARE*100))}% of every tooth converted",
         $"Each slam takes the next element in turn \u2014 fire, lightning, frost \u2014 and converts\n"+
         $"{S(Math.round(SLAM_ELEM_SHARE*100))}% of every tooth into it. The converted half pays the monster's\n"+
@@ -250,7 +250,7 @@ public static partial class G
         (p.slam.elem>=SLAM_ELEM_MAX
           ? $"TAKEN TWICE: the fault closes into a full {S(Math.round(SLAM_ARC_FULL*57.3))}\u00b0 ring."
           : $"Take it again and the fault opens all the way to {S(Math.round(SLAM_ARC_FULL*57.3))}\u00b0."))} : new string[0])
-    } : new string[] {
+    ) : new string[] {
       sRow("Light swing", light.toFixed(1)+" dmg", $"{S(Math.round(weapon.reach+p.reach))} reach · arc swing"),
       sRow("Spin swing", spin.toFixed(1)+" dmg", $"{S(Math.round(weapon.spinReach+p.reach))} reach · every 3rd swing, ×{S(weapon.spin.toFixed(2))} MORE")
     }),
