@@ -17,6 +17,18 @@ public sealed class OffCanvas
     public Target T { get { if (target == null || target.tex == 0) target = Gpu.NewTarget(_w, _h); return target; } }
     public Ctx getContext(string kind = "2d") { if (_ctx == null) _ctx = new Ctx(this); return _ctx; }
     public void Free() { Realloc(); }
+    /* A browser frees a canvas's pixels when nothing holds the canvas any more. A
+       texture is not the garbage collector's to free (and its finalizer thread may
+       not touch GL), so a canvas made for something that dies -- a golem's baked
+       body -- is OWNED by it, and the frame loop frees the canvases whose owners
+       have been collected. */
+    static readonly List<(WeakReference<object> owner, OffCanvas cv)> owned = new();
+    public OffCanvas Own(object owner) { owned.Add((new WeakReference<object>(owner), this)); return this; }
+    public static void SweepOwned()
+    {
+        for (int i = owned.Count - 1; i >= 0; i--)
+            if (!owned[i].owner.TryGetTarget(out _)) { owned[i].cv.Free(); owned.RemoveAt(i); }
+    }
 }
 
 public enum Cap { Butt, Round, Square }
