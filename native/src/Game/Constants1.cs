@@ -18,7 +18,7 @@ public static partial class G
     public const int HEARTS_PER_ROW = 16;
     public const double HEART_MAX = 999, HEART_POOL_AT = 99;
     public static readonly string[] HEART_ROW_COLS = { "#d3242b", "#ffb900", "#9b45d6", "#2ea8a0", "#e4572e", "#4b9b41", "#2e7dd1", "#c95bd0", "#d3242b" };
-    public static readonly double[] BOMB_DIRS = { 0, Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI / 4, -Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4 };
+    public static readonly Tbl BOMB_DIRS = new double[] { 0, Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI / 4, -Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4 };
     public static readonly int BOMB_MAX = BOMB_DIRS.Length;
     public const int PUMPKIN_LIVE_CAP = 12, FROST_TRAIL_CAP = 80;
     public const double PUMPKIN_MIN_RATE = 4.0, BOMB_MIN_RATE = 2.0, BOMB_MAX_R = 110;
@@ -123,8 +123,8 @@ public static partial class G
     public const double REAVE_LIFE = 2.4;
     public const double WHIRL_SPIN = 13, WHIRL_TICK = 0.18, WHIRL_MUL = 0.5;
     public static double whirlShare() => WHIRL_MUL + (player != null ? player.whirlPlus : 0);
-    public static readonly double[] WHIRL_SLOW = { 1, 1.0, 1.5 };
-    public static readonly double[] WHIRL_DEFLECT = { 0, 0.35, 0.55 };
+    public static readonly Tbl WHIRL_SLOW = new double[] { 1, 1.0, 1.5 };
+    public static readonly Tbl WHIRL_DEFLECT = new double[] { 0, 0.35, 0.55 };
     public const double WHIRL_REACH_MUL = 1.5;
     public static double whirlReach()
     {
@@ -132,13 +132,13 @@ public static partial class G
         if (p == null || weapon == null) return 0;
         return (weapon.reach * (1 + stackMod("reach")) + p.reach) * WHIRL_REACH_MUL;
     }
-    public static readonly double[] BM_SPEED = { 0, 0.10, 0.10 };
-    public static readonly double[] BM_REACH = { 0, 10, 12 };
-    public static readonly double[] BM_ATK = { 0, 0.10, 0.12 };
+    public static readonly Tbl BM_SPEED = new double[] { 0, 0.10, 0.10 };
+    public static readonly Tbl BM_REACH = new double[] { 0, 10, 12 };
+    public static readonly Tbl BM_ATK = new double[] { 0, 0.10, 0.12 };
     public const int TOTEM_MAX = 2;
-    public static readonly double[] TOTEM_EVERY = { 0, 6, 3 };
-    public static readonly double[] TOTEM_LIFE = { 0, 9, 12 };
-    public static readonly double[] TOTEM_MUL = { 0, 1.0 / 3, 0.55 };
+    public static readonly Tbl TOTEM_EVERY = new double[] { 0, 6, 3 };
+    public static readonly Tbl TOTEM_LIFE = new double[] { 0, 9, 12 };
+    public static readonly Tbl TOTEM_MUL = new double[] { 0, 1.0 / 3, 0.55 };
     public const double TOTEM_TICK = 0.3, FREEZE_STUN_T = 4.5;
     /* THE GUARDIAN GUARDS: Aegis Ring and Twin Ring */
     public const double AEGIS_REFORM = 2.4, AEGIS_BLOCK_R = 5, TWIN_GAP_MIN = 24;
@@ -176,10 +176,10 @@ public static partial class G
     public const double BANE_DOT_BASE = 1.2, BANE_DOT_T = 8, BANE_DOT_MAX_T = 16, BANE_TICK = 0.5;
     public const double BANE_DRAIN_TICK = 1.0 / 30;
     public const int BANE_STACK_MAX = 3;
-    public static readonly double[] BANE_BURST = { 0, 0.80, 1.00 };
+    public static readonly Tbl BANE_BURST = new double[] { 0, 0.80, 1.00 };
     public const int POISON_MAX = 9, POISON_MAX_BOSS = 12;
-    public static readonly double[] POISON_CAP_MUL = { 1, 2, 4 };
-    public static readonly double[] BANE_BURST_R = { 0, 130, 210 };
+    public static readonly Tbl POISON_CAP_MUL = new double[] { 1, 2, 4 };
+    public static readonly Tbl BANE_BURST_R = new double[] { 0, 130, 210 };
     public const double BANE_BURST_KEEP = 0.7, BANE_WAVE_T = 0.42;
     public const double BOMB_R_BASE = 62;
     public static double pool(double b, double flat, double inc, double more) => (b + flat) * (1 + inc) * Js.Or(more, 1);
@@ -289,7 +289,7 @@ public static partial class G
     public static double heartDropChance() => DROP["heart"] * (1 + (player != null ? player.heartChance : 0)) * heartLvlMul();
     public const double STORM_MIN_RATE = 2.00, VORTEX_MIN_RATE = 3.00;
     public const int BOOMER_MAX = 2;
-    public static readonly double[] BOOMER_LEGS = { 0, 1, 3 };
+    public static readonly Tbl BOOMER_LEGS = new double[] { 0, 1, 3 };
     public const int CLUSTER_MAX = 2;
     public const double CLUSTER_FALLOFF = 0.45;
     public const double FORTUNE_CAP = 2, RAGE_CAP = 2, BUFF_T = 30, BUFF_T_MAX = 150;
@@ -310,7 +310,7 @@ public static partial class G
     }
     public const double HEART_REGEN_T = 30, HEART_REGEN_MUL = 1.5;
     public const int HEART_STACK_MAX = 5;
-    public static readonly double[] HEART_STACK_MUL = { 1, 1.5, 1.85, 2.10, 2.30, 2.45 };
+    public static readonly Tbl HEART_STACK_MUL = new double[] { 1, 1.5, 1.85, 2.10, 2.30, 2.45 };
     public const int CHAIN_MAX_ZAPPERS = 5;
     public static double capUp(string k) => player != null && player.capUp != null ? player.capUp[k] : 0;
     public static double orbitMaxN() => ORBIT_MAX_N + capUp("orbit");
@@ -357,6 +357,6 @@ public static partial class G
     }
     public const double VORTEX_MIN_HITMUL = 0.45, VORTEX_MAX_SPIN = 7;
     public const double WARDEN_R = 240, WARDEN_HEAL = 0.055;
-    public static readonly double[] MAGIC_PACK = { 6, 12 };
-    public static readonly double[] ELITE_COURT = { 4, 9 };
+    public static readonly Tbl MAGIC_PACK = new double[] { 6, 12 };
+    public static readonly Tbl ELITE_COURT = new double[] { 4, 9 };
 }

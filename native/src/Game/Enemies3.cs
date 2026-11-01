@@ -31,10 +31,10 @@ public static partial class G
         /* BRICKBANE'S LEGENDARY: a body that dies with poison in it comes apart in a cloud */
         var po = e.poison;
         if (po != null && player.bane != null && player.bane.burst > 0 &&
-            Js.R() < BANE_BURST.At((int)player.bane.burst))
+            Js.R() < BANE_BURST[(int)player.bane.burst])
         {
             /* THE PAYOFF, and it is not an explosion: what spreads is the rot */
-            double rad = BANE_BURST_R.At((int)player.bane.burst);
+            double rad = BANE_BURST_R[(int)player.bane.burst];
             addRing(e.x, e.y, 8, 340, rad, "#8ede4a", 8, 0.55);
             addRing(e.x, e.y, 4, 240, rad * 0.6, "#d6ffa0", 5, 0.4);
             addSparks(e.x, e.y - 16, (int)(10 + po.n * 2), "#8ede4a");

@@ -236,7 +236,7 @@ public static partial class G
     }
     public static double suppressChance() => clamp(player.suppress + weaponSuppress(), 0, 1);
     /* THE WORLD GETS COLDER: three tolls of 30 points off every resistance */
-    public static readonly double[] RES_TAX_WAVES = { 20, 40, 60 };
+    public static readonly Tbl RES_TAX_WAVES = new double[] { 20, 40, 60 };
     public const double RES_TAX_STEP = 0.30;
     public static double resTaxSteps(double n = double.NaN)
     {

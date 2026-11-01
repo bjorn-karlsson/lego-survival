@@ -433,7 +433,7 @@ public static partial class G
     {
         double b = e.type == "boss" ? POISON_MAX_BOSS : POISON_MAX;
         int rank = (int)(player != null && player.bane != null ? player.bane.burst : 0);
-        return b * Js.Or(POISON_CAP_MUL.At(rank), 1);
+        return b * Js.Or(POISON_CAP_MUL[rank], 1);
     }
     public static void poisonEnemy(Ent e, double dps, double dur)
     {
@@ -455,7 +455,7 @@ public static partial class G
         hitEnemy(e, dmg, dir, kb, "bane", new HitOpts { spin = true });
     }
     /* The odds this swing opens a wound: the one ailment table's physical row */
-    public static double bleedChance(bool crit, string src) => ailChanceOf("phys", src, crit);
+    public static double bleedChance(bool crit, string src = null) => ailChanceOf("phys", src, crit);
     /* how much more fire a branded body takes -- each BURNT mark is its own MORE */
     public static double burntMul(Ent e)
     {
@@ -607,7 +607,7 @@ public static partial class G
         if (rank == 0 || depth >= EMBER_DEPTH) return;
         if (src.emberCd > 0) return;      /* one body is not a machine gun */
         src.emberCd = EMBER_CD;
-        double n = EMBER_SHOTS.At(rank);
+        double n = EMBER_SHOTS[rank];
         /* one target CHOSEN PER EMBER, and each choice knows what the earlier ones took */
         var taken = new Dictionary<Ent, double>();
         for (int i = 0; i < n; i++)

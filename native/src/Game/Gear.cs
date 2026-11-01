@@ -191,7 +191,7 @@ public static partial class G
     public static readonly string[] GEAR_WEAP = { "sword", "axe", "mace", "scepter", "staff", "bow" };
     public static readonly string[] GEAR_ATKW = { "sword", "axe", "mace", "bow" };
     /* TEN TIERS, PoE's way: T1 is the best a line can roll and T10 the worst */
-    public static readonly double[] GEAR_TIER_LVL = { 1, 3, 6, 10, 15, 21, 28, 36, 45, 55 };   /* T10 ... T1 */
+    public static readonly Tbl GEAR_TIER_LVL = new double[] { 1, 3, 6, 10, 15, 21, 28, 36, 45, 55 };   /* T10 ... T1 */
     public const double GEAR_TIER_DECAY = 0.8;
     public static readonly List<GearAffix> GEAR_AFFIXES = BuildGearAffixes();
     static List<GearAffix> BuildGearAffixes()
@@ -290,8 +290,8 @@ public static partial class G
     public static readonly Dictionary<string, int> GEAR_MAX_SUF = GEAR_MAX_PRE;
     /* ONLY BOSSES DROP GEAR */
     public const double GEAR_BOSS_EXTRA = 0;
-    public static readonly double[] GEAR_RARE_W = { 0.20, 0.35 };
-    public static readonly double[] GEAR_MAGIC_W = { 0.50, 0.65 };
+    public static readonly Tbl GEAR_RARE_W = new double[] { 0.20, 0.35 };
+    public static readonly Tbl GEAR_MAGIC_W = new double[] { 0.50, 0.65 };
     public static string gearRollRarity(double tier)
     {
         int t = (int)clamp(Js.I32(tier), 0, 1); double r = Js.R();

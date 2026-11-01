@@ -27,8 +27,8 @@ public static partial class G
     /* LEGION_R is how far out the battlefield reaches */
     public const double LEGION_R = 620, LEGION_TOUCH = 50, LEGION_T = 9;
     /* THE ARMY STANDS IN SQUADS, not in a ring */
-    public static readonly double[] LEGION_SQUADS = { 3, 6 };
-    public static readonly double[] LEGION_DELAY = { 3, 8 };
+    public static readonly Tbl LEGION_SQUADS = new double[] { 3, 6 };
+    public static readonly Tbl LEGION_DELAY = new double[] { 3, 8 };
     public const double LEGION_GENERAL_FROM = 15;
     public const string LEGION_COL = "#c3a6ff";
     public static readonly (int r, int g, int b) LEGION_ICE = (215, 200, 255);

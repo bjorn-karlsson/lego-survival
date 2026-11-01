@@ -80,8 +80,8 @@ public static partial class G
     }
     public static readonly Dictionary<string, string> CONV_ELEM = new() { ["phys"] = null, ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
     public static readonly Dictionary<string, string> CONV_RESIST = new() { ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
-    public static readonly double[] CONV_CARD = { 0.10, 0.15, 0.20, 0.30, 0.40 };
-    public static readonly double[] GAIN_CARD = { 0.06, 0.10, 0.15, 0.22, 0.30 };
+    public static readonly Tbl CONV_CARD = new double[] { 0.10, 0.15, 0.20, 0.30, 0.40 };
+    public static readonly Tbl GAIN_CARD = new double[] { 0.06, 0.10, 0.15, 0.22, 0.30 };
     public const double CHAOS_POISON_S = 0.30, CHAOS_POISON_T = 4;
     public static readonly Dictionary<string, string> SOURCE_ELEM = new()
     {
@@ -445,9 +445,9 @@ public static partial class G
         }
     }
     /* WHAT CAN THIS HERO ACTUALLY DEAL? */
-    public static HashSet<string> dealtTypes()
+    public static Flags dealtTypes()
     {
-        var o = new HashSet<string>();
+        var o = new Flags();
         if (player == null) return o;
         void add(string t) { if (t != null) o.Add(t); }
         if (isCaster()) add(convFrom(weapon.elem ?? "fire"));
@@ -477,7 +477,7 @@ public static partial class G
         return d.Contains("fire") || d.Contains("frost") || d.Contains("shock") || (isSummoner() && player.minions != null && player.minions.mirror);
     }
     public static double ailShare(string source, string type) { var sp = convSplit(source); return sp?.share?[type] ?? 0; }
-    public static string convOwnTag(string from, string to, bool gain)
+    public static string convOwnTag(string from, string to, bool gain = false)
     {
         var c = player?.conv;
         if (c == null) return "";
@@ -510,8 +510,8 @@ public static partial class G
     public const int BURNT_MAX = 4;
     /* EMBER SCATTER */
     public const int EMBER_MAX = 2;
-    public static readonly double[] EMBER_SHOTS = { 0, 2, 5 };
-    public static readonly double[] BURN_CAP_MUL = { 1, 2, 4 };
+    public static readonly Tbl EMBER_SHOTS = new double[] { 0, 2, 5 };
+    public static readonly Tbl BURN_CAP_MUL = new double[] { 1, 2, 4 };
     public const double EMBER_SHARE = 0.45, EMBER_SPD = 430;
     public const int EMBER_DEPTH = 3;
     public const double EMBER_CD = 0.25, EMBER_SEEK_R = 520, EMBER_LIT_COST = 460, EMBER_SPREAD_COST = 240;

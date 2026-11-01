@@ -276,7 +276,7 @@ public static partial class G
     public const double AIL_CHANCE_MAX = 0.75;
     public static readonly string[] AIL_TYPE_KEYS = { "fire", "frost", "shock", "chaos" };
     public const double AIL_TYPE_MAX = 0.5;
-    public static readonly double[] AIL_TYPE_STEP = { 0.03, 0.05, 0.08, 0.11, 0.15 };
+    public static readonly Tbl AIL_TYPE_STEP = new double[] { 0.03, 0.05, 0.08, 0.11, 0.15 };
     public const double AIL_CARD_W = 0.5;
     public static double ailTypeChance(string type) { var p = player; return p != null && p.ailType != null ? p.ailType[type] : 0; }
     public const double BLEED_STILL_LESS = 0.40, BLEED_STILL_SPD = 18, BLEED_TICK = 0.4;

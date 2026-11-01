@@ -504,7 +504,7 @@ public static partial class G
     /* ---- THE TREASURE GOBLIN ---- */
     public const double GOBLIN_FROM = 4, GOBLIN_CHANCE = 0.10;
     public const double GOBLIN_LIFE = 14, GOBLIN_PORTAL_T = 2.2, GOBLIN_CALM = 520;
-    public static readonly double[] GOBLIN_STUDS = { 30, 10 };   /* 30 + 10 a wave, x your stud multiplier */
+    public static readonly Tbl GOBLIN_STUDS = new double[] { 30, 10 };   /* 30 + 10 a wave, x your stud multiplier */
     public static GoblinPending goblinPending = null;
     public static bool goblinRoll(double n)
     {

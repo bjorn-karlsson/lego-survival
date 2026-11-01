@@ -105,5 +105,5 @@ public sealed class MinionPools
 {
     public double max, perCast = 1, flat, inc, life, spd, more = 1;
     public bool mages, mirror, instab; public List<string> golemTypes = new(); public double golemCap, golemCd; public bool overseer; public double overseerCd;
-    public double proj, projMore = 1, volleys; public bool gmp, zombies;
+    public double proj, projMore = 1, volleys; public bool gmp, zombies, horde;
 }

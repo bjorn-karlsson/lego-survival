@@ -49,6 +49,30 @@ public sealed class NumMap : IEnumerable<KeyValuePair<string, double>>
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
+/* A JS object used as a SET of names: { phys:true, fire:true }. Indexing a name
+   it does not hold gives false, the way `o[k]` gives undefined. */
+public sealed class Flags : HashSet<string>
+{
+    public Flags() { }
+    public Flags(IEnumerable<string> a) : base(a) { }
+    public bool this[string k] => k != null && Contains(k);
+}
+/* A JS array of numbers indexed by a NUMBER: `EMBER_SHOTS[lv]` with lv a double.
+   An index past the end gives undefined in the JS -- read here as 0 (NaN would
+   poison every sum it reached; every table in the game is read inside its range). */
+public sealed class Tbl : IReadOnlyList<double>
+{
+    readonly double[] a;
+    public Tbl(params double[] a) { this.a = a; }
+    public static implicit operator Tbl(double[] a) => new Tbl(a);
+    public double this[int i] => i >= 0 && i < a.Length ? a[i] : 0;
+    public double this[double i] => this[(int)i];
+    public int Count => a.Length;
+    public int Length => a.Length;
+    public IEnumerator<double> GetEnumerator() => ((IEnumerable<double>)a).GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => a.GetEnumerator();
+}
+
 /* A field read and written by its name, for the few places the JS does
    `p[key]` with a computed key: cached reflection over the class's fields. */
 public static class Fields

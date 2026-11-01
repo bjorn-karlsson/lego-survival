@@ -20,8 +20,8 @@ public sealed partial class Prop { public string hoard; }
 public static partial class G
 {
     public const double BREACH_FROM = 7;
-    public static readonly double[] BREACH_HAND_DELAY = { 3, 8 };
-    public static readonly double[] BREACH_HAND_DIST = { 380, 760 };
+    public static readonly Tbl BREACH_HAND_DELAY = new double[] { 3, 8 };
+    public static readonly Tbl BREACH_HAND_DIST = new double[] { 380, 760 };
     public const double BREACH_TOUCH_R = 44;
     public const double BREACH_R0 = 60;
     public const double BREACH_SPD = 110;
@@ -32,7 +32,7 @@ public static partial class G
     /* THE OTHER LAYER: packs of three to six, one kind to a pack */
     public const double BREACH_LAYER_MIN = 600, BREACH_LAYER_STEP = 40, BREACH_LAYER_MAX = 2000;
     public const double BREACH_LAYER_EXP = 0.8;
-    public static readonly double[] BREACH_PACK = { 3, 6 };
+    public static readonly Tbl BREACH_PACK = new double[] { 3, 6 };
     public const double BREACH_CORE = 0.3, BREACH_OUTER_EXP = 0.36;
     /* revealed and standing at once */
     public const double BREACH_ALIVE_MAX = 90, BREACH_ALIVE_TOP = 180, BREACH_ALIVE_PER = 50;
@@ -51,7 +51,7 @@ public static partial class G
     public const double BREACH_CLOSE_T = 1.2, BREACH_CLOSE_SPD = 1100, BREACH_CLOSE_MAX = 4.5;
     public const double BREACH_STONE = 60;
     /* RANKS IV AND V ARE BLESSINGS, and cost more */
-    public static readonly double[] BREACH_STONE_COST = { 60, 60, 60, 100, 150 };
+    public static readonly Tbl BREACH_STONE_COST = new double[] { 60, 60, 60, 100, 150 };
     public static double breachStoneCost(double rank) => BREACH_STONE_COST[(int)Math.Min(rank, BREACH_STONE_COST.Length - 1)];
     public const double SPLINTER_MAGIC = 3, SPLINTER_LORD = 15;
     public const double LORD_RING_MAX = 5, LORD_RING_PLAIN = 3;

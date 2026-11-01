@@ -360,7 +360,7 @@ public static partial class G
     public const double BLOAT_WIND = 0.55, BLOAT_BREATH = 1.1, BLOAT_TICK = 0.25, BLOAT_RANGE = 150, BLOAT_CONE = 0.55;
     public const double BLOAT_PSN = 0.35, BLOAT_CD = 4.5;
     public static readonly int[] BLOAT_GIBS = { 8, 11 };
-    public static readonly double[] BLOAT_GIB_SPD = { 230, 330 };
+    public static readonly Tbl BLOAT_GIB_SPD = new double[] { 230, 330 };
     public const double BLOAT_GIB_LIFE = 0.85, BLOAT_GIB_DMG = 1.2;
     public const double CORPSE_LIFE = 30; public const int CORPSE_MAX = 60;
     public static List<Corpse> corpses = new();

@@ -312,7 +312,7 @@ public static partial class G
         goblinRoll(n);
         logEvent("── WAVE " + Js.Num(n) + " · " + wave.queue.Count + " bodies · " + Js.Num(waveBudget(n)) + " bricks ──", "#ffd76e");
         /* THE TOLL lands ON the wave that charges it */
-        if (Array.IndexOf(RES_TAX_WAVES, n) >= 0)
+        if (RES_TAX_WAVES.Contains(n))
         {
             double lost = Math.Round(resTax(n) * 100);
             logEvent("   THE COLD CREEPS IN — all resistances " + Js.Num(lost) + " lower, for good", "#7ecbff");

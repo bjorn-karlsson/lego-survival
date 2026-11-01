@@ -25,18 +25,18 @@ public static partial class G
 {
     public const double RITUAL_FROM = 7;
     public const double RITUAL_N = 3;
-    public static readonly double[] RITUAL_DELAY = { 4, 10 };
+    public static readonly Tbl RITUAL_DELAY = new double[] { 4, 10 };
     public const double RITUAL_R = 450;
     public const double RITUAL_TOUCH = 40;
     public const double RITUAL_WAKE_R = 210;
     public const double RITUAL_GAP = 1100;
-    public static readonly double[] RITUAL_GUARD = { 5, 7 };
+    public static readonly Tbl RITUAL_GUARD = new double[] { 5, 7 };
     /* A RITUAL IS A HORDE */
     public static double ritualBudget(double n) => 24 + n;
     public const double RITUAL_PULSE_T = 1.6, RITUAL_ALIVE = 26;
-    public static readonly double[] RITUAL_PACK = { 6, 9 };
+    public static readonly Tbl RITUAL_PACK = new double[] { 6, 9 };
     public const double RITUAL_MAGIC = 0.14, RITUAL_ELITE = 0.06;
-    public static readonly double[] RITUAL_ABIL_T = { 3.2, 4.8 };
+    public static readonly Tbl RITUAL_ABIL_T = new double[] { 3.2, 4.8 };
     public const double RITUAL_MARK_R = 72, RITUAL_MARK_T = 1.15;
     public const double RITUAL_RING_WAIT = 0.7, RITUAL_RING_SPD = 250, RITUAL_RING_BAND = 14;
     public const double RITUAL_TRIB = 4;

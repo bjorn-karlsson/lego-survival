@@ -27,17 +27,17 @@ public static partial class G
 {
     public static Abyss abyss = null; public static List<Abyss> abyssExtra = new();
     public const double ABYSS_FROM = 7;
-    public static readonly double[] ABYSS_DELAY = { 4, 10 };
-    public static readonly double[] ABYSS_DIST = { 320, 620 };
+    public static readonly Tbl ABYSS_DELAY = new double[] { 4, 10 };
+    public static readonly Tbl ABYSS_DIST = new double[] { 320, 620 };
     public const int ABYSS_SEGS = 8;
-    public static readonly double[] ABYSS_SEG = { 180, 230 };
+    public static readonly Tbl ABYSS_SEG = new double[] { 180, 230 };
     public const double ABYSS_TOUCH = 56;
     public const double ABYSS_SPD = 150;
     public const double ABYSS_FOLLOW = 420;
     public const double ABYSS_ABANDON = 18;
     public const double ABYSS_SPAWN_EVERY = 150;
-    public static readonly double[] ABYSS_PACK = { 2, 4 };
-    public static readonly double[] ABYSS_PITS = { 0.34, 0.68 }, ABYSS_PIT_PACK = { 6, 9 };
+    public static readonly Tbl ABYSS_PACK = new double[] { 2, 4 };
+    public static readonly Tbl ABYSS_PITS = new double[] { 0.34, 0.68 }, ABYSS_PIT_PACK = new double[] { 6, 9 };
     public const double ABYSS_ALIVE_MAX = 45;
     public const double ABYSS_HP = 0.9, ABYSS_MAGIC = 0.1;
     public const double ABYSS_LORD_HP = 6;
@@ -46,7 +46,7 @@ public static partial class G
     public const double ABYSS_LORD_RARE = 0.4;
     /* THE FORK */
     public const double ABYSS_FORK = 0.45, ABYSS_FORK2 = 0.25, ABYSS_FORK2_FROM = 20;
-    public static readonly double[] ABYSS_FORK_AT = { 0.2, 0.6 }, ABYSS_FORK_TURN = { 0.7, 1.3 }, ABYSS_FORK_SEGS = { 3, 5 };
+    public static readonly Tbl ABYSS_FORK_AT = new double[] { 0.2, 0.6 }, ABYSS_FORK_TURN = new double[] { 0.7, 1.3 }, ABYSS_FORK_SEGS = new double[] { 3, 5 };
     public const string ABYSS_COL = "#6cff9a", ABYSS_DIM = "#0f2a1a";
     public static List<Abyss> allAbysses() { var l = new List<Abyss>(); if (abyss != null) l.Add(abyss); l.AddRange(abyssExtra); return l; }
     public static bool abyssOpenNow() => allAbysses().Any(A => A.state == "open" || A.state == "lord");
@@ -104,7 +104,7 @@ public static partial class G
         return abyssLine(start, Math.Atan2(W.h / 2 - start.y, W.w / 2 - start.x) + rnd(-0.8, 0.8), ABYSS_SEGS, true);
     }
     /* the measured line of a crack: lengths, a jagged edge, and where its pits are */
-    public static void crackMeasure(Crack c, double[] pitFracs)
+    public static void crackMeasure(Crack c, IReadOnlyList<double> pitFracs)
     {
         c.cum = new List<double> { 0 };
         for (int i = 1; i < c.pts.Count; i++) c.cum.Add(c.cum[i - 1] + hypot(c.pts[i].x - c.pts[i - 1].x, c.pts[i].y - c.pts[i - 1].y));

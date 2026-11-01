@@ -20,7 +20,7 @@ public static partial class G
     /* THE COMMON ONE: most waves leave a box */
     public const double SBOX_MORE_PER_LVL = 0.03, SBOX_MORE_MAX = 0.5, SBOX_PER_WAVE = 3;
     public const int SBOX_MAX_LIVE = 4;
-    public static readonly double[] SBOX_DELAY = { 3, 9 };
+    public static readonly Tbl SBOX_DELAY = new double[] { 3, 9 };
     public const double SBOX_TOUCH = 46;
     /* the four tiers */
     public static readonly Dictionary<string, SboxTier> SBOX_TIERS = new()
@@ -33,7 +33,7 @@ public static partial class G
     public const double SBOX_EPIC_FROM = 10;
     public static readonly string[] SBOX_MODS = { "swift", "ironclad", "brutal", "vital", "warded", "venomous", "thorned" };
     public const double SBOX_BURST_T = 1.4;
-    public static readonly double[] SBOX_PACK = { 3, 5 }, SBOX_RING = { 60, 130 };
+    public static readonly Tbl SBOX_PACK = new double[] { 3, 5 }, SBOX_RING = new double[] { 60, 130 };
     public const string SBOX_CHEST_MAX = "epic";
     public static List<SboxPending> sboxPending = new();
     public static void sboxRoll(double n)
