@@ -523,7 +523,7 @@ public static partial class G
         return e;
     }
     static double GobDrop(Ent e) => double.IsNaN(e.gobDrop) ? 0.9 : e.gobDrop;
-    public static Pt goblinTick(Ent e, double dt, Pt toP = null, double dP = 0)
+    public static Pt goblinTick(Ent e, double dt, double toP = 0, double dP = 0)
     {
         e.mode = "flee"; e.gobT = e.gobT + dt;
         /* it leaks studs as it is hit: a tenth of its life, a handful */

@@ -13,7 +13,7 @@ public sealed class HitOpts
 /* a body's {n, t}: frozen, burnt and shocked are all a count with a clock */
 public sealed class Mark { public double n, t; }
 /* a boss's or a golem's shockwave as it rolls out */
-public sealed class BossRing { public double r, max, speed, dmg = double.NaN; public bool hit; public string golem; public HashSet<Ent> mHit; }
+public sealed class BossRing { public double r, max, speed, dmg = double.NaN; public bool hit, heroHit; public string golem; public HashSet<Ent> mHit; }
 /* EVERY FLYING THING: an arrow, a bolt, a skull, an ember, a bomb, a boomerang...
    one class with every field any of them carries */
 public sealed partial class Proj : Obj
