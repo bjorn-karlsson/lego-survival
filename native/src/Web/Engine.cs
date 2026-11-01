@@ -45,10 +45,11 @@ public static class Dom
     {
         layoutDirty = true;
         if (n is Element e) MarkDirty(e, sibs: true);
-        else if (n is TextNode t && t.parentNode != null) MarkDirty(t.parentNode, false, onlyEmpty: true);
+        else if (n is TextNode t && t.parentNode != null) { MarkDirty(t.parentNode, false, onlyEmpty: true); MutationObserver.Note(t.parentNode); }
     }
     internal static void TreeChanged(Element parent)
     {
+        MutationObserver.Note(parent);
         idsDirty = true; layoutDirty = true;
         MarkDirty(parent, true);
         foreach (var c in parent.childNodes) if (c is Element ce) MarkDirty(ce, false);
@@ -490,6 +491,30 @@ public static class Dom
         return c;
     }
     public static bool Animating => Anim.Active;
+}
+
+/* MutationObserver, for the changes the game watches (childList, subtree,
+   characterData): callbacks run once, after the script that made the change */
+public sealed class MutationObserverInit { public bool childList, subtree, characterData, attributes; }
+public sealed class MutationObserver
+{
+    static readonly List<MutationObserver> all = new();
+    readonly Action cb; Element target; MutationObserverInit opts; bool pending;
+    public MutationObserver(Action cb) { this.cb = cb; }
+    public void observe(Element t, MutationObserverInit o) { target = t; opts = o; if (!all.Contains(this)) all.Add(this); }
+    public void disconnect() { all.Remove(this); }
+    internal static void Note(Element changed)
+    {
+        foreach (var m in all)
+        {
+            if (m.target == null || m.pending) continue;
+            if (changed == m.target || (m.opts.subtree && m.target.contains(changed))) m.pending = true;
+        }
+    }
+    public static void Flush()
+    {
+        foreach (var m in all.ToList()) if (m.pending) { m.pending = false; try { m.cb(); } catch (Exception e) { Dom.Report(e); } }
+    }
 }
 
 /* CSS transitions (transform, opacity, background-color) and the one keyframe

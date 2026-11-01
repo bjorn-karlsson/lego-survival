@@ -52,12 +52,51 @@ public static partial class G
         zoom = Math.Min(zoom, 3);
         reclampCam();
     }
-    /* THE TITLE FITS THE WINDOW: the native title screen lays itself out to the
-       window each frame (Ui), which is what fitTitle did with CSS zoom */
+    /* THE TITLE FITS THE WINDOW, NO SCROLLING. The plate is measured at its natural
+       size and the whole title -- the plate AND the two panels beside it -- is
+       ZOOMED to fit the window's height. It used to be a transform scale on the
+       plate alone, which only shrank the picture: the layout box stayed full size,
+       so the page still scrolled past a plate that looked like it fitted. Zoom
+       shrinks the layout itself. Never below half size, never above natural; and it
+       refits whenever the plate's content changes (a longer weapon blurb, the RPG
+       button text) as well as on a resize. */
     public const double TITLE_FIT_PAD = 40, TITLE_FIT_MIN = 0.5, TITLE_ROW_MIN = 0.6;
-    public static void fitTitle() => Ui.TitleDirty();
+    public static void fitTitle()
+    {
+        var wrap = document.querySelector("#titleScreen .titlewrap"); var el = document.querySelector("#titleScreen .boxplate");
+        if (wrap == null || el == null) return;
+        el.style.transform = "rotate(-.5deg)";
+        wrap.style.zoom = ""; wrap.classList.remove("stacked");
+        double h = el.offsetHeight;
+        if (h == 0) return;
+        /* the panels beside it are as tall as the plate may be, in the same zoom */
+        foreach (var q in wrap.querySelectorAll(".cpanel")) q.style.maxHeight = S(Math.Max(320, h)) + "px";
+        /* the height the plate needs, and the width all three columns need side by side */
+        double side = wrap.querySelectorAll(".cpanel").Aggregate(0.0, (a, q) => a + q.offsetWidth + 18);
+        double rowW = el.offsetWidth + side + 24;
+        double kh = (window.innerHeight - TITLE_FIT_PAD) / h, kw = (window.innerWidth - 8) / rowW;
+        double k = Math.Min(1, kh);
+        /* one row if a reasonable zoom gets it there; otherwise the panels go under */
+        if (kw >= TITLE_ROW_MIN) k = Math.Min(k, kw);
+        else wrap.classList.add("stacked");
+        k = clamp(k, TITLE_FIT_MIN, 1);
+        if (k < 1) wrap.style.zoom = Js.ToFixed(k, 3);
+    }
     public static bool titleFitQ = false;
-    public static void fitTitleSoon() => Ui.TitleDirty();
+    public static void fitTitleSoon()
+    {
+        if (titleFitQ) return;
+        titleFitQ = true;
+        requestAnimationFrame(() => { titleFitQ = false; fitTitle(); });
+    }
+    /* JS 3420-3426: the window's resize refits the title, and so does any change to the plate's content */
+    public static void TitleFitWire()
+    {
+        window.addEventListener("resize", _ => { fitTitle(); });
+        var plate = document.querySelector("#titleScreen .boxplate");
+        if (plate != null) new MutationObserver(fitTitleSoon).observe(plate, new MutationObserverInit { childList = true, subtree = true, characterData = true });
+        fitTitleSoon();
+    }
 
     /* ============================== SETTINGS ============================== */
     public const string OPT_KEY = "bb_opts";
@@ -159,13 +198,27 @@ public static partial class G
     }
     /* ---- TEXT SIZE: every canvas font is scaled at the moment it is set ---- */
     public static double TEXT_K = 1;
-    public static void textScaleRules() { }      // js: textScaleRules, textFontOrig, textFontCache
+    /* ---- TEXT SIZE ----
+       Every size in the stylesheet is written in px, so the stylesheet itself is
+       rescaled: each rule's own size is remembered and multiplied, and the page
+       reflows around it (Sheet.TextK: the cascade scales every px font-size a rule
+       declares). The canvas draws its words through ctx.font, so the font
+       setter scales the px size in the string it is handed (FontSpec.TextK). */
+    static readonly System.Text.RegularExpressions.Regex PX_SIZE = new(@"^([\d.]+)px$");
     public static void applyTextSize()
     {
         TEXT_K = (TEXT_SIZES.GetValueOrDefault(OPT.textSize) ?? TEXT_SIZES["normal"]).k;
         FontSpec.TextK = TEXT_K;
         FontSpec.ClearCache();
-        fitTitleSoon();
+        Sheet.TextK = TEXT_K; Dom.StyleAll();
+        foreach (var el in document.querySelectorAll("[style*=\"font-size\"]"))
+        {
+            if (el.dataset["fs"] == null) el.dataset["fs"] = el.style.fontSize;
+            var m = PX_SIZE.Match(el.dataset["fs"]);
+            if (m.Success) el.style.fontSize = TEXT_K == 1 ? el.dataset["fs"] : Js.ToFixed(Js.ToNumber(m.Groups[1].Value) * TEXT_K, 2) + "px";
+        }
+        document.documentElement.dataset["text"] = OPT.textSize;
+        try { fitTitleSoon(); } catch { }
     }
     public static object optToggle(string id) => optSet(id, !(OPT[id] is bool b && b));
 }

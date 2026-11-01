@@ -10,7 +10,7 @@ public sealed class RpgZone { public string name, col, sub; public double level;
 public sealed class RpgWorld
 {
     public string zone; public Prop gate; public bool gateOpen; public Ent boss; public Prop near; public bool fLatch; public double packs;
-    public Pt caveIn;
+    public Pt caveIn, caveOut;
 }
 public sealed class RpgCharSave { public double level = 1, xp = 0, deaths = 0; public bool town = false; }
 public sealed partial class Prop { public bool open, home; public bool solid = true; public string label, col; }
