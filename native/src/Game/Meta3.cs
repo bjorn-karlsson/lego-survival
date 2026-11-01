@@ -10,6 +10,7 @@ public sealed class MetaNode
     public double x, y, at, cost = double.NaN, deg;
     public List<Mod> mods = new(); public List<string> req = new();
     public Action<Ent> apply;
+    public string _tags, _hay;   /* the search's words, read once (metaNodeTags / metaNodeHay) */
 }
 public sealed class MetaHub { public int ring, j; public double deg, r, x, y; public string sec; public MetaNode node; }
 public sealed class MetaSite
