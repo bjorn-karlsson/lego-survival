@@ -6,7 +6,6 @@ namespace Brickblade;
    reaches the sections that use it. */
 
 public sealed partial class Breach : Obj { }
-public sealed partial class Choice { }
 public sealed partial class Upgrade { }
 public sealed partial class Hazard : Obj { }
 public sealed partial class Spike : Obj { }
