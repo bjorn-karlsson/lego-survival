@@ -71,7 +71,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 | WORLD | 4554–4938 | ported (`Game/World.cs`) |
 | PICKUPS / DEBRIS / PARTICLES | 4939–5411 | ported (`Game/Pickups.cs`) |
 | ENEMIES | 5412–8647 | ported (`Game/Enemies1-4.cs`, `Game/Gear.cs`, `Game/EntMonster.cs`) |
-| WAVES / THE ROSTER | 8648–11357 | |
+| WAVES / THE ROSTER | 8648–11357 | ported (`Game/Waves.cs`, `Breach.cs`, `Abyss.cs`, `Strongbox.cs`, `Ritual.cs`, `Legion.cs`) |
 | RARITY & UPGRADES | 11358–18277 | |
 | TEST BENCH | 18278–18844 | |
 | WHAT A BRICK DOES | 18845–19715 | |
@@ -94,7 +94,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 from sections not yet ported. `dotnet build` errors of the kind "name does not exist" are the
 list of what is left; any other kind of error is a bug in what has been ported.
 
-**Resume at JS line 8648** (WAVES / THE ROSTER).
+**Resume at JS line 11358** (RARITY & UPGRADES).
 
 ## Build and run
 
