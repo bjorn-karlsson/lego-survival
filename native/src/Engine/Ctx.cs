@@ -53,7 +53,7 @@ public sealed class Ctx
         public Paint fill, stroke;
         public double lw; public Cap cap; public Join join; public double miter;
         public double alpha; public BlendOp op;
-        public FontSpec font; public int align, baseline;
+        public FontSpec font; public int align, baseline; public double ls;
         public double[] dash; public double dashOff;
         public double shBlur, shX, shY; public Col shCol;
         public Target clip; public bool smooth;
@@ -92,6 +92,8 @@ public sealed class Ctx
         get => s.op switch { BlendOp.Lighter => "lighter", BlendOp.DestinationOut => "destination-out", BlendOp.DestinationIn => "destination-in", BlendOp.SourceIn => "source-in", BlendOp.Copy => "copy", _ => "source-over" };
     }
     public string font { set => s.font = FontSpec.Parse(value); get => s.font.src; }
+    /* ctx.letterSpacing = '1.5px': added after every character, the last included */
+    public string letterSpacing { set => s.ls = Js.ParseFloat(value ?? "0") is var v && Js.IsFinite(v) ? v : 0; get => Js.Num(s.ls) + "px"; }
     public string textAlign { set => s.align = value == "center" ? 1 : value == "right" || value == "end" ? 2 : 0; get => s.align == 1 ? "center" : s.align == 2 ? "right" : "left"; }
     public string textBaseline { set => s.baseline = value switch { "middle" => 1, "top" => 2, "bottom" => 3, "hanging" => 4, "ideographic" => 3, _ => 0 }; get => s.baseline switch { 1 => "middle", 2 => "top", 3 => "bottom", 4 => "hanging", _ => "alphabetic" }; }
     public double shadowBlur { set => s.shBlur = value; get => s.shBlur; }
@@ -613,14 +615,15 @@ public sealed class Ctx
     }
 
     /* ================= text ================= */
-    public TextMetrics measureText(string t) => new TextMetrics { width = Measure(t, s.font) };
-    public static double Measure(string t, FontSpec f)
+    public TextMetrics measureText(string t) => new TextMetrics { width = Measure(t, s.font, s.ls) };
+    public static double Measure(string t, FontSpec f, double ls = 0)
     {
         if (string.IsNullOrEmpty(t)) return 0;
         const int REF = 64;
         double w = 0;
         foreach (var rune in t.EnumerateRunes())
         {
+            w += ls;
             var face = Fonts.For(f.face, rune.Value);
             double a = face.Adv(rune.Value);
             if (a >= 0) { w += a * f.px / face.upm; continue; }
@@ -645,7 +648,7 @@ public sealed class Ctx
         if (sc <= 0) return;
         int dsize = (int)Math.Round(f.px * sc);
         if (dsize < 2) return;
-        double width = Measure(t, f);
+        double width = Measure(t, f, s.ls);
         double sx = 1;
         if (maxWidth > 0 && width > maxWidth) { sx = maxWidth / width; width = maxWidth; }
         double x0 = s.align == 1 ? x - width / 2 : s.align == 2 ? x - width : x;
@@ -694,6 +697,7 @@ public sealed class Ctx
                     Gpu.V(p0.X, p0.Y, u0, v0, pm.r, pm.g, pm.b, pm.a); Gpu.V(p2.X, p2.Y, u1, v1, pm.r, pm.g, pm.b, pm.a); Gpu.V(p3.X, p3.Y, u0, v1, pm.r, pm.g, pm.b, pm.a);
                 }
                 /* advance at the reference size so measureText and drawing agree */
+                pen += s.ls;
                 double ua = face.Adv(rune.Value);
                 if (ua >= 0) { pen += ua * f.px / face.upm; continue; }
                 var atR = Fonts.Get(face, 64);
