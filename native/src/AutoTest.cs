@@ -16,6 +16,7 @@ namespace Brickblade;
      set:FIELD=NUMBER    a number on the hero (player.FIELD), e.g. set:invuln=9999
      gear:N              N rolled items into the bag
      drag:SRC>DST        drag from one element (CSS selector) and drop on another
+     size:W,H            resize the window
      shot:FILE           a screenshot
      status              one line: state, wave, monsters, hero, frame rate
      quit                close the window */
@@ -142,11 +143,12 @@ public static class AutoTest
                         px = x1; py = y1;
                         break;
                     }
+                    case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }
                     case "shot": shot(arg); break;
                     case "status":
                         Console.WriteLine($"[status] frame {frame} state={G.state} wave={G.wave?.n}/{G.wave?.state} enemies={G.enemies?.Count} " +
                             $"hp={G.player?.hp:0.#}/{G.player?.maxHp:0.#} lvl={G.player?.level} kills={G.player?.kills} studs={G.player?.studs} " +
-                            $"picks={G.pendingPicks?.Count} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}");
+                            $"picks={G.pendingPicks?.Count} view={G.cw:0}x{G.ch:0}@{G.dpr:0.##} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}");
                         break;
 
                     case "quit": return false;

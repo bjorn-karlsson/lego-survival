@@ -319,7 +319,7 @@ internal static class Svg
         x += A(e, "dx");
         g.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
         var f = cs.Font;
-        g.font = f.src;
+        g.fontSpec = f;
         g.textAlign = cs.textAnchor == "middle" ? "center" : cs.textAnchor == "end" ? "right" : "left";
         g.textBaseline = cs.baseline is "middle" or "central" ? "middle" : cs.baseline is "hanging" or "text-before-edge" ? "top" : "alphabetic";
         if (cs.stroke.kind == 1 && cs.stroke.col.a > 0)

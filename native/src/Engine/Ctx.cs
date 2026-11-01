@@ -92,6 +92,9 @@ public sealed class Ctx
         get => s.op switch { BlendOp.Lighter => "lighter", BlendOp.DestinationOut => "destination-out", BlendOp.DestinationIn => "destination-in", BlendOp.SourceIn => "source-in", BlendOp.Copy => "copy", _ => "source-over" };
     }
     public string font { set => s.font = FontSpec.Parse(value); get => s.font.src; }
+    /* a font already resolved (the page's CSS fonts): TEXT SIZE is in it already, so it
+       must not go through the string setter, which scales the game's canvas fonts */
+    public FontSpec fontSpec { set => s.font = value; get => s.font; }
     /* ctx.letterSpacing = '1.5px': added after every character, the last included */
     public string letterSpacing { set => s.ls = Js.ParseFloat(value ?? "0") is var v && Js.IsFinite(v) ? v : 0; get => Js.Num(s.ls) + "px"; }
     public string textAlign { set => s.align = value == "center" ? 1 : value == "right" || value == "end" ? 2 : 0; get => s.align == 1 ? "center" : s.align == 2 ? "right" : "left"; }

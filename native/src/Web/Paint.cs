@@ -665,7 +665,7 @@ internal static class Paint2
         {
             if (p.space && p.cs.deco == "none") continue;
             var cs = p.cs;
-            g.font = p.font.src;
+            g.fontSpec = p.font;
             if (cs.textShadow != null)
                 for (int i = cs.textShadow.Count - 1; i >= 0; i--)
                 {
@@ -712,7 +712,7 @@ internal static class Paint2
         {
             int idx = 1; for (var s = b.el.previousElementSibling; s != null; s = s.previousElementSibling) idx++;
             string s2 = idx + ". ";
-            g.font = f.src; g.fillStyle = b.cs.color; g.textAlign = "right"; g.textBaseline = "alphabetic"; g.fillText(s2, x, y);
+            g.fontSpec = f; g.fillStyle = b.cs.color; g.textAlign = "right"; g.textBaseline = "alphabetic"; g.fillText(s2, x, y);
             return;
         }
         double r = f.px * 0.18;
@@ -800,7 +800,7 @@ internal static class Paint2
         if (show.Length > 0)
         {
             var piece = new TextPiece { text = show, x = x - (ph ? 0 : scroll), y = baseY, font = f, cs = letter == b.cs.letter ? b.cs : new CStyle { letter = letter } };
-            g.font = f.src;
+            g.fontSpec = f;
             DrawRun(piece, piece.x, baseY, col);
         }
         if (Dom.focused == e && ((int)(Time * 2) % 2 == 0 || Time - Dom.lastKeyTime < 0.6))
