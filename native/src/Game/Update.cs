@@ -211,7 +211,7 @@ public static void updatePlayer(double dt){
     /* ...and, with Raise Zombie, the dead that were zombies: their own pool, their own clock */
     p.zombieCd = p.zombieCd - dt;
     if(p.minions.zombies && !p.dead && p.stunT <= 0 && p.zombieCd <= 0 && zombieMinions().Count() < zombieCap()){
-      if(raiseZombie()) p.zombieCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
+      if(raiseZombie() != null) p.zombieCd = p.atkRate / Math.max(0.3, chillMul()) * curseSwingMul();
     }
   }
   updateSlam(dt);

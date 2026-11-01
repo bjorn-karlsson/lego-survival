@@ -205,7 +205,7 @@ public static partial class G
         $"{S(p.minions.perCast)} a raising, until there are {S(minionMax())}, and refills any that fall. "+
         $"LEFT CLICK is CONVOCATION: every minion you own is called back to your side and mends "+
         $"{S(Math.round(CONVO_REGEN*100))}% of its life a second for {S(CONVO_REGEN_T)}s ({S(CONVO_CD)}s cooldown).\n\n"+
-        $"They rise as spearmen, swordsmen or archers."+(golemMax() ? $" {S(golemMax())} BONE GOLEMS stand beside them, their own pool." : "")+
+        $"They rise as spearmen, swordsmen or archers."+(golemMax() != 0 ? $" {S(golemMax())} BONE GOLEMS stand beside them, their own pool." : "")+
         (p.minions.overseer ? " A BONE OVERSEER at your shoulder drives on every one near it." : "")+
         $"\n\nMinion damage is its OWN pool: "+Math.round(minionInc()*100)+$"% increased now"+
         (p.minions.mirror ? ", three quarters of yours mirrored into it." : ".")+

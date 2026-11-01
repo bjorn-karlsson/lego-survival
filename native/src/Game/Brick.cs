@@ -261,8 +261,8 @@ public static partial class G
         why = "a minion inside the Bone Overseer's aura (520px round it) deals 30% MORE damage and attacks 25% faster; a gold ring round its feet shows which are" },
       new StatProbe { g = "MINIONS", k = "Legion", basic = "OFFENCE", get = ()=> isSummoner() ? minionMax() : 0, fmt = v=>Math.round(v)+" skeletons", zero = true,
         why = "how many skeletons may stand at once (cap 15). At a full legion a raising replaces the oldest" },
-      new StatProbe { g = "MINIONS", k = "Golems", get = ()=> isSummoner() ? golemMax() : 0, fmt = v=>Math.round(v)+" of "+golemCap()+" · "+
-          (golemTypesOwned().map(t=>GOLEM_TYPES[t].name.replace(" Golem", "")).join(", ") ?? "none"), zero = true,
+      new StatProbe { g = "MINIONS", k = "Golems", get = ()=> isSummoner() ? golemMax() : 0, fmt = v=>Math.round(v)+" of "+S(golemCap())+" · "+
+          Js.Or(string.Join(", ", golemTypesOwned().Select(t=>GOLEM_TYPES[t].name.Replace(" Golem", ""))), "none"), zero = true,
         why = "their own pool, on top of the legion: one of each kind you have raised, two at most (three with The Foundry). Each grants you something while it stands. One that falls rises again after 10s" },
       new StatProbe { g = "MINIONS", k = "Minion life", get = ()=> isSummoner() ? minionMaxHp() : 0, fmt = v=>Math.round(v)+"", zero = true,
         why = "what a skeleton rises with: ten, and 12% more for every hero level, times the minion life pool" },
