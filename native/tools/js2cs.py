@@ -179,7 +179,7 @@ class Conv:
                     if prev and prev[1] == ':' and keystack and keystack[-1][0] == 'blk':
                         is_obj = True
                     if is_obj:
-                        cls = self.objmap.get(pending_key)
+                        cls = self.objmap.get(pending_key) or (self.objmap.get('*') if self.depth_obj() >= 1 else None)
                         if not cls and keystack and keystack[-1][0] == 'arr' and len([q for q in keystack if q[0] == 'arr']) == 1:
                             cls = self.objmap.get('[]')
                         keystack.append(('obj', cls))
@@ -220,6 +220,9 @@ class Conv:
             i += 1
         return ''.join(out)
 
+    def depth_obj(self):
+        return getattr(self, '_objdepth', 0)
+
     def peek(self, toks, i):
         while i < len(toks) and toks[i][0] in ('ws', 'com'): i += 1
         return toks[i] if i < len(toks) else None
@@ -248,6 +251,14 @@ class Conv:
                         while toks[j2][0] == 'ws': j2 += 1
                         if toks[j2][1] == '=>':
                             toks[j1] = ('id', '(' + toks[j1][1] + ', ' + self.arity[key] + ')')
+                    elif toks[j1][1] == '(':
+                        # (p)=>  ->  (p, extra)=>
+                        j2 = j1 + 1
+                        while toks[j2][0] == 'ws': j2 += 1
+                        j3 = j2 + 1
+                        while j3 < len(toks) and toks[j3][0] == 'ws': j3 += 1
+                        if toks[j2][0] == 'id' and toks[j3][1] == ')':
+                            toks[j2] = ('id', toks[j2][1] + ', ' + self.arity[key])
                 self.cur_key = key
                 # the value: remember the key for an object literal inside it
                 self.objmap_key = key
@@ -322,6 +333,29 @@ def main():
         return m.group(1) + ('double ' if top else 'var ') + body + ';'
     s = re.sub(r'(^|[;{]\s*|\n\s*)var ([^;]*);', multi, s)
     s = s.replace('dealtTypes().phys', 'dealtTypes()["phys"]')
+    # a node's mods: ["stat", v] -> new Mod("stat", v); ["stat", null] -> new Mod("stat")
+    # and a template's minors: ["Name", "stat", v] -> ("Name", "stat", v)
+    def spans(s, key):
+        out, i = [], 0
+        while True:
+            j = s.find(key + ' = [', i)
+            if j < 0: break
+            k = j + len(key) + 3; d = 0; e = k
+            while e < len(s):
+                if s[e] == '[': d += 1
+                elif s[e] == ']':
+                    d -= 1
+                    if d == 0: break
+                e += 1
+            out.append((k, e + 1)); i = e + 1
+        return out
+    for key, fn in (('mods', lambda b: re.sub(r'\[\s*("[^"]*"|[\w.+\'"]+)\s*,\s*null\s*\]', r'new Mod(\1)',
+                                   re.sub(r'\[\s*("[^"]*"|\w+)\s*,\s*([^\[\],]+?)\s*\]', r'new Mod(\1, \2)', b))),
+                    ('minors', lambda b: re.sub(r'\[\s*("[^"]*")\s*,\s*([^\[\],]+?)\s*,\s*([^\[\],]+?)\s*\]', r'(\1, \2, \3)', b))):
+        for (a, b) in reversed(spans(s, key)):
+            inner = s[a:b]
+            body = inner[1:-1]
+            s = s[:a] + '[' + fn(body) + ']' + s[b:]
     s = re.sub(r'for\s*\(\s*var\s+\[([\w, ]+)\]\s+of\s+', r'foreach (var (\1) in ', s)
     sys.stdout.write(s + '\n')
 

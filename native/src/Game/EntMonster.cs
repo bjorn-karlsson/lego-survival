@@ -45,6 +45,6 @@ public sealed partial class Ent
     public bool isProxy; public Ent minion;
     /* the hero's own: where it was a frame ago (leadPlayer), a level's heal, the gear it wears */
     public double leadX = double.NaN, leadY = double.NaN, leadDt;
-    public bool lvlHeal, ghostReaver;
+    public bool lvlHeal, ghostReaver, zealot;
     public List<(string stat, double v)> gearMods;
 }
