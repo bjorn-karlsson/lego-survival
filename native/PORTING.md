@@ -59,14 +59,14 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 | Section | JS lines | State |
 |---|---|---|
 | Engine (canvas, GPU, fonts, storage) | — | done; `--shimtest` matches Chromium |
-| UTILS | 1014–1084 | |
-| CONSTANTS | 1085–3366 | |
-| CANVAS / SETTINGS / TEXT SIZE | 3367–3552 | |
-| AUDIO | 3553–3969 | |
-| INPUT | 3970–4056 | |
-| STATE | 4057–4391 | |
-| PLAYER | 4392–4553 | |
-| WORLD | 4554–4938 | |
+| UTILS | 1014–1084 | ported (`Game/Utils.cs`) |
+| CONSTANTS | 1085–3366 | ported (`Game/Constants1-3.cs`) |
+| CANVAS / SETTINGS / TEXT SIZE | 3367–3552 | ported (`Game/Canvas.cs`; adds RENDER QUALITY and VSYNC options) |
+| AUDIO | 3553–3969 | ported (`Game/Audio.cs` on `Engine/WebAudio.cs`, a Web Audio work-alike; `Engine/SoundOut.cs`) |
+| INPUT | 3970–4056 | ported (`Game/Input.cs`) |
+| STATE | 4057–4391 | ported (`Game/State.cs`; run links are byte-compatible with the browser's) |
+| PLAYER | 4392–4553 | ported (`Game/Player.cs`, `Game/Ent.cs`) |
+| WORLD | 4554–4938 | ported (`Game/World.cs`) |
 | PICKUPS / DEBRIS / PARTICLES | 4939–5411 | |
 | ENEMIES | 5412–8647 | |
 | WAVES / THE ROSTER | 8648–11357 | |
@@ -87,6 +87,12 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 | GAME FLOW | 31909–32329 | |
 | MAIN LOOP | 32330–32430 | |
 | HTML screens (markup 743–1010, CSS 9–742) | | |
+
+**While the port is in progress the project does not compile**: a section calls functions
+from sections not yet ported. `dotnet build` errors of the kind "name does not exist" are the
+list of what is left; any other kind of error is a bug in what has been ported.
+
+**Resume at JS line 4939** (PICKUPS / DEBRIS / PARTICLES).
 
 ## Build and run
 
