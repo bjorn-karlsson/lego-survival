@@ -161,6 +161,21 @@ void main(){
         Rlgl.Viewport(0, 0, t.w, t.h);
         boundTarget = t;
     }
+    /* a region of one target copied, pixel for pixel, into the top-left of another
+       (x, y from the top, as the canvas counts) -- what is behind a backdrop blur */
+    public static void Copy(Target src, int x, int y, int w, int h, Target dst)
+    {
+        Flush();
+        const int READ = 0x8CA8, DRAW = 0x8CA9, COLOR = 0x4000;
+        w = Math.Min(w, dst.w); h = Math.Min(h, dst.h);
+        if (w <= 0 || h <= 0) return;
+        Rlgl.BindFramebuffer(READ, src.screen ? 0 : src.fbo);
+        Rlgl.BindFramebuffer(DRAW, dst.fbo);
+        int gy = src.h - (y + h);
+        Rlgl.BlitFramebuffer(x, gy, w, h, 0, dst.h - h, w, h, COLOR);
+        Rlgl.BindFramebuffer(READ, 0); Rlgl.BindFramebuffer(DRAW, 0);
+        boundTarget = null;
+    }
     /* the frame ends: whatever raylib does next starts from a clean slate */
     public static void EndFrame()
     {

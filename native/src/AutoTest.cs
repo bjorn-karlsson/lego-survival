@@ -14,6 +14,8 @@ namespace Brickblade;
      call:NAME           a static method of the game with no arguments (G.NAME())
      with:NAME=ARG       one with a string argument (with:setWeapon=axe)
      set:FIELD=NUMBER    a number on the hero (player.FIELD), e.g. set:invuln=9999
+     gear:N              N rolled items into the bag
+     drag:SRC>DST        drag from one element (CSS selector) and drop on another
      shot:FILE           a screenshot
      status              one line: state, wave, monsters, hero, frame rate
      quit                close the window */
@@ -116,6 +118,28 @@ public static class AutoTest
                             sw.Restart(); Dom.EnsureLayout(); double ly = sw.Elapsed.TotalMilliseconds;
                             Console.WriteLine($"[time] {arg}: script {js:0.0} ms, style {st:0.0} ms, layout {ly:0.0} ms");
                         }
+                        break;
+                    }
+                    case "gear":
+                    {
+                        /* gear:N -- N rolled items into the bag */
+                        int n = int.Parse(arg);
+                        for (int q = 0; q < n; q++) G.gearInvAdd(G.gearRoll(5 + q * 3, 1 + q % 4));
+                        G.refreshGearBtn();
+                        break;
+                    }
+                    case "drag":
+                    {
+                        /* drag:SRC>DST -- press on the first element's centre, move, let go on the second's */
+                        var ab = arg.Split('>');
+                        var a = Dom.document.querySelector(ab[0]); var b = Dom.document.querySelector(ab[1]);
+                        if (a == null || b == null) { Console.WriteLine($"[script] drag: {(a == null ? ab[0] : ab[1])} not found"); break; }
+                        var ra = a.getBoundingClientRect(); var rb = b.getBoundingClientRect();
+                        double x0 = ra.x + ra.width / 2, y0 = ra.y + ra.height / 2, x1 = rb.x + rb.width / 2, y1 = rb.y + rb.height / 2;
+                        Dom.PointerMove(x0, y0, 0); Dom.PointerDown(0);
+                        for (int q = 1; q <= 8; q++) Dom.PointerMove(x0 + (x1 - x0) * q / 8, y0 + (y1 - y0) * q / 8, 1);
+                        Dom.PointerUp(0);
+                        px = x1; py = y1;
                         break;
                     }
                     case "shot": shot(arg); break;

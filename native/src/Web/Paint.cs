@@ -281,6 +281,7 @@ internal static class Paint2
         var rad = Radii(b, W, H);
         if (c.boxShadow != null)
             for (int i = c.boxShadow.Count - 1; i >= 0; i--) { var s = c.boxShadow[i]; if (!s.inset) OuterShadow(s, 0, 0, W, H, rad, W, H); }
+        if (c.backdropBlur > 0) BackdropBlur(st, W, H, c.backdropBlur);
         Background(b, W, H, rad);
         if (c.boxShadow != null)
             for (int i = c.boxShadow.Count - 1; i >= 0; i--) { var s = c.boxShadow[i]; if (s.inset) InsetShadow(b, s, W, H, rad, st); }
@@ -488,11 +489,53 @@ internal static class Paint2
             double sx = px - Math.Ceiling((px - x) / tw) * tw, sy = py - Math.Ceiling((py - y) / th) * th;
             g.save();
             g.globalAlpha = Math.Clamp(curAlpha, 0, 1);
+            /* the tiles start at or before the painting area's edge: each is cut to
+               the area, as the browser clips the layer to it */
+            double kx = tile.width / tw, ky = tile.height / th;
             for (double ty = sy; ty < y + h; ty += th)
                 for (double tx = sx; tx < x + w; tx += tw)
-                    g.drawImage(tile, 0, 0, tile.width, tile.height, tx, ty, tw, th);
+                {
+                    double cx0 = Math.Max(tx, x), cy0 = Math.Max(ty, y), cx1 = Math.Min(tx + tw, x + w), cy1 = Math.Min(ty + th, y + h);
+                    if (cx1 - cx0 < 0.01 || cy1 - cy0 < 0.01) continue;
+                    g.drawImage(tile, (cx0 - tx) * kx, (cy0 - ty) * ky, (cx1 - cx0) * kx, (cy1 - cy0) * ky, cx0, cy0, cx1 - cx0, cy1 - cy0);
+                }
             g.restore();
         }
+    }
+    /* BACKDROP-FILTER: BLUR. What is already drawn behind the box is copied out,
+       shrunk twice (each a bilinear 2x2 average) and stretched back under the
+       box's own background: a soft blur of about the radius asked for, at the
+       cost of one copy and three small draws. */
+    static OffCanvas bdFull, bdA, bdB;
+    static void BackdropBlur(St st, double W, double H, double radius)
+    {
+        var (ax, ay) = st.m.Ap(0, 0); var (bx, by) = st.m.Ap(W, H);
+        var tgt = g.Tgt;
+        int x0 = (int)Math.Floor(Math.Max(0, Math.Min(ax, bx))), y0 = (int)Math.Floor(Math.Max(0, Math.Min(ay, by)));
+        int x1 = (int)Math.Ceiling(Math.Min(tgt.w, Math.Max(ax, bx))), y1 = (int)Math.Ceiling(Math.Min(tgt.h, Math.Max(ay, by)));
+        if (st.clip is { } cl) { x0 = Math.Max(x0, (int)Math.Floor(cl.x0)); y0 = Math.Max(y0, (int)Math.Floor(cl.y0)); x1 = Math.Min(x1, (int)Math.Ceiling(cl.x1)); y1 = Math.Min(y1, (int)Math.Ceiling(cl.y1)); }
+        int w = x1 - x0, h = y1 - y0;
+        if (w < 4 || h < 4) return;
+        /* how far to shrink: a 3px blur at 1x is about a quarter */
+        double k = Math.Clamp(radius * DPR / 1.5, 1, 16);
+        int sw = Math.Max(1, (int)Math.Round(w / k)), sh = Math.Max(1, (int)Math.Round(h / k));
+        int mw = Math.Max(sw, w / 2), mh = Math.Max(sh, h / 2);
+        bdFull ??= new OffCanvas(); bdA ??= new OffCanvas(); bdB ??= new OffCanvas();
+        if (bdFull.width < w || bdFull.height < h) { bdFull.width = Math.Max(bdFull.width, w); bdFull.height = Math.Max(bdFull.height, h); }
+        if (bdA.width != mw || bdA.height != mh) { bdA.width = mw; bdA.height = mh; }
+        if (bdB.width != sw || bdB.height != sh) { bdB.width = sw; bdB.height = sh; }
+        Gpu.Copy(tgt, x0, y0, w, h, bdFull.T);
+        var keepF = Ctx.Filter; Ctx.Filter = null;
+        var ca = bdA.getContext("2d"); ca.Reset(); ca.imageSmoothingEnabled = true; ca.globalCompositeOperation = "copy";
+        ca.drawImage(bdFull, 0, 0, w, h, 0, 0, mw, mh);
+        var cb = bdB.getContext("2d"); cb.Reset(); cb.imageSmoothingEnabled = true; cb.globalCompositeOperation = "copy";
+        cb.drawImage(bdA, 0, 0, mw, mh, 0, 0, sw, sh);
+        g.save();
+        g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "copy";
+        g.imageSmoothingEnabled = true;
+        g.drawImage(bdB, 0, 0, sw, sh, x0, y0, w, h);
+        g.restore();
+        Ctx.Filter = keepF;
     }
     static readonly Dictionary<(BgImage, int, int), OffCanvas> tiles = new();
     static OffCanvas Tile(BgImage img, double tw, double th)
