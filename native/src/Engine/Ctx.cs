@@ -731,6 +731,18 @@ public static class MaskPool
 public sealed class Path2D
 {
     readonly List<Action<Ctx>> ops = new();
+    public Path2D() { }
+    /* new Path2D(svgPathData): curves and arcs arrive already flattened */
+    public Path2D(string d)
+    {
+        foreach (var (pts, closed) in Svg.Polylines(d))
+        {
+            if (pts.Count == 0) continue;
+            moveTo(pts[0].x, pts[0].y);
+            for (int i = 1; i < pts.Count; i++) lineTo(pts[i].x, pts[i].y);
+            if (closed) closePath();
+        }
+    }
     public void moveTo(double x, double y) => ops.Add(c => c.moveTo(x, y));
     public void lineTo(double x, double y) => ops.Add(c => c.lineTo(x, y));
     public void closePath() => ops.Add(c => c.closePath());

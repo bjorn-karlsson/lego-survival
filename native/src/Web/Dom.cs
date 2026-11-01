@@ -544,6 +544,8 @@ public sealed class Win
     public double innerWidth => Dom.ViewW;
     public double innerHeight => Dom.ViewH;
     public double devicePixelRatio => Dom.Scale;
+    /* window.focus(): keys go back to the page, so whatever element had focus loses it */
+    public void focus() => Dom.Focus(null);
     internal readonly Dictionary<string, List<Listener>> listeners = new();
     public void addEventListener(string type, Action<DomEvent> fn, object opts = null)
     {

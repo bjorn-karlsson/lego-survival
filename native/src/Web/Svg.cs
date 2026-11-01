@@ -77,6 +77,9 @@ internal static class Svg
         pathCache[d] = l;
         return l;
     }
+    /* the same path data, for a canvas Path2D: each subpath as points, and whether it closes */
+    public static IEnumerable<(List<(double x, double y)> pts, bool closed)> Polylines(string d)
+    { foreach (var p in PathPolys(d)) yield return (p.pts, p.closed); }
     static void ParsePath(string d, List<Poly> outl)
     {
         int i = 0; char cmd = ' ';
