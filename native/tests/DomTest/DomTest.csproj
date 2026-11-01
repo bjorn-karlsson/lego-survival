@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The UI engine alone, without the game: renders the game's own HTML and CSS
+       to PNGs so they can be laid beside Chromium's rendering of the same page. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Brickblade</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS8981;CS1717;CS0108;CS0659;CS0661</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="8.1.0" />
+    <PackageReference Include="LibTessDotNet" Version="1.1.15" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Engine/*.cs" Exclude="../../src/Engine/ShimTest.cs" />
+    <Compile Include="../../src/Web/*.cs" Exclude="../../src/Web/Ui.cs" />
+    <Compile Include="../../src/Game/Types.cs" />
+    <EmbeddedResource Include="../../assets/**/*" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -40,6 +40,14 @@ public static unsafe class Gpu
     static Target curTarget, boundTarget;
     static Target curClip;
     public static Target Screen;
+    /* an axis-aligned clip in device pixels (the UI's overflow clipping); null is none */
+    static (int x, int y, int w, int h)? scissor;
+    public static void Scissor((int x, int y, int w, int h)? r)
+    {
+        if (r == scissor) return;
+        Flush();
+        scissor = r;
+    }
     public static int DrawCalls, Tris;
 
     const string VS = @"#version 330
@@ -192,6 +200,7 @@ void main(){
         ApplyBlend(curBlend);
         Rlgl.DisableBackfaceCulling();
         Rlgl.DisableDepthTest();
+        if (scissor is { } sc) { Rlgl.EnableScissorTest(); Rlgl.Scissor(sc.x, t.h - (sc.y + sc.h), Math.Max(0, sc.w), Math.Max(0, sc.h)); }
         var sz = new Vector2(t.w, t.h);
         int useClip = curClip != null && curClip.tex != 0 ? 1 : 0;
         if (!useGrad)
@@ -235,6 +244,7 @@ void main(){
         fixed (float* p = buf) Rlgl.UpdateVertexBuffer(vbo, p, nv * VF * 4, 0);
         Rlgl.DrawVertexArray(0, nv);
         Rlgl.DisableVertexArray();
+        if (scissor != null) Rlgl.DisableScissorTest();
         Rlgl.DisableShader();
         DrawCalls++; Tris += nv / 3;
         nv = 0;

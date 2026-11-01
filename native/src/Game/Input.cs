@@ -2,7 +2,6 @@ namespace Brickblade;
 
 /* =============================== INPUT (JS 3970–4056) =============================== */
 /* what a browser KeyboardEvent / MouseEvent carried, as the native loop fills it in */
-public sealed class KeyEvt { public string code, key; public bool repeat, shiftKey, ctrlKey, metaKey, prevented; public void preventDefault() => prevented = true; }
 public sealed class MouseEvt { public int button; public double clientX, clientY; public bool onCanvas; }
 public sealed class Mouse { public double x, y; public bool down; public double wx, wy; public bool rdown, lpress, rpress, fresh; }
 
@@ -15,13 +14,20 @@ public static partial class G
     public static void onKeyDown(KeyEvt e)
     {
         /* A TEXT FIELD OWNS ITS KEYS (the UI routes them there first; Esc leaves it) */
-        if (Ui.TextFocused) { Ui.TextKey(e); return; }
+        var tg = Dom.focused != null && Dom.focused.isConnected ? Dom.focused.tagName : null;
+        if (tg == "INPUT" || tg == "TEXTAREA")
+        {
+            if (e.code == "Escape") Dom.focused.blur();
+            return;
+        }
         /* CTRL+F, or /, while the tree is open goes to its search box */
         if (treeOn && ((e.code == "KeyF" && (e.ctrlKey || e.metaKey)) || e.key == "/"))
         {
-            e.preventDefault(); Ui.FocusTreeSearch(); return;
+            var inp = document.getElementById("treeSearch");
+            if (inp != null) { e.preventDefault(); inp.focus(); inp.select(); return; }
         }
         everInput = true;
+        if (e.code is "Space" or "ArrowUp" or "ArrowDown" or "ArrowLeft" or "ArrowRight" or "Tab") e.preventDefault();
         if (e.code == "Tab" && !e.repeat && (state == "play" || state == "pause" || state == "book")) mapToggle();
         keys[e.code] = true;
         if (e.code == "KeyF" && !e.repeat && state == "play" && wave.state == "ready") waveSkip();

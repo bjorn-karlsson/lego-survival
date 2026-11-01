@@ -10,8 +10,16 @@ public sealed class Face
 {
     public string name;
     public byte[] data;
-    public int upm = 1000, asc = 800, desc = -200;
+    public int upm = 1000, asc = 800, desc = -200, gap = 0;
     public HashSet<int> cmap = new();
+    /* each character's glyph and the glyphs' advance widths (font units): exact, as a browser measures */
+    public readonly Dictionary<int, int> gids = new();
+    ushort[] adv = Array.Empty<ushort>();
+    public double Adv(int cp)
+    {
+        if (!gids.TryGetValue(cp, out int g) || adv.Length == 0) return -1;
+        return adv[Math.Min(g, adv.Length - 1)];
+    }
     public readonly Dictionary<int, Atlas> atlases = new();
 
     public Face(string name, byte[] data)
@@ -34,7 +42,13 @@ public sealed class Face
             tables[tag] = (int)U32(d, o + 8);
         }
         if (tables.TryGetValue("head", out int head)) upm = U16(d, head + 18);
-        if (tables.TryGetValue("hhea", out int hhea)) { asc = S16(d, hhea + 4); desc = S16(d, hhea + 6); }
+        int nHM = 0;
+        if (tables.TryGetValue("hhea", out int hhea)) { asc = S16(d, hhea + 4); desc = S16(d, hhea + 6); gap = S16(d, hhea + 8); nHM = U16(d, hhea + 34); }
+        if (nHM > 0 && tables.TryGetValue("hmtx", out int hmtx))
+        {
+            adv = new ushort[nHM];
+            for (int i = 0; i < nHM; i++) adv[i] = (ushort)U16(d, hmtx + i * 4);
+        }
         if (tables.TryGetValue("cmap", out int cmapOff))
         {
             int nsub = U16(d, cmapOff + 2);
@@ -63,7 +77,7 @@ public sealed class Face
                         int gid;
                         if (ro == 0) gid = (c + delta) & 0xFFFF;
                         else { int go = ranges + s * 2 + ro + (c - start) * 2; gid = U16(d, go); if (gid != 0) gid = (gid + delta) & 0xFFFF; }
-                        if (gid != 0) cmap.Add(c);
+                        if (gid != 0) { cmap.Add(c); gids[c] = gid; }
                     }
                 }
             }
@@ -74,7 +88,7 @@ public sealed class Face
                 {
                     int o = best + 16 + (int)g * 12;
                     uint sc = U32(d, o), ec = U32(d, o + 4), sg = U32(d, o + 8);
-                    for (uint c = sc; c <= ec && c - sc < 70000; c++) if (sg + (c - sc) != 0) cmap.Add((int)c);
+                    for (uint c = sc; c <= ec && c - sc < 70000; c++) if (sg + (c - sc) != 0) { cmap.Add((int)c); gids[(int)c] = (int)(sg + (c - sc)); }
                 }
             }
         }
@@ -196,5 +210,30 @@ public sealed class FontSpec
         cache[key] = f;
         return f;
     }
-    public static void ClearCache() => cache.Clear();
+    public static void ClearCache() { cache.Clear(); ofCache.Clear(); }
+    /* a font from computed CSS values (no TEXT_K: the stylesheet scales itself) */
+    static readonly Dictionary<(string, int, double), FontSpec> ofCache = new();
+    public static FontSpec Of(string family, int weight, double px)
+    {
+        var k = (family, weight, px);
+        if (ofCache.TryGetValue(k, out var f)) return f;
+        string fam = family ?? "sans-serif";
+        /* the first family in the list this build carries */
+        Face face = null;
+        foreach (var part in fam.Split(','))
+        {
+            string n = part.Trim().Trim('"', '\'', ' ').ToLowerInvariant();
+            if (n.Contains("titan") || n.Contains("fredoka") || n.Contains("mono") || n == "sans-serif" || n == "cursive" || n == "system-ui" || n == "serif" || n.Contains("dejavu"))
+            { face = Fonts.Pick(n == "cursive" ? "titan" : n, weight); break; }
+        }
+        face ??= Fonts.Pick("sans-serif", weight);
+        f = new FontSpec { face = face, px = px, weight = weight, src = weight + " " + Js.Num(px) + "px " + fam };
+        ofCache[k] = f;
+        return f;
+    }
+    /* line-height: normal, the way a browser takes it from the font's own metrics */
+    /* Chrome rounds the ascent, the descent and the gap to whole pixels before it adds them */
+    public double LineNormal => face == null ? Math.Round(px * 1.2) : Math.Round(px * face.asc / face.upm) + Math.Round(-px * face.desc / face.upm) + Math.Round(px * face.gap / face.upm);
+    public double Ascent => face == null ? Math.Round(px * 0.8) : Math.Round(px * face.asc / face.upm);
+    public double Descent => face == null ? Math.Round(px * 0.2) : Math.Round(-px * face.desc / face.upm);
 }

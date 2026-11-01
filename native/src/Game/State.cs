@@ -244,12 +244,18 @@ public static partial class G
     public const string RUNLINK_PREFIX = "brickblade:run=";
     public static string runLinkURL() => RUNLINK_PREFIX + runLinkEncode(runLinkState());
     /* hand it to the clipboard */
-    public static string runLinkCopy(object btn = null)
+    public static string runLinkCopy(Element btn = null)
     {
         string url = runLinkURL();
-        bool ok = true;
-        try { Raylib_cs.Raylib.SetClipboardText(url); } catch { ok = false; }
-        Ui.Flash(btn, ok ? "LINK COPIED ✓" : "COPY FAILED", 1.6);
+        void done(bool ok)
+        {
+            if (btn == null) return; string was = btn.dataset["label"] ?? btn.textContent;
+            btn.dataset["label"] = was; btn.textContent = ok ? "LINK COPIED \u2713" : "COPY FAILED";
+            setTimeout(() => { btn.textContent = was; }, 1600);
+        }
+        bool okc = true;
+        try { Dom.ClipboardSet(url); } catch { okc = false; }
+        done(okc);
         logEvent("run link copied — wave " + N(Math.Max(1, Js.I32(wave.n))), "#9fd4ff");
         return url;
     }

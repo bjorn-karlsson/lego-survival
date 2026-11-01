@@ -270,7 +270,10 @@ public sealed class Ctx
     /* ================= painting ================= */
     Target Clip => s.clip;
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static Col Pm(Col c, double alpha) { float a = (float)(c.a * alpha); return new Col(c.r / 255f * a, c.g / 255f * a, c.b / 255f * a, a); }
+    static Col Pm(Col c, double alpha) { if (Filter != null) c = Filter(c); float a = (float)(c.a * alpha); return new Col(c.r / 255f * a, c.g / 255f * a, c.b / 255f * a, a); }
+    /* a CSS filter (saturate, grayscale, brightness) on every colour drawn while it is set */
+    public static Func<Col, Col> Filter;
+    public static Col Premul(Col c, double alpha) => Pm(c, alpha);
 
     /* the triangles of a fill, in device space */
     readonly List<Vector2> tri = new();
@@ -607,6 +610,8 @@ public sealed class Ctx
         foreach (var rune in t.EnumerateRunes())
         {
             var face = Fonts.For(f.face, rune.Value);
+            double a = face.Adv(rune.Value);
+            if (a >= 0) { w += a * f.px / face.upm; continue; }
             var at = Fonts.Get(face, REF);
             if (!at.idx.TryGetValue(rune.Value, out int gi)) { if (!at.idx.TryGetValue('?', out gi)) continue; }
             unsafe
@@ -677,6 +682,8 @@ public sealed class Ctx
                     Gpu.V(p0.X, p0.Y, u0, v0, pm.r, pm.g, pm.b, pm.a); Gpu.V(p2.X, p2.Y, u1, v1, pm.r, pm.g, pm.b, pm.a); Gpu.V(p3.X, p3.Y, u0, v1, pm.r, pm.g, pm.b, pm.a);
                 }
                 /* advance at the reference size so measureText and drawing agree */
+                double ua = face.Adv(rune.Value);
+                if (ua >= 0) { pen += ua * f.px / face.upm; continue; }
                 var atR = Fonts.Get(face, 64);
                 if (atR.idx.TryGetValue(rune.Value, out int gr)) { var g2 = atR.font.Glyphs[gr]; pen += (g2.AdvanceX != 0 ? g2.AdvanceX : atR.font.Recs[gr].Width) * f.px / 64; }
                 else pen += adv / sc;
