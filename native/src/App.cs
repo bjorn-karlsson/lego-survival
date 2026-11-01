@@ -28,6 +28,7 @@ public static class App
     static OffCanvas world;               /* the field, when it is drawn below the screen's density */
     static Ctx screen;                    /* the window itself, for the page and the scaled field */
     static bool quit, showFps;
+    public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris;
     static string pendingShot;
     static double fpsShown, fpsAcc; static int fpsN;
 
@@ -168,7 +169,9 @@ public static class App
                 Gpu.ClearScreen(new Col(16, 21, 26, 1));
                 G.RunFrameCallbacks();
                 MutationObserver.Flush();
+                long p0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 Present(now);
+                PageMs += ((System.Diagnostics.Stopwatch.GetTimestamp() - p0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency - PageMs) * 0.05;
             }
             Gpu.EndFrame(); MaskPool.EndFrame();
             OffCanvas.SweepOwned();
@@ -176,11 +179,14 @@ public static class App
             if (frameNo == shotAt) { Shot.Save(shotOut); quit = Program.Has("--quit-after-shot") || quit; }
             if (pendingShot != null) { Shot.Save(pendingShot); pendingShot = null; }
             Raylib.EndDrawing();
-            Gpu.DrawCalls = 0; Gpu.Tris = 0;
+            LastCalls = Gpu.DrawCalls; LastTris = Gpu.Tris;
+            GlMs += (Gpu.GlTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency - GlMs) * 0.05;
+            Gpu.DrawCalls = 0; Gpu.Tris = 0; Gpu.GlTicks = 0;
             if (minimised) Raylib.WaitTime(0.05);
 
             /* ---- FPS, and AUTO's step down ---- */
             fpsAcc += frameDt; fpsN++;
+            FrameMs += (frameDt * 1000 - FrameMs) * 0.05;
             if (fpsAcc >= 0.5) { fpsShown = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
             if ((Program.Opt("--render-scale") ?? G.OPT.renderScale) == "auto" && autoScale > 0.5 && G.state == "play" && Focused && !minimised)
             {
@@ -234,7 +240,8 @@ public static class App
             double k = Dom.Scale;
             screen.setTransform(k, 0, 0, k, 0, 0);
             screen.font = "600 13px Fredoka";
-            string t = Math.Round(fpsShown) + " FPS · field " + Math.Round(RenderScaleK() * 100) + "% (" + Math.Round(G.cw * G.dpr) + "×" + Math.Round(G.ch * G.dpr) + ")";
+            string t = Math.Round(fpsShown) + " FPS · field " + Math.Round(RenderScaleK() * 100) + "% (" + Math.Round(G.cw * G.dpr) + "×" + Math.Round(G.ch * G.dpr) + ")" +
+                " · game " + G.updMs.ToString("0.0") + " ms, draw " + G.renMs.ToString("0.0") + " ms, page " + PageMs.ToString("0.0") + " ms · " + G.enemies.Count + " monsters";
             screen.fillStyle = "rgba(0,0,0,0.6)"; screen.fillRect(6, 6, screen.measureText(t).width + 14, 22);
             screen.fillStyle = "#ffcf00"; screen.textAlign = "left"; screen.textBaseline = "middle"; screen.fillText(t, 13, 17);
         }

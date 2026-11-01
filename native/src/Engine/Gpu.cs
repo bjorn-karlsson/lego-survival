@@ -12,6 +12,7 @@ public sealed class Target
     public int w, h;
     public bool screen;
     public RenderTexture2D rt;
+    public int filter = -1;      /* the sampling it was last set to (-1: never) */
 }
 
 /* The one place that talks to OpenGL. Every shape the canvas shim makes becomes
@@ -42,6 +43,18 @@ public static unsafe class Gpu
     public static Target Screen;
     /* an axis-aligned clip in device pixels (the UI's overflow clipping); null is none */
     static (int x, int y, int w, int h)? scissor;
+    /* drawing FROM a canvas: what is still pending INTO it has to land first */
+    public static void ReadingFrom(Target t) { if (nv > 0 && curTarget == t) Flush(); }
+    /* a canvas's sampling (smooth or nearest): a change waits for what already uses it */
+    public static void Filter(Target t, bool smooth)
+    {
+        int f = smooth ? 0x2601 : 0x2600;
+        if (t.filter == f) return;
+        if (nv > 0 && curTex == t.tex) Flush();
+        Rlgl.TextureParameters(t.tex, 0x2800, f);
+        Rlgl.TextureParameters(t.tex, 0x2801, f);
+        t.filter = f;
+    }
     public static void Scissor((int x, int y, int w, int h)? r)
     {
         if (r == scissor) return;
@@ -114,7 +127,7 @@ void main(){
         var rt = Raylib.LoadRenderTexture(w, h);
         Raylib.SetTextureFilter(rt.Texture, TextureFilter.Bilinear);
         Raylib.SetTextureWrap(rt.Texture, TextureWrap.Clamp);
-        var t = new Target { rt = rt, fbo = rt.Id, tex = rt.Texture.Id, w = w, h = h };
+        var t = new Target { rt = rt, fbo = rt.Id, tex = rt.Texture.Id, w = w, h = h, filter = 0x2601 };
         Clear(t);
         return t;
     }
@@ -192,9 +205,11 @@ void main(){
         Rlgl.SetBlendMode(BlendMode.CustomSeparate);
     }
 
+    public static long GlTicks;          /* time spent handing batches to the driver this frame */
     public static void Flush()
     {
         if (nv == 0) return;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var t = curTarget ?? Screen;
         Bind(t);
         ApplyBlend(curBlend);
@@ -248,6 +263,7 @@ void main(){
         Rlgl.DisableShader();
         DrawCalls++; Tris += nv / 3;
         nv = 0;
+        GlTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
     }
 
     /* one vertex: device position, texcoord (or user-space position for a

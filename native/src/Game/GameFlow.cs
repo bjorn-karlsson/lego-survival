@@ -685,7 +685,9 @@ public static partial class G
         }
         double dt = raw * tScale;
         tScale += (1 - tScale) * Math.min(1, raw * 3);
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try { update(dt, raw); } catch (Exception err) { Console.Error.WriteLine("update: " + err); }
+        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (!Js.IsFinite(cam.x) || !Js.IsFinite(cam.y) || cam.x < -120 || cam.x > W.w + 120 || cam.y < -120 || cam.y > W.h + 120)
         {
             cam.x = player != null ? player.x : W.w / 2;
@@ -694,7 +696,12 @@ public static partial class G
         }
         try { render(); } catch (Exception err) { Console.Error.WriteLine("render: " + err); }
         if (state == "title") { try { renderTitle(); } catch (Exception err) { Console.Error.WriteLine("title: " + err); } }
+        long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+        /* NATIVE: what the frame cost, for the F3 readout (smoothed) */
+        double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        updMs += ((t1 - t0) * f - updMs) * 0.05; renMs += ((t2 - t1) * f - renMs) * 0.05;
     }
+    public static double updMs, renMs;
     /* JS 32431–32443: the script's last statements */
     public static void GameBoot()
     {

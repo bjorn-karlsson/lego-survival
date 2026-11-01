@@ -62,9 +62,13 @@ public static class AutoTest
                     {
                         /* with:NAME=ARG -- G.NAME("ARG"), e.g. with:setWeapon=axe */
                         var kv = arg.Split('=', 2);
-                        var m = typeof(G).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == kv[0] && x.GetParameters().Length >= 1 && x.GetParameters()[0].ParameterType == typeof(string) && x.GetParameters().Skip(1).All(q => q.IsOptional));
-                        if (m == null) Console.WriteLine("[script] no G." + kv[0] + "(string)");
-                        else m.Invoke(null, new object[] { kv[1] }.Concat(m.GetParameters().Skip(1).Select(q => q.DefaultValue)).ToArray());
+                        var m = typeof(G).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == kv[0] && x.GetParameters().Length >= 1
+                            && (x.GetParameters()[0].ParameterType == typeof(string) || x.GetParameters()[0].ParameterType == typeof(double) || x.GetParameters()[0].ParameterType == typeof(int) || x.GetParameters()[0].ParameterType == typeof(bool))
+                            && x.GetParameters().Skip(1).All(q => q.IsOptional));
+                        if (m == null) { Console.WriteLine("[script] no G." + kv[0] + "(x)"); break; }
+                        var t0 = m.GetParameters()[0].ParameterType;
+                        object a0 = t0 == typeof(string) ? kv[1] : t0 == typeof(double) ? double.Parse(kv[1]) : t0 == typeof(int) ? int.Parse(kv[1]) : (object)(kv[1] == "true");
+                        m.Invoke(null, new object[] { a0 }.Concat(m.GetParameters().Skip(1).Select(q => q.DefaultValue)).ToArray());
                         break;
                     }
                     case "set":
@@ -73,12 +77,26 @@ public static class AutoTest
                         if (fi != null && G.player != null) fi.SetValue(G.player, double.Parse(kv[1]));
                         break;
                     }
+                    case "spawn":
+                    {
+                        /* spawn:TYPE,DX,DY -- a monster beside the hero */
+                        var p = arg.Split(',');
+                        G.spawnEnemy(p[0], G.player.x + double.Parse(p[1]), G.player.y + double.Parse(p[2]));
+                        break;
+                    }
+                    case "probe":
+                    {
+                        var near = G.enemies.OrderBy(e => G.dist(e, G.player)).Take(3).Select(e => $"{e.type}@{G.dist(e, G.player):0} hp={e.hp:0.#}/{e.maxHp:0.#} st={e.state}");
+                        Console.WriteLine($"[probe] frame {frame} hero=({G.player.x:0},{G.player.y:0}) mouse=({G.mouse.wx:0},{G.mouse.wy:0}) down={G.mouse.down} proj={G.projectiles.Count}:{string.Join(",", G.projectiles.Take(4).Select(q => q.kind))} near: {string.Join(" | ", near)}");
+                        break;
+                    }
                     case "shot": shot(arg); break;
                     case "status":
                         Console.WriteLine($"[status] frame {frame} state={G.state} wave={G.wave?.n}/{G.wave?.state} enemies={G.enemies?.Count} " +
                             $"hp={G.player?.hp:0.#}/{G.player?.maxHp:0.#} lvl={G.player?.level} kills={G.player?.kills} studs={G.player?.studs} " +
-                            $"picks={G.pendingPicks?.Count} fps={fps:0} errors={Dom.errors.Count}");
+                            $"picks={G.pendingPicks?.Count} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}");
                         break;
+
                     case "quit": return false;
                 }
             }

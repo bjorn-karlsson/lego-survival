@@ -715,19 +715,17 @@ public sealed class Ctx
         if (img == null) return;
         var T = img.T;
         if (T == Tgt) return;
-        Gpu.Flush();
+        Gpu.ReadingFrom(T);
         var p0 = X(dx, dy); var p1 = X(dx + dw, dy); var p2 = X(dx + dw, dy + dh); var p3 = X(dx, dy + dh);
         /* a canvas's texture is stored bottom row first */
         float u0 = (float)(sx / T.w), u1 = (float)((sx + sw) / T.w);
         float v0 = 1 - (float)(sy / T.h), v1 = 1 - (float)((sy + sh) / T.h);
         float a = (float)s.alpha;
         Gpu.Use(Tgt, s.op, Clip, T.tex);
-        Raylib_cs.Rlgl.TextureParameters(T.tex, 0x2800, s.smooth ? 0x2601 : 0x2600);
-        Raylib_cs.Rlgl.TextureParameters(T.tex, 0x2801, s.smooth ? 0x2601 : 0x2600);
+        Gpu.Filter(T, s.smooth);
         Gpu.Need(6);
         Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p1.X, p1.Y, u1, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a);
         Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a); Gpu.V(p3.X, p3.Y, u0, v1, a, a, a, a);
-        Gpu.Flush();
     }
 
     /* ================= gradients ================= */
