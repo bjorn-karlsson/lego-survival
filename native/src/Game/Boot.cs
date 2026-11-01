@@ -15,7 +15,7 @@ public static partial class G
         /* JS 13958: (function buildTree(){ ... })() */ buildTree();
         /* JS 15718: TREE_VIEW, from the built map; 15733: the country washes remembered */ TreeViewInit(); TreeSectorsLoad();
         /* JS 16965: the title's long stat list remembered */ MenuStatsLoad();
-        /* JS 18980: every stat a brick can move */ StatProbesInit();
+        /* JS 18980: every stat a brick can move */ StatProbesInit(); SheetNerdLoad();
         /* the rest are added as the sections that hold them are ported (GAME FLOW, MAIN LOOP) */
     }
 }
