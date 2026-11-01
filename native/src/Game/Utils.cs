@@ -92,6 +92,16 @@ public static partial class G
     /* `rgba(${r},${g},${b},${a})` without the string */
     public static Col rgba(double r, double g, double b, double a) => new Col(r, g, b, a);
     public static Col rgb(double r, double g, double b) => new Col(r, g, b, 1);
+    /* `rgba(${rgb},${a})` where rgb is an "r,g,b" string (or prs() of a colour) */
+    static readonly Dictionary<string, double[]> rgbTriples = new();
+    public static Col rgbaS(string rgb, double a)
+    {
+        if (rgb == null) return rgba(0, 0, 0, a);
+        if (!rgbTriples.TryGetValue(rgb, out var c))
+            rgbTriples[rgb] = c = rgb.Split(',').Select(v => Js.ParseFloat(v)).Concat(new double[] { 0, 0, 0 }).Take(3).ToArray();
+        return rgba(c[0], c[1], c[2], a);
+    }
+    public static Col rgbaS(double[] c, double a) => rgba(c[0], c[1], c[2], a);
     /* Math.hypot, the two-argument case the game uses */
     public static double hypot(double x, double y) => Math.Sqrt(x * x + y * y);
     public static double hypot(double x, double y, double z) => Math.Sqrt(x * x + y * y + z * z);

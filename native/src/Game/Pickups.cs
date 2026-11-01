@@ -7,7 +7,7 @@ public sealed partial class Pickup : Obj
     public string kind; public double z, vx, vy, vz, spin, t, val, xp;
     public bool seeking; public double seekX, seekY;
 }
-public sealed class Debris { public double x, y, z, vx, vy, vz, rot, vr, w, h, life, max; public Col color; }
+public sealed class Debris : Obj { public double z, vx, vy, vz, rot, vr, w, h, life, max; public Col color; }
 public sealed partial class Particle : Obj
 {
     public string kind; public double vx, vy, life, max, v, lw, maxLife, a;

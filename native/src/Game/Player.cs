@@ -90,6 +90,6 @@ public static partial class G
             dead = false, deadT = 0, stepT = 0, streak = 0, streakT = 0
         };
     }
-    public static readonly (string head, string torso, string legs, string hands, string hair) HERO_COLORS =
-        (PAL.hyellow, PAL.red, "#1a4f8a", PAL.hyellow, PAL.brown);
+    public static readonly FigCols HERO_COLORS =
+        new FigCols { head = PAL.hyellow, torso = PAL.red, legs = "#1a4f8a", hands = PAL.hyellow, hair = PAL.brown };
 }
