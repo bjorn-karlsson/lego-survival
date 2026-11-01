@@ -10,7 +10,7 @@ public sealed partial class Pickup : Obj
 public sealed class Debris { public double x, y, z, vx, vy, vz, rot, vr, w, h, life, max; public Col color; }
 public sealed partial class Particle : Obj
 {
-    public string kind; public double vx, vy, life, max, v, lw, maxLife;
+    public string kind; public double vx, vy, life, max, v, lw, maxLife, a;
     public Col color, col;
     public double x1, y1, x2, y2, seed, link; public bool hostile;
 }

@@ -83,7 +83,7 @@ public static partial class G
     {
         var d = Math.hypot(tx - p.x, ty - p.y);
         if (d < 1) return null;
-        if (!NAV.blocked || (navLineOpen(p.x, p.y, tx, ty) && !segHitsWater(p.x, p.y, tx, ty, Js.Or(p.r, 12) * 0.8)))
+        if (NAV.blocked == null || (navLineOpen(p.x, p.y, tx, ty) && !segHitsWater(p.x, p.y, tx, ty, Js.Or(p.r, 12) * 0.8)))
         {
             CTL.path = null; return new Pt((tx - p.x) / d, (ty - p.y) / d);
         }

@@ -10,6 +10,7 @@ namespace Brickblade;
 public static class JsMath
 {
     public const double PI = System.Math.PI, E = System.Math.E;
+    public const double SQRT2 = 1.4142135623730951, SQRT1_2 = 0.7071067811865476, LN2 = 0.6931471805599453, LN10 = 2.302585092994046;
     /* Math.round: the nearest integer, halves toward +infinity */
     public static double Round(double x)
     {

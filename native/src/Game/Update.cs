@@ -706,7 +706,7 @@ public static void castBolt(double aim){
 }
 
 /* fields only updatePlayer reads and writes */
-public sealed partial class Ent { public double orbCd2, whirlRageCd, whirlPropCd, raiseCd, convoCd, zombieCd, castT; }
+public sealed partial class Ent { public double orbCd2, whirlCd, whirlRageCd, whirlPropCd, raiseCd, convoCd, zombieCd, castT; }
 public sealed partial class Proj { public bool whirlRolled, deflected; }
 public sealed partial class Pickup { public bool landed; }
 /* one leap of a storm brick's bolt: who, how deep, and where the arc comes from */
