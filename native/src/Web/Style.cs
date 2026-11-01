@@ -535,7 +535,9 @@ svg *{display:inline}
     static SvgPaint SvgPaintOf(string v, Col cur)
     {
         v = v.Trim();
-        if (v == "none" || v == "transparent") return new SvgPaint { kind = 0 };
+        if (v == "none") return new SvgPaint { kind = 0 };
+        /* transparent paints nothing, but it is painted: it still takes the pointer */
+        if (v == "transparent") return new SvgPaint { kind = 1, col = new Col(0, 0, 0, 0) };
         if (v.Equals("currentColor", StringComparison.OrdinalIgnoreCase)) return new SvgPaint { kind = 1, col = cur };
         if (v.StartsWith("url(")) return new SvgPaint { kind = 3, url = v.Substring(4).TrimEnd(')').Trim('"', '\'', '#', ' ') };
         return new SvgPaint { kind = 1, col = ColorOf(v, cur) };

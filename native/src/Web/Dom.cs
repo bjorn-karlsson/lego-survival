@@ -159,6 +159,23 @@ public sealed class StyleDecl
     public string zIndex { get => getPropertyValue("z-index"); set => setProperty("z-index", value); }
 }
 
+/* createSVGPoint / getScreenCTM: a point and a 2D matrix */
+public sealed class DOMPoint
+{
+    public double x, y;
+    public DOMPoint matrixTransform(DOMMatrix m) => new DOMPoint { x = m.a * x + m.c * y + m.e, y = m.b * x + m.d * y + m.f };
+}
+public sealed class DOMMatrix
+{
+    public double a = 1, b, c, d = 1, e, f;
+    public DOMMatrix inverse()
+    {
+        double det = a * d - b * c;
+        if (Math.Abs(det) < 1e-12) return new DOMMatrix { a = double.NaN, d = double.NaN };
+        return new DOMMatrix { a = d / det, b = -b / det, c = -c / det, d = a / det, e = (c * f - d * e) / det, f = (b * e - a * f) / det };
+    }
+}
+
 public sealed class DOMRect
 {
     public double x, y, width, height;
@@ -483,6 +500,19 @@ public class Element : Node
         set { Dom.EnsureLayout(); double mx = box != null ? Math.Max(0, box.contentW - box.PadW) : 0; double v = Math.Max(0, Math.Min(mx, double.IsNaN(value) ? 0 : value)); if (v != scrollX) { scrollX = v; Dom.Scrolled(); } }
     }
     public void scrollTo(double x, double y) { scrollLeft = x; scrollTop = y; }
+    public DOMPoint createSVGPoint() => new DOMPoint();
+    /* user space -> client px for an <svg> (its viewBox, letterboxed into its content box) */
+    public DOMMatrix getScreenCTM()
+    {
+        Dom.EnsureLayout();
+        if (box == null) return null;
+        var r = box.ClientRect();
+        double k = box.w > 0 ? r.width / box.w : 1;
+        double cx = r.x + (box.bl + box.pl) * k, cy = r.y + (box.bt + box.pt) * k;
+        double cw = (box.w - box.bl - box.br - box.pl - box.pr) * k, ch = (box.h - box.bt - box.bb - box.pt - box.pb) * k;
+        var m = Mat.T(cx, cy).Mul(Svg.ViewMat(this, cw, ch));
+        return new DOMMatrix { a = m.a, b = m.b, c = m.c, d = m.d, e = m.e, f = m.f };
+    }
     public void scrollIntoView(object opts = null) => Dom.ScrollIntoView(this);
     public override string ToString() => "<" + localName + (id.Length > 0 ? "#" + id : "") + (className.Length > 0 ? "." + className.Replace(' ', '.') : "") + ">";
 }

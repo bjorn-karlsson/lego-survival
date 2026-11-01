@@ -18,7 +18,7 @@ internal static class Svg
         return p;
     }
     /* the user-space -> viewport transform for an <svg> of size w x h */
-    static Mat ViewMat(Element svg, double w, double h)
+    internal static Mat ViewMat(Element svg, double w, double h)
     {
         var vb = ViewBox(svg);
         if (vb == null) return Mat.I;
