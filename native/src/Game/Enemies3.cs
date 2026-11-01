@@ -15,7 +15,7 @@ public static partial class G
         if (rpgOn()) rpgOnKill(e);
         /* a death INSIDE an open breach feeds its clock; a breach body pays its lord's splinters */
         if (e.breach != null) breachOnKill(e);
-        if (e.abyss != null) abyssOnKill(e);
+        if (e.abyss) abyssOnKill(e);
         if (e.sbox != null) sboxOnKill(e);
         if (e.ritual != null || e.ritualGuard != null) ritualOnKill(e);
         rareModOnKill(e);

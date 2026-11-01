@@ -18,11 +18,14 @@ public sealed class BossRing { public double r, max, speed, dmg = double.NaN; pu
    one class with every field any of them carries */
 public sealed partial class Proj : Obj
 {
+    /* a lobbed thing is made with sx/sy and no x/y; the JS reads its x as undefined
+       until the first frame puts it at sx (updateProjectiles) */
+    public Proj() { x = double.NaN; y = double.NaN; }
     public string kind, owner; public double vx, vy, life, max, t, seed;
     public double px = double.NaN, py = double.NaN, hitR = double.NaN;
     public Ent tgt, src; public bool loop; public double depth, @out;
     public double a0, ang, arc, delay, dot, dotT, dur, flap, fr, fuse, gen, olife, pfall, rMax, rico, size, spin, stacks;
-    public double sx, sy, tx, ty, tr, trailD, trailLife, turn, zapCd, cluster, legs;
+    public double sx = double.NaN, sy = double.NaN, tx, ty, tr, trailD, trailLife, turn, zapCd, cluster, legs;
     public bool arrow, big, gib, homing, missile, small;
     public string art, curse, el, phase;
     public HashSet<object> hit;

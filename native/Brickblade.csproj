@@ -5,6 +5,9 @@
     <AssemblyName>Brickblade</AssemblyName>
     <RootNamespace>Brickblade</RootNamespace>
     <Nullable>disable</Nullable>
+    <!-- a double or bool compared with null is always false (or true): the JS's
+         undefined is NaN or a default here, never null -->
+    <WarningsAsErrors>CS0472;CS0464</WarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
