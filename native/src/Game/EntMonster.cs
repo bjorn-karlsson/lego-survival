@@ -26,7 +26,7 @@ public sealed partial class Ent
     /* where it belongs: a breach (its lord's key), an abyss, a strongbox, a ritual, a legion, an RPG pack */
     public string breach; public Breach breachB;
     public bool abyss; public Abyss abyssA;
-    public Strongbox sbox;
+    public Prop sbox;          /* the strongbox it guards */
     public Ritual ritual, ritualGuard;
     public Legion legion;
     public double rpgPack;

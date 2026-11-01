@@ -12,8 +12,7 @@ public sealed partial class Hazard : Obj { }
 public sealed partial class Spike : Obj { }
 public sealed partial class SlamAct { }
 public sealed partial class Swing { }
-public sealed partial class Abyss : Obj { }
-public sealed partial class Strongbox : Obj { }
+public sealed partial class Abyss : Crack { }
 public sealed partial class Ritual : Obj { }
 public sealed partial class Legion : Obj { }
 public sealed partial class Wave { public double n; public bool hold; public string state; }

@@ -91,7 +91,7 @@ def cs_names():
                     n = re.match(r'\s*([A-Za-z_]\w*)', part)
                     if n: names.add(n.group(1))
             # a tuple-typed field: static readonly (string a, string b) NAME = ...
-            for m in re.finditer(r'\bstatic\s+(?:readonly\s+)?\([^;={}]*?\)\s+([A-Za-z_]\w*)\s*=', src):
+            for m in re.finditer(r'\bstatic\s+(?:readonly\s+)?\([^;={}]*?\)(?:\[\])?\s+([A-Za-z_]\w*)\s*=', src):
                 names.add(m.group(1))
             # a generic method: static T name<T>(...)
             for m in re.finditer(r'\bstatic\s+[\w<>\[\],?]+\s+([A-Za-z_]\w*)<\w+(?:\s*,\s*\w+)*>\s*\(', src):
