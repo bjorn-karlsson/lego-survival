@@ -33,7 +33,7 @@ public static partial class G
        source that has gone quiet ages out of its own accord rather than sitting at
        its old number for ever. */
     public const int CLOG_DPS_WIN = 60;
-    public static Dictionary<string, DpsBuckets> clogDps = new();   /* source -> { b:[60], sec } (insertion order kept) */
+    public static JsMap<string, DpsBuckets> clogDps = new();   /* source -> { b:[60], sec } (insertion order kept) */
     static readonly List<string> clogDpsOrder = new();
     public static DpsBuckets dpsSlot(string source)
     {
@@ -266,7 +266,7 @@ public static partial class G
        FIRE row drawn red reads as two different things. Everything that has an
        obvious type takes it from the one palette; the rest keep a colour of their
        own, because a spell is not a damage type. */
-    public static readonly Dictionary<string, string> DPS_COLS = new()
+    public static readonly JsMap<string, string> DPS_COLS = new()
     {
         ["sword"] = CONV_COL["phys"], ["slam"] = CONV_COL["phys"], ["storm"] = "#9fe8ff", ["vortex"] = "#b98cff",
         ["orbit"] = "#ffd166", ["arrow"] = "#e8f0c8", ["minion"] = "#c9b8ff", ["mfire"] = "#ff9a5a", ["mfrost"] = "#9fdcff", ["mshock"] = "#fff07a", ["mburst"] = "#ffb070", ["mchaos"] = "#c98bff", ["bomb"] = "#ffb04a", ["whirl"] = "#e6e6e6",

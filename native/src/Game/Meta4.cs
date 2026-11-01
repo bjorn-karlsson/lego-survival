@@ -16,8 +16,8 @@ public sealed class MetaRec
 public sealed class MetaSave
 {
     public double v; public bool on;
-    public readonly Dictionary<string, Dictionary<string, MetaRec>> d = new();
-    public Dictionary<string, MetaRec> this[string k] => d.GetValueOrDefault(k);
+    public readonly JsMap<string, JsMap<string, MetaRec>> d = new();
+    public JsMap<string, MetaRec> this[string k] => d.GetValueOrDefault(k);
 }
 public sealed class MetaRunSnap { public double wave, level, earned; }
 public sealed class MetaStatLine { public string key, text, col; public bool good; }
@@ -161,7 +161,7 @@ public static partial class G
         var @out = new MetaSave { v = META_VER, on = !(onN is JsonValue ov && ov.GetValueKind() == System.Text.Json.JsonValueKind.False) };
         foreach (var d in DIFFS.Keys)
         {
-            @out.d[d] = new Dictionary<string, MetaRec>();
+            @out.d[d] = new JsMap<string, MetaRec>();
             var drN = JGet(o, d);
             var dr = JIsObj(drN) ? drN : null;
             var legacy = (dr != null && !WEAPON_KEYS.Any(w => JTruthy(JGet(dr, w)))
@@ -470,7 +470,7 @@ public static partial class G
         m ??= metaCur();
         string wk = metaWeapon();
         /* insertion-ordered totals: a number, a switch (no value) or a word */
-        var keys = new List<string>(); var tot = new Dictionary<string, Mod>();
+        var keys = new List<string>(); var tot = new JsMap<string, Mod>();
         void put(string k, Mod v) { if (!tot.ContainsKey(k)) keys.Add(k); tot[k] = v; }
         foreach (var id in m.nodes)
         {

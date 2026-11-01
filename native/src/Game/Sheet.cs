@@ -65,7 +65,7 @@ public static partial class G
        heading, a stat this hero does not have is left out rather than dashed */
     public static string simpleStatBlocks()
     {
-        var by = new Dictionary<string, List<string>>();
+        var by = new JsMap<string, List<string>>();
         foreach (var sp in STAT_PROBES)
         {
             if (!Js.T(sp.basic)) continue;
@@ -559,7 +559,7 @@ public static partial class G
   })) : "<div class=\"nospell\">No spells yet — spell bricks come from wave, level and boss rewards.</div>";
 
   /* --- every upgrade taken, grouped by class --- */
-  var byCls = new Dictionary<string, List<string>>();
+  var byCls = new JsMap<string, List<string>>();
   foreach (var id in taken.Keys){
     var u = UPGRADES.Find(x=>x.id==id);
     if(u == null) continue;

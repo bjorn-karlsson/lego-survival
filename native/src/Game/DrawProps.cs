@@ -223,7 +223,7 @@ public static void drawProp(Ctx c, Prop p){
    size as a stud and got lost in the litter of a cleared wave. Each now stands
    in a BEACON: a pulsing ring painted on the floor, a soft column of its own
    colour, and a chevron bobbing overhead. You can see them across the room. */
-public static readonly Dictionary<string, Beacon> BEACONS = new() {
+public static readonly JsMap<string, Beacon> BEACONS = new() {
   ["heart"] = new Beacon { col = "#ff5a4a", r = 26 },
   ["gheart"] = new Beacon { col = "#ffd166", r = 30 },
   ["magnet"] = new Beacon { col = "#9b45d6", r = 28 },

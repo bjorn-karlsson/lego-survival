@@ -25,7 +25,7 @@ public sealed class FigCols { public string head, torso, legs, hands, hair, hat,
 
 public static partial class G
 {
-    public static readonly Dictionary<string, StudTier> STUD_TIERS = new()
+    public static readonly JsMap<string, StudTier> STUD_TIERS = new()
     {
         ["stud1"] = new StudTier { val = 1, xp = 1, r = 5.6, col = PAL.gold, next = "stud5" },
         ["stud5"] = new StudTier { val = 5, xp = 3, r = 7, col = PAL.blue, next = "stud20" },
@@ -182,8 +182,8 @@ public static partial class G
             return;
         }
         if (pickups.Count < 12) return;
-        var NEED = new Dictionary<string, int> { ["stud1"] = 10, ["stud5"] = 8, ["stud20"] = 5, ["stud50"] = 4, ["stud100"] = 5 };
-        var OUT = new Dictionary<string, int> { ["stud1"] = 2, ["stud5"] = 2, ["stud20"] = 2, ["stud50"] = 2, ["stud100"] = 2 };
+        var NEED = new JsMap<string, int> { ["stud1"] = 10, ["stud5"] = 8, ["stud20"] = 5, ["stud50"] = 4, ["stud100"] = 5 };
+        var OUT = new JsMap<string, int> { ["stud1"] = 2, ["stud5"] = 2, ["stud20"] = 2, ["stud50"] = 2, ["stud100"] = 2 };
         var MERGEABLE = new[] { "stud1", "stud5", "stud20", "stud50", "stud100" };
         var used = new HashSet<Pickup>();
         int merged = 0;
@@ -355,7 +355,7 @@ public static partial class G
         }
     }
     /* =============================== THE DEAD THAT WALK =============================== */
-    public static readonly Dictionary<string, string> ZOMBIE_CRAWL = new() { ["zombie"] = "crawler", ["zrunner"] = "crawler", ["zhulk"] = "bigcrawler" };
+    public static readonly JsMap<string, string> ZOMBIE_CRAWL = new() { ["zombie"] = "crawler", ["zrunner"] = "crawler", ["zhulk"] = "bigcrawler" };
     public const double ZOMBIE_CRAWL_CHANCE = 0.4;
     public const double BLOAT_WIND = 0.55, BLOAT_BREATH = 1.1, BLOAT_TICK = 0.25, BLOAT_RANGE = 150, BLOAT_CONE = 0.55;
     public const double BLOAT_PSN = 0.35, BLOAT_CD = 4.5;

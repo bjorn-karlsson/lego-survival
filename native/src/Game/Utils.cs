@@ -93,7 +93,7 @@ public static partial class G
     public static Col rgba(double r, double g, double b, double a) => new Col(r, g, b, a);
     public static Col rgb(double r, double g, double b) => new Col(r, g, b, 1);
     /* `rgba(${rgb},${a})` where rgb is an "r,g,b" string (or prs() of a colour) */
-    static readonly Dictionary<string, double[]> rgbTriples = new();
+    static readonly JsMap<string, double[]> rgbTriples = new();
     public static Col rgbaS(string rgb, double a)
     {
         if (rgb == null) return rgba(0, 0, 0, a);

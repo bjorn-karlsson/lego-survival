@@ -21,7 +21,7 @@ public sealed class Band { public double from, every; }
 /* a hero's conversion table: conv[from][to] and gain[from][to] */
 public sealed class Conv
 {
-    public Dictionary<string, NumMap> conv = new(), gain = new();
+    public JsMap<string, NumMap> conv = new(), gain = new();
     public bool on;
 }
 
@@ -58,7 +58,7 @@ public static partial class G
         return true;
     }
     /* THE ELEMENTAL LORDS WARD THEIR OWN */
-    public static readonly Dictionary<string, string> LORD_WARD = new() { ["pyrolord"] = "fire", ["frostlord"] = "frost", ["stormlord"] = "shock" };
+    public static readonly JsMap<string, string> LORD_WARD = new() { ["pyrolord"] = "fire", ["frostlord"] = "frost", ["stormlord"] = "shock" };
     public const double LORD_WARD_R = 320, LORD_WARD_STEP = 0.25;
     public const int LORD_WARD_MAX = 3;
     public static void lordWardTick(Ent e, double dt)
@@ -83,8 +83,8 @@ public static partial class G
     }
     public const int AIL_BREAK = 5;
     public const double BRAND_STEP = 0.11, BRAND_T = 22, RES_FLOOR = -1.0, IFRAME_T = 0.1;
-    public static readonly Dictionary<string, string> BRAND_NAME = new() { ["fire"] = "BURNT", ["frost"] = "FROSTBITTEN", ["shock"] = "CONDUCTIVE" };
-    public static readonly Dictionary<string, string> BRAND_COL = new() { ["fire"] = "#ff6a2a", ["frost"] = "#7fb9e0", ["shock"] = "#e0a81a" };
+    public static readonly JsMap<string, string> BRAND_NAME = new() { ["fire"] = "BURNT", ["frost"] = "FROSTBITTEN", ["shock"] = "CONDUCTIVE" };
+    public static readonly JsMap<string, string> BRAND_COL = new() { ["fire"] = "#ff6a2a", ["frost"] = "#7fb9e0", ["shock"] = "#e0a81a" };
     public const double STUN_T = 3, BURN_DUR = 12;
     public static List<Dot> burnList() => player.burn?.list ?? new List<Dot>();
     public static int burnStacks() => burnList().Count;
@@ -147,12 +147,12 @@ public static partial class G
     public const double SLAM_ELEM_SHARE = 0.5;
     public static readonly string[] SLAM_ELEMS = { "fire", "shock", "frost" };
     public const int SLAM_ELEM_MAX = 2;
-    public static readonly Dictionary<string, string> SLAM_COL = new() { ["fire"] = "#ff9a3c", ["shock"] = "#ffe95a", ["frost"] = "#bfe3ff" };
+    public static readonly JsMap<string, string> SLAM_COL = new() { ["fire"] = "#ff9a3c", ["shock"] = "#ffe95a", ["frost"] = "#bfe3ff" };
     public const double SLAM_SPIKE_A = 0.52;
-    public static readonly Dictionary<string, string> SLAM_AIL = new() { ["fire"] = "BURN", ["shock"] = "SHOCK", ["frost"] = "CHILL" };
+    public static readonly JsMap<string, string> SLAM_AIL = new() { ["fire"] = "BURN", ["shock"] = "SHOCK", ["frost"] = "CHILL" };
     public const double LEECH_MAX = 0.25, LEECH_CHANCE_MAX = 0.60, LEECH_HIT_CAP = 0.03;
     /* Difficulty scales the monsters and the loot, not the rules */
-    public static readonly Dictionary<string, Diff> DIFFS = new()
+    public static readonly JsMap<string, Diff> DIFFS = new()
     {
         ["easy"] = new Diff { id = "easy", name = "EASY", col = "#4b9b41", lvl = -2, hp = 0.70, dmg = 0.75, spd = 0.88, atk = 1.20, count = 0.80, pack = 0.6, rar = 0.85,
             blurb = "Fewer, slower, softer monsters. Rewards roll a touch worse." },
@@ -191,7 +191,7 @@ public static partial class G
     }
     public static double mobRankMul(double r = double.NaN) => Math.Pow(1 + MOB_LEVEL_STEP, double.IsNaN(r) ? mobRank() : r);
     /* ============================== WEAPONS ============================== */
-    public static readonly Dictionary<string, Weapon> WEAPONS = new()
+    public static readonly JsMap<string, Weapon> WEAPONS = new()
     {
         ["sword"] = new Weapon { id = "sword", name = "SWORD", col = "#cfd6dd",
             blurb = "Balanced. Nothing it does is the best, and nothing it does is bad.",
@@ -297,10 +297,10 @@ public static partial class G
     public const double VENOM_LIFE = 5.5, VENOM_TICK = 0.55, VENOM_SHARE = 0.45;
     /* ======================= DAMAGE CONVERSION ======================= */
     public static readonly string[] CONV_ORDER = { "phys", "shock", "frost", "fire", "chaos" };
-    public static readonly Dictionary<string, string> CONV_NAME = new() { ["phys"] = "PHYSICAL", ["shock"] = "LIGHTNING", ["frost"] = "COLD", ["fire"] = "FIRE", ["chaos"] = "CHAOS" };
-    public static readonly Dictionary<string, string> CONV_COL = new() { ["phys"] = "#ffffff", ["shock"] = "#ffe23d", ["frost"] = "#6fb7ff", ["fire"] = "#ff4a3c", ["chaos"] = "#b46aff" };
+    public static readonly JsMap<string, string> CONV_NAME = new() { ["phys"] = "PHYSICAL", ["shock"] = "LIGHTNING", ["frost"] = "COLD", ["fire"] = "FIRE", ["chaos"] = "CHAOS" };
+    public static readonly JsMap<string, string> CONV_COL = new() { ["phys"] = "#ffffff", ["shock"] = "#ffe23d", ["frost"] = "#6fb7ff", ["fire"] = "#ff4a3c", ["chaos"] = "#b46aff" };
     public static readonly (string body, string stud, string spark, string glow) STORM_BRICK = ("#f2c000", "#9a7400", "#fff3a8", CONV_COL["shock"]);
-    public static readonly Dictionary<string, int> CONV_RANK = CONV_ORDER.Select((k, i) => (k, i)).ToDictionary(t => t.k, t => t.i);
+    public static readonly JsMap<string, int> CONV_RANK = CONV_ORDER.Select((k, i) => (k, i)).ToJsMap(t => t.k, t => t.i);
     public static bool convAdd(Conv c, string from, string to, double v)
     {
         if (c == null || !convLegal(from, to) || !(v > 0)) return false;

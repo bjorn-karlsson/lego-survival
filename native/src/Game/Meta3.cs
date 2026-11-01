@@ -36,13 +36,13 @@ public static partial class G
     }
     static double TreeJit(double n, double amt) => ((TreeHash(n) % 2000) / 1000 - 1) * amt;
     sealed class Layout { public List<double[]> P = new(); public List<int[]> L = new(); public double[] hub = { 0, 0 }; public List<int> toHub = new(); }
-    static readonly Dictionary<string, int[]> SHAPE_N = new()
+    static readonly JsMap<string, int[]> SHAPE_N = new()
     {
         ["vee"] = new[] { 4, 4 }, ["line"] = new[] { 4, 5 }, ["chain"] = new[] { 4, 5 }, ["hook"] = new[] { 4, 5 }, ["arc"] = new[] { 4, 6 },
         ["cresc"] = new[] { 4, 5 }, ["ring"] = new[] { 5, 6 }, ["wheel"] = new[] { 4, 6 }, ["diamond"] = new[] { 4, 4 }, ["star"] = new[] { 5, 6 },
     };
     static readonly string[] SHAPE_RING = { "ring", "arc", "wheel", "line", "diamond", "cresc", "chain", "hook", "star", "vee" };
-    static readonly Dictionary<string, string> SHAPE_ALIAS = new() { ["fan"] = "star", ["pair"] = "vee" };
+    static readonly JsMap<string, string> SHAPE_ALIAS = new() { ["fan"] = "star", ["pair"] = "vee" };
     /* WHERE THE NODES OF A FIGURE GO, in cluster feet: u straight out from the middle, v along the ring */
     static Layout TreeLayout(string shape, int n, double r, double seed)
     {
@@ -522,7 +522,7 @@ public static partial class G
         foreach (var s in sites.ToList()) if (s.after) drawSite(s);
         META_SITES = sites;
 
-        var byHome = new Dictionary<string, List<MetaDoor>>(); var homeOrder = new List<string>();
+        var byHome = new JsMap<string, List<MetaDoor>>(); var homeOrder = new List<string>();
         foreach (var d in META_DOORS) { if (!byHome.ContainsKey(d.home)) { byHome[d.home] = new(); homeOrder.Add(d.home); } byHome[d.home].Add(d); }
         /* where the i-th of n doors in a country stands, in degrees */
         double doorDeg(string sec, int i, int n)
@@ -731,7 +731,7 @@ public static partial class G
         /* ---- 7. THE NUDGE ---- */
         {
             double R(MetaNode n) => META_NODE_R.GetValueOrDefault(n.kind ?? "", 14);
-            var home = new Dictionary<string, double[]>();
+            var home = new JsMap<string, double[]>();
             /* EVERYTHING BUT A DOOR MAY GIVE A LITTLE */
             foreach (var n in META_NODES) if (n.kind != "start") home[n.id] = new[] { n.x, n.y };
             var seg = new List<(MetaNode A, MetaNode B)>();
@@ -741,14 +741,14 @@ public static partial class G
                 if (A != null && B != null && A != B) seg.Add((A, B));
             }
             /* AND ONLY WHAT IS NEAR: gathered once off a grid */
-            const double CELL = 300; var grid = new Dictionary<string, List<MetaNode>>();
+            const double CELL = 300; var grid = new JsMap<string, List<MetaNode>>();
             foreach (var n in META_NODES)
             {
                 string k = Js.I32(n.x / CELL) + "," + Js.I32(n.y / CELL);
                 if (!grid.TryGetValue(k, out var gl)) { gl = new(); grid[k] = gl; }
                 gl.Add(n);
             }
-            var nearM = new Dictionary<string, List<MetaNode>>();
+            var nearM = new JsMap<string, List<MetaNode>>();
             foreach (var n in META_NODES)
             {
                 int gx = Js.I32(n.x / CELL), gy = Js.I32(n.y / CELL); var list = new List<MetaNode>();
@@ -759,7 +759,7 @@ public static partial class G
                     }
                 nearM[n.id] = list;
             }
-            var cand = new Dictionary<string, List<(MetaNode A, MetaNode B)>>();
+            var cand = new JsMap<string, List<(MetaNode A, MetaNode B)>>();
             foreach (var n in META_NODES)
             {
                 var list = new List<(MetaNode A, MetaNode B)>();
@@ -934,7 +934,7 @@ public static partial class G
         }
         /* ---- 8b. THE BALANCING BREAKS ---- */
         {
-            var ATTR_NAME = new Dictionary<string, string> { ["str"] = "Strength", ["dex"] = "Dexterity", ["int"] = "Intelligence" };
+            var ATTR_NAME = new JsMap<string, string> { ["str"] = "Strength", ["dex"] = "Dexterity", ["int"] = "Intelligence" };
             double RR(MetaNode n) => META_NODE_R.GetValueOrDefault(n.kind ?? "", 14);
             var segs = new List<(MetaNode A, MetaNode B)>();
             foreach (var e in edges) { var A = META_BY_ID.GetValueOrDefault(e.a); var B = META_BY_ID.GetValueOrDefault(e.b); if (A != null && B != null) segs.Add((A, B)); }

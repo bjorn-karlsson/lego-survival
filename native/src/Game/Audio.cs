@@ -207,7 +207,7 @@ public static partial class G
         s.connect(f); f.connect(g); g.connect(v); s.start(t, Js.R()); s.stop(t + dur + 0.03);
     }
     /* a repeat of the same sound inside a short window is dropped */
-    public static readonly Dictionary<string, double> sfxLast = new();
+    public static readonly JsMap<string, double> sfxLast = new();
     public static bool every(string key, double gap)
     {
         if (!sfxLive()) return false;

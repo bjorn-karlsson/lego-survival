@@ -32,7 +32,7 @@ public static partial class G
     public const double LEGION_GENERAL_FROM = 15;
     public const string LEGION_COL = "#c3a6ff";
     public static readonly (int r, int g, int b) LEGION_ICE = (215, 200, 255);
-    public static readonly Dictionary<string, LegionFaction> LEGION_FACTIONS = new()
+    public static readonly JsMap<string, LegionFaction> LEGION_FACTIONS = new()
     {
         ["empire"] = new LegionFaction { name = "THE ETERNAL EMPIRE", col = "#ffd76e", ranks = new[] { "knight", "lancer", "archer", "skeleton" }, sergeant = "bastion", general = "jugg" },
         ["horde"] = new LegionFaction { name = "THE KARUI HORDE", col = "#ff8a3c", ranks = new[] { "brute", "stalker", "imp", "superimp" }, sergeant = "zhulk", general = "jugg" },
@@ -311,7 +311,7 @@ public static partial class G
        NOT LIVE YET: leagueStat() answers 0 while LEAGUE_TREE_ON is off. */
     public static bool LEAGUE_TREE_ON = false;
     static string P(double v) => Js.Num(Math.Round(v * 100));
-    public static readonly Dictionary<string, LtStat> LT_STATS = new()
+    public static readonly JsMap<string, LtStat> LT_STATS = new()
     {
         ["leagueChance"] = new LtStat { txt = v => "+" + P(v) + "% chance a wave carries a league" },
         ["breachWeight"] = new LtStat { txt = v => "Breach " + P(v) + "% more likely to be the league" },
@@ -352,7 +352,7 @@ public static partial class G
         LT("lt_lo3", "loot", "Locksmith", new NumMap(("sboxChance", 0.30)), new[] { "lt_lo1" }),
         LT("lt_lo4", "loot", "Goblin Bait", new NumMap(("goblinChance", 1.0)), new[] { "lt_lo2" }, true),
     };
-    public static readonly Dictionary<string, LtNode> LEAGUE_TREE_BY_ID = LEAGUE_TREE.ToDictionary(n => n.id, n => n);
+    public static readonly JsMap<string, LtNode> LEAGUE_TREE_BY_ID = LEAGUE_TREE.ToJsMap(n => n.id, n => n);
     public static LtreeState LTREE = new();
     public static NumMap ltreeCache = new();
     public static void ltreeRebuild()

@@ -213,7 +213,7 @@ public static partial class G
             apply = e =>
             {
                 e.stackOn = new HashSet<string>(e.stackOn ?? new HashSet<string>()) { "rage" };
-                e.stacks ??= new Dictionary<string, StackSt>();
+                e.stacks ??= new JsMap<string, StackSt>();
                 e.stackMax ??= new NumMap();
                 e.rageOnHurt = e.rageOnHurt + 3;
             } },

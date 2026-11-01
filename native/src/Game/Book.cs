@@ -60,7 +60,7 @@ public static partial class G
     {
         var body = document.getElementById("bookBody");
         if (body == null || player == null) return;
-        var byId = new Dictionary<string, Upgrade>(); foreach (var u in UPGRADES) byId[u.id] = u;
+        var byId = new JsMap<string, Upgrade>(); foreach (var u in UPGRADES) byId[u.id] = u;
         var owned = taken.Keys.Where(id => byId.ContainsKey(id) && taken[id] > 0).ToList();
         double cards = 0; foreach (var id in owned) cards += taken[id];
         document.getElementById("bookSub").textContent =
@@ -80,7 +80,7 @@ public static partial class G
 
         /* a spell section gets the spell's own live summary above its bricks, which
            is the one thing the bench has no reason to show and a spellbook does */
-        var sums = new Dictionary<string, Ability>(); foreach (var sp in spellSummaries()) sums[sp.id] = sp;
+        var sums = new JsMap<string, Ability>(); foreach (var sp in spellSummaries()) sums[sp.id] = sp;
         var html = string.Join("", secs.Select(s =>
         {
             var (name, ids) = s;
@@ -125,7 +125,7 @@ public static partial class G
     }
     /* which bench section belongs to which spell, so the book can head a section
        with that spell's live numbers */
-    public static readonly Dictionary<string, string> SECTION_SPELL = new()
+    public static readonly JsMap<string, string> SECTION_SPELL = new()
     {
         ["GUARDIAN BRICK"] = "orbit", ["STORM BRICK"] = "chain",
         ["BLADESTORM"] = "storm", ["BLADE VORTEX"] = "vortex", ["BOMB VOLLEY"] = "bombplus",

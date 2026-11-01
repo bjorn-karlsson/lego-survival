@@ -14,7 +14,7 @@ public static partial class G
        Ctrl-click it twice -- to be rid of it. The run waits while this is open. */
     public static bool gearOn = false; public static string gearFrom = "play";
     /* where each slot sits on the paper doll, in bag cells */
-    public static readonly Dictionary<string, DollSlot> GEAR_DOLL = new()
+    public static readonly JsMap<string, DollSlot> GEAR_DOLL = new()
     {
         ["weapon"] = new DollSlot { x = 0, y = 1, w = 2, h = 4 },
         ["helmet"] = new DollSlot { x = 4, y = 0, w = 2, h = 2 },
@@ -32,7 +32,7 @@ public static partial class G
        as SVG paths -- so the SAME drawing is an <svg> in the bag and a Path2D on the
        floor. Each part names its paint: m the base's colour, d darker, l lighter,
        s steel, w wood, g gold. */
-    public static readonly Dictionary<string, (string k, string d)[]> GEAR_ICON = new()
+    public static readonly JsMap<string, (string k, string d)[]> GEAR_ICON = new()
     {
         ["helmet"] = new[] { ("m", "M3 16 C3 7 7 3 12 3 C17 3 21 7 21 16 L22 16 L22 19 L2 19 L2 16 Z"), ("d", "M7 11 L17 11 L17 13.5 L7 13.5 Z") },
         ["body"] = new[] { ("m", "M7 4 L10 6 L14 6 L17 4 L22 9 L19 13 L19 32 L5 32 L5 13 L2 9 Z"), ("d", "M11 8 L13 8 L13 30 L11 30 Z"),
@@ -72,7 +72,7 @@ public static partial class G
           string.Join("", parts.Select(pt => $"<path fill-rule=\"evenodd\" fill=\"{S(gearPaint(pt.k, col))}\" stroke=\"rgba(10,14,18,.55)\" stroke-width=\".5\" d=\"{pt.d}\"/>")) +
           "</svg>";
     }
-    public static readonly Dictionary<string, List<GearPathPart>> gearPathCache = new();
+    public static readonly JsMap<string, List<GearPathPart>> gearPathCache = new();
     public static List<GearPathPart> gearPaths(string cls)
     {
         if (!gearPathCache.TryGetValue(cls ?? "", out var l))

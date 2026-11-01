@@ -78,12 +78,12 @@ public static partial class G
             if (raw[k] > 0) parts.Add(new ConvPart { type = k, @base = raw[k], amount = tot[k] });
         return parts;
     }
-    public static readonly Dictionary<string, string> CONV_ELEM = new() { ["phys"] = null, ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
-    public static readonly Dictionary<string, string> CONV_RESIST = new() { ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
+    public static readonly JsMap<string, string> CONV_ELEM = new() { ["phys"] = null, ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
+    public static readonly JsMap<string, string> CONV_RESIST = new() { ["shock"] = "shock", ["frost"] = "frost", ["fire"] = "fire", ["chaos"] = "chaos" };
     public static readonly Tbl CONV_CARD = new double[] { 0.10, 0.15, 0.20, 0.30, 0.40 };
     public static readonly Tbl GAIN_CARD = new double[] { 0.06, 0.10, 0.15, 0.22, 0.30 };
     public const double CHAOS_POISON_S = 0.30, CHAOS_POISON_T = 4;
-    public static readonly Dictionary<string, string> SOURCE_ELEM = new()
+    public static readonly JsMap<string, string> SOURCE_ELEM = new()
     {
         ["fire"] = "fire", ["burn"] = "fire", ["ember"] = "fire", ["frost"] = "frost", ["freeze"] = "frost",
         ["chain"] = "shock", ["shock"] = "shock", ["bane"] = "chaos", ["poison"] = "chaos",
@@ -95,7 +95,7 @@ public static partial class G
     /* PENETRATION */
     public const double PEN_MAX = 0.60;
     public static readonly string[] PEN_KEYS = { "fire", "frost", "shock", "chaos" };
-    public static readonly Dictionary<string, string> PEN_NAME = new() { ["fire"] = "Fire", ["frost"] = "Cold", ["shock"] = "Lightning", ["chaos"] = "Chaos" };
+    public static readonly JsMap<string, string> PEN_NAME = new() { ["fire"] = "Fire", ["frost"] = "Cold", ["shock"] = "Lightning", ["chaos"] = "Chaos" };
     public static double penOf(string el)
     {
         var P = player?.pen;
@@ -120,8 +120,8 @@ public static partial class G
     public const double EXPOSE_STEP = 0.22, EXPOSE_T = 6, EXPOSE_CHANCE_MAX = 1.0;
     public static bool EXPOSE_ON = false;
     public static readonly string[] EXPOSE_ELEMS = { "fire", "frost", "shock", "chaos" };
-    public static readonly Dictionary<string, string> EXPOSE_COL = new() { ["fire"] = "#ff6a2a", ["frost"] = "#7fb9e0", ["shock"] = "#e0a81a", ["chaos"] = "#b46aff" };
-    public static readonly Dictionary<string, string> EXPOSE_NAME = new() { ["fire"] = "SCORCHED", ["frost"] = "BRITTLE", ["shock"] = "SAPPED", ["chaos"] = "WITHERED" };
+    public static readonly JsMap<string, string> EXPOSE_COL = new() { ["fire"] = "#ff6a2a", ["frost"] = "#7fb9e0", ["shock"] = "#e0a81a", ["chaos"] = "#b46aff" };
+    public static readonly JsMap<string, string> EXPOSE_NAME = new() { ["fire"] = "SCORCHED", ["frost"] = "BRITTLE", ["shock"] = "SAPPED", ["chaos"] = "WITHERED" };
     public static double exposedOn(Ent e, string el)
     {
         if (e == null || e.expose == null) return 0;
@@ -182,7 +182,7 @@ public static partial class G
         || source == "slamfire" || source == "slamfrost" || source == "slamshock";
     public static string convKind(string source) =>
         SPELL_SOURCES.Contains(source ?? "") || source == "fire" || source == "frost" || source == "burn" || source == "freeze" ? "spell" : "melee";
-    public static readonly Dictionary<string, ConvSplit> CONV_PLAIN = CONV_ORDER.ToDictionary(k => k, k => new ConvSplit { from = k, share = new NumMap((k, 1)), mul = 1 });
+    public static readonly JsMap<string, ConvSplit> CONV_PLAIN = CONV_ORDER.ToJsMap(k => k, k => new ConvSplit { from = k, share = new NumMap((k, 1)), mul = 1 });
     public static double incVia(string kind, List<string> via)
     {
         var p = player;
@@ -214,7 +214,7 @@ public static partial class G
         return new ConvSplit { from = from, kind = kind, share = share, mul = plain > 0 ? total / plain : 1 };
     }
     /* STACKS THE HERO CARRIES: momentum, rage, and the three charges */
-    public static readonly Dictionary<string, StackDef> HERO_STACKS = new()
+    public static readonly JsMap<string, StackDef> HERO_STACKS = new()
     {
         ["momentum"] = new StackDef { name = "MOMENTUM", col = "#e0a81a", max = 6, decay = 2.0, mods = new NumMap(("atk", 0.08), ("reach", 0.04)), only = new[] { "axe" } },
         ["rage"] = new StackDef { name = "RAGE", col = "#ff4a3c", max = 30, grace = 2.0, rate = 10, frac = true, mob = true, mods = new NumMap(("moreDmg", 0.01)) },
@@ -303,9 +303,9 @@ public static partial class G
     public static readonly NumMap AIL_BASE = new(("phys", 0), ("frost", 0), ("fire", 0), ("shock", 0), ("chaos", 0));
     public static readonly NumMap AIL_CRIT = new(("phys", 0), ("frost", 1), ("fire", 1), ("shock", 1), ("chaos", 0));
     public static readonly HashSet<string> AIL_NATIVE = new() { "fire", "ember", "frost", "freeze", "slamfire", "slamfrost", "slamshock" };
-    public static readonly Dictionary<string, double> AIL_NATIVE_CHANCE = new() { ["fire"] = 0.25 };
+    public static readonly JsMap<string, double> AIL_NATIVE_CHANCE = new() { ["fire"] = 0.25 };
     public static double ailNativeChance(string source) => source != null && AIL_NATIVE_CHANCE.TryGetValue(source, out var v) ? v : 1;
-    public static readonly Dictionary<string, string> AIL_NAME = new() { ["phys"] = "BLEED", ["frost"] = "CHILL", ["fire"] = "IGNITE", ["shock"] = "SHOCK", ["chaos"] = "POISON" };
+    public static readonly JsMap<string, string> AIL_NAME = new() { ["phys"] = "BLEED", ["frost"] = "CHILL", ["fire"] = "IGNITE", ["shock"] = "SHOCK", ["chaos"] = "POISON" };
     public const double AIL_MAG_MIN = 0.012, AIL_MAG_FULL = 0.10;
     public const int AIL_STACK_HIT = 3;
     public const double AIL_POOL_BOSS = 0.05;
@@ -515,7 +515,7 @@ public static partial class G
     public const double EMBER_SHARE = 0.45, EMBER_SPD = 430;
     public const int EMBER_DEPTH = 3;
     public const double EMBER_CD = 0.25, EMBER_SEEK_R = 520, EMBER_LIT_COST = 460, EMBER_SPREAD_COST = 240;
-    public static Ent emberTarget(Obj from, Ent src, Dictionary<Ent, double> taken)
+    public static Ent emberTarget(Obj from, Ent src, JsMap<Ent, double> taken)
     {
         Ent best = null; double bestScore = double.PositiveInfinity;
         foreach (var e2 in enemies)
@@ -534,7 +534,7 @@ public static partial class G
         int k = player != null ? (int)player.ember : 0;
         return EBURN_MAX * (k >= 0 && k < BURN_CAP_MUL.Length ? BURN_CAP_MUL[k] : 1);
     }
-    public static readonly Dictionary<string, string> DOT_COL = new() { ["bane"] = "#4f9e3a", ["poison"] = "#4f9e3a", ["bleed"] = "#a3222b", ["burn"] = "#ff9a3c" };
+    public static readonly JsMap<string, string> DOT_COL = new() { ["bane"] = "#4f9e3a", ["poison"] = "#4f9e3a", ["bleed"] = "#a3222b", ["burn"] = "#ff9a3c" };
     public const string LEECH_COL = "#8ede4a";
     public const double DMG_SPLIT_MIN = 0.4, DMG_SPLIT_SHARE = 0.06;
     public static string dmgColour(string source, NumMap mix)
@@ -551,9 +551,9 @@ public static partial class G
     public static bool canTakeSpell(string k) => spellHas(k) || spellsOwned() < SPELL_MAX;
     public static readonly string[] ELEMENTS = { "fire", "frost", "shock" };
     public static readonly string[] RES_KINDS = ELEMENTS.Concat(new[] { "chaos" }).ToArray();
-    public static readonly Dictionary<string, string> ELEM_COL = new() { ["fire"] = "#ff8a3c", ["frost"] = "#bfe3ff", ["shock"] = "#ffe95a" };
+    public static readonly JsMap<string, string> ELEM_COL = new() { ["fire"] = "#ff8a3c", ["frost"] = "#bfe3ff", ["shock"] = "#ffe95a" };
     /* Imp master curses. They STACK. */
-    public static readonly Dictionary<string, Curse> CURSES = new()
+    public static readonly JsMap<string, Curse> CURSES = new()
     {
         ["resist"] = new Curse { name = "SUNDERED", col = "#9b45d6", step = 0.12, cap = 0.90, tip = "elemental resistance cut" },
         ["haste"] = new Curse { name = "LEADEN", col = "#c9b8e8", step = 0.11, cap = 1.50, tip = "swings come slower" },

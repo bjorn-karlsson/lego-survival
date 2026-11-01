@@ -157,7 +157,7 @@ public static partial class G
     /* COMPRESSED, THEN BASE64: LZW with growing code widths, bit for bit the JS */
     public static byte[] lzwPack(byte[] bytes)
     {
-        var dict = new Dictionary<string, int>(); int next = 256;
+        var dict = new JsMap<string, int>(); int next = 256;
         var outb = new List<byte>(); int acc = 0, nb = 0, k = 0;
         void put(int code)
         {

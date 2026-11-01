@@ -25,7 +25,7 @@ public static partial class G
        second way to play and is work in progress: for now it is a screen, and the
        equipment, the inventory and the stash live behind it (docs/RPG-BLUEPRINT.md).
        Every piece of gear code is still here, asked through modeHasGear(). */
-    public static readonly Dictionary<string, GameModeDef> GAME_MODES = new()
+    public static readonly JsMap<string, GameModeDef> GAME_MODES = new()
     {
         ["arcade"] = new GameModeDef { name = "ARCADE", col = "#ffb900", blurb = "Waves, reward cards and the arcade skill tree. No gear: what you pick up in a run is bricks." },
         ["rpg"] = new GameModeDef { name = "RPG · W.I.P.", col = "#6fb6ff", blurb = "A character per class, the Outskirts and the town of Brickhaven, gear that drops. Missions, gems and the RPG tree come next." },
@@ -96,7 +96,7 @@ public static partial class G
        experience and whether you have reached the town. Death sends you to the town
        once you have reached it, back to the Outskirts' start before then. */
     public const string RPG_KEY = "bb_rpg";
-    public static readonly Dictionary<string, RpgZone> RPG_ZONES = new()
+    public static readonly JsMap<string, RpgZone> RPG_ZONES = new()
     {
         ["outskirts"] = new RpgZone { name = "THE OUTSKIRTS", level = 2, col = "#a5e06e", hostile = true,
                    sub = "a field outside the walls -- the town is east, past the gate" },
@@ -177,7 +177,7 @@ public static partial class G
         if (p.solid) solids.Add(p);
         return p;
     }
-    public static readonly Dictionary<string, string> RPG_USES = new()
+    public static readonly JsMap<string, string> RPG_USES = new()
     {
         ["rstash"] = "STASH", ["rboard"] = "MISSIONS", ["rwaypoint"] = "WAYPOINT", ["rexit"] = "TO THE OUTSKIRTS", ["rhome"] = "HOME", ["rcave"] = "NEW CAVE", ["rportal"] = "TO BRICKHAVEN",
     };

@@ -28,7 +28,7 @@ public sealed class Pt : Obj
 public sealed class NumMap : IEnumerable<KeyValuePair<string, double>>
 {
     readonly List<string> order = new();
-    readonly Dictionary<string, double> d = new();
+    readonly JsMap<string, double> d = new();
     public NumMap() { }
     public NumMap(params (string k, double v)[] kv) { foreach (var (k, v) in kv) this[k] = v; }
     public double this[string k]
@@ -77,7 +77,7 @@ public sealed class Tbl : IReadOnlyList<double>
    `p[key]` with a computed key: cached reflection over the class's fields. */
 public static class Fields
 {
-    static readonly Dictionary<(Type, string), FieldInfo> cache = new();
+    static readonly JsMap<(Type, string), FieldInfo> cache = new();
     static FieldInfo F(object o, string name)
     {
         var key = (o.GetType(), name);
@@ -156,4 +156,34 @@ public static class JsList
     public static int IndexOfJs<T>(this IList<T> a, T v) => a.IndexOf(v);
     public static bool Includes<T>(this IList<T> a, T v) => a.Contains(v);
     public static T At<T>(this IList<T> a, int i) => i >= 0 && i < a.Count ? a[i] : default;
+}
+
+/* A JS OBJECT USED AS A MAP. Reading a key that is not there is undefined in JS,
+   never an error, and the game leans on that everywhere (`LOB_CONF[pr.kind]` and
+   then `if(lc)`). This is a Dictionary whose indexer reads like that: a missing
+   key gives null (or the value type's default: false, 0). Writing, enumeration
+   and everything else are the Dictionary's own. */
+public class JsMap<TK, TV> : Dictionary<TK, TV>
+{
+    public JsMap() { }
+    public JsMap(IEqualityComparer<TK> cmp) : base(cmp) { }
+    public JsMap(IDictionary<TK, TV> from) : base(from) { }
+    public JsMap(IEnumerable<KeyValuePair<TK, TV>> from) : base(from) { }
+    public JsMap(int capacity) : base(capacity) { }
+    public new TV this[TK k]
+    {
+        get => k != null && TryGetValue(k, out var v) ? v : default;
+        set => base[k] = value;
+    }
+}
+public static class JsMapExt
+{
+    public static JsMap<TK, TV> ToJsMap<T, TK, TV>(this IEnumerable<T> src, Func<T, TK> key, Func<T, TV> val)
+    {
+        var m = new JsMap<TK, TV>(); foreach (var x in src) m[key(x)] = val(x); return m;
+    }
+    public static JsMap<TK, T> ToJsMap<T, TK>(this IEnumerable<T> src, Func<T, TK> key)
+    {
+        var m = new JsMap<TK, T>(); foreach (var x in src) m[key(x)] = x; return m;
+    }
 }

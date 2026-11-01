@@ -178,7 +178,7 @@ public static partial class G
       c.fillText(txt, x, y);
       c.textAlign = "left";
     }
-    public static readonly Dictionary<string, (double[] a, double[] b)> GOLEM_RGB = new()
+    public static readonly JsMap<string, (double[] a, double[] b)> GOLEM_RGB = new()
     {
         ["ice"] = (new double[] { 150, 210, 255 }, new double[] { 223, 242, 255 }),
         ["fire"] = (new double[] { 255, 120, 40 }, new double[] { 255, 209, 102 }),
@@ -239,7 +239,7 @@ public static partial class G
        their knuckles, a heavy slab of a back, stubby bent legs, and two red coals
        for eyes set in a blunt slab of a face. Every piece is a chunk of rock with
        flat faces and hard corners; nothing on it is smooth and nothing is a panel. */
-    public static readonly Dictionary<string, GolemSkin> GOLEM_SKIN = new()
+    public static readonly JsMap<string, GolemSkin> GOLEM_SKIN = new()
     {
         ["stone"] = new GolemSkin { rock = new Col[] { "#9a9083", "#8a8073", "#756b60", "#a9a093", "#5f574d" }, dark = "#4c453d",
             edge = "rgba(30,26,20,0.8)", eye = "#ff2a1a", eyeGlow = new double[] { 255, 60, 40 },

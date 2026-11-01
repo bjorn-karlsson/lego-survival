@@ -19,6 +19,8 @@ public static class Dom
     public static double ViewW = 1280, ViewH = 720, Scale = 1, ZoomRoot = 1;
     public static double RootFont => document?.documentElement.cs?.fontSize ?? 16;
     public static Element focused, hovered, pressed;
+    /* the element the game's field is drawn in (#game): drawn on the window first, the page over it */
+    public static Element FieldEl;
     public static double lastKeyTime;
     public static int StyleGen;
     static bool styleDirty = true, layoutDirty = true, allDirty = true;

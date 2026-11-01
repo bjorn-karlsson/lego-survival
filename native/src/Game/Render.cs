@@ -10,7 +10,7 @@ public static partial class G
 /* =============================== RENDER =============================== */
 /* every one of these is thrown BY a monster, so they all sit on the deep side of
    the palette — the player's own lobbed bomb is the pale one */
-public static readonly Dictionary<string, LobConf> LOB_CONF = new() {
+public static readonly JsMap<string, LobConf> LOB_CONF = new() {
   ["vbrick"] = new LobConf {rr = 62, sc = 1, cols = new Col[]{"#23272b","#3a3f44"}, tele = 40},
   ["jrock"] = new LobConf {rr = 80, sc = 1.35, cols = new Col[]{"#8b8f8a","#6d6e68"}, tele = 52},
   ["spit"] = new LobConf {rr = 46, sc = 0.7, cols = new Col[]{"#2f5e23","#5f8f33"}, tele = 28},
@@ -21,6 +21,8 @@ public static readonly Dictionary<string, LobConf> LOB_CONF = new() {
      thing you are dodging is the GROUND it is about to become */
   ["venom"] = new LobConf {rr = 58, sc = 0.85, cols = new Col[]{"#4c7a2b","#8ac24a"}, tele = 44}
 };
+/* set by the window (App): the world is drawn, the screen-space layer follows */
+public static Action fieldDone;
 public static void render(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.globalAlpha = 1;
@@ -1094,6 +1096,10 @@ public static void render(){
   drawRpgWorld(ctx);
   drawGearLabels();
   ctx.restore();
+  /* NATIVE: the world is done. When it was drawn below the window's density it is
+     put on the window now, and everything from here on -- the map, the HUD, the
+     markers, the vignette, the reticle -- is drawn on the window at full sharpness */
+  fieldDone?.Invoke();
   drawMapOverlay();
   renderHUD();
   if(state=="play" && player != null && !player.dead){

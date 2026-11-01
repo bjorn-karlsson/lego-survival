@@ -21,7 +21,7 @@ public sealed partial class Spike : Obj
     public double a, t, life, h, w, seed, wait; public bool hitHero; public HashSet<object> hit; public SlamRec sl; public string el;
 }
 /* one mace slam's shared record: what it has bitten, what it dealt, how many teeth stand */
-public sealed class SlamRec { public Dictionary<Ent, int> hits = new(); public HashSet<Prop> props = new(); public double dealt, left; public string el; public bool propSfx; }
+public sealed class SlamRec { public JsMap<Ent, int> hits = new(); public HashSet<Prop> props = new(); public double dealt, left; public string el; public bool propSfx; }
 public sealed partial class SlamAct { public double t, aim; public bool fired; public string el; }
 /* a swing in flight (startSwing builds it; updatePlayer sweeps it) */
 public sealed partial class Swing

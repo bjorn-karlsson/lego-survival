@@ -7,7 +7,7 @@ public sealed class Mouse { public double x, y; public bool down; public double 
 
 public static partial class G
 {
-    public static readonly Dictionary<string, bool> keys = new();
+    public static readonly JsMap<string, bool> keys = new();
     public static bool key(string code) => keys.TryGetValue(code, out var v) && v;
     public static readonly Mouse mouse = new();
     public static bool everInput = false;
@@ -64,6 +64,8 @@ public static partial class G
     public static void onMouseDown(MouseEvt e)
     {
         everInput = true;
+        try { window.focus(); } catch { }
+        try { cvEl?.focus(); } catch { }
         if (e.button == 0)
         {
             /* the combat log swallows its own clicks */
@@ -91,5 +93,13 @@ public static partial class G
     {
         foreach (var k in keys.Keys.ToList()) keys[k] = false;
         mouse.down = false; mouse.rdown = false; lootHeld = false;
+    }
+    /* JS 3974-4056: the game listens on the window, after the page's own elements */
+    public static void InputWire()
+    {
+        window.addEventListener("mousemove", e => onMouseMove(e.clientX, e.clientY));
+        window.addEventListener("mousedown", e => onMouseDown(new MouseEvt { button = e.button, clientX = e.clientX, clientY = e.clientY, onCanvas = e.target != null && e.target == cvEl }));
+        window.addEventListener("mouseup", e => onMouseUp(new MouseEvt { button = e.button, clientX = e.clientX, clientY = e.clientY }));
+        window.addEventListener("blur", _ => onBlur());
     }
 }

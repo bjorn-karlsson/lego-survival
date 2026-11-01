@@ -21,8 +21,8 @@ public sealed class CpLayer { public string key, name, tag, col; }
 public sealed class Ability { public string id, icon, name, head, tip; }
 public sealed class ComboLayersOut
 {
-    public Dictionary<string, double> bare, weap, fav, tree; public List<Ability> abilities; public object favBricks;
-    public Dictionary<string, double> this[string k] => k switch { "bare" => bare, "weap" => weap, "fav" => fav, _ => tree };
+    public JsMap<string, double> bare, weap, fav, tree; public List<Ability> abilities; public object favBricks;
+    public JsMap<string, double> this[string k] => k switch { "bare" => bare, "weap" => weap, "fav" => fav, _ => tree };
 }
 
 public static partial class G
@@ -31,7 +31,7 @@ public static partial class G
     /* WHICH BRICK HANDS YOU A SPELL YOU DO NOT HAVE. The reward screen needs this to
        mark the card, and the chest needs it to refuse one — those are the only two
        places that care, so it lives here rather than as a flag on each brick. */
-    public static readonly Dictionary<string, string> SPELL_GRANT = new()
+    public static readonly JsMap<string, string> SPELL_GRANT = new()
     {
         ["orbit"] = "orbit", ["chain"] = "chain", ["storm"] = "storm",
         ["vortex"] = "vortex", ["bombplus"] = "bomb", ["freeze"] = "freeze", ["bane"] = "bane",
@@ -49,7 +49,7 @@ public static partial class G
        ceiling you are building towards is yours alone). Taking no favourite trades
        all of that for a little of everything.
        `lines` is what the hover panel shows; `apply` is what actually happens. */
-    public static readonly Dictionary<string, FavPerk> FAV_PERKS = new()
+    public static readonly JsMap<string, FavPerk> FAV_PERKS = new()
     {
         ["none"] = new FavPerk { attr = A3(8, 8, 8), lines = new() { "+0.5 flat physical damage", "+1 max heart", "+10 armour",
                  "+5% increased damage", "+4% move speed", "+10% studs and XP" },
@@ -183,7 +183,7 @@ public static partial class G
        its `req` -- the gate is the truth, and this keeps the two from drifting
        apart. The card prints the answer so you never have to guess why something
        is not being offered. */
-    public static readonly Dictionary<string, List<string>> WEAP_TAGS = new() { ["melee"] = L("SWORD", "AXE", "MACE"), ["cast"] = L("STAFF") };
+    public static readonly JsMap<string, List<string>> WEAP_TAGS = new() { ["melee"] = L("SWORD", "AXE", "MACE"), ["cast"] = L("STAFF") };
     public static List<string> brickWeapons(Upgrade u)
     {
         if (Js.T(u.weap)) return WEAP_TAGS.GetValueOrDefault(u.weap) ?? WEAP_TAGS["melee"];
@@ -635,9 +635,9 @@ public static partial class G
     public static ComboLayersOut comboLayers()
     {
         var keepP = player; var keepF = favourite; var keepW = weapon;
-        Dictionary<string, double> snap()
+        JsMap<string, double> snap()
         {
-            var o = new Dictionary<string, double>();
+            var o = new JsMap<string, double>();
             foreach (var q in STAT_PROBES)
             {
                 double v = 0;
@@ -704,12 +704,12 @@ public static partial class G
         /* THE SHORT LIST: only the basic probes, under the simple headings, and only
            the ones this hero actually HAS -- a sword is not shown its bolt damage as
            a dash, it is simply not shown it. */
-        var @short = new Dictionary<string, List<string>>();
+        var @short = new JsMap<string, List<string>>();
         foreach (var q in STAT_PROBES)
         {
             if (!all && !Js.T(q.basic)) continue;
             string k = q.g + "|" + q.k;
-            var v = new Dictionary<string, double> { ["bare"] = L.bare[k], ["weap"] = L.weap[k], ["fav"] = L.fav[k], ["tree"] = L.tree[k] };
+            var v = new JsMap<string, double> { ["bare"] = L.bare[k], ["weap"] = L.weap[k], ["fav"] = L.fav[k], ["tree"] = L.tree[k] };
             if (!all && !(v["tree"] > 0 || v["tree"] < 0)) continue;
             var chips = new List<string>();
             for (int i = 1; i < CP_LAYERS.Count; i++)

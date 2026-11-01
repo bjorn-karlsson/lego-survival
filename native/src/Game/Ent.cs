@@ -53,7 +53,7 @@ public sealed partial class Ent : Obj
     public double bleedChanceFlat, bleedShareFlat, bleedChance, bleedShare;
     public double ailChanceFlat, ailChance; public NumMap ailTypeFlat, ailType;
     public double reave, reaveCd;
-    public Dictionary<string, StackSt> stacks; public NumMap stackMax; public HashSet<string> stackOn;
+    public JsMap<string, StackSt> stacks; public NumMap stackMax; public HashSet<string> stackOn;
     public double rageOnHurt, rageOnHit;
     public double chargeKill, chargeCrit, chargeHurt;
     public double exposeChanceFlat, exposeChance, prolifR, ailMagInc, dotMore = 1;

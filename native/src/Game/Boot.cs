@@ -9,6 +9,7 @@ public static partial class G
     public static void boot()
     {
         /* JS 3420-3426: the window's resize, the title's fit and its watcher */ TitleFitWire();
+        /* JS 3974-4056: keys reach onKeyDown through the window (App), the mouse here */ InputWire();
         /* JS 11357 */ ltreeLoad();
         /* JS 13010-13030: the generated conversion and weapon writers */ MetaGenStats();
         /* JS 13440-13491, 13207, 13895: the generated groups, the doors, the legends */ MetaGenTemplates();

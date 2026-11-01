@@ -8,7 +8,7 @@ public sealed class OptDef
 {
     public string id, name, note, unit;
     public object def;
-    public string[] choices; public Dictionary<string, string> names;
+    public string[] choices; public JsMap<string, string> names;
     public double[] range;
 }
 public sealed class TextSize { public string name; public double k; }
@@ -16,7 +16,7 @@ public sealed class TextSize { public string name; public double k; }
    typed properties the game uses most. */
 public sealed class OptStore
 {
-    readonly Dictionary<string, object> v = new();
+    readonly JsMap<string, object> v = new();
     public object this[string k] { get => v.GetValueOrDefault(k); set => v[k] = value; }
     public bool dmgNumbers => v.GetValueOrDefault("dmgNumbers") is bool b && b;
     public bool autoLoot => v.GetValueOrDefault("autoLoot") is bool b && b;
@@ -82,6 +82,8 @@ public static partial class G
         k = clamp(k, TITLE_FIT_MIN, 1);
         if (k < 1) wrap.style.zoom = Js.ToFixed(k, 3);
     }
+    /* resize() as the JS calls it: the window's size, at the density the field is drawn at */
+    public static void resizeNow() => resize(window.innerWidth, window.innerHeight, App.WorldDensity);
     public static bool titleFitQ = false;
     public static void fitTitleSoon()
     {
@@ -92,7 +94,7 @@ public static partial class G
     /* JS 3420-3426: the window's resize refits the title, and so does any change to the plate's content */
     public static void TitleFitWire()
     {
-        window.addEventListener("resize", _ => { fitTitle(); });
+        window.addEventListener("resize", _ => { resizeNow(); fitTitle(); }); resizeNow();
         var plate = document.querySelector("#titleScreen .boxplate");
         if (plate != null) new MutationObserver(fitTitleSoon).observe(plate, new MutationObserverInit { childList = true, subtree = true, characterData = true });
         fitTitleSoon();
@@ -137,7 +139,7 @@ public static partial class G
             note = "wait for the screen before drawing the next frame: no tearing, and no more frames than your " +
                    "monitor can show. Off draws as fast as it can" },
     };
-    public static readonly Dictionary<string, TextSize> TEXT_SIZES = new()
+    public static readonly JsMap<string, TextSize> TEXT_SIZES = new()
     {
         ["small"] = new TextSize { name = "SMALL", k = 0.88 }, ["normal"] = new TextSize { name = "NORMAL", k = 1 },
         ["large"] = new TextSize { name = "LARGE", k = 1.15 }, ["xlarge"] = new TextSize { name = "VERY LARGE", k = 1.32 },

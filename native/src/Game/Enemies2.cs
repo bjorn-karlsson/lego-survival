@@ -612,7 +612,7 @@ public static partial class G
         src.emberCd = EMBER_CD;
         double n = EMBER_SHOTS[rank];
         /* one target CHOSEN PER EMBER, and each choice knows what the earlier ones took */
-        var taken = new Dictionary<Ent, double>();
+        var taken = new JsMap<Ent, double>();
         for (int i = 0; i < n; i++)
         {
             var tgt = emberTarget(src, src, taken);

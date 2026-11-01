@@ -22,7 +22,7 @@ public sealed class GolemTypeDef
 
 public static partial class G
 {
-    public static readonly Dictionary<string, RarityDef> RARITY = new()
+    public static readonly JsMap<string, RarityDef> RARITY = new()
     {
         ["common"] = new RarityDef { name = "COMMON", col = "#9ba19d", mult = 1.0 },
         ["uncommon"] = new RarityDef { name = "UNCOMMON", col = "#4b9b41", mult = 1.6 },
@@ -34,7 +34,7 @@ public static partial class G
     public static readonly NumMap REJECT_STUDS = new(("common", 30), ("uncommon", 60), ("rare", 120), ("epic", 260), ("legendary", 700));
     /* Every table now runs one legendary per nine epics */
     public const double LEG_PER_EPIC = 1.0 / 9;
-    public static readonly Dictionary<string, NumMap> MODE_W = new()
+    public static readonly JsMap<string, NumMap> MODE_W = new()
     {
         ["wave"] = new NumMap(("common", 58), ("uncommon", 26), ("rare", 12), ("epic", 4), ("legendary", 4 * LEG_PER_EPIC)),
         ["level"] = new NumMap(("common", 50), ("uncommon", 30), ("rare", 15), ("epic", 5), ("legendary", 5 * LEG_PER_EPIC)),
@@ -105,8 +105,8 @@ public static partial class G
     /* BLOCK FREEZE HAS ITS OWN LADDER */
     public static readonly Tbl FREEZE_COUNT = new double[] { 0, 0, 1, 2, 3 };
     public static double spellCount(double m) => byRar(m, SPELL_COUNT);
-    public static readonly Dictionary<string, string> CLS_COL = new() { ["OFFENSE"] = "#d3242b", ["DEFENSE"] = "#1668b3", ["UTILITY"] = "#c78c00", ["SPELL"] = "#9b45d6" };
-    public static readonly Dictionary<string, string> ICONS = new()
+    public static readonly JsMap<string, string> CLS_COL = new() { ["OFFENSE"] = "#d3242b", ["DEFENSE"] = "#1668b3", ["UTILITY"] = "#c78c00", ["SPELL"] = "#9b45d6" };
+    public static readonly JsMap<string, string> ICONS = new()
         {
       ["sword"] = "<path d=\"M20 4 L8 16 M18 2 L22 6 M6.5 13.5 L10.5 17.5 M8 16 L4 20 M3 21 L4.5 19.5\"/>",
       ["bolt"] = "<path d=\"M13 2 L5 13 H11 L9 22 L19 10 H13 Z\"/>",
@@ -188,7 +188,7 @@ public static partial class G
     /* =============================== GOLEMS ===============================
        Each KIND grants you something while it stands, and fights with its own element. */
     public const int GOLEM_BASE_CAP = 2, GOLEM_CAP_MAX = 3;
-    public static readonly Dictionary<string, GolemTypeDef> GOLEM_TYPES = new()
+    public static readonly JsMap<string, GolemTypeDef> GOLEM_TYPES = new()
     {
         ["flame"] = new GolemTypeDef { name = "Flame Golem", skin = "fire", col = "#ff8a3c", el = "fire",
             k = new NumMap(("dmg", 1.7), ("rate", 1.05), ("hp", 2.6), ("range", 420), ("keep", 200), ("reach", 0)),
@@ -365,7 +365,7 @@ public static partial class G
         apply = c=>{ player.inc["chaos"] += c.v; } },
       /* PENETRATION, one per element, offered only to a hero whose hits carry it */
       ..PEN_KEYS.map(el=>(new Upgrade { id = "pen"+el, name = PEN_NAME[el]+" Penetration",
-        icon = new Dictionary<string, string> { ["fire"] = "flame", ["frost"] = "icecube", ["shock"] = "chain", ["chaos"] = "bane" }[el], cls = "OFFENSE",
+        icon = new JsMap<string, string> { ["fire"] = "flame", ["frost"] = "icecube", ["shock"] = "chain", ["chaos"] = "bane" }[el], cls = "OFFENSE",
         minRar = el == "chaos" ? "rare" : "uncommon",
         req = ()=>!isSummoner() && !!dealtTypes()[el] && penOf(el) < PEN_MAX - 1e-9,
         calc = m=>(new Calc {v = byRar(m, [0.05, 0.06, 0.08, 0.11, 0.15])}),

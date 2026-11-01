@@ -33,7 +33,7 @@ public static partial class G
         new FigCols { head = head, torso = torso, legs = legs, hands = hands, hair = hair };
     static NumMap R(params (string k, double v)[] kv) => new NumMap(kv);
 
-    public static readonly Dictionary<string, EDef> EDEF = new()
+    public static readonly JsMap<string, EDef> EDEF = new()
     {
         ["imp"] = new EDef { hp = 3, speed = 88, r = 12, scale = 0.78, dmg = 1, xp = 2, studs = new double[] { 2, 4 },
             col = FC(PAL.red, PAL.dred, "#2b2f33", PAL.hyellow, "#8f161d"), style = "imp" },
@@ -181,7 +181,7 @@ public static partial class G
             col = FC("#ff9a3c", "#8a3418", "#4a1d0f", "#ffc07a", "#4a1d0f"), style = "brute" },
     };
     /* Each golem has its OWN kit */
-    public static readonly Dictionary<string, GolemConf> GOLEM_CONF = new()
+    public static readonly JsMap<string, GolemConf> GOLEM_CONF = new()
     {
         ["stone"] = new GolemConf { ring = "#c9cec9", dust = "#b8bdb9", stompR = 300, chargeSpd = 430, wind = 1.0, dmg = 5,
             kit = "stomp", range = 620, mini = "ministone", bricks = new[] { "#9aa0a0", "#7b8184", "#5f6467" }, name = "STONE" },
@@ -199,7 +199,7 @@ public static partial class G
     /* and it lands AROUND you, at arm's length */
     public const double COIL_SPREAD_MIN = 150, COIL_SPREAD_MAX = 330;
     /* What one shot carries: a share of the monster's melee `dmg` */
-    public static readonly Dictionary<string, double> SHOT_SHARE = new()
+    public static readonly JsMap<string, double> SHOT_SHARE = new()
     {
         ["arrow"] = 0.85, ["bolt"] = 0.80, ["frostbolt"] = 0.80, ["batbolt"] = 0.50,
         ["skull"] = 0.34, ["hexbolt"] = 0.30,
@@ -230,7 +230,7 @@ public static partial class G
         return Math.Min(BOSS_LATE_MAX, Math.Pow(BOSS_LATE_BASE, 1 + Math.Floor((w - BOSS_LATE_FROM) / BOSS_LATE_PER)));
     }
     public static double bossPool(double baseHp, double st) => baseHp * 1.2 * (1 + (st - 1) * ULTRA_STEP) + st * ULTRA_FLAT + ULTRA_BASE;
-    public static readonly Dictionary<string, EDef> BOSSES = new()
+    public static readonly JsMap<string, EDef> BOSSES = new()
     {
         ["brickthane"] = new EDef { name = "VON BRICKTHANE", hp = 90, speed = 52, r = 26, scale = 2.15, dmg = 2, xp = 40, studs = new double[] { 40, 60 },
             col = FC("#3a3f44", "#23272b", "#1b1f23", "#2f3438", "#2f3438"), style = "boss" },
@@ -248,7 +248,7 @@ public static partial class G
             col = FC("#4a3a63", "#2e2442", "#1d1730", "#6b5790", "#140f22"), style = "bat" },
     };
     /* SUPER BOSSES at waves 10 / 20 / 30 ... */
-    public static readonly Dictionary<string, EDef> SUPERBOSSES = new()
+    public static readonly JsMap<string, EDef> SUPERBOSSES = new()
     {
         ["omegathane"] = new EDef { name = "OMEGA BRICKTHANE", hp = 640, speed = 66, r = 40, scale = 3.1, dmg = 5, xp = 120, studs = new double[] { 120, 180 }, sig = "nova",
             es = 0.30, chaos = 0.15,
@@ -343,7 +343,7 @@ public static partial class G
         new MonMod { id = "envenomed", name = "ENVENOMED", col = "#8ede4a", tip = "every hit it lands poisons you",
             apply = e => { e.rmVenom = true; } },
     };
-    public static readonly Dictionary<string, MonMod> RARE_MOD_BY_ID = RARE_MODS.ToDictionary(m => m.id, m => m);
+    public static readonly JsMap<string, MonMod> RARE_MOD_BY_ID = RARE_MODS.ToJsMap(m => m.id, m => m);
     public static bool applyRareMod(Ent e, string id)
     {
         var M = id != null ? RARE_MOD_BY_ID.GetValueOrDefault(id) : null;
@@ -456,7 +456,7 @@ public static partial class G
             c.strokeStyle = "rgba(255,230,160,0.9)"; c.lineWidth = 3; c.beginPath(); c.arc(k.x, k.y, 10 + (RM_CORE_R - 10) * f, 0, TAU); c.stroke();
             c.fillStyle = "#ffb066"; c.beginPath(); c.arc(k.x, k.y - 8, 7 + 3 * Math.Sin(vtime * 20), 0, TAU); c.fill();
         }
-        var groups = new Dictionary<int, List<Ent>>(); var gOrder = new List<int>();
+        var groups = new JsMap<int, List<Ent>>(); var gOrder = new List<int>();
         c.textAlign = "center";
         foreach (var e in enemies)
         {
@@ -732,7 +732,7 @@ public static partial class G
     public const double ORB_TTL = 4.0, ORB_SPD0 = 45, ORB_ACC = 60, ORB_SPD_MAX = 330, ORB_TURN = 2.4;
     public const double ORB_HOLD_T = 1.0, ORB_R = 58, ORB_TOUCH = 24, ORB_CAP = 48;
     public const double ORB_AURA_T = 5, ORB_AURA_N = 2, ORB_DMG_MUL = 0.9;
-    public static readonly Dictionary<string, OrbKind> ORB_KINDS = new()
+    public static readonly JsMap<string, OrbKind> ORB_KINDS = new()
     {
         ["blood"] = new OrbKind { col = "#e0203a", r = 224, g = 32, b = 58, elem = null, name = "blood orb" },
         ["chaos"] = new OrbKind { col = "#8ede4a", r = 142, g = 222, b = 74, elem = "chaos", name = "plague orb" },

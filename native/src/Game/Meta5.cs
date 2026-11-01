@@ -17,13 +17,13 @@ public static partial class G
 
        The tags come off the STAT, like the icon does, so a stat written tomorrow
        needs one line here and every node carrying it is findable from then on. */
-    public static readonly Dictionary<string, string> META_TAG_DMG = new()
+    public static readonly JsMap<string, string> META_TAG_DMG = new()
     {
         ["phys"] = "physical", ["fire"] = "fire elemental", ["frost"] = "cold frost elemental",
         ["shock"] = "lightning shock elemental", ["chaos"] = "chaos",
     };
     /* what each spell brick deals, so "lightning" finds the Storm Brick's nodes */
-    public static readonly Dictionary<string, string> META_TAG_SPELL = new()
+    public static readonly JsMap<string, string> META_TAG_SPELL = new()
     {
         ["orbit"] = "physical guardian orbit", ["chain"] = "lightning shock elemental chain",
         ["storm"] = "physical bladestorm", ["vortex"] = "physical vortex", ["freeze"] = "cold frost elemental freeze chill",
@@ -31,7 +31,7 @@ public static partial class G
     };
     public const string META_TAG_RES = "defence resistance elemental resistance ";
     public const string META_TAG_LIFE = "defence life hearts health ";
-    public static readonly Dictionary<string, string> META_TAGS = new()
+    public static readonly JsMap<string, string> META_TAGS = new()
     {
         ["incMelee"] = "offence damage physical attack melee",
         ["incSpell"] = "offence damage spell caster",

@@ -61,7 +61,7 @@ public static partial class G
     public const string BREACH_CHEST_MAX = "rare";
     public static readonly (double need, string rar)[] BREACH_HOARD = { (25, "common"), (60, "uncommon"), (110, "rare") };
     public static string breachChestRar(string r) => Array.IndexOf(RAR_ORDER, r) > Array.IndexOf(RAR_ORDER, BREACH_CHEST_MAX) ? BREACH_CHEST_MAX : r;
-    public static readonly Dictionary<string, BreachLordDef> BREACH_LORDS = new()
+    public static readonly JsMap<string, BreachLordDef> BREACH_LORDS = new()
     {
         ["xoph"] = new BreachLordDef { name = "XOPH", title = "Dark Embers", el = "fire", col = "#ff6a2a", dim = "#6e1c0a", ring = "Xoph's Ring" },
         ["tul"] = new BreachLordDef { name = "TUL", title = "Creeping Avalanche", el = "frost", col = "#8fd8ff", dim = "#1d4a66", ring = "Tul's Ring" },

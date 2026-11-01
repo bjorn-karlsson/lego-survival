@@ -29,7 +29,7 @@ public static partial class G
     public const double ARROW_SPREAD = 0.14, ARROW_LIFE = 0.95;
     public const int ARROW_MAX_PIERCE = 12, ARROW_PIERCE_ALL = 99, ARROW_FORK_N = 4;
     public const double ARROW_FORK_R = 190, ARROW_FORK_SHARE = 0.5, ARROW_BLAST_R = 80, ARROW_BLAST_LESS = 0.45;
-    public static readonly Dictionary<string, ArrowKind> ARROW_KINDS = new()
+    public static readonly JsMap<string, ArrowKind> ARROW_KINDS = new()
     {
         ["light"] = new ArrowKind { name = "Lightning Arrow", to = "shock", conv = 0.75, ail = 0.25, col = "#ffd84a" },
         ["fire"] = new ArrowKind { name = "Fire Arrow", to = "fire", conv = 0.80, ail = 0.20, col = "#ff7a2a" },
@@ -334,12 +334,12 @@ public static partial class G
         return start + (floor - start) * t;
     }
     public const double ORBIT_MAX_SPD = 5.2;
-    public static readonly Dictionary<string, double> SPELL_FLOOR = new()
+    public static readonly JsMap<string, double> SPELL_FLOOR = new()
     {
         ["chain"] = CHAIN_MIN_RATE, ["storm"] = STORM_MIN_RATE, ["vortex"] = VORTEX_MIN_RATE,
         ["freeze"] = FREEZE_MIN_RATE, ["bomb"] = BOMB_MIN_RATE, ["bane"] = BANE_MIN_RATE
     };
-    public static readonly Dictionary<string, string> SPELL_NAME = new()
+    public static readonly JsMap<string, string> SPELL_NAME = new()
     {
         ["orbit"] = "Guardian Brick", ["chain"] = "Storm Brick", ["storm"] = "Bladestorm", ["vortex"] = "Blade Vortex",
         ["freeze"] = "Block Freeze", ["bomb"] = "Bomb Volley", ["bane"] = "Brickbane"

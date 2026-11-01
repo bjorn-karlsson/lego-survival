@@ -17,7 +17,7 @@ public sealed class CaveBat { public double x, y, vx, vy, ph, life; }
 public sealed class CaveTileT { public OffCanvas c; public int used; }
 public sealed class CaveArtT
 {
-    public CaveMapT M; public List<CaveLoop> loops; public Path2D floor, rock; public Dictionary<string, CaveTileT> tiles = new();
+    public CaveMapT M; public List<CaveLoop> loops; public Path2D floor, rock; public JsMap<string, CaveTileT> tiles = new();
     public double k = 1; public int frame;
     public List<CaveStud> studs = new(); public List<CaveLump> lumps = new();
     public List<CaveDeco> cracks = new(), moss = new(), pebbles = new(), shrooms = new(), shards = new(), puddles = new(), patches = new(), bones = new();
@@ -241,7 +241,7 @@ public static partial class G
     {
         int C = M.cols, R = M.rows; var Gg = M.g; double Sz = CAVE_CELL; int V = C + 1;
         int wall(int x, int y) => x < 0 || y < 0 || x >= C || y >= R ? 1 : Gg[y * C + x];
-        var @out = new Dictionary<int, List<CEdge>>(); var edges = new List<CEdge>();
+        var @out = new JsMap<int, List<CEdge>>(); var edges = new List<CEdge>();
         void add(int ax, int ay, int bx, int by)
         {
             var e = new CEdge { ax = ax, ay = ay, bx = bx, by = by, dx = bx - ax, dy = by - ay, used = false };

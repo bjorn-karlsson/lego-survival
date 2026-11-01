@@ -23,7 +23,7 @@ public static partial class G
     public static readonly Tbl SBOX_DELAY = new double[] { 3, 9 };
     public const double SBOX_TOUCH = 46;
     /* the four tiers */
-    public static readonly Dictionary<string, SboxTier> SBOX_TIERS = new()
+    public static readonly JsMap<string, SboxTier> SBOX_TIERS = new()
     {
         ["plain"] = new SboxTier { name = "STRONGBOX", col = "#b8c0c6", mods = 1, bursts = 2, extra = 0, rar = "common", w = 0.52 },
         ["magic"] = new SboxTier { name = "MAGIC STRONGBOX", col = "#5a8dff", mods = 2, bursts = 3, extra = 0, rar = "uncommon", w = 0.30 },
@@ -161,7 +161,7 @@ public static partial class G
         }
     }
     /* THE STASH, bottom centre: one pip per reward in the order they will open, and the key */
-    public static readonly Dictionary<string, string> LOOT_PIP = new() { ["chest"] = null, ["level"] = "#ffd23a", ["boss"] = "#ff8a1f", ["wave"] = "#6fdc6f", ["bonus"] = "#6fdc6f" };
+    public static readonly JsMap<string, string> LOOT_PIP = new() { ["chest"] = null, ["level"] = "#ffd23a", ["boss"] = "#ff8a1f", ["wave"] = "#6fdc6f", ["bonus"] = "#6fdc6f" };
     public static void drawLootStash()
     {
         if (OPT.autoLoot || pendingPicks.Count == 0 || state != "play" || player == null || player.dead) return;

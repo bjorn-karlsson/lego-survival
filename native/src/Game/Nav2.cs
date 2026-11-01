@@ -7,7 +7,7 @@ namespace Brickblade;
 public sealed partial class Ent
 {
     public Pt flowAt; public double flowT; public Ent tgtM; public bool taunted; public Dash proxyDash;
-    public Dictionary<string, double> hazCd;
+    public JsMap<string, double> hazCd;
     /* the stand-in's copy of the hero: every field as the hero has it this moment */
     public Ent ProxyOf() => (Ent)MemberwiseClone();
 }
@@ -274,7 +274,7 @@ public static partial class G
         {
             if (m.rise < 1 || m.gone) continue;
             if (Math.hypot(m.x - h.x, m.y - h.y) >= r + m.r) continue;
-            m.hazCd ??= new Dictionary<string, double>();
+            m.hazCd ??= new JsMap<string, double>();
             var k = Js.Or(hkind, "h");
             if (m.hazCd.GetValueOrDefault(k) > vtime) continue;
             m.hazCd[k] = vtime + Js.Or(every, 0.5);

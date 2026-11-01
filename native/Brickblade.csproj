@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="GameOrder.props" />
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
@@ -25,6 +26,14 @@
   <ItemGroup>
     <Compile Remove="tests/**" />
     <Compile Remove="tools/**" />
+    <!-- the game's files go to the compiler in JS order, so their static
+         initialisers run in the order the browser ran the script (GameOrder.props);
+         a file not listed there yet still compiles, last -->
+    <Compile Remove="src/Game/**" />
+    <Compile Include="@(GameOrdered)" />
+    <Compile Include="src/Game/**/*.cs" Exclude="@(GameOrdered)" />
     <EmbeddedResource Include="assets/**/*" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- the game's own page: its stylesheet and its screens (the script is the C#) -->
+    <EmbeddedResource Include="../lego-survival.html" LogicalName="page.html" />
   </ItemGroup>
 </Project>

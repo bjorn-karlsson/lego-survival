@@ -125,7 +125,7 @@ public static partial class G
       <div class=""ctag"" style=""background:{CLS_COL.GetValueOrDefault(u.cls ?? "") ?? "#555"}"">{u.cls}</div>
     </div>";
         }
-        var byId = new Dictionary<string, Upgrade>(); foreach (var u in UPGRADES) byId[u.id] = u;
+        var byId = new JsMap<string, Upgrade>(); foreach (var u in UPGRADES) byId[u.id] = u;
         var used = new HashSet<string>();
         List<Upgrade> take(List<string> ids) => ids.Select(id => byId.GetValueOrDefault(id)).Where(u =>
         {
@@ -417,8 +417,8 @@ public static partial class G
        two still turn up, only less often. */
     public const double CONV_WEIGHT = 0.5, CHAOS_CONV_WEIGHT = 0.25;
     public static readonly HashSet<string> CHAOS_CONV = new() { "convchaos", "gainchaos", "convrot", "gainrot" };
-    public static readonly Dictionary<string, string> HOME_ATTR = new() { ["sword"] = "str", ["mace"] = "str", ["axe"] = "dex", ["bow"] = "dex", ["staff"] = "int", ["scepter"] = "int" };
-    public static readonly Dictionary<string, string> DEF_FAMILY = new()
+    public static readonly JsMap<string, string> HOME_ATTR = new() { ["sword"] = "str", ["mace"] = "str", ["axe"] = "dex", ["bow"] = "dex", ["staff"] = "int", ["scepter"] = "int" };
+    public static readonly JsMap<string, string> DEF_FAMILY = new()
     {
         ["armor"] = "str", ["armorinc"] = "str", ["attstr"] = "str",
         ["eva"] = "dex", ["evainc"] = "dex", ["suppress"] = "dex", ["attdex"] = "dex",

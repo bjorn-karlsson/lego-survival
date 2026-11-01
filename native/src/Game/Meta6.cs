@@ -250,7 +250,7 @@ public static partial class G
         if (svg != null)
         {
             foreach (var r in svg.querySelectorAll(".tfind")) r.remove();
-            var at = new Dictionary<string, int>();
+            var at = new JsMap<string, int>();
             for (int i = 0; i < treeFound.Count; i++) at[treeFound[i]] = i;
             foreach (var g in svg.querySelectorAll(".tnode"))
             {

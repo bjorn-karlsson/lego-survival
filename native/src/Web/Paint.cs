@@ -439,6 +439,10 @@ internal static class Paint2
     }
     static void Background(Box b, double W, double H, (double tl, double tr, double br, double bl) rad)
     {
+        /* the field is drawn on the window before the page: the boxes it sits in
+           (html, body) would paint their backgrounds over it, where the browser has
+           them under the canvas, which covers them edge to edge */
+        if (Dom.FieldEl != null && b.el != null && b.el != Dom.FieldEl && !b.isPseudo && b.el.contains(Dom.FieldEl)) return;
         var c = b.cs;
         double x = 0, y = 0, w = W, h = H; var r = rad;
         if (c.bgClip == "padding-box") { x = b.bl; y = b.bt; w = W - b.bl - b.br; h = H - b.bt - b.bb; r = Shrink(rad, Math.Max(b.bl, b.bt)); }

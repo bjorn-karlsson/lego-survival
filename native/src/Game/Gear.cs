@@ -29,8 +29,8 @@ public sealed class GearEntry { public GearItem it; public int x, y; }
 public sealed class GearState
 {
     public int v = 3;
-    public Dictionary<string, Dictionary<string, GearItem>> eqBy = new();
-    public Dictionary<string, GearItem> eq;
+    public JsMap<string, JsMap<string, GearItem>> eqBy = new();
+    public JsMap<string, GearItem> eq;
     public List<GearEntry> inv = new(), stash = new();
     public int uid = 1;
 }
@@ -46,13 +46,13 @@ public static partial class G
     /* THE STASH: twelve wide and 256 deep, and it SCROLLS */
     public const int GEAR_STASH_COLS = 12, GEAR_STASH_ROWS = 256, GEAR_STASH_VIEW = 12;
     public static readonly string[] GEAR_SLOTS = { "weapon", "helmet", "offhand", "body", "amulet", "ring1", "ring2", "gloves", "belt", "boots" };
-    public static readonly Dictionary<string, string> GEAR_SLOT_NAME = new()
+    public static readonly JsMap<string, string> GEAR_SLOT_NAME = new()
     {
         ["weapon"] = "WEAPON", ["offhand"] = "OFF HAND", ["helmet"] = "HELMET", ["body"] = "BODY ARMOUR",
         ["gloves"] = "GLOVES", ["boots"] = "BOOTS", ["belt"] = "BELT", ["amulet"] = "AMULET", ["ring1"] = "RING", ["ring2"] = "RING",
     };
     /* every class of item: the slot that takes it and how much of the bag it fills */
-    public static readonly Dictionary<string, GearCls> GEAR_CLS = new()
+    public static readonly JsMap<string, GearCls> GEAR_CLS = new()
     {
         ["helmet"] = new GearCls { name = "Helmet", slot = "helmet", w = 2, h = 2 },
         ["body"] = new GearCls { name = "Body Armour", slot = "body", w = 2, h = 3 },
@@ -176,11 +176,11 @@ public static partial class G
             }
         return true;
     }
-    public static readonly Dictionary<string, GearBase> GEAR_BASE_BY_ID = GEAR_BASES.ToDictionary(b => b.id, b => b);
+    public static readonly JsMap<string, GearBase> GEAR_BASE_BY_ID = GEAR_BASES.ToJsMap(b => b.id, b => b);
     /* the one damage type a weapon adds, by what the hand holding it does */
     public static string gearDmgKind(string cls) => cls == "staff" ? "elem" : cls == "scepter" ? "minion" : "phys";
     /* ---- THE AFFIXES ---- */
-    public static readonly Dictionary<string, MetaStat> GEAR_XSTATS = new()
+    public static readonly JsMap<string, MetaStat> GEAR_XSTATS = new()
     {
         ["minionFlat"] = new MetaStat { n = "flat damage to every minion hit", w = (p, v) => { p.minions.flat += v; } },
         ["allAttr"] = new MetaStat { n = "to all ATTRIBUTES", w = (p, v) => { p.attr["str"] += v; p.attr["dex"] += v; p.attr["int"] += v; } },
@@ -266,7 +266,7 @@ public static partial class G
         for (int i = 0; i < a.tiers.Count; i++) { var t = a.tiers[i]; if (v >= Math.Min(t.min, gearRound(a.stat, t.min)) - 1e-9) best = i; }
         return best;
     }
-    public static readonly Dictionary<string, GearAffix> GEAR_AFFIX_BY_ID = GEAR_AFFIXES.ToDictionary(a => a.id, a => a);
+    public static readonly JsMap<string, GearAffix> GEAR_AFFIX_BY_ID = GEAR_AFFIXES.ToJsMap(a => a.id, a => a);
     /* WHOLE NUMBERS where the number is one */
     public static readonly HashSet<string> GEAR_WHOLE = new() { "hearts", "es", "armour", "eva", "str", "dex", "int", "allAttr", "acc",
         "locArmour", "locEva", "locEs" };
@@ -280,14 +280,14 @@ public static partial class G
     static double JsRound(double v) => Math.Round(v);
     public static double gearRollIn(string stat, double lo, double hi) => gearRound(stat, lo + Js.R() * (hi - lo));
     /* ---- RARITY ---- */
-    public static readonly Dictionary<string, GearRar> GEAR_RAR = new()
+    public static readonly JsMap<string, GearRar> GEAR_RAR = new()
     {
         ["normal"] = new GearRar { name = "NORMAL", col = "#c8c8c8", bg = "rgba(200,200,200,.10)", min = 0, max = 0 },
         ["magic"] = new GearRar { name = "MAGIC", col = "#8888ff", bg = "rgba(90,90,255,.20)", min = 1, max = 2 },
         ["rare"] = new GearRar { name = "RARE", col = "#ffff77", bg = "rgba(255,230,80,.16)", min = 3, max = 6 },
     };
-    public static readonly Dictionary<string, int> GEAR_MAX_PRE = new() { ["normal"] = 0, ["magic"] = 1, ["rare"] = 3 };
-    public static readonly Dictionary<string, int> GEAR_MAX_SUF = GEAR_MAX_PRE;
+    public static readonly JsMap<string, int> GEAR_MAX_PRE = new() { ["normal"] = 0, ["magic"] = 1, ["rare"] = 3 };
+    public static readonly JsMap<string, int> GEAR_MAX_SUF = GEAR_MAX_PRE;
     /* ONLY BOSSES DROP GEAR */
     public const double GEAR_BOSS_EXTRA = 0;
     public static readonly Tbl GEAR_RARE_W = new double[] { 0.20, 0.35 };
@@ -384,7 +384,7 @@ public static partial class G
         "Golem", "Grim", "Hate", "Havoc", "Honour", "Horror", "Hypnotic", "Kraken", "Loath", "Maelstrom", "Mind", "Miracle",
         "Morbid", "Oblivion", "Onslaught", "Pain", "Pandemonium", "Phoenix", "Plague", "Rage", "Rapture", "Rune", "Skull",
         "Sol", "Soul", "Sorrow", "Spirit", "Storm", "Tempest", "Torment", "Vengeance", "Victory", "Viper", "Vortex", "Woe", "Wrath" };
-    public static readonly Dictionary<string, string[]> GEAR_RARE_B = new()
+    public static readonly JsMap<string, string[]> GEAR_RARE_B = new()
     {
         ["helmet"] = new[] { "Brow", "Corona", "Cowl", "Crest", "Crown", "Halo", "Horn", "Keep", "Peak", "Salvation", "Shelter", "Star", "Veil", "Visage" },
         ["body"] = new[] { "Carapace", "Cloak", "Coat", "Curtain", "Guardian", "Hide", "Jack", "Mantle", "Pelt", "Sanctuary", "Shell", "Shroud", "Skin", "Suit", "Ward", "Wrap" },
@@ -452,7 +452,7 @@ public static partial class G
     /* ---- THE SAVE ---- */
     public static GearState GEAR = null;
     /* ONE SET OF GEAR PER WEAPON, ONE STASH FOR ALL */
-    public static Dictionary<string, GearItem> gearBlankEq() { var eq = new Dictionary<string, GearItem>(); foreach (var s in GEAR_SLOTS) eq[s] = null; return eq; }
+    public static JsMap<string, GearItem> gearBlankEq() { var eq = new JsMap<string, GearItem>(); foreach (var s in GEAR_SLOTS) eq[s] = null; return eq; }
     public static GearState gearBlank()
     {
         var Gs = new GearState();
@@ -519,7 +519,7 @@ public static partial class G
             if (o != null)
             {
                 int maxU = 0;
-                void readSet(JsonNode src, Dictionary<string, GearItem> into)
+                void readSet(JsonNode src, JsMap<string, GearItem> into)
                 {
                     foreach (var s in GEAR_SLOTS)
                     {
@@ -576,7 +576,7 @@ public static partial class G
         var B = GEAR_BASE_BY_ID.GetValueOrDefault(it.b ?? ""); var C = B != null ? GEAR_CLS.GetValueOrDefault(B.cls) : null;
         return C != null ? (C.w, C.h) : (1, 1);
     }
-    public static readonly Dictionary<string, GearDim> GEAR_DIM = new()
+    public static readonly JsMap<string, GearDim> GEAR_DIM = new()
     {
         ["inv"] = new GearDim { cols = GEAR_COLS, rows = GEAR_ROWS },
         ["stash"] = new GearDim { cols = GEAR_STASH_COLS, rows = GEAR_STASH_ROWS, rowMajor = true },
@@ -641,9 +641,9 @@ public static partial class G
     }
     public static bool gearActive(GearItem it, string slot = null) => gearActiveWhy(it, slot) == "";
     /* THE GEAR THIS RUN WEARS: a run link carries the gear it was copied with */
-    public static Dictionary<string, GearItem> gearLinkCache = null; public static JsonObject gearLinkSrc = null;
+    public static JsMap<string, GearItem> gearLinkCache = null; public static JsonObject gearLinkSrc = null;
     public static bool gearLinked() => runLink != null && runLink.g != null;
-    public static Dictionary<string, GearItem> gearEqNow()
+    public static JsMap<string, GearItem> gearEqNow()
     {
         if (gearLinked())
         {
@@ -673,7 +673,7 @@ public static partial class G
         else if (hp0 > 0 && p.maxHp != hp0 && hpNow > 0) p.hp = Math.Min(p.maxHp, hpNow * p.maxHp / hp0);
     }
     /* the gear, squeezed for a run link: base, rarity, level, implicits, affixes */
-    public static JsonObject gearPackEq(Dictionary<string, GearItem> eq)
+    public static JsonObject gearPackEq(JsMap<string, GearItem> eq)
     {
         var o = new JsonObject();
         foreach (var s in GEAR_SLOTS)
@@ -687,9 +687,9 @@ public static partial class G
         }
         return o.Count > 0 ? o : null;
     }
-    public static Dictionary<string, GearItem> gearUnpackEq(JsonObject o)
+    public static JsMap<string, GearItem> gearUnpackEq(JsonObject o)
     {
-        var eq = new Dictionary<string, GearItem>();
+        var eq = new JsMap<string, GearItem>();
         foreach (var s in GEAR_SLOTS)
         {
             eq[s] = null;

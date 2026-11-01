@@ -68,7 +68,7 @@ public static partial class G
        is brought anywhere else. Its bolts fly far, fast and wide. */
     public const double MAGE_BOLT_FLY = 1.3, MAGE_FAN = 0.24, MAGE_FAN_MAX = 2.8;
     public static readonly string[] MAGE_ELEMS = { "fire", "frost", "shock" };
-    public static readonly Dictionary<string, string> MAGE_COL = new() { ["fire"] = "#ff8a3c", ["frost"] = "#8fd8ff", ["shock"] = "#ffe95a", ["chaos"] = "#b45cff" };
+    public static readonly JsMap<string, string> MAGE_COL = new() { ["fire"] = "#ff8a3c", ["frost"] = "#8fd8ff", ["shock"] = "#ffe95a", ["chaos"] = "#b45cff" };
     public const double MIRROR_SHARE = 0.75;
     public const double INSTAB_SHARE = 0.30, INSTAB_R = 110;
     /* WHAT RISES. A plain raising stands up one of three skeletons, for variety and
@@ -77,7 +77,7 @@ public static partial class G
        a MAGE; the first epic makes some of the melee ones GOLEMS; the second puts an
        OVERSEER at your shoulder. `dmg` and `rate` scale the legion's own numbers;
        `hp` its life. */
-    public static readonly Dictionary<string, MinionKind> MINION_KINDS = new()
+    public static readonly JsMap<string, MinionKind> MINION_KINDS = new()
     {
         ["spear"] = new MinionKind { name = "Skeleton Spearman", dmg = 1.25, rate = 0.85, reach = 34, range = 0, hp = 1.0, spd = 1.00, r = 11 },
         ["sword"] = new MinionKind { name = "Skeleton Swordsman", dmg = 1.35, rate = 0.72, reach = 26, range = 0, hp = 1.1, spd = 1.25, r = 11 },
@@ -102,7 +102,7 @@ public static partial class G
        what rises is any of the family, not only the plain walker -- each with its
        own numbers against the Raised Zombie's */
     public const double ZOMBIE_HORDE_MUL = 2;
-    public static readonly Dictionary<string, HordeKind> ZOMBIE_HORDE_KINDS = new()
+    public static readonly JsMap<string, HordeKind> ZOMBIE_HORDE_KINDS = new()
     {
         ["zombie"] = new HordeKind { name = "Raised Zombie", w = 3, k = new NumMap(), s = 0.84 },
         ["runner"] = new HordeKind { name = "Raised Runner", w = 2, k = new NumMap(("spd", 1.45), ("hp", 0.75), ("dmg", 0.9), ("rate", 0.8)), s = 0.84 },
@@ -298,7 +298,7 @@ public static partial class G
     {
         var M = player.minions;
         if (M.mages) return "mage";
-        var have = new Dictionary<string, int> { ["spear"] = 0, ["sword"] = 0, ["bow"] = 0 };
+        var have = new JsMap<string, int> { ["spear"] = 0, ["sword"] = 0, ["bow"] = 0 };
         foreach (var m in legion()) if (m.kind != null && have.ContainsKey(m.kind)) have[m.kind]++;
         var least = System.Math.Min(have["spear"], System.Math.Min(have["sword"], have["bow"]));
         var pk = MINION_MIX.Select(x => x.k).Where(k => have[k] == least).ToList();

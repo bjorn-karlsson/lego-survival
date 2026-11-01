@@ -54,7 +54,7 @@ public static partial class G
         g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
     }
     /* ONE biome per run */
-    public static readonly Dictionary<string, string[]> BIOMES = new()
+    public static readonly JsMap<string, string[]> BIOMES = new()
     {
         ["forest"] = new[] { "#4f9a37", "#55a43c", "#4a9133", "#59ab40" },
         ["desert"] = new[] { "#d3bc7e", "#ccb474", "#dcc689", "#c9b276" },
@@ -66,12 +66,12 @@ public static partial class G
         ["cave"] = new[] { "#6e6a62", "#67635c", "#767268", "#5f5b55" },
     };
     public static readonly string[] BIOME_ORDER = { "forest", "desert", "stone", "swamp", "tundra", "ash", "meadow" };
-    public static readonly Dictionary<string, string> BIOME_NAMES = new()
+    public static readonly JsMap<string, string> BIOME_NAMES = new()
     {
         ["forest"] = "THE GREENWOOD", ["desert"] = "THE DUST FLATS", ["stone"] = "THE GREY REACH", ["swamp"] = "THE MIRE",
         ["tundra"] = "THE WHITE WASTE", ["ash"] = "THE CINDER FIELDS", ["meadow"] = "THE LONG MEADOW",
     };
-    public static readonly Dictionary<string, (string t, int c)[]> BIOME_PROPS = new()
+    public static readonly JsMap<string, (string t, int c)[]> BIOME_PROPS = new()
     {
         ["forest"] = new[] { ("tree", 26), ("crate", 6), ("crystal", 4) },
         ["desert"] = new[] { ("cactus", 20), ("rock", 12), ("crate", 5) },
@@ -83,7 +83,7 @@ public static partial class G
     };
     public static string runBiome = "forest";
     public static string biomeAt(double x, double y) => inCave(x, y) ? "cave" : runBiome;
-    static readonly Dictionary<Col, OffCanvas> spriteCache = new();
+    static readonly JsMap<Col, OffCanvas> spriteCache = new();
     public static OffCanvas cellSprite(Col col)
     {
         if (spriteCache.TryGetValue(col, out var s)) return s;

@@ -418,7 +418,7 @@ public static partial class G
        actually roll at, which is epic for everything except the legendary-only
        bricks. Reading a card at common and at epic side by side is the whole point
        of the bench when you are balancing numbers. */
-    public static readonly Dictionary<string, double> benchRar = new();
+    public static readonly JsMap<string, double> benchRar = new();
     public static (double lo, double hi) benchRange(Upgrade u)
     {
         double lo = rarRank(Js.T(u.minRar) ? u.minRar : "common");

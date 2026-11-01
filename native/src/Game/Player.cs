@@ -73,7 +73,7 @@ public static partial class G
             bleedChanceFlat = 0, bleedShareFlat = 0, bleedChance = 0, bleedShare = BLEED_SHARE_BASE,
             ailChanceFlat = 0, ailChance = 0, ailTypeFlat = NM("fire", "frost", "shock", "chaos"), ailType = NM("fire", "frost", "shock", "chaos"),
             reave = 0, reaveCd = 0,
-            stacks = new Dictionary<string, StackSt>(), stackMax = NM("momentum", "rage", "frenzy", "power", "endurance"),
+            stacks = new JsMap<string, StackSt>(), stackMax = NM("momentum", "rage", "frenzy", "power", "endurance"),
             rageOnHurt = 0, rageOnHit = 0,
             chargeKill = 0, chargeCrit = 0, chargeHurt = 0,
             exposeChanceFlat = 0, exposeChance = 0, prolifR = 0, ailMagInc = 0, dotMore = 1,

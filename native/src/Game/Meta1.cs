@@ -41,7 +41,7 @@ public static partial class G
     /* ONE POINT A LEVEL */
     public const double META_POINTS_PER_LEVEL = 1;
     /* MASTERY: every CAPPED brick of one spell, at its cap */
-    public static readonly Dictionary<string, MetaMastery> META_MASTERY = new()
+    public static readonly JsMap<string, MetaMastery> META_MASTERY = new()
     {
         ["bane"] = new MetaMastery { name = "BRICKBANE MASTER", icon = "bane",
             note = "every capped Brickbane brick at its cap \u2014 stacks, spread, reach, " +
@@ -55,7 +55,7 @@ public static partial class G
                 && p.bane.burst >= BANE_BURST.Length - 1 },
     };
     /* INTELLIGENCE FEEDS THE LEGION: [stat it rides on, minion stat, how much of it] */
-    public static readonly Dictionary<string, (string k, double m)> MINION_SISTERS = new()
+    public static readonly JsMap<string, (string k, double m)> MINION_SISTERS = new()
     {
         ["incSpell"] = ("minionDmg", 0.8), ["incElem"] = ("minionDmg", 0.8), ["incAll"] = ("minionDmg", 0.8),
         ["incFire"] = ("minionDmg", 0.6), ["incFrost"] = ("minionDmg", 0.6), ["incShock"] = ("minionDmg", 0.6), ["incChaos"] = ("minionDmg", 0.6),
@@ -68,7 +68,7 @@ public static partial class G
         if (stat == null || !MINION_SISTERS.TryGetValue(stat, out var s2) || !(v > 0)) return null;
         return new Mod(s2.k, Math.Round(v * s2.m * 1000) / 1000);
     }
-    public static readonly Dictionary<string, MetaStat> META_STATS = new()
+    public static readonly JsMap<string, MetaStat> META_STATS = new()
     {
       ["incMelee"] = new MetaStat { n = "increased physical damage",    pct = 1, w = (p,v)=>{ p.incMelee += v; } },
       ["incSpell"] = new MetaStat { n = "increased spell damage",       pct = 1, w = (p,v)=>{ p.incSpell += v; } },

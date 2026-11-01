@@ -24,10 +24,10 @@ public sealed class MetaTpl
 public static partial class G
 {
     /* ---- WHAT A NODE LOOKS LIKE: read off the stat the node gives ---- */
-    public static readonly Dictionary<string, string> META_ICON_EXACT = BuildIconExact();
-    static Dictionary<string, string> BuildIconExact()
+    public static readonly JsMap<string, string> META_ICON_EXACT = BuildIconExact();
+    static JsMap<string, string> BuildIconExact()
     {
-        var d = new Dictionary<string, string>();
+        var d = new JsMap<string, string>();
         void S(string list) { foreach (var kv in list.Split(',')) { var p = kv.Split(':'); d[p[0].Trim()] = p[1].Trim(); } }
         S("incMelee:sword, flatPhys:sword, incAll:burst, moreAll:burst, incSpell:arcane, incCast:tempo, incAtk:tempo, boltR:range");
         S("incCrit:target, critMult:target, reach:range, incDot:bane, bleedChance:bane, bleedShare:bane, poisonDot:bane");
@@ -49,8 +49,8 @@ public static partial class G
         return d;
     }
     /* a conversion wears the type it ARRIVES as */
-    public static readonly Dictionary<string, string> CONV_ICON = new() { ["phys"] = "sword", ["shock"] = "bolt", ["frost"] = "snow", ["fire"] = "flame", ["chaos"] = "vortex" };
-    public static readonly Dictionary<string, string> WEAP_ICON = new() { ["sword"] = "sword", ["axe"] = "spin", ["mace"] = "fist", ["staff"] = "arcane" };
+    public static readonly JsMap<string, string> CONV_ICON = new() { ["phys"] = "sword", ["shock"] = "bolt", ["frost"] = "snow", ["fire"] = "flame", ["chaos"] = "vortex" };
+    public static readonly JsMap<string, string> WEAP_ICON = new() { ["sword"] = "sword", ["axe"] = "spin", ["mace"] = "fist", ["staff"] = "arcane" };
     static readonly System.Text.RegularExpressions.Regex CV_RE = new(@"^(?:cv|gn)_([a-z]+)_([a-z]+)$"), WINC_RE = new(@"^(?:dmg|inc)_(.+)$");
     public static string metaIconKey(MetaNode n)
     {
@@ -82,8 +82,8 @@ public static partial class G
         new() { id = "dex", name = "THE SWIFT ROAD", col = "#6ee06e" },
     };
     /* [from, to] clockwise in degrees, 0 = east. They tile the circle exactly. */
-    public static readonly (double cx, double cy, Dictionary<string, double[]> sector) META_MAP =
-        (4200, 4200, new Dictionary<string, double[]> { ["str"] = new double[] { 95, 235 }, ["int"] = new double[] { 235, 345 }, ["dex"] = new double[] { 345, 95 } });
+    public static readonly (double cx, double cy, JsMap<string, double[]> sector) META_MAP =
+        (4200, 4200, new JsMap<string, double[]> { ["str"] = new double[] { 95, 235 }, ["int"] = new double[] { 235, 345 }, ["dex"] = new double[] { 345, 95 } });
     public static string metaSectorOf(double deg)
     {
         double a = ((deg % 360) + 360) % 360;
@@ -96,7 +96,7 @@ public static partial class G
     }
     public static string metaSectorAt(double x, double y) => metaSectorOf(Math.Atan2(y - META_MAP.cy, x - META_MAP.cx) * 180 / Math.PI);
     /* WHICH COUNTRY EACH WEAPON CALLS HOME */
-    public static readonly Dictionary<string, string> META_HOME = new() { ["sword"] = "str", ["mace"] = "str", ["axe"] = "dex", ["staff"] = "int", ["bow"] = "dex", ["scepter"] = "int" };
+    public static readonly JsMap<string, string> META_HOME = new() { ["sword"] = "str", ["mace"] = "str", ["axe"] = "dex", ["staff"] = "int", ["bow"] = "dex", ["scepter"] = "int" };
     /* THE HEART, AND THE ROOM IT NEEDS */
     public const double CORE_ROOM = 560;
     public const double DOOR_R = 1300;
@@ -123,17 +123,17 @@ public static partial class G
     public const double LANE_STEP = 560;
     /* THE BALANCING BREAK */
     public const double ATTR_BREAK_N = 30, ATTR_BREAK_R = 31, ATTR_BREAK_D = 150;
-    public static readonly Dictionary<string, string> ATTR_COL = new() { ["str"] = "#ff5a4a", ["dex"] = "#6ee06e", ["int"] = "#5aa8ff" };
+    public static readonly JsMap<string, string> ATTR_COL = new() { ["str"] = "#ff5a4a", ["dex"] = "#6ee06e", ["int"] = "#5aa8ff" };
     public const double LANE_VARY = 0.46;
     /* what a step of lane is worth: an ATTRIBUTE, by the ground it crosses */
-    public static readonly Dictionary<string, (string name, string stat, double v)> META_TRAVEL = new()
+    public static readonly JsMap<string, (string name, string stat, double v)> META_TRAVEL = new()
     {
         ["str"] = ("Strength", "str", 10),
         ["dex"] = ("Dexterity", "dex", 10),
         ["int"] = ("Intelligence", "int", 10),
         ["core"] = ("Resolve", "str", 20),
     };
-    public static readonly Dictionary<string, List<List<(string name, string stat, double v)>>> META_BRANCH = new()
+    public static readonly JsMap<string, List<List<(string name, string stat, double v)>>> META_BRANCH = new()
     {
       /* RED IS TWO BEGINNINGS, not one. The sword and the mace both live in the red
          country, so a build that never leaves it can walk into twenty-four cheap
@@ -282,7 +282,7 @@ public static partial class G
         minors = [("Widening", "boltR", 0.10),("Harmonic", "incSpell", 0.04)] },
     ];
     /* ---- THE CONVERSION GROUPS: one per legal pair, both forms in the same cluster, generated ---- */
-    public static readonly Dictionary<string, string> CONV_GROUP_NAME = new()
+    public static readonly JsMap<string, string> CONV_GROUP_NAME = new()
     {
         ["phys>shock"] = "THE LIVE WIRE", ["phys>frost"] = "THE RIMEBLADE", ["phys>fire"] = "THE FORGE-EDGE",
         ["phys>chaos"] = "CREEPING BLIGHT", ["shock>frost"] = "STORMFROST", ["shock>fire"] = "THE ARC-FLAME",
@@ -782,15 +782,15 @@ public static partial class G
         minors = [("Veil", "incEs", 0.05),("Soft Step", "incHp", 0.025),("Studied", "int", 4)] },
     ];
     public static readonly List<MetaNode> META_NODES = new();
-    public static readonly Dictionary<string, MetaNode> META_BY_ID = new();
-    public static readonly Dictionary<string, MetaCluster> META_CLUSTER_BY_ID = new();
+    public static readonly JsMap<string, MetaNode> META_BY_ID = new();
+    public static readonly JsMap<string, MetaCluster> META_CLUSTER_BY_ID = new();
     public static readonly List<MetaCluster> META_CLUSTERS = new();
     public static List<MetaSite> META_SITES = new();
     /* how much clear ground a quad needs, beside its own group, to take a second */
     public const double SAT_WALL = 160, SAT_GAP = 330;
     /* how far round from its first way in a cluster's second one has to be */
     public const double THROUGH_ANGLE = 110 * Math.PI / 180;
-    public static readonly Dictionary<string, double> META_NODE_R = new() { ["start"] = 46, ["legend"] = 44, ["keystone"] = 40, ["notable"] = 34, ["minor"] = 25, ["travel"] = 19 };
+    public static readonly JsMap<string, double> META_NODE_R = new() { ["start"] = 46, ["legend"] = 44, ["keystone"] = 40, ["notable"] = 34, ["minor"] = 25, ["travel"] = 19 };
     /* what a ring costs to be standing on */
     public static readonly Tbl RING_AT = new double[] { 0, 5, 12, 22, 34 };
 }

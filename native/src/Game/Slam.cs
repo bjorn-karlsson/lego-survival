@@ -175,7 +175,7 @@ public static partial class G
        rhythm of the weapon and its legendary are the same thing.
        A row here is a whole combo, so a fifth weapon swings differently by being
        written down rather than by adding a branch to startSwing. */
-    public static readonly Dictionary<string, SwingStep> SWING_STEPS = new()
+    public static readonly JsMap<string, SwingStep> SWING_STEPS = new()
     {
         ["lo"] = new SwingStep { dur = 0.20, arc = new[] { -1.50, 1.15 }, reach = "reach", kb = 1.0 },
         ["hi"] = new SwingStep { dur = 0.20, arc = new[] { 1.50, -1.15 }, reach = "reach", kb = 1.0 },
@@ -183,7 +183,7 @@ public static partial class G
         /* out of the chop and all the way round behind you */
         ["back"] = new SwingStep { dur = 0.33, arc = new[] { 2.45, -2.25 }, reach = "spinReach", kb = 2.0, spin = true, crit = true },
     };
-    public static readonly Dictionary<string, string[]> SWING_COMBO = new() { ["_"] = new[] { "lo", "hi", "spin" }, ["axe"] = new[] { "lo", "back" } };
+    public static readonly JsMap<string, string[]> SWING_COMBO = new() { ["_"] = new[] { "lo", "hi", "spin" }, ["axe"] = new[] { "lo", "back" } };
     public static string[] comboSteps() => (weapon != null ? SWING_COMBO.GetValueOrDefault(weapon.id ?? "") : null) ?? SWING_COMBO["_"];
     public static void startSwing(double aim)
     {

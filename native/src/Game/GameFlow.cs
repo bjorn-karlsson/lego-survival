@@ -6,13 +6,13 @@ public sealed class OptRow
 {
     public string key, name, note, vol, unit;
     public Func<bool> on; public Action hit;
-    public string[] choices; public Dictionary<string, string> names; public double[] range;
+    public string[] choices; public JsMap<string, string> names; public double[] range;
 }
 
 public static partial class G
 {
     /* =============================== TITLE SCREEN =============================== */
-    public static readonly Dictionary<char, string[]> GLYPHS = new()
+    public static readonly JsMap<char, string[]> GLYPHS = new()
     {
         ['B'] = new[] { "1110", "1001", "1001", "1110", "1001", "1001", "1110" },
         ['R'] = new[] { "1110", "1001", "1001", "1110", "1010", "1001", "1001" },
@@ -681,7 +681,7 @@ public static partial class G
         {
             sizeCheck = 0.5;
             double iw = window.innerWidth, ih = window.innerHeight;
-            if (iw > 0 && ih > 0 && (iw != cw || ih != ch)) resize(iw, ih, App.WorldDensity);
+            if (iw > 0 && ih > 0 && (iw != cw || ih != ch)) resizeNow();
         }
         double dt = raw * tScale;
         tScale += (1 - tScale) * Math.min(1, raw * 3);

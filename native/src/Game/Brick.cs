@@ -43,7 +43,7 @@ public static partial class G
        title screen's stats panel. A probe may carry its own `why:` instead — this
        fills in everything that does not. Anything with no entry shows no tooltip
        rather than a wrong one; statWhy() is the only reader. */
-    public static readonly Dictionary<string, string> STAT_WHY = new()
+    public static readonly JsMap<string, string> STAT_WHY = new()
     {
         ["PHYSICAL|Weapon hit"] = "one ordinary swing, before crits. (Base + flat) × (1 + increased) × each more",
         ["PHYSICAL|Spin swing"] = "every third swing is a spin — a MORE multiplier of its own, on top of everything",
