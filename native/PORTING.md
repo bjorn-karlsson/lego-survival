@@ -39,6 +39,8 @@ reference: same rules, same numbers, same look. Nothing is meant to be left out.
   `Js.I32(x)`.
 - **Colours** are `Col` (a JS colour string converts implicitly). Template-literal colours
   become `rgba(r, g, b, a)` calls.
+- **`Math` is the JS's.** `Engine/JsMath.cs` is aliased over `System.Math` for the whole
+  project, so `Math.Round` rounds halves up as `Math.round` does (C#'s own rounds them to even).
 - **Text and numbers:** `String(n)` and `${n}` → `Js.Num(n)`; `n.toFixed(d)` → `Js.ToFixed(n, d)`.
   The process runs with the invariant culture, so a Windows set to a comma-decimal locale
   changes nothing.
@@ -68,7 +70,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 | PLAYER | 4392–4553 | ported (`Game/Player.cs`, `Game/Ent.cs`) |
 | WORLD | 4554–4938 | ported (`Game/World.cs`) |
 | PICKUPS / DEBRIS / PARTICLES | 4939–5411 | ported (`Game/Pickups.cs`) |
-| ENEMIES | 5412–8647 | |
+| ENEMIES | 5412–8647 | ported (`Game/Enemies1-4.cs`, `Game/Gear.cs`, `Game/EntMonster.cs`) |
 | WAVES / THE ROSTER | 8648–11357 | |
 | RARITY & UPGRADES | 11358–18277 | |
 | TEST BENCH | 18278–18844 | |
@@ -92,7 +94,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 from sections not yet ported. `dotnet build` errors of the kind "name does not exist" are the
 list of what is left; any other kind of error is a bug in what has been ported.
 
-**Resume at JS line 5412** (ENEMIES).
+**Resume at JS line 8648** (WAVES / THE ROSTER).
 
 ## Build and run
 

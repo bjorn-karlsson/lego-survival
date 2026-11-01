@@ -286,7 +286,7 @@ public static partial class G
     public static bool lowLife() { var p = player; return p != null && p.maxHp > 0 && p.hp <= p.maxHp * LOW_LIFE_FRAC; }
     public const double HEART_PER_LVL = 0.03;
     public static double heartLvlMul() => 1 + HEART_PER_LVL * Math.Max(0, mobLevel() - 1);
-    public static double heartDropChance() => DROP.heart * (1 + (player != null ? player.heartChance : 0)) * heartLvlMul();
+    public static double heartDropChance() => DROP["heart"] * (1 + (player != null ? player.heartChance : 0)) * heartLvlMul();
     public const double STORM_MIN_RATE = 2.00, VORTEX_MIN_RATE = 3.00;
     public const int BOOMER_MAX = 2;
     public static readonly double[] BOOMER_LEGS = { 0, 1, 3 };

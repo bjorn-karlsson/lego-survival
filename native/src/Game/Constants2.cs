@@ -10,7 +10,7 @@ public sealed class Weapon
     public NumMap attr;
     public bool slam, cast, shoot, summon;
     public string elem;
-    public double incSpell, incElem, incAtk, res, boltSpd, boltR, evaBase, arrowSpd;
+    public double incSpell, incElem, incAtk, incMelee, res, boltSpd, boltR, evaBase, arrowSpd;
 }
 public sealed class Diff
 {

@@ -1,0 +1,2 @@
+_rgbCache -- Col.Parse keeps its own parse cache (Engine/Col.cs)
+cv -- the game window is the canvas (App.cs, Ctx.MainTarget)

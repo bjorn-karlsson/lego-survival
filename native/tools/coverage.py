@@ -84,10 +84,21 @@ def cs_names():
             for m in pat.finditer(src):
                 names.add(m.group(1))
             # several fields on one line: public static double cw = 0, ch = 0;
-            for m in re.finditer(r'\bstatic\s+[\w<>\[\], ?]+\s+([^;(){}]+);', src):
-                for part in split_top(m.group(1)):
+            # (and consts: public const double A = 1, B = 2;) -- split at the
+            # top-level commas, so an initializer's own braces do not end it
+            for m in re.finditer(r'\b(?:const|static)\s+(?:readonly\s+)?[\w.?\[\]]+(?:<[^;={}]*?>)?(?:\[\])?\??\s+(?=[A-Za-z_]\w*\s*(?:=[^=>]|,|;))', src):
+                for part in split_top(src[m.end():]):
                     n = re.match(r'\s*([A-Za-z_]\w*)', part)
                     if n: names.add(n.group(1))
+            # a tuple-typed field: static readonly (string a, string b) NAME = ...
+            for m in re.finditer(r'\bstatic\s+(?:readonly\s+)?\([^;={}]*?\)\s+([A-Za-z_]\w*)\s*=', src):
+                names.add(m.group(1))
+            # a generic method: static T name<T>(...)
+            for m in re.finditer(r'\bstatic\s+[\w<>\[\],?]+\s+([A-Za-z_]\w*)<\w+(?:\s*,\s*\w+)*>\s*\(', src):
+                names.add(m.group(1))
+            # a method with a tuple or nested-generic return type
+            for m in re.finditer(r'\bstatic\s[^\n;{=]*?\s([A-Za-z_]\w*)\s*\(', src):
+                names.add(m.group(1))
             # the port's own marker: // js: name1, name2
             for m in re.finditer(r'//\s*js:\s*([\w$, ]+)', src):
                 for n in m.group(1).split(','): names.add(n.strip())

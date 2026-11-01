@@ -13,7 +13,8 @@ public sealed class BuildEntry { public string id, rar; }
 public sealed class RunLinkData
 {
     public double v, n, s, tv, lv, xp, xn, st, k, gh, hp, bd, rt, treeStale;
-    public string w, d, f, g;
+    public string w, d, f;
+    public JsonObject g;         /* the gear it was copied with, packed (gearPackEq) */
     public bool on;
     public List<string> t = new();
     public List<(string k, double at)> ro = new();
@@ -152,7 +153,7 @@ public static partial class G
     static JsonNode MetaIdJson(string id) => double.TryParse(id, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? JsonValue.Create(d) : JsonValue.Create(id);
     static JsonObject NumMapJson(NumMap m) { var o = new JsonObject(); if (m != null) foreach (var (k, v) in m) o[k] = v; return o; }
     /* the gear goes in the link only when there is some */
-    public static string gearLinkPart() { if (!modeHasGear()) return null; var g = gearPackEq(gearEqNow()); return string.IsNullOrEmpty(g) ? null : g; }
+    public static JsonObject gearLinkPart() { if (!modeHasGear()) return null; return gearPackEq(gearEqNow()); }
     /* COMPRESSED, THEN BASE64: LZW with growing code widths, bit for bit the JS */
     public static byte[] lzwPack(byte[] bytes)
     {
@@ -228,7 +229,7 @@ public static partial class G
         {
             v = num("v"), w = str_("w"), d = str_("d"), f = str_("f"), n = num("n"), s = num("s"), tv = num("tv"),
             lv = num("lv"), xp = num("xp"), xn = num("xn"), st = num("st"), k = num("k"), gh = num("gh"), hp = num("hp"),
-            bd = num("bd"), rt = num("rt"), g = str_("g"),
+            bd = num("bd"), rt = num("rt"), g = j["g"] is JsonObject go ? (JsonObject)go.DeepClone() : null,
             on = j.TryGetPropertyValue("on", out var onN) && onN is JsonValue ov && ov.TryGetValue<bool>(out var ob) && ob,
         };
         if (j["t"] is JsonArray ta) foreach (var x in ta) o.t.Add(x is JsonValue xv && xv.TryGetValue<double>(out var dd) ? Js.Num(dd) : x?.ToString());
