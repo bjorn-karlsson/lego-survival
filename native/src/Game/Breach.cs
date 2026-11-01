@@ -135,8 +135,8 @@ public static partial class G
             double x = player.x + Math.Cos(a) * rr, y = player.y + Math.Sin(a) * rr;
             if (x < lo || x > hiX || y < lo || y > hiY) continue;
             bool bad = false; var pt = new Pt(x, y);
-            foreach (var so in solids) if (dist(pt, so) < so.r + 40) { bad = true; break; }
-            foreach (var w in waters) if (x > w.x - 40 && x < w.x + w.w + 40 && y > w.y - 40 && y < w.y + w.h + 40) bad = true;
+            foreach (var so in solids.Live()) if (dist(pt, so) < so.r + 40) { bad = true; break; }
+            foreach (var w in waters.Live()) if (x > w.x - 40 && x < w.x + w.w + 40 && y > w.y - 40 && y < w.y + w.h + 40) bad = true;
             /* not on top of another breach's hand */
             foreach (var o in allBreaches()) if (o != breach && o.state != "wait" && hypot(o.x - x, o.y - y) < 600) bad = true;
             if (!bad) return pt;
@@ -195,8 +195,8 @@ public static partial class G
     /* THE LAYER: laid across the whole floor the moment the breach opens, sorted by distance */
     public static bool breachFloorOk(double x, double y)
     {
-        foreach (var so in solids) if (hypot(x - so.x, y - so.y) < so.r + 16) return false;
-        foreach (var w in waters) if (x > w.x - 24 && x < w.x + w.w + 24 && y > w.y - 24 && y < w.y + w.h + 24) return false;
+        foreach (var so in solids.Live()) if (hypot(x - so.x, y - so.y) < so.r + 16) return false;
+        foreach (var w in waters.Live()) if (x > w.x - 24 && x < w.x + w.w + 24 && y > w.y - 24 && y < w.y + w.h + 24) return false;
         return true;
     }
     public static void breachLayer(Breach B)
@@ -338,7 +338,7 @@ public static partial class G
             B.r = Math.Min(Js.Or(B.rEnd, BREACH_R0), B.r + BREACH_SPD * dt);
             B.t -= dt;
             /* the circle reaches them, and they are there */
-            int alive = 0; foreach (var e in enemies) if (breachOf(e) == B && !e.dead) alive++;
+            int alive = 0; foreach (var e in enemies.Live()) if (breachOf(e) == B && !e.dead) alive++;
             double cap = breachAliveMax(B.r);
             while (B.layer != null && B.li < B.layer.Count && B.layer[B.li].d <= B.r && alive < cap)
             {
@@ -360,7 +360,7 @@ public static partial class G
             B.r = B.rClose * clamp(B.closeT / Js.Or(B.closeMax, BREACH_CLOSE_T), 0, 1);
             /* the edge passes over them, and they go back through -- paying nothing */
             var L = BREACH_LORDS[B.lord];
-            foreach (var e in enemies)
+            foreach (var e in enemies.Live())
             {
                 if (breachOf(e) != B || e.dead) continue;
                 if (hypot(e.x - B.x, e.y - B.y) <= B.r + Js.Or(e.r, 12) * 0.5) continue;
@@ -392,7 +392,7 @@ public static partial class G
     /* A BREACH BODY CANNOT LEAVE ITS CIRCLE */
     public static void breachHold(Breach B)
     {
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (breachOf(e) != B || e.dead) continue;
             double dx = e.x - B.x, dy = e.y - B.y, d = hypot(dx, dy), lim = Math.Max(0, B.r - Js.Or(e.r, 12));
@@ -488,7 +488,7 @@ public static partial class G
         foreach (var B in allBreaches()) withBreach(B, drawBreachOne);   /* allBreaches() is read once, before any swap */
         var c = ctx;
         /* a stain of its lord under every breach body */
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.breach == null || e.dead || !onScreen(e, 40) || !breachSees(e)) continue;
             Col lc = BREACH_LORDS[e.breach].col;

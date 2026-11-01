@@ -37,7 +37,7 @@ public static void render(){
   viewSet(vx, vy, vw, vh);
   drawGround(vx, vy, Math.max(1,vw), Math.max(1,vh));
   drawCaveWalls(vx, vy, Math.max(1,vw), Math.max(1,vh));
-  foreach (var w in waters){
+  foreach (var w in waters.Live()){
     if(w.cave) continue;
     for(var i=0;i<4;i++){
       var a = Math.sin(vtime*2.2 + i*1.7 + w.x)*0.5+0.5;
@@ -55,7 +55,7 @@ public static void render(){
   drawLegion();
   drawClickMarks(ctx);
   drawCorpses();
-  foreach (var h in hazards){
+  foreach (var h in hazards.Live()){
     if(h.x < vx-120 || h.x > vx+vw+120 || h.y < vy-120 || h.y > vy+vh+120) continue;
     var k = clamp(h.life/h.max,0,1);
     if(h.kind=="coil"){
@@ -243,7 +243,7 @@ public static void render(){
     var cxp = ((vtime*12 + i*1100) % (W.w+800)) - 400;
     ctx.beginPath(); ctx.ellipse(cxp, 300+i*640, 240, 120, 0, 0, TAU); ctx.fill();
   }
-  foreach (var e in enemies){
+  foreach (var e in enemies.Live()){
     if(e.dead) continue;
     if(e.type=="brute" && e.mode=="windup"){
       var k = e.modeT/0.55;
@@ -532,7 +532,7 @@ public static void render(){
   /* STONE SPIKES. Drawn after the ground and before the bodies, so they stand
      between the hero and the floor: a shadow at the base, a jagged rock tooth
      rising out of it, and a dusty collar where it broke through. */
-  foreach (var sp in spikes){
+  foreach (var sp in spikes.Live()){
     var h = spikeHeight(sp);
     if(h < 1) continue;
     var w = sp.w;
@@ -564,7 +564,7 @@ public static void render(){
      is cycling through — so a fire slam is a row of glowing coals coming up out
      of the floor and a frost one is ice. That is the whole read on which
      element is up this cast. */
-  foreach (var sp in pspikes){
+  foreach (var sp in pspikes.Live()){
     if(sp.wait > 0) continue;
     var h = spikeHeight(sp);
     if(h < 1) continue;
@@ -605,7 +605,7 @@ public static void render(){
     ctx.beginPath(); ctx.ellipse(0, 2, w*1.15, w*0.4, 0, 0, TAU); ctx.fill();
     ctx.restore();
   }
-  foreach (var pr in projectiles){
+  foreach (var pr in projectiles.Live()){
     if(!onScreen(pr, 90)) continue;
     var lc = LOB_CONF[pr.kind];
     if(lc != null && (pr.delay>0 || pr.t<pr.dur-0.15)){
@@ -644,7 +644,7 @@ public static void render(){
       ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(2, rr*(1-k)), 0, TAU); ctx.stroke();
     }
   }
-  foreach (var pk in pickups) if(onScreen(pk, 60)) drawPickup(ctx, pk);
+  foreach (var pk in pickups.Live()) if(onScreen(pk, 60)) drawPickup(ctx, pk);
   drawGearDrops();
   if(player != null && player.magnetT>0 && !player.dead){
     ctx.setLineDash([8,10]);
@@ -654,9 +654,9 @@ public static void render(){
     ctx.setLineDash([]);
   }
   var list = new List<(double y, Action f)>();
-  foreach (var p in props) if(!p.dead && onScreen(p, 120))
+  foreach (var p in props.Live()) if(!p.dead && onScreen(p, 120))
     list.Add((p.y, ()=>drawProp(ctx,p)));
-  foreach (var e in enemies){
+  foreach (var e in enemies.Live()){
     if(!onScreen(e, 120)) continue;
     if(e.breach != null && !breachSees(e)) continue;      /* the other layer, where the circle has not reached */
     /* THE SHIELD GOES ON OUTSIDE drawEnemy, not inside it. That function is
@@ -667,13 +667,13 @@ public static void render(){
     list.Add((e.y, ()=>{ drawEnemy(ctx, e);
       if(e.esMax > 0) drawShieldBubble(ctx, e, e.es/e.esMax, e.esFlash); }));
   }
-  foreach (var m in minions) if(onScreen(m, 80)) list.Add((m.y, ()=>drawMinion(ctx, m)));
+  foreach (var m in minions.Live()) if(onScreen(m, 80)) list.Add((m.y, ()=>drawMinion(ctx, m)));
   if(player != null && (!player.dead || player.deadT<0.05)) list.Add((player.y, ()=>drawHero(ctx)));
   list = list.OrderBy(q=>q.y).ToList();   /* Array.prototype.sort is stable, as OrderBy is */
   foreach (var it in list) it.f();
   /* Lingering Vortex totems — the same whirlwind, standing still and unlit by the
      hero's own glow so you can tell it is not following you */
-  foreach (var pr in projectiles){
+  foreach (var pr in projectiles.Live()){
     if(pr.kind!="vtotem" || pr.dead || !onScreen(pr, 120)) continue;
     var k = clamp(pr.life/1.2, 0, 1);            /* fades out at the end */
     ctx.save();
@@ -799,7 +799,7 @@ public static void render(){
       ctx.restore();
     }
   }
-  foreach (var pr in projectiles){
+  foreach (var pr in projectiles.Live()){
     if(!onScreen(pr, 90)) continue;
     if(pr.kind=="arrow" && pr.gib) drawGib(ctx, pr);
     else if(pr.kind=="arrow") drawArrow(ctx,pr);
@@ -1033,8 +1033,8 @@ public static void render(){
       ctx.restore();
     }
   }
-  foreach (var d in debris) if(onScreen(d, 30)) drawDebris(ctx,d);
-  foreach (var p in particles){
+  foreach (var d in debris.Live()) if(onScreen(d, 30)) drawDebris(ctx,d);
+  foreach (var p in particles.Live()){
     /* a bolt can be 340px of storm hanging off its own midpoint, so it is culled
        by its whole span and not by its centre */
     if(p.kind=="zap"){
@@ -1081,7 +1081,7 @@ public static void render(){
   drawCaveLight();
   drawRitualFog();
   ctx.textAlign="center";
-  foreach (var t in dmgTexts){
+  foreach (var t in dmgTexts.Live()){
     if(!onScreen(t, 60)) continue;
     var k = clamp(t.life/0.8,0,1);
     ctx.font = $"700 {S(t.size)}px Fredoka";
@@ -1114,10 +1114,10 @@ public static void render(){
     /* Everything worth walking towards gets a marker on the rim: the chests you
        cannot see, and every buff brick lying in the dark. Distance is written on
        it so you can decide whether it is worth the trip. */
-    foreach (var pr in props)
+    foreach (var pr in props.Live())
       if(pr.type=="chest" && !pr.dead)
         edgeMarker(pr.x, pr.y, CHEST_RAR_COL(pr.rar), (x,y)=> drawChestGlyph(x, y), true);
-    foreach (var pk in pickups){
+    foreach (var pk in pickups.Live()){
       if(pk.got) continue;
       if(pk.kind=="magnet")
         edgeMarker(pk.x, pk.y, "#9b45d6", (x,y)=> drawMagnetIcon(x,y), true);
@@ -1148,7 +1148,7 @@ public static void render(){
         roundRect(ctx, x - 8, y - 5, 16, 11, 2); ctx.fill(); ctx.stroke(); }, true);
     }
     /* a rare on the floor is worth the walk */
-    foreach (var d in gearDrops) if(d.it.r == "rare")
+    foreach (var d in gearDrops.Live()) if(d.it.r == "rare")
       edgeMarker(d.x, d.y, "#ffff77", (x,y)=>{ ctx.fillStyle = "#ffff77"; ctx.strokeStyle = "rgba(20,20,10,0.7)"; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }, true);
     /* a ritual altar that still has something to give */

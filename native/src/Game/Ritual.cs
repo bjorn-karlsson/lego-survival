@@ -129,7 +129,7 @@ public static partial class G
     {
         if (A == null || A.woke) return;
         A.woke = true;
-        foreach (var e in enemies) if (e.ritualGuard == A && e.dormant) { e.dormant = false; e.atkCd = Math.Max(e.atkCd, 0.35); }
+        foreach (var e in enemies.Live()) if (e.ritualGuard == A && e.dormant) { e.dormant = false; e.atkCd = Math.Max(e.atkCd, 0.35); }
         addRing(A.x, A.y, 20, 320, 160, RITUAL_COL, 4, 0.45);
         logEvent("   the altar's guards wake", RITUAL_COL);
     }
@@ -173,9 +173,9 @@ public static partial class G
         A.state = "active"; A.t = 0; A.left = ritualBudget(wave.n); A.pulseT = 0.9; A.abilT = rnd(RITUAL_ABIL_T[0], RITUAL_ABIL_T[1]); A.earned = 0;
         ritualS.active = A;
         /* what is inside now stays inside, and what is outside stays out */
-        foreach (var e in enemies) e.ritualSide = hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
+        foreach (var e in enemies.Live()) e.ritualSide = hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
         /* the legion comes in with you */
-        foreach (var m in minions)
+        foreach (var m in minions.Live())
         {
             double d = hypot(m.x - A.x, m.y - A.y);
             if (d > RITUAL_R - 30) { double a = rnd(TAU), rr = rnd(40, RITUAL_R * 0.5); m.x = A.x + Math.Cos(a) * rr; m.y = A.y + Math.Sin(a) * rr; }
@@ -279,7 +279,7 @@ public static partial class G
     public static void ritualDone(Ritual A)
     {
         A.state = "done"; ritualS.active = null; ritualS.fx = ritualS.fx.Filter(f => f.A != A);
-        foreach (var e in enemies) e.ritualSide = double.NaN;
+        foreach (var e in enemies.Live()) e.ritualSide = double.NaN;
         int left = ritualLive().Count;
         showBanner(left != 0 ? "RITUAL COMPLETE" : "ALL RITUALS COMPLETE",
             "+" + Js.Num(A.earned) + " TRIBUTE · " + Js.Num(ritualS.tribute) + " TO SPEND · U", RITUAL_COL, 2.0, 44);
@@ -304,19 +304,19 @@ public static partial class G
         }
         var h = heroObj ?? player;
         if (h != null && !h.dead) inside(h, Js.Or(h.r, 12) + 2);
-        foreach (var m in minions) if (!m.gone) inside(m, Js.Or(m.r, 10) + 2);
-        foreach (var e in enemies)
+        foreach (var m in minions.Live()) if (!m.gone) inside(m, Js.Or(m.r, 10) + 2);
+        foreach (var e in enemies.Live())
         {
             if (e.dead) continue;
             if (double.IsNaN(e.ritualSide)) e.ritualSide = e.ritual == A || hypot(e.x - A.x, e.y - A.y) < RITUAL_R ? 1 : -1;
             if (e.ritualSide > 0) inside(e, Js.Or(e.r, 12)); else outside(e, Js.Or(e.r, 12));
         }
-        foreach (var o in bloodOrbs)
+        foreach (var o in bloodOrbs.Live())
         {
             if ((hypot(o.px - A.x, o.py - A.y) >= RITUAL_R) != (hypot(o.x - A.x, o.y - A.y) >= RITUAL_R)) { o.dead = true; addDust(o.x, o.y, 3, "rgba(120,40,50,"); }
         }
         bloodOrbs = bloodOrbs.Filter(o => !o.dead);
-        foreach (var pr in projectiles)
+        foreach (var pr in projectiles.Live())
         {
             if (pr.dead || Array.IndexOf(RITUAL_FOG_STILL, pr.kind) >= 0 || double.IsNaN(pr.px)) continue;
             double was = hypot(pr.px - A.x, pr.py - A.y), now = hypot(pr.x - A.x, pr.y - A.y);
@@ -530,7 +530,7 @@ public static partial class G
         var c = ctx;
         foreach (var A in ritualS.altars) if (onScreen(A, RITUAL_R + 40)) drawRitualAltar(c, A);
         /* a dark stain under a sleeping guard, and a red one under a woken one */
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (!(e.ritualGuard != null || e.ritual != null) || e.dead || !onScreen(e, 40)) continue;
             c.fillStyle = e.dormant ? "rgba(60,10,20,0.35)" : "rgba(255,58,74,0.22)";

@@ -249,7 +249,7 @@ public static void updateEnemyCore(Ent e, double dt){
         /* one pumpkin, two if it has been promoted — and never more than a
            dozen fuses burning on the field at once, however many lords live */
         var live = 0;
-        foreach (var q in projectiles) if(q.kind=="pumpkin" && !q.dead) live++;
+        foreach (var q in projectiles.Live()) if(q.kind=="pumpkin" && !q.dead) live++;
         var n = Math.max(0, Math.min(e.elite ? 2 : 1, PUMPKIN_LIVE_CAP - live));
         for(var i=0;i<n;i++){
           var dur = rnd(0.75,1.0);
@@ -332,7 +332,7 @@ public static void updateEnemyCore(Ent e, double dt){
     if(e.wardT <= 0){
       e.wardT = 0.5;
       var mended = 0;
-      foreach (var e2 in enemiesNear(e.x, e.y, WARDEN_R + 60)){
+      foreach (var e2 in enemiesNear(e.x, e.y, WARDEN_R + 60).Live()){
         /* himself, never — that is the deal */
         if(e2==e || e2.dead || e2.state!="active") continue;
         if(e2.hp >= e2.maxHp) continue;
@@ -557,7 +557,7 @@ public static void updateEnemyCore(Ent e, double dt){
         if(hero != null && !hero.dead && hero.dash.t <= 0 && inCone(hero)){
           var keep = player; player = hero; poisonPlayer(dose, PSN_DUR); player = keep;
         }
-        foreach (var m in minions) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, "chaos", e);
+        foreach (var m in minions.Live()) if(m.rise >= 1 && !m.gone && inCone(m)) minionHurt(m, dose*BLOAT_TICK*6, "chaos", e);
       }
       if(e.modeT >= BLOAT_BREATH){ e.mode = "chase"; e.atkCd = BLOAT_CD * e.atkS; }
     } else {
@@ -597,7 +597,7 @@ public static void updateEnemyCore(Ent e, double dt){
         addRing(e.x, e.y, 12, 260, 220, "#c9b8e8", 5, 0.5);
         SFX.fortune();
         var cnt = 0;
-        foreach (var e2 in enemies){
+        foreach (var e2 in enemies.Live()){
           if(e2==e || e2.dead || e2.state!="active" || e2.type=="boss") continue;
           if(dist(e2,e) < 300){
             if(!addMobBuff(e2, "empower", OVERSEER_MAX_STACKS)) continue;

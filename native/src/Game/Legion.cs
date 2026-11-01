@@ -166,7 +166,7 @@ public static partial class G
             /* back into the fight -- once */
             if (!enemies.Contains(e)) enemies.Add(e);
         }
-        foreach (var e in enemies) if (e.legion == L && !e.dead) { e.legionFrozen = false; e.mode = "chase"; e.atkCd = rnd(0.2, 1.0); }
+        foreach (var e in enemies.Live()) if (e.legion == L && !e.dead) { e.legionFrozen = false; e.mode = "chase"; e.atkCd = rnd(0.2, 1.0); }
         int woke = enemies.Count(e => e.legion == L && !e.dead);
         showBanner("TIME STARTS AGAIN", held.Count > 0 ? held.Count + " RISE AWAKENED · " + woke + " IN ALL"
                                                       : "THE LEGION BREAKS FREE", LEGION_FACTIONS[L.faction].col, 1.8, 40);
@@ -254,7 +254,7 @@ public static partial class G
     {
         var L = legionEv; var c = ctx;
         /* the AWAKENED: a violet flame round the feet and the word over the head */
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (!e.awakened || e.dead || !onScreen(e, 80)) continue;
             double s = Js.Or(e.scale, 1), fl = 0.5 + 0.5 * Math.Sin(vtime * 7 + e.phase);
@@ -266,7 +266,7 @@ public static partial class G
         }
         if (L != null && L.state == "frozen")
         {
-            foreach (var e in enemies)
+            foreach (var e in enemies.Live())
             {
                 if (e.dead || e.legion != L || !e.legionFrozen || !onScreen(e, 80)) continue;
                 double s = Js.Or(e.scale, 1);

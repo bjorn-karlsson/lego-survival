@@ -6,7 +6,7 @@ public static partial class G
 {
 public static Ent reaveTarget(double x, double y, HashSet<object> seen = null){
   Ent best = null; double bd = REAVE_SEEK;
-  foreach (var e in enemiesNear(x, y, REAVE_SEEK)){
+  foreach (var e in enemiesNear(x, y, REAVE_SEEK).Live()){
     if(e.dead || e.state != "active" || (seen != null && seen.Contains(e))) continue;
     var d = dist(new Pt(x, y), e);
     if(d < bd){ bd = d; best = e; }
@@ -60,7 +60,7 @@ public static void wbladeLeg(Proj pr, bool caught){
   }
 }
 public static void updateProjectiles(double dt){
-  foreach (var pr in projectiles){
+  foreach (var pr in projectiles.Live()){
     if(double.IsNaN(pr.x) && !double.IsNaN(pr.sx)){ pr.x = pr.sx; pr.y = pr.sy; }
     pr.px = pr.x; pr.py = pr.y;
     if(pr.kind=="arrow" || pr.kind=="skull" || pr.kind=="frostbolt" || pr.kind=="bolt"
@@ -91,7 +91,7 @@ public static void updateProjectiles(double dt){
           pr.trailD = 0;
           /* a pack of frost golems could otherwise carpet the whole floor */
           var frostPatches = 0;
-          foreach (var h in hazards) if(h.kind=="frost") frostPatches++;
+          foreach (var h in hazards.Live()) if(h.kind=="frost") frostPatches++;
           if(frostPatches < FROST_TRAIL_CAP){
             var lf = pr.trailLife;
             hazards.Add(new Hazard {kind = "frost", x = pr.x, y = pr.y, r = pr.tr, life = lf, max = lf});
@@ -108,7 +108,7 @@ public static void updateProjectiles(double dt){
         particles.Add(new Particle {kind = "spark", x = pr.x, y = pr.y, vx = rnd(-25,25), vy = rnd(-25,25),
           life = 0.3, max = 0.3, color = CURSES[pr.curse].col});
       if(pr.life<=0) pr.dead=true;
-      foreach (var s in solids){
+      foreach (var s in solids.Live()){
         /* a thrown boulder shoulders straight through saplings and crates; only
            something its own size stops it */
         if(pr.kind=="frostrock" && s.r < 20) continue;
@@ -123,7 +123,7 @@ public static void updateProjectiles(double dt){
          can tell. A curse has nothing to hold on to in bones and simply breaks;
          a thrown boulder shoulders on through. */
       if(pr.owner=="enemy" && !pr.dead && minions.Count > 0){
-        foreach (var m in minions){
+        foreach (var m in minions.Live()){
           if(m.rise < 1 || m.gone) continue;
           if(!sweepsBody(m, pr.px, pr.py, pr.x, pr.y, !double.IsNaN(pr.hitR) ? pr.hitR : 7+(pr.big?5:0))) continue;
           if(pr.kind == "frostrock"){ if(!(pr.mHit != null && pr.mHit.Contains(m))){ (pr.mHit ??= new HashSet<Ent>()).Add(m); minionHurt(m, Js.Or(pr.dmg, 1), "frost", pr); } continue; }
@@ -163,7 +163,7 @@ public static void updateProjectiles(double dt){
       }
       if(pr.owner=="player"){
         foreach (var e in enemiesNear((pr.x+pr.px)/2.0, (pr.y+pr.py)/2.0,
-              Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 80)){
+              Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 80).Live()){
           if(e.dead||e.state!="active") continue;
           if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 10)){
             hitEnemy(e, calcDamage(2,"melee"), Math.atan2(pr.vy,pr.vx),180,"arrow",new HitOpts {spin = true});
@@ -175,7 +175,7 @@ public static void updateProjectiles(double dt){
     else if(pr.kind=="vtotem"){
       pr.life -= dt;
       if(pr.life<=0){ pr.dead = true; addSparks(pr.x, pr.y-10, 8, "#cfd6dd"); }
-      foreach (var e in enemiesNear(pr.x, pr.y, pr.r + 80)){
+      foreach (var e in enemiesNear(pr.x, pr.y, pr.r + 80).Live()){
         if(e.dead || e.state!="active" || e.totCd>0) continue;
         if(hitsBody(e, pr.x, pr.y, pr.r)){
           e.totCd = TOTEM_TICK;
@@ -196,7 +196,7 @@ public static void updateProjectiles(double dt){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
       pr.ang += ZORB_SPIN*dt;
       if(pr.life<=0) pr.dead = true;
-      foreach (var so in solids) if(dist(pr,so) < so.r){ pr.dead = true; break; }
+      foreach (var so in solids.Live()) if(dist(pr,so) < so.r){ pr.dead = true; break; }
       if(pr.x < W.wall || pr.x > W.w-W.wall || pr.y < W.wall || pr.y > W.h-W.wall) pr.dead = true;
       pr.zapCd -= dt;
       if(pr.zapCd <= 0 && !pr.dead){
@@ -211,7 +211,7 @@ public static void updateProjectiles(double dt){
         if(!player.dead && player.dash.t<=0 && player.invuln<=0 &&
            sweepsBody(player, pr.x, pr.y, ex, ey, 9))
           playerDamage(Js.Or(pr.dmg, 1), pr, "shock");
-        foreach (var m in minions) if(m.rise >= 1 && !m.gone && segDist(pr.x, pr.y, ex, ey, m.x, m.y - 14) < 9 + m.r)
+        foreach (var m in minions.Live()) if(m.rise >= 1 && !m.gone && segDist(pr.x, pr.y, ex, ey, m.x, m.y - 14) < 9 + m.r)
           minionHurt(m, Js.Or(pr.dmg, 1), "shock", pr);
       }
       if(!pr.dead && !player.dead &&
@@ -260,7 +260,7 @@ public static void updateProjectiles(double dt){
       if(pr.life<=0) pr.dead = true;
       pr.r = pr.rMax * Math.min(1, pr.t/pr.dur);
       var full = pr.arc >= BANE_ARC_MAX-0.01;
-      foreach (var e in enemiesNear(pr.x, pr.y, pr.r + 90)){
+      foreach (var e in enemiesNear(pr.x, pr.y, pr.r + 90).Live()){
         if(e.dead || e.state!="active" || pr.hit.Contains(e)) continue;
         var d = dist(e, pr);
         if(d > pr.r + hitR(e)) continue;
@@ -318,13 +318,13 @@ public static void updateProjectiles(double dt){
       pr.px = pr.x; pr.py = pr.y;
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt; pr.spin += dt*11;
       if(pr.life<=0) pr.dead = true;
-      foreach (var so in solids) if(dist(pr,so) < so.r){ pr.dead = true; break; }
+      foreach (var so in solids.Live()) if(dist(pr,so) < so.r){ pr.dead = true; break; }
       if(Js.R() < 0.9)
         particles.Add(new Particle {kind = "spark", x = pr.x+rnd(-5,5), y = pr.y+rnd(-5,5),
           vx = rnd(-24,24), vy = rnd(-40,-6), life = rnd(0.18,0.38), max = 0.38,
           color = Js.R()<0.5 ? "#ff9a3c" : "#ffd166"});
       if(!pr.dead){
-        foreach (var e in enemiesNear(pr.x, pr.y, 70)){
+        foreach (var e in enemiesNear(pr.x, pr.y, 70).Live()){
           if(e.dead || e.state!="active") continue;
           if(!sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 9)) continue;
           pr.dead = true; break;
@@ -334,7 +334,7 @@ public static void updateProjectiles(double dt){
          the way a sword hero cuts them down. This is the hero's OWN bolt, so it
          is never in the deflect list: that only ever holds what monsters throw. */
       if(!pr.dead){
-        foreach (var prop in props){
+        foreach (var prop in props.Live()){
           if(prop.dead || prop.indestructible) continue;
           if(dist(prop, pr) > prop.r + 10) continue;
           pr.dead = true; break;
@@ -350,13 +350,13 @@ public static void updateProjectiles(double dt){
         addShake(0.1); SFX.boomSmall();
         /* the fire it leaves is the fire that landed, and hitEnemy is where
            that is decided now — for this and for every other ailment */
-        foreach (var e in enemies){
+        foreach (var e in enemies.Live()){
           if(e.dead || e.state!="active") continue;
           if(dist(e, pr) > pr.r + (Js.Or(e.r, 12))) continue;
           hitEnemy(e, pr.dmg, angTo(pr, e), 140, "fire", new HitOpts {});
         }
         /* everything breakable inside the burst takes a hit */
-        foreach (var prop in props){
+        foreach (var prop in props.Live()){
           if(prop.dead || prop.indestructible) continue;
           if(dist(prop, pr) > pr.r + prop.r) continue;
           prop.hp--; prop.flash = 1;
@@ -370,15 +370,15 @@ public static void updateProjectiles(double dt){
       pr.x += pr.vx*dt; pr.y += pr.vy*dt; pr.life -= dt;
       if(pr.life<=0) pr.dead = true;
       /* a chest or a crate in the way takes the knock -- how a summoner opens one */
-      if(!pr.dead) foreach (var prop in props){
+      if(!pr.dead) foreach (var prop in props.Live()){
         if(prop.dead || prop.type == "torch" || prop.type == "crystal") continue;
         if(Math.abs(prop.x - pr.x) > 100 || Math.abs(prop.y - pr.y) > 100) continue;
         if(segDist(pr.px, pr.py, pr.x, pr.y, prop.x, prop.y) > prop.r + 3) continue;
         pr.dead = true; if(!prop.indestructible) knockProp(prop);
         break;
       }
-      if(!pr.dead) foreach (var so in solids) if(dist(pr, so) < so.r){ pr.dead = true; break; }
-      if(!pr.dead) foreach (var e in enemiesNear(pr.x, pr.y, 80)){
+      if(!pr.dead) foreach (var so in solids.Live()) if(dist(pr, so) < so.r){ pr.dead = true; break; }
+      if(!pr.dead) foreach (var e in enemiesNear(pr.x, pr.y, 80).Live()){
         if(e.dead || e.state!="active" || !breachSees(e)) continue;
         if(!sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 7)) continue;
         hitEnemy(e, pr.dmg, Math.atan2(pr.vy, pr.vx), 50, pr.srcKey, new HitOpts {});
@@ -395,7 +395,7 @@ public static void updateProjectiles(double dt){
          pass clean through each other between frames. A thrown boulder is the
          one thing an arrow cannot stop: the arrow breaks on it, the boulder
          keeps coming. */
-      if(!pr.dead) foreach (var q in projectiles){
+      if(!pr.dead) foreach (var q in projectiles.Live()){
         if(q == pr || q.dead || q.owner != "enemy") continue;
         if(Math.abs(q.x - pr.x) > 90 || Math.abs(q.y - pr.y) > 90) continue;
         var rr = ARROW_SHOOT_R + (!double.IsNaN(q.hitR) ? q.hitR : 7 + (q.big ? 5 : 0));
@@ -409,7 +409,7 @@ public static void updateProjectiles(double dt){
          arrow the way they take a swing -- one knock each -- and the arrow stops
          in them. Chests are props but not solids, so without this an arrow flew
          straight through a chest and a bow hero could never open one at range. */
-      if(!pr.dead) foreach (var prop in props){
+      if(!pr.dead) foreach (var prop in props.Live()){
         if(prop.dead) continue;
         if(Math.abs(prop.x - pr.x) > 120 || Math.abs(prop.y - pr.y) > 120) continue;
         if(segDist(pr.px, pr.py, pr.x, pr.y, prop.x, prop.y) > prop.r + 3) continue;
@@ -422,9 +422,9 @@ public static void updateProjectiles(double dt){
         } else addDust(pr.x, pr.y, 2);
         break;
       }
-      if(!pr.dead) foreach (var so in solids) if(dist(pr, so) < so.r){ pr.dead = true; addDust(pr.x, pr.y, 2); break; }
+      if(!pr.dead) foreach (var so in solids.Live()) if(dist(pr, so) < so.r){ pr.dead = true; addDust(pr.x, pr.y, 2); break; }
       if(!pr.dead) foreach (var e in enemiesNear((pr.x+pr.px)/2.0, (pr.y+pr.py)/2.0,
-            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 90)){
+            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 90).Live()){
         if(e.dead||e.state!="active"||pr.hit.Contains(e)) continue;
         if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 8)){
           /* each body already gone through has worn it down a little */
@@ -459,7 +459,7 @@ public static void updateProjectiles(double dt){
         else pr.dead = true;
       }
       foreach (var e in enemiesNear((pr.x+pr.px)/2.0, (pr.y+pr.py)/2.0,
-            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 90)){
+            Math.hypot(pr.x-pr.px, pr.y-pr.py)/2.0 + 90).Live()){
         if(e.dead||e.state!="active"||pr.hit.Contains(e)) continue;
         if(sweepsBody(e, pr.px, pr.py, pr.x, pr.y, 9*pr.size + 6)){
           pr.hit.Add(e);

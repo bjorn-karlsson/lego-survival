@@ -100,7 +100,7 @@ public static partial class G
     public static double rejectValue()
     {
         double best = 0;
-        foreach (var c in choices) best = Math.max(best, REJECT_STUDS[c.rar]);
+        foreach (var c in choices.Live()) best = Math.max(best, REJECT_STUDS[c.rar]);
         return Math.round(best * Js.Or(player.studMul, 1));
     }
     public static void rejectReward()

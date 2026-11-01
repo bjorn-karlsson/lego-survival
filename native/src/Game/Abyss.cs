@@ -316,7 +316,7 @@ public static partial class G
             A.fadeT -= dt;
             return A.fadeT > 0;
         }
-        double crowd = 0; foreach (var e in enemies) if (e.abyss && !e.dead && (e.abyssA ?? abyss) == A) crowd++;
+        double crowd = 0; foreach (var e in enemies.Live()) if (e.abyss && !e.dead && (e.abyssA ?? abyss) == A) crowd++;
         /* the forks wake as the main front passes them */
         foreach (var b in A.branches)
             if (!b.active && A.f >= b.fork)
@@ -412,7 +412,7 @@ public static partial class G
         foreach (var A in allAbysses()) drawAbyssOne(A);
         /* a green stain under everything that climbed out of one */
         var c = ctx;
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (!e.abyss || e.dead || !onScreen(e, 40)) continue;
             c.fillStyle = rgba(108, 255, 154, e.abyssLord ? 0.34 : 0.2);
@@ -427,7 +427,7 @@ public static partial class G
         double bw = Math.Min(320, cw - 80), bx = cw / 2 - bw / 2;
         double by = hudWaveBottom() + 8 + (breachOpenNow() ? 30 : 0);
         var pits = new List<Crack> { A }.Concat(A.branches).Select(c0 => c0.pit).Where(p0 => p0 != null).ToList();
-        int alive = 0; foreach (var e in enemies) if (e.abyssPit != null && pits.Contains(e.abyssPit) && !e.dead) alive++;
+        int alive = 0; foreach (var e in enemies.Live()) if (e.abyssPit != null && pits.Contains(e.abyssPit) && !e.dead) alive++;
         int forks = A.branches.Count(b => b.active && !b.done);
         string head = "ABYSS" + (open.Count > 1 ? " ×" + open.Count : "") + " · " + (A.state == "lord" ? "THE STYGIAN"
             : pits.Count > 0 ? "ABYSSAL PIT — " + alive + " left"

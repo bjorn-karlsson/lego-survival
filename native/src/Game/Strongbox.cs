@@ -136,7 +136,7 @@ public static partial class G
         if (player == null) return;
         if (wave.state == "fight" && sboxPending.Count > 0)
         {
-            foreach (var s in sboxPending) s.delay -= dt;
+            foreach (var s in sboxPending.Live()) s.delay -= dt;
             var due = sboxPending.Where(s => s.delay <= 0).ToList();
             sboxPending = sboxPending.Filter(s => s.delay > 0);
             foreach (var s in due) if (sboxLive().Count < SBOX_MAX_LIVE) sboxPlace();
@@ -219,7 +219,7 @@ public static partial class G
     public static void drawSboxGuards()
     {
         var c = ctx;
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.sbox == null || e.dead || !onScreen(e, 40)) continue;
             Col tc = (SBOX_TIERS.GetValueOrDefault(e.sbox.tier ?? "") ?? SBOX_TIERS["plain"]).col;

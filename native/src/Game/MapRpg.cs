@@ -54,11 +54,11 @@ public static partial class G
             g.fillStyle = "rgba(10,16,24,0.34)"; g.fillRect(w, w, W.w - 2 * w, W.h - 2 * w);
             g.strokeStyle = "rgba(0,0,0,0.7)"; g.lineWidth = 34; g.strokeRect(w, w, W.w - 2 * w, W.h - 2 * w);
             g.strokeStyle = "rgba(232,232,220,0.95)"; g.lineWidth = 14; g.strokeRect(w, w, W.w - 2 * w, W.h - 2 * w);
-            foreach (var r in waters) if (!r.cave) { g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20); }
+            foreach (var r in waters.Live()) if (!r.cave) { g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20); }
             g.fillStyle = "rgba(90,160,245,0.9)";
-            foreach (var r in waters) if (!r.cave) g.fillRect(r.x, r.y, r.w, r.h);
+            foreach (var r in waters.Live()) if (!r.cave) g.fillRect(r.x, r.y, r.w, r.h);
         }
-        foreach (var q in props)
+        foreach (var q in props.Live())
         {
             if (q.dead || !q.solid || !solids.Contains(q)) continue;
             if (q.type == "rwall" || q.type == "rhouse")
@@ -126,7 +126,7 @@ public static partial class G
             ctx.strokeStyle = "rgba(10,10,15,0.8)"; ctx.lineWidth = 1; ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
         }
         /* the places: portals and waypoints, the stash, the board, the gate, the way out, chests */
-        foreach (var q in props)
+        foreach (var q in props.Live())
         {
             if (q.dead || !mapSeenAt(q.x, q.y)) continue;
             if (q.type == "rportal" || q.type == "rwaypoint")
@@ -144,14 +144,14 @@ public static partial class G
             else if (q.type == "chest") box(q.x, q.y, 3.5, "#ffd76e");
             else if (q.type == "strongbox") box(q.x, q.y, 4, "#fe8a18");
         }
-        foreach (var d in gearDrops)
+        foreach (var d in gearDrops.Live())
             if (mapSeenAt(d.x, d.y))
             {
                 var (sx, sy) = at(d.x, d.y);
                 ctx.fillStyle = "#ffb45a"; ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 4, sy); ctx.lineTo(sx, sy + 4); ctx.lineTo(sx - 4, sy); ctx.closePath(); ctx.fill();
             }
         /* the monsters near you, as PoE shows them: red, blue for magic, yellow for rares */
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.state != "active" || !mapSeenAt(e.x, e.y)) continue;
             bool boss = e.rpgBoss || e.boss;
@@ -164,7 +164,7 @@ public static partial class G
             else dot(e.x, e.y, 3.2, "#ff4a3a", "rgba(30,0,0,0.8)");
             ctx.globalAlpha /= a;
         }
-        foreach (var m in minions) if (!m.dead) dot(m.x, m.y, 2, "#7fe07a");
+        foreach (var m in minions.Live()) if (!m.dead) dot(m.x, m.y, 2, "#7fe07a");
         /* and you */
         dot(p.x, p.y, 4.5, "#ffd76e", "rgba(20,15,5,0.95)");
         ctx.restore();
@@ -201,7 +201,7 @@ public static partial class G
     {
         if (!rpgOn()) return;
         var q = RPG.near;
-        foreach (var p in props)
+        foreach (var p in props.Live())
         {
             if (!Js.T(p.label) || p == q || !RPG_USES.ContainsKey(p.type ?? "") && !p.home) continue;
             if (hypot(p.x - player.x, p.y - player.y) > 520) continue;

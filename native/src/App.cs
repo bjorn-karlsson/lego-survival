@@ -294,6 +294,7 @@ public static class App
         double mx = mp.X * k, my = mp.Y * k;
         int buttons = (Raylib.IsMouseButtonDown(MouseButton.Left) ? 1 : 0) | (Raylib.IsMouseButtonDown(MouseButton.Right) ? 2 : 0) | (Raylib.IsMouseButtonDown(MouseButton.Middle) ? 4 : 0);
         if (mx != lastMx || my != lastMy) { lastMx = mx; lastMy = my; Dom.PointerMove(mx, my, buttons); }
+        else Dom.PointerRefresh();
         foreach (var (rb, dom) in BUTTONS)
         {
             if (Raylib.IsMouseButtonPressed(rb)) Dom.PointerDown(dom);

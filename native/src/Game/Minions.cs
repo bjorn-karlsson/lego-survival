@@ -219,7 +219,7 @@ public static partial class G
     public static double carrionMul(Ent m)
     {
         double n = 0;
-        foreach (var q in minions) if (!q.gone && q.rise >= 1 && q.kind != "golem" && q.kind != "overseer" && Math.hypot(q.x - m.x, q.y - m.y) < CARRION_R) n++;
+        foreach (var q in minions.Live()) if (!q.gone && q.rise >= 1 && q.kind != "golem" && q.kind != "overseer" && Math.hypot(q.x - m.x, q.y - m.y) < CARRION_R) n++;
         return 1 + Math.min(CARRION_MAX, n * CARRION_PER);
     }
     /* WHAT THE GOLEMS GRANT, while they stand: written through the tree's own stat
@@ -267,7 +267,7 @@ public static partial class G
     {
         Obj h = heroObj ?? player;
         Corpse best = null; double bd = double.PositiveInfinity;
-        foreach (var k in corpses)
+        foreach (var k in corpses.Live())
         {
             if (Math.hypot(k.x - h.x, k.y - h.y) > ZOMBIE_REACH) continue;
             var d = Math.hypot(k.x - mouse.wx, k.y - mouse.wy);
@@ -494,7 +494,7 @@ public static partial class G
     {
         Ent h = heroObj ?? player;
         Prop best = null; double bd = MINION_SEEK;
-        foreach (var pr in props)
+        foreach (var pr in props.Live())
         {
             if (pr.dead || pr.indestructible || (pr.type != "chest" && pr.type != "crate")) continue;
             if (Math.hypot(pr.x - h.x, pr.y - h.y) > MINION_LEASH) continue;

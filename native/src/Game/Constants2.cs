@@ -69,7 +69,7 @@ public static partial class G
         e.wardT = 1.4;
         string key = "res_" + el;
         int n = 0;
-        foreach (var e2 in enemiesNear(e.x, e.y, LORD_WARD_R + 60))
+        foreach (var e2 in enemiesNear(e.x, e.y, LORD_WARD_R + 60).Live())
         {
             if (e2 == e || e2.dead || e2.state != "active") continue;
             if (dist(e2, e) > LORD_WARD_R) continue;
@@ -250,7 +250,20 @@ public static partial class G
         /* the favourite list is weapon-dependent: drop a favourite this weapon cannot use */
         buildFavRow();
         if (!favAllowed(favourite)) setFavourite("none");
-        Ui.TitleDirty();
+        var row = document.getElementById("weaponRow");
+        if (row != null) foreach (var el in row.children)
+        {
+            bool on = el.dataset["weapon"] == weapon.id;
+            el.classList.toggle("on", on);
+            el.style.borderColor = on ? S(weapon.col) : "rgba(255,255,255,.18)";
+            el.style.background = on ? S(weapon.col) : "rgba(9,13,17,.34)";
+            el.style.color = on ? "#12181d" : "#f0e6e6";
+            el.style.boxShadow = on ? "0 4px 0 " + S(sh(weapon.col, -0.35)) : "none";
+        }
+        var blurb = document.getElementById("weaponBlurb");
+        if (blurb != null) blurb.textContent = weapon.blurb;
+        /* EVERY WEAPON HAS ITS OWN TREE, so the button's number belongs to the
+           weapon and has to move with it */
         refreshTreeBtn();
         if (treeOn) renderTree();
         buildComboPanel();

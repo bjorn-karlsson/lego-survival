@@ -249,7 +249,7 @@ public static partial class G
        throws a beam up, PoE's way, so it can be seen across a crowded screen. */
     public static void drawGearDrops()
     {
-        foreach (var d in gearDrops)
+        foreach (var d in gearDrops.Live())
         {
             if (!onScreen(d, 80)) continue;
             var it = d.it; var B = GEAR_BASE_BY_ID[it.b]; var C = GEAR_CLS[B.cls];
@@ -279,7 +279,7 @@ public static partial class G
         var p = player;
         ctx.textAlign = "center";
         ctx.font = "700 11px Fredoka";
-        foreach (var d in gearDrops)
+        foreach (var d in gearDrops.Live())
         {
             if (!onScreen(d, 80)) continue;
             var it = d.it; var R = GEAR_RAR[it.r];

@@ -42,13 +42,13 @@ public static partial class G
         double r = double.IsNaN(pad) ? 10 : pad;
         o.x = clamp(o.x, W.wall + r + 4, W.w - W.wall - r - 4);
         o.y = clamp(o.y, W.wall + r + 4, W.h - W.wall - r - 4);
-        foreach (var sd in solids)
+        foreach (var sd in solids.Live())
         {
             double d = dist(o, sd), rr = sd.r + r;
             if (d < rr && d > 0.001) { o.x += (o.x - sd.x) / d * (rr - d); o.y += (o.y - sd.y) / d * (rr - d); }
             else if (d <= 0.001) { o.x = sd.x + rr; }
         }
-        foreach (var w in waters)
+        foreach (var w in waters.Live())
         {
             if (o.x < w.x - r || o.x > w.x + w.w + r || o.y < w.y - r || o.y > w.y + w.h + r) continue;
             double l = o.x - (w.x - r), rt = (w.x + w.w + r) - o.x, t = o.y - (w.y - r), bt = (w.y + w.h + r) - o.y;
@@ -63,8 +63,8 @@ public static partial class G
     public static bool floorClear(double x, double y, double r)
     {
         if (x < W.wall + r + 4 || x > W.w - W.wall - r - 4 || y < W.wall + r + 4 || y > W.h - W.wall - r - 4) return false;
-        foreach (var sd in solids) if (!sd.dead && hypot(x - sd.x, y - sd.y) < sd.r + r) return false;
-        foreach (var w in waters) if (x > w.x - r && x < w.x + w.w + r && y > w.y - r && y < w.y + w.h + r) return false;
+        foreach (var sd in solids.Live()) if (!sd.dead && hypot(x - sd.x, y - sd.y) < sd.r + r) return false;
+        foreach (var w in waters.Live()) if (x > w.x - r && x < w.x + w.w + r && y > w.y - r && y < w.y + w.h + r) return false;
         return true;
     }
     public static Pt floorAt(double x, double y, double r)
@@ -178,7 +178,7 @@ public static partial class G
     {
         if (player != null && player.magnetT > 0)
         {
-            foreach (var pk in pickups) pk.seeking = false;
+            foreach (var pk in pickups.Live()) pk.seeking = false;
             return;
         }
         if (pickups.Count < 12) return;
@@ -191,7 +191,7 @@ public static partial class G
         {
             int need = NEED[kind];
             var arr = new List<Pickup>();
-            foreach (var pk in pickups) if (pk.kind == kind && !pk.dead && pk.z < 6) arr.Add(pk);
+            foreach (var pk in pickups.Live()) if (pk.kind == kind && !pk.dead && pk.z < 6) arr.Add(pk);
             if (arr.Count < need) continue;
             for (int i = 0; i < arr.Count && merged < 30; i++)
             {
@@ -222,7 +222,7 @@ public static partial class G
         foreach (var kind in MERGEABLE)
         {
             var arr = new List<Pickup>();
-            foreach (var pk in pickups) if (pk.kind == kind && !pk.dead && pk.z < 6) arr.Add(pk);
+            foreach (var pk in pickups.Live()) if (pk.kind == kind && !pk.dead && pk.z < 6) arr.Add(pk);
             if (arr.Count < 2 || arr.Count > 300) { foreach (var pk in arr) pk.seeking = false; continue; }
             foreach (var pk in arr)
             {
@@ -409,14 +409,14 @@ public static partial class G
     public static void updateCorpses(double dt)
     {
         if (corpses.Count == 0) return;
-        foreach (var c in corpses) c.t -= dt;
+        foreach (var c in corpses.Live()) c.t -= dt;
         corpses = corpses.Where(c => c.t > 0).ToList();
     }
     public static void drawCorpses()
     {
         if (corpses.Count == 0 || !isSummoner()) return;
         var c = ctx;
-        foreach (var k in corpses)
+        foreach (var k in corpses.Live())
         {
             if (!onScreen(k, 60)) continue;
             double fade = clamp(k.t / 3, 0, 1), s = k.big ? 1.2 : 0.85;

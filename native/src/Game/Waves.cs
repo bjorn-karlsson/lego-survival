@@ -257,19 +257,19 @@ public static partial class G
     public static double waveModBudget(double b)
     {
         double outV = b;
-        foreach (var m in waveMods) if (m.budget != null) outV = m.budget(outV);
+        foreach (var m in waveMods.Live()) if (m.budget != null) outV = m.budget(outV);
         return outV;
     }
     /* ...and to one body, the moment it is built */
     public static void applyWaveMods(Ent e)
     {
-        foreach (var m in waveMods) if (m.apply != null) try { m.apply(e); } catch { }
+        foreach (var m in waveMods.Live()) if (m.apply != null) try { m.apply(e); } catch { }
     }
     /* the extra chance a body is an elite, from WARBAND */
     public static double waveModElite()
     {
         double p = 0;
-        foreach (var m in waveMods) if (Js.T(m.elite)) p = Math.Max(p, m.elite);
+        foreach (var m in waveMods.Live()) if (Js.T(m.elite)) p = Math.Max(p, m.elite);
         return p;
     }
     public static List<string> composeWave(double n)
@@ -320,7 +320,7 @@ public static partial class G
                 "#7ecbff", 2.6, 44);
             SFX.roar(); addShake(0.4);
         }
-        foreach (var m in waveMods) logEvent("   " + m.name + " — " + m.tip, m.col);
+        foreach (var m in waveMods.Live()) logEvent("   " + m.name + " — " + m.tip, m.col);
         queueTrackForWave(n);
         /* the wave is BUILT now and spawns when the break runs out */
         bool afterBoss = n > 1 && (n - 1) % 5 == 0;
@@ -546,7 +546,7 @@ public static partial class G
                 && !breachOpenNow() && !abyssOpenNow() && !sboxActiveNow() && !ritualActiveNow() && !legionActiveNow())
             {
                 wave.state = "cleared"; wave.t = 0;
-                foreach (var b in enemies) if (isBanner(b) && !b.dead) { b.dead = true; addSparks(b.x, b.y - 60, 8, "#fff0b0"); }
+                foreach (var b in enemies.Live()) if (isBanner(b) && !b.dead) { b.dead = true; addSparks(b.x, b.y - 60, 8, "#fff0b0"); }
                 wave.hold = leagueLeft().Count > 0;
                 /* the highest wave actually FINISHED */
                 wave.done = Math.Max(wave.done, wave.n);

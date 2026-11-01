@@ -67,8 +67,18 @@ public static partial class G
     public static bool toggleMute() { A.muted = !A.muted; audioApply(); return !A.muted; }
     public static void refreshAudioBtns()
     {
-        /* the options screen and the title's two buttons read A directly each frame */
+        /* the options screen shows the same two switches, so it redraws with them --
+           otherwise M mutes everything and the row still reads ON */
         if (optOn) optRender();
+        void set(string id, bool on)
+        {
+            var b = document.getElementById(id);
+            if (b == null) return;
+            b.textContent = (id == "musicBtn" ? "MUSIC" : "SOUND") + ": " + (on ? "ON" : "OFF");
+            b.classList.toggle("off", !on);
+        }
+        set("musicBtn", A.musicOn && !A.muted);
+        set("sfxBtn", A.sfxOn && !A.muted);
     }
     public static void audioInit()
     {

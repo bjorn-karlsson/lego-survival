@@ -202,7 +202,7 @@ public static partial class G
         Obj to = at ?? (id == "town" ? RPG_TOWN : id == "cave" ? RPG.caveIn : RPG_START);
         p.x = to.x; p.y = to.y; p.kx = 0; p.ky = 0; p.dash.t = 0;
         /* the legion walks in with you */
-        foreach (var m in minions)
+        foreach (var m in minions.Live())
         {
             double a = rnd(TAU); var q = floorAt(p.x + Math.Cos(a) * rnd(40, 90), p.y + Math.Sin(a) * rnd(40, 90), Js.Or(m.r, 12) + 2);
             m.x = q.x; m.y = q.y; m.spot = null;
@@ -324,7 +324,7 @@ public static partial class G
     /* ---- EVERY FRAME, in a zone ---- */
     public static void rpgWakePack(double id)
     {
-        foreach (var e in enemies) if (e.rpgPack == id && e.dormant) { e.dormant = false; e.atkCd = Math.Max(Js.Or(e.atkCd, 0), 0.3); }
+        foreach (var e in enemies.Live()) if (e.rpgPack == id && e.dormant) { e.dormant = false; e.atkCd = Math.Max(Js.Or(e.atkCd, 0), 0.3); }
     }
     public static void rpgTick(double dt)
     {
@@ -342,7 +342,7 @@ public static partial class G
         }
         /* what is close enough to use */
         Prop near = null; double nd = RPG_USE_R;
-        foreach (var q in props)
+        foreach (var q in props.Live())
         {
             if (!RPG_USES.ContainsKey(q.type ?? "") || q.type == "rexit") continue;
             if (q.type == "rwaypoint" && RPG.zone == "outskirts" && !(rpgChar != null && rpgChar.town)) continue;
@@ -350,7 +350,7 @@ public static partial class G
             if (d < nd) { nd = d; near = q; }
         }
         RPG.near = near;
-        if (RPG.zone == "cave") foreach (var pr in projectiles) if (!pr.dead && caveWallAt(pr.x, pr.y)) { pr.dead = true; addDust(pr.x, pr.y, 1); }
+        if (RPG.zone == "cave") foreach (var pr in projectiles.Live()) if (!pr.dead && caveWallAt(pr.x, pr.y)) { pr.dead = true; addDust(pr.x, pr.y, 1); }
         bool f = key("KeyF");
         if (f && !RPG.fLatch && near != null) rpgUse(near);
         RPG.fLatch = f;

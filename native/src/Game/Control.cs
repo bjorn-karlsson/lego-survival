@@ -58,7 +58,7 @@ public static partial class G
     public static Obj clickTargetAt(double wx, double wy)
     {
         Obj best = null; double bd = double.PositiveInfinity;
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.state != "active" || e.docile) continue;
             var s = Js.Or(e.scale, 1); var cy = e.y - 18 * s;
@@ -66,7 +66,7 @@ public static partial class G
             if (d < 0 && d < bd) { bd = d; best = e; }
         }
         if (best != null) return best;
-        foreach (var pr in props)
+        foreach (var pr in props.Live())
         {
             if (pr.dead || pr.indestructible || !(pr.hp > 0)) continue;
             var d = Math.hypot(pr.x - wx, pr.y - 10 - wy) - Js.Or(pr.r, 14) - CLICK_PICK * 0.5;

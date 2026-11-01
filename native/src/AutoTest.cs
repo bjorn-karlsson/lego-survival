@@ -10,6 +10,7 @@ namespace Brickblade;
      move:X,Y            the pointer to CSS px X,Y
      down:B / up:B       a mouse button (0 left, 2 right) at the pointer
      call:NAME           a static method of the game with no arguments (G.NAME())
+     with:NAME=ARG       one with a string argument (with:setWeapon=axe)
      set:FIELD=NUMBER    a number on the hero (player.FIELD), e.g. set:invuln=9999
      shot:FILE           a screenshot
      status              one line: state, wave, monsters, hero, frame rate
@@ -55,6 +56,15 @@ public static class AutoTest
                         var m = typeof(G).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == arg && x.GetParameters().All(q => q.IsOptional));
                         if (m == null) Console.WriteLine("[script] no G." + arg + "()");
                         else m.Invoke(null, m.GetParameters().Select(q => q.DefaultValue).ToArray());
+                        break;
+                    }
+                    case "with":
+                    {
+                        /* with:NAME=ARG -- G.NAME("ARG"), e.g. with:setWeapon=axe */
+                        var kv = arg.Split('=', 2);
+                        var m = typeof(G).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == kv[0] && x.GetParameters().Length >= 1 && x.GetParameters()[0].ParameterType == typeof(string) && x.GetParameters().Skip(1).All(q => q.IsOptional));
+                        if (m == null) Console.WriteLine("[script] no G." + kv[0] + "(string)");
+                        else m.Invoke(null, new object[] { kv[1] }.Concat(m.GetParameters().Skip(1).Select(q => q.DefaultValue)).ToArray());
                         break;
                     }
                     case "set":

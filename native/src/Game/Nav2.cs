@@ -106,12 +106,12 @@ public static partial class G
     {
         e.x = clamp(e.x, W.wall + e.r + 6, W.w - W.wall - e.r - 6);
         e.y = clamp(e.y, W.wall + e.r + 6, W.h - W.wall - e.r - 6);
-        foreach (var s in solids)
+        foreach (var s in solids.Live())
         {
             double d = dist(e, s), rr = e.r + s.r;
             if (d < rr && d > 0.001) { e.x += (e.x - s.x) / d * (rr - d); e.y += (e.y - s.y) / d * (rr - d); }
         }
-        foreach (var w in waters)
+        foreach (var w in waters.Live())
         {
             double cx = clamp(e.x, w.x, w.x + w.w), cy = clamp(e.y, w.y, w.y + w.h);
             double dx = e.x - cx, dy = e.y - cy; var d2 = dx * dx + dy * dy;
@@ -154,7 +154,7 @@ public static partial class G
     {
         if (minions.Count == 0 || e.type == "boss" || e.docile || heroObj == null) return null;
         /* THE STONE GOLEM TAUNTS: anything near it comes for it, not for you */
-        foreach (var g in minions)
+        foreach (var g in minions.Live())
         {
             if (g.kind != "golem" || g.gt != "stone" || g.gone || g.rise < 1) continue;
             if (Math.hypot(e.x - g.x, e.y - g.y) < STONE_TAUNT_R) { e.tgtM = g; e.taunted = true; return g; }
@@ -162,7 +162,7 @@ public static partial class G
         e.taunted = false;
         var dP = heroObj.dead ? 1e9 : Math.hypot(e.x - heroObj.x, e.y - heroObj.y);
         Ent best = null; double bd = TARGET_MAX;
-        foreach (var m in minions)
+        foreach (var m in minions.Live())
         {
             if (m.rise < 1 || m.gone) continue;
             var d = Math.hypot(e.x - m.x, e.y - m.y) - (e.tgtM == m ? TARGET_STICK : 0);
@@ -216,7 +216,7 @@ public static partial class G
             double dx = e.x - h.x, dy = e.y - h.y, d = Math.hypot(dx, dy), min = Js.Or(e.r, 12) + Js.Or(h.r, 12);
             if (d > 0.01 && d < min) { var k = (min - d) / d; e.x += dx * k; e.y += dy * k; }
         }
-        foreach (var m in minions)
+        foreach (var m in minions.Live())
         {
             if (m.rise < 1 || m.gone) continue;
             double dx = e.x - m.x, dy = e.y - m.y, d = Math.hypot(dx, dy), min = Js.Or(e.r, 12) + m.r;

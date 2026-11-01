@@ -518,7 +518,7 @@ public static partial class G
     public static Ent emberTarget(Obj from, Ent src, JsMap<Ent, double> taken)
     {
         Ent best = null; double bestScore = double.PositiveInfinity;
-        foreach (var e2 in enemies)
+        foreach (var e2 in enemies.Live())
         {
             if (e2 == src || e2.dead || e2.state != "active") continue;
             double d = dist(e2, from);

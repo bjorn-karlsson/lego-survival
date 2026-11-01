@@ -600,9 +600,9 @@ public static partial class G
         }
         hole(p.x, p.y - 10, 560 + Math.Sin(vtime * 7) * 6 + Math.Sin(vtime * 13) * 4, 1);
         foreach (var l in A.lights) hole(l.x, l.y, l.r, l.a * (0.8 + 0.2 * Math.Sin(vtime * 1.6 + l.ph)));
-        foreach (var q in props) if (!q.dead && (q.type == "crystal" || q.type == "rportal")) hole(q.x, q.y - 20, q.type == "rportal" ? 260 : 150, 0.8);
-        foreach (var pr in projectiles) if (!pr.dead) hole(pr.x, pr.y, 70, 0.55);
-        foreach (var m in minions) if (!m.dead) hole(m.x, m.y, 110, 0.35);
+        foreach (var q in props.Live()) if (!q.dead && (q.type == "crystal" || q.type == "rportal")) hole(q.x, q.y - 20, q.type == "rportal" ? 260 : 150, 0.8);
+        foreach (var pr in projectiles.Live()) if (!pr.dead) hole(pr.x, pr.y, 70, 0.55);
+        foreach (var m in minions.Live()) if (!m.dead) hole(m.x, m.y, 110, 0.35);
         g.globalCompositeOperation = "source-over";
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.drawImage(L, 0, 0);
@@ -615,7 +615,7 @@ public static partial class G
             ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(sx - R, sy - R, R * 2, R * 2);
         }
         foreach (var l in A.lights) glow(l.x, l.y, l.r * 0.7, l.col, 0.22 * (0.7 + 0.3 * Math.Sin(vtime * 1.6 + l.ph)));
-        foreach (var q in props) if (!q.dead && q.type == "crystal") glow(q.x, q.y - 16, 110, "#3ddc84", 0.2);
+        foreach (var q in props.Live()) if (!q.dead && q.type == "crystal") glow(q.x, q.y - 16, 110, "#3ddc84", 0.2);
         glow(p.x, p.y - 10, 300, "#ffcf8a", 0.08);
         /* spores drifting through the light */
         ctx.globalAlpha = 1;

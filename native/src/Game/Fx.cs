@@ -10,7 +10,7 @@ public static partial class G
 {
     public static void updateFx(double dt)
     {
-        foreach (var d in debris)
+        foreach (var d in debris.Live())
         {
             d.life -= dt;
             d.vz -= 850 * dt; d.z += d.vz * dt;
@@ -21,7 +21,7 @@ public static partial class G
             if (d.z == 0) d.vr *= Math.max(0, 1 - 4 * dt);
         }
         debris = debris.Where(d => d.life > 0).ToList();
-        foreach (var p in particles)
+        foreach (var p in particles.Live())
         {
             p.life -= dt;
             if (p.kind == "ring") { p.r += p.v * dt; }
@@ -33,7 +33,7 @@ public static partial class G
            point they are not visible as anything but cost — the oldest go first. */
         if (particles.Count > PARTICLE_MAX) particles.RemoveRange(0, particles.Count - PARTICLE_MAX);
         if (debris.Count > DEBRIS_MAX) debris.RemoveRange(0, debris.Count - DEBRIS_MAX);
-        foreach (var t in dmgTexts) { t.life -= dt; t.y += t.vy * dt; t.vy *= 0.94; }
+        foreach (var t in dmgTexts.Live()) { t.life -= dt; t.y += t.vy * dt; t.vy *= 0.94; }
         dmgTexts = dmgTexts.Where(t => t.life > 0).ToList();
         foreach (var h in hazards.Live())
         {
@@ -83,7 +83,7 @@ public static partial class G
                     particles.Add(new Particle { kind = "spark", x = h.x + rnd(-h.r * 0.8, h.r * 0.8), y = h.y + rnd(-h.r * 0.5, h.r * 0.5),
                         vx = rnd(-12, 12), vy = rnd(-40, -8), life = rnd(0.4, 0.8), max = 0.8, color = FX.foe.frost });
                 if (!player.dead && dist(h, player) < h.r * 0.9) applyAilment("frost", null);
-                foreach (var en in enemies)
+                foreach (var en in enemies.Live())
                     if (!en.dead && en.state == "active" && string.IsNullOrEmpty(en.golem) && string.IsNullOrEmpty(en.mini) && dist(h, en) < h.r * 0.9)
                         en.slowT = Math.max(en.slowT, 0.8);   /* the frost field catches its own side too */
                 continue;
@@ -116,7 +116,7 @@ public static partial class G
         updatePSpikes(dt);
         mergeT -= dt;
         if (mergeT <= 0) { mergeT = 1.2; mergeSweep(); }
-        foreach (var s in sched) s.t -= dt;
+        foreach (var s in sched.Live()) s.t -= dt;
         var fire = sched.Where(s => s.t <= 0).ToList();
         sched = sched.Where(s => s.t > 0).ToList();
         foreach (var s in fire) s.fn();

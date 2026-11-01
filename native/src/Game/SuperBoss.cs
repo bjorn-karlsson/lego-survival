@@ -189,7 +189,7 @@ public static void updateSuperBoss(Ent b, double dt, double toP, double dP){
       b.suppress = Math.min(0.8, b.suppress + 0.05);
       /* then everything of its own within the call */
       var cnt = 0;
-      foreach (var e2 in enemies){
+      foreach (var e2 in enemies.Live()){
         if(e2==b || e2.dead || e2.state!="active" || e2.type=="boss") continue;
         if(dist(e2,b) > 520) continue;
         if(!addMobBuff(e2, "empower", OVERSEER_MAX_STACKS)) continue;

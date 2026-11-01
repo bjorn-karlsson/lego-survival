@@ -194,13 +194,13 @@ public static partial class G
                     {
                         /* stop whatever the wave was doing and leave the field to you */
                         wave.queue.Clear();
-                        foreach (var e in enemies) e.dead = true;
+                        foreach (var e in enemies.Live()) e.dead = true;
                         wave.state = "fight";
                     }
                 }
                 else
                 {
-                    foreach (var e in enemies) e.dead = true;
+                    foreach (var e in enemies.Live()) e.dead = true;
                     projectiles.Clear(); hazards.Clear();
                 }
                 SFX.click(); buildCheatRows();
@@ -289,7 +289,7 @@ public static partial class G
                 else if (k == "hearts") { addMaxHp(50); p.hp = p.maxHp; }
                 else if (k == "studs") p.studs += 1000;
                 else if (k == "level") { for (int i = 0; i < 5; i++) { p.level++; p.incAll += 0.05; } }
-                else if (k == "clear") { foreach (var e in enemies) e.dead = true; }
+                else if (k == "clear") { foreach (var e in enemies.Live()) e.dead = true; }
                 else if (k == "god") godMode = !godMode;
                 else if (k == "buffs")
                 {

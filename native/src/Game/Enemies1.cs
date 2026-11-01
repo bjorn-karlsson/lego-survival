@@ -447,7 +447,7 @@ public static partial class G
     public static void drawMonsterMods()
     {
         var c = ctx;
-        foreach (var k in rmCores)
+        foreach (var k in rmCores.Live())
         {
             double f = 1 - clamp(k.t / RM_CORE_T, 0, 1);
             c.fillStyle = rgba(255, 138, 60, 0.08 + 0.12 * f); c.beginPath(); c.arc(k.x, k.y, RM_CORE_R, 0, TAU); c.fill();
@@ -458,7 +458,7 @@ public static partial class G
         }
         var groups = new JsMap<int, List<Ent>>(); var gOrder = new List<int>();
         c.textAlign = "center";
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.state != "active" || !onScreen(e, 120)) continue;
             if (e.kindred != 0)
@@ -626,7 +626,7 @@ public static partial class G
     public static void updateBanners()
     {
         var bs = enemies.Where(b => b.type == "warbanner" && !b.dead && b.state == "active").ToList();
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.type == "warbanner") continue;
             bannerSet(e, bs.Count > 0 && bs.Any(b => hypot(b.x - e.x, b.y - e.y) < BANNER_R));
@@ -815,7 +815,7 @@ public static partial class G
     public static void drawBloodOrbs()
     {
         var c = ctx;
-        foreach (var o in bloodOrbs)
+        foreach (var o in bloodOrbs.Live())
         {
             if (!onScreen(o, 120)) continue;
             var K = ORB_KINDS[o.kind];

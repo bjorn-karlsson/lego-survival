@@ -669,13 +669,13 @@ public static partial class G
         ctlReset();   /* no walk or target from before the fall carries over */
         tScale = 1;
         /* room to breathe: everything close is thrown back, every shot in the air near you goes */
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.state != "active") continue;
             double d = hypot(e.x - p.x, e.y - p.y);
             if (d < RESPAWN_PUSH_R) { double a = Math.Atan2(e.y - p.y, e.x - p.x), k = 1 - d / RESPAWN_PUSH_R; e.kx = e.kx + Math.Cos(a) * 700 * k; e.ky = e.ky + Math.Sin(a) * 700 * k; }
         }
-        foreach (var pr in projectiles) if (pr.owner == "enemy" && hypot(pr.x - p.x, pr.y - p.y) < RESPAWN_PUSH_R * 1.5) pr.dead = true;
+        foreach (var pr in projectiles.Live()) if (pr.owner == "enemy" && hypot(pr.x - p.x, pr.y - p.y) < RESPAWN_PUSH_R * 1.5) pr.dead = true;
         addRing(p.x, p.y, 12, 420, RESPAWN_PUSH_R, "#ffd76e", 8, 0.6); addShake(0.3);
         showBanner("BACK ON YOUR FEET", o.free ? "SECOND CHANCE" : "FINE PAID · " + Js.Num(o.cost) + " STUDS", "#ffd76e", 1.8, 40);
         logEvent(o.free ? "second chance taken" : "respawned for " + Js.Num(o.cost) + " studs", "#ffd76e");

@@ -130,7 +130,7 @@ public static void golemStomp(Ent e, GolemConf G){
    Twelve seconds is long enough that the floor you cleared stops being cleared. */
 public static void plantCoil(Ent e, double x, double y){
   var live = 0;
-  foreach (var h in hazards) if(h.kind=="coil") live++;
+  foreach (var h in hazards.Live()) if(h.kind=="coil") live++;
   if(live >= COIL_MAX) return;
   /* the twelve seconds it is DANGEROUS start when it wakes, not when it lands */
   var arm = rnd(COIL_ARM_MIN, COIL_ARM_MAX);
@@ -303,7 +303,7 @@ public static bool maceSpin(Ent b, double dt, double tier, bool enr, double toP)
   }
   /* THE SWING TAKES WHATEVER IT CROSSES, skeletons included -- each on its own
      short clock so one pass of the head is one hit */
-  foreach (var m in minions){
+  foreach (var m in minions.Live()){
     if(m.rise < 1 || m.gone || m.maceCd > vtime) continue;
     var dm = Math.hypot(m.x - b.x, m.y - b.y);
     if(dm >= reach + m.r) continue;

@@ -58,7 +58,7 @@ public static partial class G
             /* ONE TO MANY, never onward: the body the arrow found throws a bolt at each
                of its nearest neighbours, and none of those throws one again */
             var near = new List<(double d, Ent o)>();
-            foreach (var o in enemies)
+            foreach (var o in enemies.Live())
             {
                 if (o == e || o.dead || o.state != "active" || pr.hit.Contains(o)) continue;
                 var d = dist(o, e);
@@ -78,7 +78,7 @@ public static partial class G
         var ch = player != null ? player.ricochet : 0;
         if (!(ch > 0) || pr.rico >= RICO_MAX || Js.R() >= ch) return false;
         Ent best = null; double bd = RICO_R;
-        foreach (var o in enemies)
+        foreach (var o in enemies.Live())
         {
             if (o.dead || o.state != "active" || pr.hit.Contains(o)) continue;
             var d = Math.hypot(o.x - pr.x, (o.y - 16) - pr.y);

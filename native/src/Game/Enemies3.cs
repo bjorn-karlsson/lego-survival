@@ -125,13 +125,13 @@ public static partial class G
         if (!FLOOR_CAP.Has(kind)) return true;
         double cap = FLOOR_CAP[kind];
         int n = 0;
-        foreach (var pk in pickups) if (pk.kind == kind && !pk.got && ++n >= cap) return false;
+        foreach (var pk in pickups.Live()) if (pk.kind == kind && !pk.got && ++n >= cap) return false;
         return true;
     }
     public static bool chestRoom()
     {
         int n = 0;
-        foreach (var pr in props) if (pr.type == "chest" && !pr.dead && ++n >= CHEST_CAP) return false;
+        foreach (var pr in props.Live()) if (pr.type == "chest" && !pr.dead && ++n >= CHEST_CAP) return false;
         return true;
     }
     /* A boss always leaves a heart and a magnet, and then rolls for the rest */

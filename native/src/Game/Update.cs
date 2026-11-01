@@ -125,7 +125,7 @@ public static void updatePlayer(double dt){
       /* sent back the way a deflected arrow is: at the nearest thing that is
          not you, and it belongs to you now */
       Ent tgt = null; double best = 1e9;
-      foreach (var en in enemies){ if(en.dead||en.state!="active") continue;
+      foreach (var en in enemies.Live()){ if(en.dead||en.state!="active") continue;
         var dd = dist(pr,en); if(dd<best){ best=dd; tgt=en; } }
       var a3 = tgt != null ? angTo(pr,tgt) : p.whirlAng;
       pr.vx = Math.cos(a3)*460; pr.vy = Math.sin(a3)*460;
@@ -263,7 +263,7 @@ public static void updatePlayer(double dt){
           if(within && !s.hit.Contains(pr)){
             s.hit.Add(pr);
             Ent tgt=null; double best=1e9;
-            foreach (var en in enemies){ if(en.dead||en.state!="active") continue;
+            foreach (var en in enemies.Live()){ if(en.dead||en.state!="active") continue;
               var dd = dist(pr,en); if(dd<best){best=dd;tgt=en;} }
             var a2 = tgt != null ? angTo(pr,tgt) : aimA;
             pr.vx = Math.cos(a2)*460; pr.vy = Math.sin(a2)*460;
@@ -448,7 +448,7 @@ public static void updatePlayer(double dt){
     if(bo.cd<=0){
       bo.cd = bo.rate;
       Ent tgt=null; double best=1e9;
-      foreach (var en in enemies){
+      foreach (var en in enemies.Live()){
         if(en.dead||en.state!="active") continue;
         var dd = dist(en,p);
         if(dd<best){ best=dd; tgt=en; }
@@ -517,7 +517,7 @@ public static void updatePlayer(double dt){
         foreach (var node in frontier){
           /* the `branch` nearest foes this bolt has not touched yet */
           var near = new List<(Ent e, double dd)>();
-          foreach (var e2 in enemies){
+          foreach (var e2 in enemies.Live()){
             if(e2.dead||e2.state!="active"||hitSet.Contains(e2)) continue;
             var dd = dist(e2, node.e);
             if(dd < 340) near.Add((e2, dd));

@@ -155,7 +155,7 @@ public static partial class G
             if (Math.Abs(fx - CX) < 300 || Math.Abs(fy - CY) < 100) continue;
             if (biomeAt(fx, fy) == "cave") continue;
             bool bad = false;
-            foreach (var w in waters) if (fx > w.x - 20 && fx < w.x + w.w + 20 && fy > w.y - 20 && fy < w.y + w.h + 20) bad = true;
+            foreach (var w in waters.Live()) if (fx > w.x - 20 && fx < w.x + w.w + 20 && fy > w.y - 20 && fy < w.y + w.h + 20) bad = true;
             if (bad) continue;
             flowers.Add(new Flower { x = fx, y = fy, col = fc });
         }
@@ -243,7 +243,7 @@ public static partial class G
             if (!parts.Any(w => !(w.x - 30 > vx + vw || w.x + w.w + 30 < vx || w.y - 30 > vy + vh || w.y + w.h + 30 < vy))) continue;
             drawLake(parts);
         }
-        foreach (var f in flowers)
+        foreach (var f in flowers.Live())
         {
             if (f.x < vx - 20 || f.x > vx + vw + 20 || f.y < vy - 20 || f.y > vy + vh + 20) continue;
             drawStudG(ctx, f.x, f.y, 5, f.col);
@@ -298,8 +298,8 @@ public static partial class G
                 if (biomeAt(x, y) != biome) continue;
                 if (hypot(x - CX, y - CY) < 420) continue;
                 bool bad = false;
-                foreach (var w in waters) if (x > w.x - 75 && x < w.x + w.w + 75 && y > w.y - 75 && y < w.y + w.h + 75) bad = true;
-                foreach (var p in props) if (hypot(p.x - x, p.y - y) < (p.landmark ? 120 : 95)) bad = true;
+                foreach (var w in waters.Live()) if (x > w.x - 75 && x < w.x + w.w + 75 && y > w.y - 75 && y < w.y + w.h + 75) bad = true;
+                foreach (var p in props.Live()) if (hypot(p.x - x, p.y - y) < (p.landmark ? 120 : 95)) bad = true;
                 if (bad) continue;
                 addProp(type, x, y, rng); placed++;
             }
@@ -311,8 +311,8 @@ public static partial class G
     {
         if (x < 260 + R || y < 260 + R || x > W.w - 260 - R || y > W.h - 260 - R) return false;
         if (hypot(x - CX, y - CY) < 620 + R) return false;
-        foreach (var w in waters) if (x > w.x - R - 120 && x < w.x + w.w + R + 120 && y > w.y - R - 120 && y < w.y + w.h + R + 120) return false;
-        foreach (var p in props) if (p.landmark && hypot(p.lx - x, p.ly - y) < R + p.lr + 260) return false;
+        foreach (var w in waters.Live()) if (x > w.x - R - 120 && x < w.x + w.w + R + 120 && y > w.y - R - 120 && y < w.y + w.h + R + 120) return false;
+        foreach (var p in props.Live()) if (p.landmark && hypot(p.lx - x, p.ly - y) < R + p.lr + 260) return false;
         return true;
     }
     public static void buildLandmarks(Func<double> rng, double dens)

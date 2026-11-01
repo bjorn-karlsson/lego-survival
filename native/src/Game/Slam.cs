@@ -155,7 +155,7 @@ public static partial class G
         }
         if (pspikes.Any(sp => sp.dead))
         {
-            foreach (var sp in pspikes)
+            foreach (var sp in pspikes.Live())
             {
                 if (!sp.dead) continue;
                 var sl = sp.sl;

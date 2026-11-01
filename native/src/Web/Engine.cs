@@ -233,7 +233,7 @@ public static class Dom
     public static void PointerMove(double x, double y, int buttons)
     {
         double dx = mx < 0 ? 0 : x - mx, dy = my < 0 ? 0 : y - my;
-        mx = x; my = y;
+        mx = x; my = y; lastButtons = buttons;
         var t = HitTest(x, y);
         PointerTarget = t;
         if (t != hovered)
@@ -260,6 +260,16 @@ public static class Dom
             Dispatch(target, pv);
             if (rangeDrag != null) RangeSet(rangeDrag, x);
         }
+    }
+    /* WHAT IS UNDER A STILL POINTER CHANGES WITH THE PAGE. A browser re-hit-tests
+       after a layout change (a fake mouse move): a screen that hides under the
+       pointer loses its hover, and its tooltip goes, without the mouse moving. */
+    static int refreshedAt = -1, lastButtons;
+    public static void PointerRefresh()
+    {
+        if (mx < 0 || refreshedAt == LayoutCount) return;
+        refreshedAt = LayoutCount;
+        PointerMove(mx, my, lastButtons);
     }
     static DomEvent Ev(string type, double x, double y, int buttons, Element related) => new DomEvent
     {

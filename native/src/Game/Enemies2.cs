@@ -199,8 +199,8 @@ public static partial class G
             var pt = new Pt(x, y);
             if (player != null && dist(pt, player) < 440) continue;
             bool bad = false;
-            foreach (var s in solids) if (dist(pt, s) < s.r + 30) bad = true;
-            foreach (var w in waters) if (x > w.x - 30 && x < w.x + w.w + 30 && y > w.y - 30 && y < w.y + w.h + 30) bad = true;
+            foreach (var s in solids.Live()) if (dist(pt, s) < s.r + 30) bad = true;
+            foreach (var w in waters.Live()) if (x > w.x - 30 && x < w.x + w.w + 30 && y > w.y - 30 && y < w.y + w.h + 30) bad = true;
             if (!bad) return pt;
         }
         return new Pt(clamp((player != null ? player.x : CX) + 520, lo, hiX), clamp((player != null ? player.y : CY) + 520, lo, hiY));

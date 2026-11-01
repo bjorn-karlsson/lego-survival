@@ -680,7 +680,7 @@ public static bool isReaver(){ return player != null && player.reave > 0 && weap
    the weapon again and startSwing has nothing to ask. */
 public static double reaveAir(){
   double n = 0;
-  foreach (var pr in projectiles) if(pr.kind == "reave" && !pr.dead) n++;
+  foreach (var pr in projectiles.Live()) if(pr.kind == "reave" && !pr.dead) n++;
   return n;
 }
 public static double reaveAirMax(){ return (player != null && player.reave >= 2) ? REAVE_AIR_R2 : REAVE_AIR; }

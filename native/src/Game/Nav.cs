@@ -34,13 +34,13 @@ public static partial class G
     {
         double cs = NAV.cs, cx = ix * cs + cs / 2, cy = iy * cs + cs / 2, pad = NAV_PAD;
         if (cx < W.wall + pad || cx > W.w - W.wall - pad || cy < W.wall + pad || cy > W.h - W.wall - pad) return true;
-        foreach (var so in solids)
+        foreach (var so in solids.Live())
         {
             if (so.dead || (so.r < NAV_SMALL && !so.navHard)) continue;
             if (Math.abs(cx - so.x) > so.r + pad || Math.abs(cy - so.y) > so.r + pad) continue;
             if (Math.hypot(cx - so.x, cy - so.y) < so.r + pad) return true;
         }
-        foreach (var wa in waters)
+        foreach (var wa in waters.Live())
         {
             if (cx > wa.x - pad && cx < wa.x + wa.w + pad && cy > wa.y - pad && cy < wa.y + wa.h + pad) return true;
         }
@@ -67,7 +67,7 @@ public static partial class G
     {
         if (NAV.blocked == null) return false;
         bool learnt = false;
-        foreach (var so in solids)
+        foreach (var so in solids.Live())
         {
             if (so.dead || so.navHard || so.r >= NAV_SMALL) continue;
             if (Math.hypot(so.x - e.x, so.y - e.y) > so.r + Js.Or(e.r, 12) + 34) continue;
@@ -229,12 +229,12 @@ public static partial class G
     public static List<Obj> nearBlockers(Obj e, double reach)
     {
         var outp = new List<Obj>();
-        foreach (var so in solids)
+        foreach (var so in solids.Live())
         {
             if (Math.abs(so.x - e.x) > reach + so.r || Math.abs(so.y - e.y) > reach + so.r) continue;
             outp.Add(so);
         }
-        foreach (var w in waters)
+        foreach (var w in waters.Live())
         {
             if (e.x < w.x - reach || e.x > w.x + w.w + reach || e.y < w.y - reach || e.y > w.y + w.h + reach) continue;
             double qx = clamp(e.x, w.x, w.x + w.w), qy = clamp(e.y, w.y, w.y + w.h);
@@ -327,7 +327,7 @@ public static partial class G
         {
             for (int i = 0; i < n; i++) if (EGRID.cells[i].Count > 0) EGRID.cells[i].Clear();
         }
-        foreach (var e in enemies)
+        foreach (var e in enemies.Live())
         {
             if (e.dead || e.state != "active") continue;
             int ix = (int)clamp(Math.floor(e.x / EGRID.cs), 0, w - 1);
@@ -347,7 +347,7 @@ public static partial class G
         res.Clear();
         if (EGRID.cells == null)
         {
-            foreach (var e in enemies) res.Add(e);
+            foreach (var e in enemies.Live()) res.Add(e);
             return res;
         }
         double cs = EGRID.cs; int w = EGRID.w, h = EGRID.h;
@@ -443,7 +443,7 @@ public static partial class G
     public static bool segHitsWater(double x1, double y1, double x2, double y2, double r)
     {
         double dx = x2 - x1, dy = y2 - y1;
-        foreach (var w in waters)
+        foreach (var w in waters.Live())
         {
             double L = w.x - r, R = w.x + w.w + r, T = w.y - r, B = w.y + w.h + r;
             if (Math.max(x1, x2) < L || Math.min(x1, x2) > R || Math.max(y1, y2) < T || Math.min(y1, y2) > B) continue;
