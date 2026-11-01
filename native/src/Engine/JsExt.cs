@@ -68,4 +68,11 @@ public static partial class G
     {
         null => "null", double d => Js.Num(d), int i => S(i), bool b => S(b), string s => s, _ => v.ToString()
     };
+    /* (1234567).toLocaleString() in an English locale: thousands grouped, up to three decimals */
+    public static string toLocaleString(this double v)
+    {
+        if (double.IsNaN(v)) return "NaN";
+        if (double.IsInfinity(v)) return v > 0 ? "∞" : "-∞";
+        return System.Math.Round(v, 3, MidpointRounding.AwayFromZero).ToString("#,0.###", System.Globalization.CultureInfo.InvariantCulture);
+    }
 }

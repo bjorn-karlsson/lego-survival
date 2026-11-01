@@ -885,7 +885,7 @@ public static partial class G
 
 /* one row of the character sheet (STAT_PROBES, JS 18980): its group, its label,
    which short-list heading it sits under, how it is read and printed, and why */
-public sealed class StatProbe
+public sealed partial class StatProbe
 {
-    public string g, k, basic, why; public Func<double> get; public Func<double, string> fmt; public bool zero;
+    public string g, k, basic, why; public Func<double> get; public Func<double, string> fmt; public bool zero, hi = true;
 }

@@ -188,7 +188,7 @@ public static partial class G
     {
         return pl + (player?.inc?["cast"] ?? 0) + (weapon != null ? weapon.incAtk : 0) + stackMod("cast");
     }
-    public static double dotRate(double b, double flat, bool chaos)
+    public static double dotRate(double b, double flat, bool chaos = false)
     {
         double inc = dotInc() + (chaos && player != null ? player.inc["chaos"] : 0);
         return pool(b, flat, Math.Min(INC_DMG_CAP, inc), player != null ? Js.Or(player.dotMore, 1) : 1);
