@@ -10,7 +10,12 @@ public sealed partial class Upgrade { }
 public sealed partial class Hazard : Obj { }
 public sealed partial class Spike : Obj { }
 public sealed partial class SlamAct { }
-public sealed partial class Swing { }
+/* a swing in flight (startSwing builds it; updatePlayer sweeps it) */
+public sealed partial class Swing
+{
+    public double t, dur, kb = 1, aim, from, to, reach, cur; public bool spin, crit, crited, gained;
+    public HashSet<object> hit = new(), hitP = new();
+}
 public sealed partial class Abyss : Crack { }
 public sealed partial class Ritual : Obj { }
 public sealed partial class Legion : Obj { }

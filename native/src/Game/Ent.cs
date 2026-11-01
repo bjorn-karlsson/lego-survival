@@ -81,13 +81,13 @@ public sealed class SlamPools { public double flat, arcFlat, rangeInc, spdInc, e
 public sealed class Dash { public double t, cd, cdMax; public Pt dir = new Pt(1, 0); public double dx, dy; }
 public sealed class Stacks { public double stacks, t; }
 public sealed class Bow { public double n = 1, pierce, flat, more = 1; public string kind; public double forkPlus, blastInc; }
-public sealed class OrbPos { public double x, y; public int i; public bool outer; public double broken; }
+public sealed class OrbPos { public double x, y, ang, r; public int i; public bool outer; public double broken; }
 /* every spell's numbers in one shape: the JS reads p[k].n / .rate whatever k is */
 public sealed class Spell
 {
     public double n, dmg, rate, cd;
     /* orbit */
-    public double spd, size, aegis, twin, blocked; public List<OrbPos> pos = new(); public double[] brk = new double[64], brk2 = new double[64];
+    public double spd, size, aegis, twin, blocked, rNow; public List<OrbPos> pos = new(); public double[] brk = new double[64], brk2 = new double[64];
     /* storm */
     public double life, count, boomer, queued, qT, qIdx, qOffset;
     /* vortex */

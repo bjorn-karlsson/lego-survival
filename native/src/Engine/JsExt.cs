@@ -7,6 +7,10 @@ namespace Brickblade;
    empty list). */
 public static class JsExt
 {
+    /* `for (const x of list)` exactly: by index, re-reading the length each step, so a
+       body that pushes to the list, splices it or empties it behaves as it did in the
+       browser instead of throwing "collection was modified" */
+    public static IEnumerable<T> Live<T>(this List<T> l) { for (int i = 0; i < l.Count; i++) yield return l[i]; }
     public static List<R> map<T, R>(this IEnumerable<T> a, Func<T, R> f) => a.Select(f).ToList();
     public static List<R> map<T, R>(this IEnumerable<T> a, Func<T, int, R> f) => a.Select(f).ToList();
     public static List<T> filter<T>(this IEnumerable<T> a, Func<T, bool> f) => a.Where(f).ToList();
