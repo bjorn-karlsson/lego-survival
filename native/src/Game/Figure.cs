@@ -5,8 +5,8 @@ namespace Brickblade;
 
 public sealed class Fig
 {
-    public double x, y, z, s = 1, walk, phase, flash, blink, bowPull, wScale;
-    public double whirlA = double.NaN, bladeAng = double.NaN, slam = double.NaN;
+    public double x, y, z, s = 1, walk, phase, flash, blink, wScale;
+    public double whirlA = double.NaN, bladeAng = double.NaN, slam = double.NaN, bowPull = double.NaN;
     public Pt face;
     public bool moving, angry, armsUp, bigImp, castGlow, crown, elite, fat, hero, horns, lava, lord, magic,
         noHelm, staffUpright, wings, zombieArms, skip;
