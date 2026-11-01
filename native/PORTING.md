@@ -49,52 +49,75 @@ reference: same rules, same numbers, same look. Nothing is meant to be left out.
   hero, monsters and minions, `Proj`, `Prop`, `Fx`…). An undefined field is `0`, `false` or
   `null`, which is how the JS reads it (`e.foo || 0`).
 - **`Math.random()`** → `Js.R()`, overridable so tests can make a run reproducible.
-- **DOM screens** (title, cards, tree, gear, options…) are drawn natively in `src/Game/Ui*.cs`.
-  The HTML strings the JS builds for tooltips and cards are rendered by a small rich-text
-  renderer, so the text logic itself is ported unchanged.
+- **The screens are the game's own HTML and CSS.** The title, cards, tree, gear, options and
+  every tooltip are the page's markup and stylesheet, embedded from `lego-survival.html` and
+  run by a small DOM and CSS engine (`src/Web`): the cascade, block, inline, flex and grid
+  layout, painting, events, focus, text fields and sliders. The JS that builds them with
+  `innerHTML` and `classList` is ported line for line against it.
+- **A JS object used as a map** is a `JsMap` (a `Dictionary` whose missing keys read as
+  `null`/`0`, never a throw); one used as a map of numbers is a `NumMap`.
+- **`for (const x of list)`** over a list the body can change (a hit that kills spawns the
+  splits) is `foreach (var x in list.Live())`, which walks by index as JS does.
+  `tools/live_loops.py` applies it to every loop over the game's live lists.
 
 ## Status
 
-Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
-**Next line** column records where porting resumes in each section.
+**Every section of the JS is ported.** `tools/coverage.py` finds every top-level JS
+declaration in the C# (2414 of 2414; three text-size helpers are done another way and
+listed in `tools/coverage-map.txt`).
 
-| Section | JS lines | State |
+| Section | JS lines | C# |
 |---|---|---|
-| Engine (canvas, GPU, fonts, storage) | — | done; `--shimtest` matches Chromium |
-| UTILS | 1014–1084 | ported (`Game/Utils.cs`) |
-| CONSTANTS | 1085–3366 | ported (`Game/Constants1-3.cs`) |
-| CANVAS / SETTINGS / TEXT SIZE | 3367–3552 | ported (`Game/Canvas.cs`; adds RENDER QUALITY and VSYNC options) |
-| AUDIO | 3553–3969 | ported (`Game/Audio.cs` on `Engine/WebAudio.cs`, a Web Audio work-alike; `Engine/SoundOut.cs`) |
-| INPUT | 3970–4056 | ported (`Game/Input.cs`) |
-| STATE | 4057–4391 | ported (`Game/State.cs`; run links are byte-compatible with the browser's) |
-| PLAYER | 4392–4553 | ported (`Game/Player.cs`, `Game/Ent.cs`) |
-| WORLD | 4554–4938 | ported (`Game/World.cs`) |
-| PICKUPS / DEBRIS / PARTICLES | 4939–5411 | ported (`Game/Pickups.cs`) |
-| ENEMIES | 5412–8647 | ported (`Game/Enemies1-4.cs`, `Game/Gear.cs`, `Game/EntMonster.cs`) |
-| WAVES / THE ROSTER | 8648–11357 | ported (`Game/Waves.cs`, `Breach.cs`, `Abyss.cs`, `Strongbox.cs`, `Ritual.cs`, `Legion.cs`) |
-| RARITY & UPGRADES | 11358–18277 | |
-| TEST BENCH | 18278–18844 | |
-| WHAT A BRICK DOES | 18845–19715 | |
-| CHARACTER SHEET | 19716–21304 | |
-| UPDATE | 21305–22179 | |
-| THE ARROW | 22180–23086 | |
-| THE GROUND SLAM | 23087–23268 | |
-| PATHFINDING | 23269–27346 | |
-| DRAW: MINIFIGURE | 27347–28128 | |
-| DRAW: PROPS & WORLD | 28129–28696 | |
-| RENDER | 28697–30517 | |
-| COMBAT LOG | 30518–30991 | |
-| HUD | 30992–31835 | |
-| TITLE SCREEN | 31836–31908 | |
-| GAME FLOW | 31909–32329 | |
-| MAIN LOOP | 32330–32430 | |
-| HTML screens (markup 743–1010, CSS 9–742) | | |
+| Engine (canvas, GPU, fonts, storage, audio out) | — | `src/Engine` |
+| Page engine (DOM, CSS, layout, paint, events) | markup 743–1010, CSS 9–742 | `src/Web` |
+| UTILS · CONSTANTS | 1014–3366 | `Utils.cs`, `Constants1-3.cs` |
+| CANVAS / SETTINGS / TEXT SIZE · AUDIO · INPUT | 3367–4056 | `Canvas.cs`, `Audio.cs`, `Input.cs` |
+| STATE · PLAYER · WORLD · PICKUPS | 4057–5411 | `State.cs`, `Player.cs`, `Ent.cs`, `World.cs`, `Pickups.cs` |
+| ENEMIES · WAVES · THE ROSTER (leagues) | 5412–11357 | `Enemies1-4.cs`, `Gear.cs`, `Waves.cs`, `Breach.cs`, `Abyss.cs`, `Strongbox.cs`, `Ritual.cs`, `Legion.cs` |
+| RARITY & UPGRADES · the skill tree · modes · map | 11358–18277 | `Upgrades.cs`, `Meta1-6.cs`, `Fav.cs`, `Rpg.cs`, `Cave.cs`, `MapRpg.cs` |
+| TEST BENCH · WHAT A BRICK DOES · CHARACTER SHEET | 18278–21304 | `Bench.cs`, `Brick.cs`, `Sheet.cs`, `Book.cs`, `Equip*.cs`, `Reward.cs` |
+| UPDATE · THE ARROW · THE GROUND SLAM · PATHFINDING | 21305–27346 | `Control.cs`, `Update.cs`, `Arrow.cs`, `Minions.cs`, `Slam.cs`, `Nav*.cs`, `EnemyCore.cs`, `Boss1-2.cs`, `SuperBoss.cs`, `Projectiles.cs`, `Fx.cs`, `MonsterMarks.cs` |
+| DRAW · RENDER · COMBAT LOG · HUD | 27347–31835 | `DrawFig.cs`, `DrawProps.cs`, `Render.cs`, `CombatLog.cs`, `Hud.cs` |
+| TITLE SCREEN · GAME FLOW · MAIN LOOP | 31836–32430 | `GameFlow.cs`, `Boot.cs` |
+| The window and its loop | — | `App.cs` |
 
-**While the port is in progress the project does not compile**: a section calls functions
-from sections not yet ported. `dotnet build` errors of the kind "name does not exist" are the
-list of what is left; any other kind of error is a bug in what has been ported.
+## How it runs
 
-**Resume at JS line 11358** (RARITY & UPGRADES).
+`App.Run` does what the browser did around the script. Each turn of its loop is one browser
+frame: input is routed into the page (hover, clicks, keys by their browser `code`, the wheel,
+typed text), due timers run, `requestAnimationFrame` callbacks run (the game's `frame()`:
+`update` and `render`), `MutationObserver` callbacks run, and the page is painted over the
+field. `Boot.cs` runs the script's top-level statements once, in JS order.
+
+**Static initialisers run in JS order.** A partial class's field initialisers run file by
+file in the order the compiler is given the files; `GameOrder.props` (written by
+`tools/compile_order.py`) hands the game's files over in the order of the JS they port, so a
+constant is always set up before anything below it reads it, as in the browser. Run the tool
+after adding or renaming a file in `src/Game`.
+
+**Render quality.** The field can be drawn below the screen's own resolution: the world goes
+into an offscreen canvas and is scaled up, and everything after it (the map, the HUD, the
+markers, the reticle) and every menu is drawn on the window at full sharpness. AUTO starts at
+full and steps down (75%, then 50%) when most of 2.5 seconds of play runs under 45 frames a
+second.
+
+## Testing without a person at the keys
+
+`--script` runs a scripted session (see `src/AutoTest.cs`): clicks by id or CSS selector, keys,
+the mouse, drags, calls into the game, a hero kept alive, screenshots and one-line status
+reports with the frame's cost.
+
+```
+dotnet bin/Release/net8.0/Brickblade.dll --w 960 --h 600 --script \
+  "10:click:startBtn; 40:with:startWave=10; 40:set:invuln=9999; 300:status; 300:shot:w10.png; 301:quit"
+```
+
+What has been run this way: every weapon in arcade for 5000 frames; boss and super-boss waves
+5–40; the RPG Outskirts; the whole test bench (every brick granted, every utility, league,
+league-tree node and rare modifier, all 55 monsters in the sandbox) followed by a fight;
+every screen opened and screenshotted; the equipment screen's click-to-wear, drag, stash and
+bin. None of them logs an exception. Screens were compared with Chromium running the original
+page (`tests/DomTest` compares element rectangles; the gameplay field by eye).
 
 ## Build and run
 
@@ -103,8 +126,10 @@ cd native
 dotnet build -c Release
 dotnet bin/Release/net8.0/Brickblade.dll               # the game
 dotnet bin/Release/net8.0/Brickblade.dll --shimtest --out shim.png
-python3 tools/coverage.py --missing                    # what is not ported yet
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o out/win
+python3 tools/coverage.py --missing                    # anything not carried over
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o out/win
 ```
 
-In a container without a display: `LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a dotnet …`.
+In a container without a display: `xvfb-run -a dotnet …` (Mesa renders in software, so the
+frame rate there says nothing about a real graphics card).

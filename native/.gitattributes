@@ -1,0 +1,2 @@
+# a batch file keeps Windows line endings, whatever checks it out
+*.cmd text eol=crlf
