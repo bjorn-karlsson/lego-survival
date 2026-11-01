@@ -736,9 +736,15 @@ internal static class Paint2
         }
         if (e.localName == "svg")
         {
+            /* an inline <svg> clips what it draws to its own box (the UA's
+               svg:not(:root){overflow:hidden}): a zoomed-in tree stays in its frame */
             var inner = st;
-            if (hitMode) { var hit = Svg.Hit(e, st.m.Mul(Mat.T(cx, cy)), cw, ch, hx, hy); if (hit != null && InClip(st)) { hitBox = b; hitEl = hit; } return; }
-            Apply(st);
+            {
+                var (x0, y0) = st.m.Ap(cx, cy); var (x1, y1) = st.m.Ap(cx + cw, cy + ch);
+                inner.clip = Intersect(st.clip, (Math.Min(x0, x1), Math.Min(y0, y1), Math.Max(x0, x1), Math.Max(y0, y1)));
+            }
+            if (hitMode) { var hit = Svg.Hit(e, st.m.Mul(Mat.T(cx, cy)), cw, ch, hx, hy); if (hit != null && InClip(inner)) { hitBox = b; hitEl = hit; } return; }
+            Apply(inner);
             Svg.Paint(g, e, st.m.Mul(Mat.T(cx, cy)), cw, ch, st.alpha, b.cs);
             Apply(st);
             return;

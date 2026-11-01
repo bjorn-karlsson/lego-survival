@@ -133,7 +133,13 @@ public static class AutoTest
                     {
                         /* drag:SRC>DST -- press on the first element's centre, move, let go on the second's */
                         var ab = arg.Split('>');
-                        var a = Dom.document.querySelector(ab[0]); var b = Dom.document.querySelector(ab[1]);
+                        Element Pick(string q)
+                        {
+                            int at = q.LastIndexOf('@'); int n = 0;
+                            if (at > 0 && int.TryParse(q.Substring(at + 1), out var nn)) { n = nn; q = q.Substring(0, at); }
+                            var all = Dom.document.querySelectorAll(q); return n < all.Count ? all[n] : null;
+                        }
+                        var a = Pick(ab[0]); var b = Pick(ab[1]);
                         if (a == null || b == null) { Console.WriteLine($"[script] drag: {(a == null ? ab[0] : ab[1])} not found"); break; }
                         var ra = a.getBoundingClientRect(); var rb = b.getBoundingClientRect();
                         double x0 = ra.x + ra.width / 2, y0 = ra.y + ra.height / 2, x1 = rb.x + rb.width / 2, y1 = rb.y + rb.height / 2;
@@ -141,6 +147,36 @@ public static class AutoTest
                         for (int q = 1; q <= 8; q++) Dom.PointerMove(x0 + (x1 - x0) * q / 8, y0 + (y1 - y0) * q / 8, 1);
                         Dom.PointerUp(0);
                         px = x1; py = y1;
+                        break;
+                    }
+                    case "tree": { var m = G.metaCur(); Console.WriteLine($"[tree] frame {frame} taken={m.nodes.Count} left={G.metaPointsLeft(m)} earned={G.metaPointsEarned(m)} pick={G.treePick} hover={G.treeHover}"); break; }
+                    case "metawave": { var m = G.metaCur(); m.best.wave = double.Parse(arg); G.metaSave(); G.refreshTreeBtn(); break; }
+                    case "rect":
+                    {
+                        foreach (var e in Dom.document.querySelectorAll(arg).Take(4)) { var r = e.getBoundingClientRect(); Console.WriteLine($"[rect] {arg}: {r.x:0.#},{r.y:0.#} {r.width:0.#}x{r.height:0.#} hit={Dom.HitTest(r.x + r.width / 2, r.y + r.height / 2)?.localName}.{Dom.HitTest(r.x + r.width / 2, r.y + r.height / 2)?.className}"); }
+                        break;
+                    }
+                    case "hitclick":
+                    {
+                        /* hitclick:AREA|ITEM@N -- scan AREA's box with the hit-tester, find the Nth distinct
+                           element matching ITEM under the pointer (an SVG node has no box of its own), click it there */
+                        var parts = arg.Split('|'); string item = parts[1]; int n = 0;
+                        int at = item.LastIndexOf('@'); if (at > 0) { n = int.Parse(item.Substring(at + 1)); item = item.Substring(0, at); }
+                        var area = Dom.document.querySelector(parts[0]); if (area == null) { Console.WriteLine("[script] no " + parts[0]); break; }
+                        var r = area.getBoundingClientRect(); var seen = new List<(Element, double, double)>();
+                        double cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+                        /* nearest the middle first */
+                        var pts = new List<(double, double)>();
+                        for (double y = r.y + 2; y < r.y + r.height; y += 4) for (double x = r.x + 2; x < r.x + r.width; x += 4) pts.Add((x, y));
+                        foreach (var (x, y) in pts.OrderBy(q => (q.Item1 - cx) * (q.Item1 - cx) + (q.Item2 - cy) * (q.Item2 - cy)))
+                        {
+                            var h = Dom.HitTest(x, y)?.closest(item);
+                            if (h != null && !seen.Any(t => t.Item1 == h)) { seen.Add((h, x, y)); if (seen.Count > n) break; }
+                        }
+                        if (seen.Count <= n) { Console.WriteLine($"[script] hitclick: only {seen.Count} found"); break; }
+                        var (el, hx, hy) = seen[n];
+                        Dom.PointerMove(hx, hy, 0); Dom.PointerDown(0); Dom.PointerUp(0); px = hx; py = hy;
+                        Console.WriteLine($"[hitclick] {item}@{n} = {el.getAttribute("data-node")} at {hx:0},{hy:0}");
                         break;
                     }
                     case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }

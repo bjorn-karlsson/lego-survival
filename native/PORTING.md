@@ -116,7 +116,9 @@ What has been run this way: every weapon in arcade for 5000 frames; boss and sup
 5–40; the RPG Outskirts; the whole test bench (every brick granted, every utility, league,
 league-tree node and rare modifier, all 55 monsters in the sandbox) followed by a fight;
 every screen opened and screenshotted; the equipment screen's click-to-wear, drag, stash and
-bin. None of them logs an exception. Screens were compared with Chromium running the original
+bin; the skill tree's nodes taken by real hit-tested clicks, zoom, fit, refund and clear;
+render quality, vsync and text size changed live; the window resized mid-run; death, retry,
+pause, main menu and a second run. None of them logs an exception. Screens were compared with Chromium running the original
 page (`tests/DomTest` compares element rectangles; the gameplay field by eye).
 
 ## Build and run
