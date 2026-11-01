@@ -21,7 +21,7 @@ public sealed partial class Proj : Obj
     /* a lobbed thing is made with sx/sy and no x/y; the JS reads its x as undefined
        until the first frame puts it at sx (updateProjectiles) */
     public Proj() { x = double.NaN; y = double.NaN; }
-    public string kind, owner; public double vx, vy, life, max, t, seed;
+    public string kind, owner; public double vx, vy, life, max, t, seed = double.NaN;
     public double px = double.NaN, py = double.NaN, hitR = double.NaN;
     public Ent tgt, src; public bool loop; public double depth, @out;
     public double a0, ang, arc, delay, dot, dotT, dur, flap, fr, fuse, gen, olife, pfall, rMax, rico, size, spin, stacks;
