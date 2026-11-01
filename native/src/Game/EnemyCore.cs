@@ -208,7 +208,7 @@ public static void updateEnemyCore(Ent e, double dt){
         e.mode="chase"; e.atkCd = 5.0*e.atkS;
         var cnt = e.elite ? irnd(5,7) : irnd(3,5);
         for(var i=0;i<cnt;i++){
-          var a = i/cnt*TAU + rnd(-0.3,0.3);
+          var a = (double)i/cnt*TAU + rnd(-0.3,0.3);
           spawnEnemy(wave.n >= 5 ? "skeleton" : "imp",
             clamp(e.x+Math.cos(a)*90, W.wall+40, W.w-W.wall-40),
             clamp(e.y+Math.sin(a)*90, W.wall+40, W.h-W.wall-40));

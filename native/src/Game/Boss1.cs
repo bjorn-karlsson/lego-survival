@@ -335,7 +335,7 @@ public static double maceReach(Ent b){
   var t = Math.max(1, Js.Or(b.btier, 1));
   return (126*(Js.Or(b.scale, 1)) + 40) * Math.min(1, 0.5 + (t-1)*0.17);
 }
-public static void bossSummon(Ent b, double count, IList<string> kinds, double elites){
+public static void bossSummon(Ent b, double count, IList<string> kinds, double elites = 0){
   if(b != null && b.trLegion) count = Math.round(count*1.6) + 1;   /* LEGION */
   var room = Math.max(0, MAX_ALIVE - enemies.Count() - 4);
   var n = Math.min(count, room);

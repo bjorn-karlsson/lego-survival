@@ -21,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="tests/**" />
+    <Compile Remove="tools/**" />
     <EmbeddedResource Include="assets/**/*" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
