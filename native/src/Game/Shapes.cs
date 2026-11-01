@@ -7,7 +7,11 @@ namespace Brickblade;
 
 public sealed partial class Breach : Obj { }
 public sealed partial class Upgrade { }
-public sealed partial class Hazard : Obj { }
+/* a patch of ground that hurts: fire, lava, frost, venom, a lightning coil */
+public sealed partial class Hazard : Obj
+{
+    public string kind; public double life, max, tick, arm, armMax, drift, spin, seed, born, t;
+}
 /* a stone tooth: a boss's quake (spikes) or the mace's fault (pspikes). The JS
    gives the two the same `hit` key with different meanings -- a boss tooth's is a
    flag (it has struck the hero), a mace tooth's the bodies it has bitten -- so the
