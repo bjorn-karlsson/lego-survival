@@ -10,6 +10,8 @@ public sealed class Calc { public double v, n, s, r, t, p; }
 public sealed partial class Upgrade
 {
     public string id, name, icon, cls, minRar, need, ailType, golemType;
+    /* the weapon class a brick serves when it says so itself (none of the deck does yet: brickWeapons asks the req) */
+    public string weap;
     public Func<bool> req; public Func<double, Calc> calc; public Func<Calc, double, string> desc; public Action<Calc> apply;
 }
 public sealed class GolemTypeDef
