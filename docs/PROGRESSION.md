@@ -4312,3 +4312,461 @@ track, save, restore, and survive a switch off and on; VERY LARGE is ×1.32 on t
 canvas, remembered, SMALL ×0.88, NORMAL exactly as written, and both survive a reload. Breaks
 `volmus`, `volsfx`, `volnosave`, `volnoload`, `txtnocss`, `txtnocanvas`, `txtnosave`,
 `txtnoboot` caught.
+
+**Packs come in gradually, and the sliders drag.** Each queued body rolls for a magic band (9%),
+an elite with a court (12%) and a lone elite (15%) from wave 6, so wave 6 averaged ~23 elites
+and ~43 magic bodies. Now `packRamp(n)` scales those odds from 0.12 on wave 6 to 1 by wave 30,
+and `packCaps(n)` limits a wave to 1 + ⌊(n−6)/4⌋ magic bands and 2 + ⌊(n−6)/2⌋ elites
+(`wave.magicN`/`wave.eliteN`, reset in `startWave`); the boneling triple's per-body elite roll,
+which was most of wave 6's elites, goes through the same ramp and cap. Wave modifiers' elites
+are untouched. Measured: wave 6 ~2 elites and ≤1 band; wave 20 ~10 and ~3; wave 30 ~17 and ~4.
+The volume sliders only moved on a click because every `input` went through `audioApply` →
+`refreshAudioBtns` → `optRender`, which replaced the slider under the cursor; they now call
+`audioGains()` (the levels alone) and `audioSave()`. New `packs70` (ramp and caps, wave 6 never
+over 2 elites or 1 band across eight spawns, wave 12 within its caps, wave 30 well above wave 6,
+and a real mouse drag walking the music slider 100 → 13 on the same element); breaks `noramp`,
+`nocap`, `bonenocap`, `dragdies` caught.
+
+## Seventy-first pass — searching the tree, and the Heart
+
+**Search.** Every node wears tags read off its stats (`META_TAGS`, one line per stat; `cv_`/`gn_`
+conversions, `inc_`/`dmg_` weapon stats, spell-brick stats and `grant` are tagged by rule, and a
+stat's `only` list adds the weapons). `metaNodeTags(n)` adds the kind (`travel` reads as *path
+travel highway*, a balancing break as *attribute break*) and a door's own steps their weapon;
+`metaNodeHay(n)` is the name, note, cluster name, kind, every line of the card and the tags.
+Second-hand counts: `allRes` carries *fire/cold/lightning resistance*, `incElem` and `flatElem`
+*fire cold lightning*, conversions both of their types. `metaSearchRe(q)` compiles
+`new RegExp(q, 'i')`; if that throws it tries the glob reading (`*attr*` → `attr`, inner `*` →
+`.*`), then the escaped letters. The box (`treeFindBox`, made once and moved into the top of
+`.treeside` on every render, sticky) drives `treeFindApply`, which sorts the matches by distance
+from the start and appends a `.tfind` circle to each matching `.tnode`; `treeFindSize` (also
+called from `treeApplyView`) keeps each ring at least 6 screen px in radius, drawn with a
+non-scaling stroke. Enter/Shift+Enter → `treeFindNext` (centres, zooms to at least 100%, marks
+`.cur`, shows the card); Esc empties then leaves; Ctrl+F or `/` focuses it while the tree is open.
+New `search71` (every node and every stat on the map tagged; `Attr` finds all 569 attribute nodes
+and no damage node; `Minions?` every minion stat and nothing else; `Fire Resistance` every
+fireRes *and* allRes and no cold-only node; `sword` its door, oath, reach and lifesteal and no
+axe node; `Defence`, `Spell`, `Physical`, `Over time`; the syntax cases; then the real box:
+Ctrl+F, rings on exactly the matches, ≥9px wide at FIT, Enter to the nearest, a purchase
+keeping the search, Esc twice, typing T not closing the tree). Breaks `noallres`, `noattr`,
+`nodoortag`, `noglob`, `tinyring`, `nokeep`, `noctrlf`, `escleaves`, `nosort` caught. The
+flaky `breach` case (a 65s breach once in ~20 runs) was the perfect clear's leftover splinters
+buying a ring rank mid-measurement and letting a second lord in; the test now clears
+`player.splinters` with the rings.
+
+**The Heart.** `CORE_ROOM` (560) moves every ring out; `DOOR_R` is 1300 and `DOOR_SPREAD` 1.0,
+so the six doors stand 55–70° apart instead of 44–75°. Step 6b lays, *before the doors*, a ring
+of `HEART_N` (12) travel stops at `HEART_R` (520), and between each pair of planned door
+bearings (`doorDeg`, shared with step 6) a straight highway from the Heart to the inner ring —
+of the two Heart stops and two junctions nearest the bisector, the straightest pair whose road
+crosses nothing. Each door then opens **two ways out** (`WAYS` 2, picked as before, now able to
+see and avoid the highways) and **one way in**: its third flavoured path aimed at the nearest
+free Heart stop (`inward` on those nodes). Step 6c puts a `META_HEART_GROUPS` site halfway
+between each way in and the highway's actual line at `HEART_SITE_R` (1000), dealt per country
+so none repeats (five per country, defensive only), and step 8 joins each to its way in and its
+highway by the nearest pair and nothing else. `META_TREE_VER` 4 refunds saved points. The
+first attempt left the fans free and a door this near the inner ring drew its third way straight
+across the middle to the far side; restricting reach helped, but only laying the highways first
+and turning the third way inward got the map to zero crossings. Measured: 1623 nodes, 206
+clusters, 103 nodes inside r 1300 (the old middle was bare inside its doors), home prizes 21.1 against away
+25.1. New `heart71` (doors ≥50° and ≥1000 apart at r ≥1200; the ring a 12-cycle paying its
+ground; every door 3 first steps — one in reaching the Heart within two road steps, two out;
+a highway per gap, pure attributes, Heart to hub, landing between its doors; ≥10 groups,
+unique, two short (≤400) connectors, defensive, no damage; no empty spot in the middle; no
+door taken through the Heart). Breaks `spread08`, `threeout`, `dmgheart`, `repeat`,
+`nohighway`, `hgloose`, `doorsin` caught.
+
+**Legion, the way PoE does it.** A report: the whole frozen army was cut down (every kill added
+0.35s, so a strong build always could) and the legion simply ended — nothing woke, nothing
+happened when time "started again". Now kills buy no time (`LEGION_KILL_T` and `LEGION_T_MAX`
+are gone; the base 9s plus the league tree's `legionTime` is the whole clock), and a frozen
+soldier brought to nothing is **held**: `hitEnemy` asks `legionHolds(e)` before `killEnemy`,
+which marks it `dead` (so every loop, aim and count leaves it alone), `legionDown`, and parks it
+in `L.held` — nothing paid. It is drawn as a block of cracked ice where it stood. The freeze
+always runs to zero; `legionRelease` then revives each held body for an instant and puts it
+through `killEnemy` (its kill, studs, frenzy charge, a sergeant's war chest, a general's), and
+wakes whatever is left; with nothing left, the legion is done on the next frame. The HUD counts
+*broken* and *standing*. `legionlg` rewritten for it (a break holds, pays nothing and moves no
+clock; the clock runs at its own pace; at release the broken pay — two kills, the sergeant's
+chest; the general pays only when it shatters; breaking the whole army keeps the legion frozen
+to the end, then all of it shatters and it is done); breaks `noheld`, `buytime`, `earlyend`,
+`noshatter` caught.
+
+**Banners, and the legion's field.** `bannerCap(n)` — 1 until wave 24, 2 until 36, 3 at most —
+is asked when a bearer decides to plant *and* again when the banner goes in (five bearers could
+all start planting in one second, before any banner existed to count). `isBanner` keeps banners
+out of *bricks left*, the last-monsters pointers, the spawn cap and the wave-clear test, and a
+clearing wave takes its banners down with it, paying nothing. The aura is a faint pale yellow
+(`rgba(255,240,176,~0.04)`, dashed rim ~0.2). The legion is violet (`LEGION_COL #c3a6ff`, ice
+`215,200,255`), draws no ring (the monolith's four runes go dark as the time runs out, with a
+violet haze off the stone while frozen), and stands in `LEGION_SQUADS` 3–6 squads within
+`LEGION_R` 620: each squad a centre 170–510 out, a spread of 70–150, a facing, and a weight
+`0.25 + r²·2.5`, so a couple are big and the rest are knots; sergeants lead the biggest, the
+general stands by the stone. New `lb71` (the cap by wave; five bearers raising 1 banner on wave
+14 and 3 on 36; banners not in *bricks left* and not holding the wave, gone with it; the pale
+aura read off a pretend context; the colour violet; six legions each in 3–6 squads, all inside
+620, reaching past 350, and at least four of six with one eighth of the field ≥3× another; no
+arc of 200+ drawn by `drawLegion`).
+
+**Run links carry the tree's version.** The suite's `minion2` replays a saved scepter link and
+went from ~40s to ~52s on its boss: the link's tree is a list of ids, and after the Heart those
+ids named different nodes. `runLinkState` now writes `tv`; `runLinkBoot` drops a tree whose `tv`
+is not `META_TREE_VER` (every older link has none), notes it (`treeStale`, a log line and the
+banner's `OLDER TREE LEFT OUT`), and keeps everything else. The fixture was translated to the
+new ids by content (same name and stats; five CADENCE nodes by the nearest node with the same
+stats) and is back at ~41s. `zombie` and `r56` compared every node against a snapshot of the
+round-42 tree; the snapshot is now `tree71.ids`, the v4 tree, and `r56` counts a door's way in as
+a road when asking whether a cluster is a pocket. New `link71` (a copied link carries `tv`; a
+current link restores its tree exactly; a version-less one restores none of it and says so).
+
+## Seventy-second pass — point and click, and the next skill point
+
+**The next skill point.** `metaNextLevelPoint()` is `max(best level, level) + 1` while the tree
+is live for this run (`metaRun`, tree on, under the ceiling) and `null` otherwise; `renderHUD`
+writes *next skill point at level N* under the level bar, blue when it is the very next level.
+
+**Point and click.** Two options: `moveMode` (`wasd` | `click`) and `attackBtn` (`left` |
+`right`); `OPT_DEFS` choices may now carry display `names`. The mouse gains `rdown` and per-button
+presses latched on the canvas only (`lpress`, `rpress`). `updatePlayer` asks `heroControl(p, dt)`
+for one frame of intent — `{ ax, ay, aim, face, attack, held, press, engaged, stand }` — and uses
+it where it read the keys and `mouse.down`: the walk vector, the facing, the whirl (`held &&
+attack`), the attack block, and Convocation (`press`). WASD answers as before (with the weapon on
+the chosen button). POINT & CLICK keeps `CTL` (`dest`, `target`, `mode` move/attack/stand, `fired`,
+a cached `path`): a press decides the mode — SHIFT or the right button off a monster is *stand*,
+a monster (or breakable prop, `clickTargetAt`, picked round the body's middle) under the attack
+button is *attack*, else *move*; a quick tap still sets the destination or its one attack. *Move*
+follows the cursor while held and walks to the last point on release; *attack* walks
+(`heroSteer`: straight while `navLineOpen` and no water, else `navFindPath`, string-pulled,
+repathed when the goal moves 60px) until within `heroAttackRange()` — 0.85 of the swing's reach,
+0.7 of a slam, 520 for a bow, 470 for a staff, 0 for the scepter — then attacks; the attack block
+sets `CTL.fired`, and a target not held is let go after its one attack. `drawClickMarks` draws the
+pale ring where you clicked and a red dashed one under the target. `resetRun` clears `CTL`.
+New `click72` (the options; WASD still walks and swings, and with the attack on the right only
+the right button swings; a ground click walks there and stops, a held one follows the cursor; a
+monster click walks into reach and swings exactly once, a hold keeps swinging even with the cursor
+wandered off, a press on the ground dragged over a monster never attacks; SHIFT swings where you
+stand, and a SHIFT tap swings once; a bow walks from 1000 to its range and shoots once, SHIFT
+shoots from where it is; with the attack on the right the left walks up to a monster without
+swinging, the right engages it (one swing) or swings in place; the scepter walks on a click and
+SHIFT+click is Convocation; a click across a 120px boulder walks round it; the next-point level
+7→8, 9→10, shown, off without a run; the options screen names both rows; and a real mouse click
+on the canvas walks the hero there). Breaks `noclick`, `notap`, `noonce`, `noshift`, `nopath`,
+`nextsame`, `scepterconvo`, `dragattack`, `rightboth` caught. `opts70` now picks its TEXT SIZE
+buttons by row, since MOVEMENT's are the first choice buttons on the screen. `summon`'s "brute
+stands inside the skeleton" (a 2px overlap in a real-time run) fails about one run in five on both
+the old and the new build (6/30 each) -- a flake that predates this pass.
+
+## Seventy-third pass — walking while fighting, the legion's minions, the arcade's second chance
+
+**Point and click, two channels.** `heroControl` no longer has a *stand* mode that clears the
+walk. A *free attack* (`CTL.free`) — SHIFT with the left button, or the right button when the
+attack lives there (unless it is pressed on a monster while standing still and walking nothing,
+which approaches it) — fires at the cursor and leaves `CTL.dest` alone; `freeDown` (SHIFT + left
+held, or right held) keeps it going, and a tap too quick for a frame still gets its one attack. A
+held left walk follows the cursor except while SHIFT holds it for an attack, when the walk goes on to
+where it was going. `click72` gains four cases (SHIFT+click mid-walk swings and still arrives within
+12px; holding SHIFT while walking swings as it goes; a right-button attack mid-walk arrives; both
+buttons walk after the cursor and swing); breaks `shiftstops`, `rightstops` caught.
+
+**Minions.** `minionMoveMul()` = (1 + minion speed) × (1 + half the hero's increased movement
+speed), on every `minionStep`; the stat's text now says so. Melee golems leap (`m.leap`, 0.5s arc,
+70px high, drawn lifted with a shadow; `golemLand` slams 1.25× their aoe at 1.2× damage; every 6s,
+at 120–340px). Swordsmen are `spd` 1.25 and charge (`m.charge`: half the time their 3–6s cooldown
+comes round at 90–280px, 2.6× pace for up to 0.45s, striking on arrival). Spearmen thrust along a
+line (`SPEAR_LINE_W` 16 either side, reach + 18 long) and 40% carry a pike (58 reach, drawn 1.35×
+long). **The Horde** (`zombiehorde`, legendary, needs `minions.zombies`): `zombieCap()` doubles and
+`raiseZombie` rolls a kind from `ZOMBIE_HORDE_KINDS` (walker 3, runner 2, crawler 2, bloater 1,
+hulk 1) whose numbers ride on `minionK`; crawlers draw with `drawCrawler`, bloaters fat.
+
+**Arcade.** `arcadeMode()` (not the RPG). A level adds `ARCADE_LEVEL_HEART` to `hpFlat` and heals
+to full (and fills the shield); `levelHearts(p)` puts them back in `rebuildWithout` and
+`runLinkApply`. **The second chance**: `respawn = { free, paid, banked }`, reset per run;
+`respawnOffer()` (null outside the arcade or on the bench), `respawnFine()` =
+(150 + 25·wave)·3^paid, `respawnNow()` (full life and shield, 3s grace, a 320px shove, enemy
+shots near you cleared), `respawnOnBoss()` from `killEnemy`. `showGameOver` does not bank while an
+affordable respawn stands (`overLeave` banks on TRY AGAIN / TITLE), so a respawned run is never
+banked twice. **The log after death**: `clogPush`/`clogPushDmg` always record the TAKEN channel,
+`logTaken` always runs and keeps `clogLastHit`; the death screen names the killer and
+`overPeek` hides the plate (`.peek`, pointer-events off) and opens the log on TAKEN.
+
+**Legion, awakened.** At the end of the freeze the broken no longer die: each gets up AWAKENED
+(`LEGION_WAKE_HP` 1.6, dmg ×1.35, speed ×1.15, scale ×1.15), back into `enemies` once (it may not
+have been swept out yet), with a violet flame and the word over it, and pays only when killed for
+good. Squad centres are now tried for open floor and a soldier whose squad has no room stands
+anywhere on the field — `legionlg` had dropped to 33–34 of 38 placed now and then. `legionlg` also
+strips PROXIMAL TANGIBILITY from the soldiers it hits (the squads stand far off, outside its ring):
+its occasional failures this pass were that, not the game.
+
+New `r73` (minion speed stat and hero speed on the walk; an ice golem leaps onto a target 240px off,
+lands within 90px and hurts what is there, a flame golem never leaps; the Horde is legendary, gated
+on Raise Zombie, doubles the cap and raises four-plus kinds with hulks tougher than crawlers; a
+spear hits two bodies on its line and not one beside it, ~40% pikes; swordsmen faster and charging;
+an arcade level +1–2 max hearts and a full heal, none in the RPG, kept through a rebuild; the free
+second chance offered without banking, taken, an unaffordable one shown disabled and the run banked,
+a fine paid and the next tripled, a boss giving the free one back, none in the RPG; the TAKEN log
+kept with the log closed, the killer named, COMBAT LOG and BACK). Breaks `nomove`, `noleap`,
+`nohorde`, `hordeopen`, `onekind`, `noline`, `nopike`, `nocharge`, `noheart`, `rebuildlose`,
+`nofree`, `flatfine`, `bossnoreset`, `bankearly`, `logoff`, `nokiller` caught; `noawake` caught by
+`legionlg`. `qol`'s death-screen check now dies with no second chance on the table.
+
+## Seventy-fourth pass — the second chance that froze you, the bow's own ground, and three fixes
+
+**The second chance froze the hero.** Standing up cleared your poison, bleed and burn by setting
+them to `null` -- but the frame reads each of them as a live list, so every frame after the
+respawn threw half-way through the hero's update: you stood where you fell and could not move.
+They are cleared to empty lists now (chill and shock too, and any walk or target from before the
+fall), and a second death after it offers the fine and brings you back the same way.
+
+**Barbed Arrows** is Sharpened Blade's numbers **+0.5** (+1 / +1.5 / +3.5 / +5.5 / +8.5): it only
+feeds arrows, so it must beat the brick that feeds everything. The tree's two *Barbed* nodes are
++0.5 each.
+
+**Spell Suppression** was offered to a hero already at 100%: it asked whether *your own*
+suppression was under 100%, and never counted the share your weapon or shield gives. It asks of
+the whole chance now, and its card reads *85% → 100%, cap 100%*.
+
+**The bow's ground in the green.** The dexterity country had three bow minors scattered in it and
+no arrow at all. It has three clusters of its own -- **THE FLETCHERY** (Volley: +1 arrow on every
+shot), **THE SKEWER** (Skewer: +2 pierce) and **THE BARRAGE** (Barrage: +1 arrow, 8% less arrow
+damage) -- with pierce and flat arrow damage on their minors, and a new tree stat, *+1 arrow on
+every shot*, capped with Split Arrow at 9. Adding them was the hard part: the in-quad groups number
+themselves off how many sites came before them, so one more site anywhere re-seeded 262 nodes that
+saved trees own. These three are laid **after** every other site is numbered and measured
+(`after:true` on the template) and drawn last -- as notables of their own, not as the defensive
+filler the empty quads take -- and not one node of the round-71 snapshot moves.
+
+**+1 maximum golems.** THE FOUNDRY's *Golem Commander* reads **+1 maximum golems** and says what
+it is: room for one more, raising nothing until a golem brick picks which. (A golem at the start
+could not be reproduced from the node -- no path in the code raises a golem without a kind -- so
+the fix is the wording, and a test that the node alone raises nothing.)
+
+**The scepter's SHIFT, walking.** With point and click, holding the left button to walk and then
+pressing SHIFT did nothing -- Convocation is a *press*, and SHIFT coming down on a held button is
+not a new click. Starting a free attack is that press now, so SHIFT mid-walk calls the legion home.
+
+Tests: `r74` (Barbed = Sharpened +0.5 at every rarity and on the tree; suppression not offered at a
+whole 100% with a weapon's share, offered below with the cap in the text; three green bow clusters
+on the road with +1 arrow twice and pierce, the stat capped, buying a path to Volley starts the run
+with two arrows; a second chance that walks, keeps playing and survives a second death and a fine;
+the golem notable raises nothing, a golem brick then does; SHIFT on a held walk and SHIFT+click
+while walking are both Convocation). Breaks `barbold`, `treebarb`, `supown`, `noarrowN`, `uncapped`,
+`nobowland`, `nullail`, `golemfree`, `golemtext`, `noshiftconvo` caught; `sitesearly` caught by
+`zombie`, whose round-71 tree snapshot now carries the two *Barbed* nodes at +0.5.
+
+## Seventy-fifth pass — PoE's numbers on the tree, the weapons' own ground, penetration
+
+**The whirl feeds rage.** A Blademaster whirl's hits never counted for *Rage on hit* -- only a
+swing did. A whirl's pass is one hit now, however many bodies it goes through: once every 0.18s
+while it is landing, the swing's own once-a-swing rule.
+
+**PoE's numbers.** A build step at the end of the tree's construction sets every **damage increase
+on a small node to 16%** and on a **notable to 30%** (physical, spell, elemental and each element,
+chaos, damage over time, minion, the weapon lanes) whatever the template wrote -- 3% here and 7%
+there read as nothing worth walking to. Keystones keep their trades; speed, crit, life and defences
+keep theirs. The minion sisters in blue follow (80% or 60% of the 16%).
+
+**Attributes are PoE-sized.** A road node is **+10**, the big stops off the junctions **+30**, an
+attribute on a small node +10 and a notable +20. To make room every point does **half** what it did
+(`ATTR_K = 2`: 0.25% physical and hearts a STR, 0.25% spell and regeneration an INT, 0.15% crit,
+crit damage and attack speed a DEX, 1 accuracy and 0.1% evasion, 0.1% energy shield, mana 1 per 4
+INT, a heart per 10 INT with Runeblood) and everything else that hands attributes over hands over
+**twice** as many -- weapons, favourites (24 each), the attribute bricks (12 / 20 / 32 / 52 / 80),
+gear -- so none of those moved. The tree's did: a road node is five times what it was.
+
+What that does, measured at the ceiling of 120 points: a stay-at-home red build's damage went from
+x2.25 to **x4.85**, its total power (damage x hearts) from x3.54 to **x11.77**; a straight build
+x2.6 to x12.1. `meta`'s budgets move with it (same ~4% slack over the measure), and the note there
+says why. If that is more than wanted, the knobs are `META_INC_MINOR` / `META_INC_NOTABLE` and
+`ATTR_K` -- or the hearts half alone, `ATTR_STR_HP`.
+
+**The weapons' own ground.** Five clusters, laid after every other site so nothing moves: **THE
+DERVISH** (red; the whirl's share of a swing, Bladestorm and Blade Vortex), **THE REAPER** (green;
+the thrown axe's share of the critical, **+1 body** it reaps, wounds), **THE EARTHSHAKER** (red;
+teeth, fault, range), **THE TEMPEST QUIVER** (green; Lightning Arrow **forks once more**, Fire
+Arrow bursts wider, ricochet) and **THE SUNDERING** (blue; penetration). New stats: `whirlShare`,
+`reaveShare`, `reaveBounce`, `arrowFork`, `arrowBlast`, and the five penetrations.
+
+**Penetration.** *Your hits PENETRATE 10% fire resistance*: `penRes` is the resistance a hit of
+yours meets -- the body's own (exposure and brands included) less your penetration, **down to
+nothing and no further**, hits only (burns, bleeds and poison were built when opened), never a
+minion's. 60% cap per element. Bricks: Fire / Cold / Lightning Penetration (uncommon+, +6 to +15%),
+Chaos Penetration (rare+), Elemental Penetration (rare+, all three); each offered only to a hero
+whose hits carry the element. The NERD sheet shows a PENETRATION card when there is any.
+
+**And a crash found on the way:** a mystery chest's colour cycle could read a rarity that is not
+there and throw the frame; its index is held in 0..3 now whatever the clock says. (`gear` had been
+failing on it one run in four, on the old build too.)
+
+Tests: `r75` (whirl rage once a pass, not once a body; every small-node increase 16% and notable
+30%; road +10, big +30, minor +10, notable +20; a sword's strength, a brick, a favourite worth what
+they were; +10 STR a node = +2.5%; the five clusters in their countries on the road; each skill stat
+doing what it says and reaching only its weapons; the Dervish's share raising the whirl's hit x2;
+penetration x1.4 at 50%/20%, never below nothing, the 60% cap against a 90% body, not for minions,
+not for burns, elemental counting; the bricks offered to the right heroes and applying; the sheet's
+card). 17 breaks caught. Updated for the new numbers: `meta` (budgets), `nodes` (heart per 10 INT),
+`es` (200 INT), `qol` (24 a hand), `pools` (1 mana per 4 INT), `r56` (+10 / +30), and the round-71
+tree snapshot's values (every position the same); `quiet` now lands its hit for certain -- a 10%
+MISS had been an old flake.
+
+## Seventy-sixth pass — the golem nobody chose, and the RPG's first stretch
+
+**The golem you did not pick.** Hovering a reward card shows what it would change, and it does that
+by *trying* the card on the hero and putting the hero back. The hero came back; the world did not.
+A golem brick's apply **raises** its golem, so hovering *Ice Golem* and picking something else left
+an ice golem standing -- and the same with the +1-golem node's extra room, which is why it looked
+like the node had handed one over. The preview now restores every list a card can add to (minions,
+props, projectiles, pickups, monsters, corpses, the pick queue, the scheduler, hazards, orbs) and
+every standing minion's own fields (Skeleton Mages turns the legion it finds into mages), and is
+silent while it tries (`previewing`).
+
+**The RPG walks.** Phase 1 of the blueprint, most of it:
+
+- **A character per class**, saved in `bb_rpg` (level, experience, reached town, deaths), shown on
+  the RPG screen with PLAY and *start this class over*. Its level is walked back up the same curve
+  `gainXp` uses, so the bar and the +5% a level are exact.
+- **A zone replaces the wave.** `wave.state` is `'rpg'` and `wave.n` the zone's level, so every
+  monster is built at that level by the arcade's own code; the frame runs `rpgTick` where it ran
+  `updateWave`; the HUD draws the zone where the wave number was. No reward cards (`queuePick`
+  refuses in RPG), no arcade tree, favourite or tree points (`metaRun` is null in RPG).
+- **THE OUTSKIRTS**: the arena's ground and props with the card chests taken out, a palisade of
+  posts down the east edge with a **gate**, thirteen packs placed in the field and **dormant** -- the
+  ritual guards' rule, given a pack id and the zone's own 520px -- so a pack wakes whole when you
+  come close or touch it. Two rare packs; a quarter magic. **THE GATEKEEPER** (a rare brute at
+  four times the health, two skeleton guards) holds the gate; its death opens it (out of the solids,
+  the nav refreshed), and walking through is the town.
+- **BRICKHAVEN**, an instance of its own on a fixed seed: a walled square, your home and its
+  **stash**, the **mission board** (empty), the **waypoint** (to a fresh Outskirts, and back from the
+  Outskirts' own waypoint once you have been to town) and the west gate out. **F** uses what you
+  stand by; the label turns into the prompt.
+- **Gear** from kills: rares 60%, magic 12%, plain 2.5%, the Gatekeeper two pieces.
+- **Death** is the RPG's: *YOU FELL*, the killer, COMBAT LOG (the plate steps aside), and STAND UP in
+  Brickhaven -- or the Outskirts before you have reached it -- whole, gear and level kept, the zone
+  gone.
+- The pause menu's RESTART reloads the character; T does nothing in RPG.
+
+Tests: `r76` (a golem card hovered raises nothing and leaves the golem types alone, Skeleton Mages
+hovered changes no standing skeleton, the card taken still raises its golem; the RPG screen and its
+PLAY; the Outskirts asleep, rares, the Gatekeeper, no chests, the gate solid; a pack waking whole
+and the far ones not; a level with no card, saved, and not feeding the arcade tree; the Gatekeeper
+opening the gate and dropping two, the gate leading to town and saving it; the town's stash, board,
+waypoint and exit, F at the stash opening it; the waypoint to a fresh Outskirts and back to the same
+town; the town's gate leading out; death to town, whole, the log a click away; the character kept
+at its level and another class its own; the arcade untouched). 15 breaks caught.
+
+## Seventy-seventh pass — a cave generator in town (not canon)
+
+**A test instance.** Brickhaven gets a stone mouth, **CAVE GENERATOR · TEST**: F at it opens a
+fresh cave (zone `cave`, monster level 3, flagged `test`), carved by cellular automata in
+`caveGenerate(seed)`:
+
+- **Fill**: 67×50 cells of 80px, rock at 47% (`CAVE_FILL`), a rim of rock.
+- **Smooth**: five passes (`CAVE_STEPS`) of the 4-5 rule. Rock if at least 5 of the 8 neighbours are
+  rock, floor if fewer than 4, unchanged at 4. In the first three passes (`CAVE_OPEN`), a cell with
+  at most 2 rock cells in the 24 around it turns to rock, so wide halls get pillars instead of
+  staying empty.
+- **Connect**: 4-connected flood fill, keep the largest region, fill the rest. Below 28% open
+  (`CAVE_MIN`), try again on the next seed, up to 12 times, keeping the best.
+- **Ends**: in at the westmost *roomy* cell (open all round); out at the roomy cell with the
+  longest **walk** from it (BFS distances in `M.dist`).
+
+The cave lives in the world as it already is. Each horizontal run of rock becomes one rectangle in
+`waters` (flagged `cave`, so it is never drawn as water). Collision, `navBuild`, `floorAt`, the
+spawners and `segHitsWater` all handle it with no new code. `drawCaveWalls` draws only the visible
+cells: deep rock dark with seams, the rim as raised studded bricks with a lit face and a shadow
+where floor lies below. In the cave, `rpgTick` kills any projectile inside rock.
+
+Fourteen dormant packs are placed on roomy floor that is at least 8 cells' walk from the entrance
+and more than the wake radius plus 260px from it in a straight line, so none wakes through the rock
+as you arrive. Each is a random cave monster; past 60% of the walk, half are rare. **THE CAVE
+WARDEN** (a rare knight at 2.5× health) stands at the far end with a portal home, and another
+portal is at the entrance. Its death is a banner, not a gate. Leaving drops the cave
+(`caveMap = null`); dying in it wakes you in Brickhaven. The HUD line reads *NOT CANON · cellular
+automata: seed · fill · passes · open*.
+
+Tests: `r77`.
+
+- **Generator.** Same seed gives the same cave, different seeds differ. Over 30 seeds: right size,
+  rock rim, one connected region, `open` honest, at least 28% open, almost no crumbs of rock (at
+  most 2% of rock cells with 2 or fewer rock neighbours), ends on floor, the way out the farthest
+  walk. About 3ms a cave.
+- **Entering and leaving.** The stone in town and F; a sleeping cave whose packs are all out of
+  wake range; the Warden far off; two portals; rock rectangles matching the grid cell for cell; the
+  HUD line. A second visit is a different cave, and leaving clears it.
+- **Rock.** An arrow dies in it; the hero walking into it stops at it.
+- **Pathing.** Every pack, woken, walks toward you by the grid's walking distance, none inside rock
+  over 30s.
+- **Endings.** The Warden's banner, no gate, its drops, the portal by it home; death in the cave
+  wakes you in Brickhaven.
+- **Arcade.** It never has a cave.
+
+14 breaks caught.
+
+## Seventy-eighth pass — the map, a cave that lives, and the stash at home
+
+**TAB, the map.** PoE's overlay, drawn between the world and the HUD (`drawMapOverlay`). The overlay
+is laid out so that the hero's world position lands on the hero's screen position; its scale is
+`MAP_BASE` × MAP SIZE. The still part (ground and its edges, water, solid props, the town walls) is
+painted once per zone into a canvas at 0.16 px per world px (`mapPaint`), with a dark underlay
+under every line and dot so it reads on bright grass. It is masked by what you have seen and
+recomposited only when that changes.
+
+- **Fog.** In an RPG zone other than town (`mapFogged`), `mapReveal` marks the 80px cells within
+  `MAP_REVEAL` (960px) of you every 0.12s. In town and the arcade everything is known.
+- **Markers.** Drawn live: portals, the waypoint, stash, board, cave stone, gate (red shut, green
+  open), the way out, chests and strongboxes, gear drops, minions, the hero, and monsters within
+  1400px (red, blue magic, yellow rare, pink boss; dimmer while dormant).
+- **Input.** TAB toggles it in play, pause and the spellbook. The key's default is prevented, so
+  focus never leaves the canvas.
+- **Options.** The options gained **sliders**: an `OPT_DEFS` entry with `range:[min, max, step]` and a
+  `unit` is drawn as one, saved as a number, and clamped and stepped by `optSet`. MAP OPACITY
+  (default 70%) and MAP SIZE (default 100%).
+
+**The cave, drawn.**
+
+- **Outline.** `caveLoops` traces the boundary between rock and floor as closed loops along cell
+  edges, with the rock on the right. At a diagonal touch it takes the right turn. Each loop is cut
+  into 20px steps, nudged by noise across the line and smoothed seven times with a [1,2,1] filter.
+- **Painting.** `caveArtBuild` makes floor and rock `Path2D`s (rock is evenodd against a rect) and
+  scatters the dressing: rim studs, moss, pebbles, crystal veins (only in faces you can see),
+  mushroom clusters, puddles, dirt, cracks, bones and boulders on the rock top. `caveTile` paints
+  a 384px tile in order: floor dressing, the shadow (`shadowBlur` on the rock fill), the face
+  (layered stone clipped to the rock), crystal veins, then the top (the rock lifted
+  `CAVE_TOP_H` = 22px, boulders, and bands of lighter stone toward the rim), the rim line, studs
+  and moss.
+- **Tile cache.** Tiles are cached up to 48 and evicted least recently used. One extra tile a
+  frame is painted just past the view. The tile scale follows zoom × dpr up to 1.5.
+- **Per frame.** `drawCaveLife` draws drips and ripples in the puddles and the mushrooms
+  breathing. `drawCaveLight` (before the damage numbers) draws:
+  - a dark layer with holes cut for the hero (560px, flickering), the veins, mushrooms, crystals,
+    portals, minions and projectiles
+  - additive coloured glows
+  - spores (not over rock)
+  - bat flocks every 9–23s
+- **Floor and obstacles.** The floor mottles stud by stud in the cave (`cellColorKey`), with no
+  town-square sand. Up to 18 solid **stalagmites** stand on open floor at least 5 cells' walk in,
+  260px apart, and before `navBuild`.
+- Leaving the RPG clears the cave (`rpgLeave`), so the arcade's map never paints it.
+
+**The stash is in Brickhaven.** Out in an RPG zone, I opens **INVENTORY**: your bag and what you
+wear. The stash panel and STASH ALL are hidden, and `gearTransfer` and `gearStashAll` refuse with
+*THE STASH IS IN BRICKHAVEN*. In town (I or F at the stash), between runs on the title, and in the
+arcade's old path, it is the full equipment screen.
+
+Tests: `r78`.
+
+- **TAB.** It toggles the map in play without moving the focus.
+- **Fog.** It is fogged in the Outskirts and filled in by walking; town is fully known.
+- **Drawing.** The hero's map dot lands on the hero to the pixel. Opacity and size follow the
+  options, and nothing is drawn when the map is shut.
+- **Sliders.** Both are present, saved, labelled and clamped.
+- **Stash.** In town and on the title you get EQUIPMENT with the stash. In the field you get
+  INVENTORY without it, and transfers and STASH ALL are refused.
+- **Cave outline.** Every loop point is within 40px of a rock–floor cell edge, with rock on the
+  right and floor on the left.
+- **Cave contents.** Tiles, lights, puddles, and solid stalagmites clear of the entrance.
+- **Clean-up.** The art is dropped on leaving.
+- **Speed.** The frame rate stays usable.
+- **Arcade.** Its map is unfogged, and TAB works there.
+
+14 breaks caught.
+

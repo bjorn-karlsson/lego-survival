@@ -59,13 +59,117 @@ The title screen asks first **how** you want to play.
   levels into the arcade skill tree, reward cards, bosses and leagues. **An arcade run has no
   gear** — nothing is worn, nothing drops, the ritual sells cards instead, and there is no
   equipment screen. What you pick up in a run is bricks.
-- **RPG · W.I.P.** is the second way to play, and **not playable yet**: START opens a work-in-progress
-  screen. The plan is a character and class, a start outside a town at level 1, a town with your
-  home, stash and a mission board, dungeons, and power that comes from **gear with sockets,
-  skill gems and support gems**, an RPG passive tree and ascendancies — with mana costs, five
-  flasks and Path of Exile's key layout. The [equipment](#equipment), the bag and the stash
-  live here now, behind the screen's **EQUIPMENT & STASH** button.
-  The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+- **RPG · W.I.P.** is the second way to play, and **its first stretch is walkable** (see
+  [The RPG: the Outskirts and Brickhaven](#the-rpg-the-outskirts-and-brickhaven)): a character per
+  class, THE OUTSKIRTS outside the walls, and BRICKHAVEN, the town, through the gate. Still to come:
+  missions and dungeons, and power from **gear with sockets, skill gems and support gems**, an RPG
+  passive tree and ascendancies — with mana costs, five flasks and Path of Exile's key layout.
+  The [equipment](#equipment), the bag and the stash live here, behind the screen's **EQUIPMENT &
+  STASH** button and the stash in town. The whole plan: **[docs/RPG-BLUEPRINT.md](docs/RPG-BLUEPRINT.md)**.
+
+### The RPG: the Outskirts and Brickhaven
+
+![The RPG screen: the character and the way in](docs/rpg-screen.png)
+
+**START** in RPG opens the character screen: the class you have chosen on the title (its weapon),
+its level, how far it has got, and **PLAY**. *Start this class over* resets it (gear and the stash
+stay). **Each class is its own character**, saved in the browser.
+
+![The Outskirts: the Gatekeeper at the shut gate](docs/rpg-outskirts.png)
+
+**THE OUTSKIRTS** (monster level 2) is a field outside the walls — a fresh instance every time you
+enter it: new ground, new packs. You wake at its west end; the town is east, behind a **palisade**
+whose **gate is shut**.
+
+- **Thirteen packs stand in the field, asleep.** A pack wakes **all together** when you come within
+  520px of it or hit one of it — never the whole field at once. About a quarter are **magic** packs;
+  **two are rare** monsters (with their modifiers) and a few of their friends.
+- **THE GATEKEEPER** — a rare brute at four times the health, with two skeleton guards — stands
+  before the gate. Break it and **the gate opens**; walk through and you are in town.
+- **No reward cards.** A level is +5% damage, a refill of mana, and progress saved; what makes you
+  stronger is **gear**: a rare drops something more often than not (60%), a magic monster
+  sometimes (12%), a plain one rarely, the Gatekeeper **two pieces**. No card chests stand in the
+  field.
+
+![Brickhaven: your home and the stash](docs/rpg-town.png)
+
+**BRICKHAVEN** is the town, and **an instance of its own**: the same town every visit, inside its own
+wall, with no monsters in it. **F** uses what you are standing by:
+
+| | |
+|---|---|
+| **STASH** (in front of *your home*) | opens the equipment screen with the stash. **I** anywhere in town does the same; out in a zone, **I** opens only your bag and what you wear (*INVENTORY*), because the stash stays at home |
+| **MISSION BOARD** | where missions will be posted — none yet (dungeons are the next phase) |
+| **WAYPOINT** | out to a **fresh** Outskirts; the Outskirts' own waypoint (by where you wake) brings you back once you have been to town |
+| **the gate west** | walk into it to leave for the Outskirts |
+
+#### The test cave (not canon)
+
+![A generated cave: the Warden by the portal home](docs/rpg-cave.png)
+
+A stone mouth west of the square, **CAVE GENERATOR · TEST**, opens **a new cave every time** you
+press **F** at it. It is a test bed for generated instances and **not part of the story**. The cave
+is carved by **cellular automata**:
+
+1. **Fill.** A 67×50 grid of 80px cells, each rock with a 47% chance, with a rim of rock all round.
+2. **Smooth, five passes.** A cell becomes rock when 5 or more of its 8 neighbours are rock, and
+   floor when fewer than 4 are; at exactly 4 it stays as it was. In the first three passes, a cell
+   with almost no rock within two cells (at most 2 of 24) also becomes rock, which raises pillars
+   in what would otherwise be empty halls.
+3. **One cave.** Floor regions are flood-filled (4-connected), the largest is kept, and the rest is
+   filled in. If less than 28% of the map is floor, it tries again, up to 12 times.
+4. **Ends.** You come in at the westmost roomy cell (floor all round it). The way out is the roomy
+   cell farthest from it **by walking**, found with a breadth-first search over the grid.
+
+Rock is collision for everything: each horizontal run of rock cells becomes one rectangle that
+the movement, pathfinding and spawners already treat as an obstacle. Arrows and bolts stop in it.
+Fourteen **dormant packs** (bats, shades, skeletons, bonelings, zombies, spitters, archers) sit on
+open floor, none within waking range of where you come in, and packs deeper in are more often rare.
+**THE CAVE WARDEN** (a rare knight at 2.5× health) waits at the far end beside a **portal home**,
+and a second portal stands where you come in. The HUD shows the seed, the fill, the passes and how
+much of the map is open. Dying in the cave wakes you in Brickhaven.
+
+**What it looks like.** The rock's edge is traced off the grid as closed loops, cut into 20px steps,
+nudged with noise and smoothed, so the 80px blocks read as a worn cave wall. The rock is drawn in a
+three-quarter view:
+
+- a **cliff face** in layered stone where it drops to the floor
+- a raised **top** with boulders and a lit rim of studs and moss
+- a soft **shadow** pooled at its foot
+
+The floor is mottled stone with cracks, dirt, pebbles, bones and puddles. Drops fall into the
+puddles and ripple. **Glowing mushrooms** grow at the foot of the walls, and **crystal veins**
+glint in the faces. **Stalagmites** stand in the open: they are solid, so you and the monsters walk
+round them. The cave is **dark**: you carry a pool of light, and the crystals, mushrooms, portals,
+your minions and every projectile light their own patch. Spores drift through the air, and now and
+then a **flock of bats** crosses the screen. The rock is painted once into 384px tiles and cached;
+only what moves is drawn each frame.
+
+### The map (TAB)
+
+![TAB over the cave: what you have explored, the portal, the monsters near you](docs/rpg-map.png)
+
+**TAB** lays the map over the whole field, as in PoE. It is centred on you, so your dot sits on your
+hero, and it is drawn in lines and dots so it covers nothing you need to see. It takes no clicks and
+the game keeps running. It shows:
+
+- the ground's edges, water and what blocks
+- portals, the waypoint, the stash, the board, the gate and the way out
+- chests and gear on the ground
+- the monsters within 1400px: red, **blue** for magic, **yellow** for rares, **pink** for a boss
+- your minions
+
+Out in an RPG zone it starts dark and **fills in as you walk**, revealing about 960px around you.
+Brickhaven and the arcade's arena are known from the start. **Options → MAP OPACITY** (20–100%) and
+**MAP SIZE** (50–200%) are sliders, and both are remembered.
+
+**Death** is the RPG's, not the arcade's: *YOU FELL*, what killed you, **COMBAT LOG** a click away,
+and **STAND UP IN BRICKHAVEN** (or in the Outskirts, before you have reached the town) — whole,
+with your gear and your level. The zone you died in is gone; the next is a fresh instance.
+
+The RPG keeps the arcade's combat, monsters, rares and their modifiers, minions, gear, the log and
+the sheet. It leaves behind the arcade tree (T does nothing in RPG, and RPG levels never feed it),
+the favourite's kit, and reward cards. The pause menu's RESTART reloads the character.
 
 The mode you pick is remembered. A run link always opens an arcade run.
 
@@ -270,7 +374,9 @@ back:
   armour and after suppression, so it takes its share of whatever got through rather than
   competing with armour for the same pool. It reaches poison, bleed and burn as readily as
   it reaches a hit.
-- **Spell suppression** — +25%, or **+30%** on a mace, on top of whatever you have bought.
+- **Spell suppression** — +25%, or **+30%** on a mace, on top of whatever you have bought. It
+  counts toward 100%: once what you hold and what you bought reach it, the *Spell Suppression*
+  brick is no longer offered (its card shows *now → after, cap 100%*).
 - **Lifesteal** — see below.
 
 The mace is the one that never leaves contact, so it carries the most of both.
@@ -1495,7 +1601,11 @@ off it, and that is the actual mechanic.
 - **The Banner-bearer** joins the roster (from wave 11 or so). It walks in, stops, and **plants a
   war banner**: everything within **280px** of it hits **30% harder**, moves **20% faster** and
   attacks faster, for as long as the banner stands. Break the banner (it has a little life) and
-  the buff is gone; the bearer plants another ten seconds later.
+  the buff is gone; the bearer plants another ten seconds later. **Only a few stand at once** —
+  one until wave 24, two until 36, three at most — however many bearers there are. The ground
+  it holds is a faint, pale-yellow circle. **A banner is not a monster:** it is not counted in
+  *bricks left*, gets no last-monsters pointer, does not hold a wave open, and falls, paying
+  nothing, when the wave's last monster does.
 - **The Witch Doctor** — a zombie caster — joins the roster around wave 16. It keeps its
   distance and raises **three blood orbs** (or plague orbs) at a time.
 - **Blood orbs** rise beside whoever raised them and **hunt you**: they set off roughly your way,
@@ -1541,6 +1651,13 @@ and ×1.5 damage**, up from ×2.2 and +1.
 the modifier — it used to be three copies each carrying the full thing. Each body's share is
 smaller to pay for the extra bodies: **×1.18 health, ×1.12 speed, 12% less damage taken**,
 down from ×1.5, ×1.3 and 30%.
+
+**They come in gradually.** Every body in a wave's queue rolls for a pack, so full odds from
+wave 6 on made the wave after the first boss about twenty elites and five magic bands. The odds
+now **ramp in** — 12% of their full value on wave 6, all of it by wave 30 — and a wave holds at
+most **one magic band and two elites on wave 6**, one more band every four waves and one more
+elite every two. Bonelings, which arrive in threes and used to roll an elite each, count against
+the same limit. A wave modifier that promises elites still hands them out.
 
 Magic-touched is **blue** now rather than purple: purple is already the epic rarity band and
 the necromancers' own colour, so a magic pack read as *something arcane* instead of as the
@@ -1678,24 +1795,78 @@ weapons — and **they share nothing**. Points earned on a staff are a staff's; 
 axe and you find the axe's own tree exactly as you left it, and switching back finds the
 staff's.
 
-**Everyone starts in the middle, and no two weapons start the same way.** Four doors in the
-dead centre, and each one opens into a cluster nobody else can reach cheaply — the sword's
-is reach and riposte, the mace's is the weight of the slam, the axe's is bloodscent and wild
-swings, the staff's is focus and warding. Each door sits in its own country — the sword and
-the mace in the red, the axe in the green, the staff in the blue.
+**Everyone starts round the middle, and no two weapons start the same way.** Six doors stand
+evenly round the Heart, and each one opens into steps nobody else can reach cheaply — the
+sword's are edge and footwork, the mace's the weight of the slam, the axe's quick hands and
+openings, and so on. Each door sits in its own country — the sword and the mace in the red,
+the axe and the bow in the green, the staff and the scepter in the blue.
 
-### Four beginnings, and all four are on the map
+### Six beginnings, set apart, round the Heart
 
-Each door **fans into four paths of three flavoured nodes** — a sword's edge, its footwork,
-its guard, its opening — before the plain attribute road takes over. One flavoured node and
-then a corridor made the beginning of a build a formality: you pressed a button and then
-walked. Three is a small decision of its own, which of the four directions you commit to
-before the map opens.
+![The Heart: the ring in the middle, a way in from every door, highways out between them](docs/tree-heart.png)
+
+Each door opens **three paths of three flavoured nodes** — **two out** to the lattice and **one
+in** to the Heart — before the plain attribute road takes over. One flavoured node and then a
+corridor made the beginning of a build a formality: you pressed a button and then walked.
+Three is a small decision of its own: out into your country, or in towards the middle and
+everybody else's.
+
+**The doors stand apart.** They used to sit 900 from the middle, in pairs — the bow 44° from
+the axe, the scepter 44° from the staff — round a black disc the size of a country. They stand
+evenly now, **55 to 70° apart** and 1300 out, at least 1300 from each other, and the whole
+lattice moved out by 560 to make room.
+
+**The middle is the Heart**, PoE's centre: a ring of **twelve plain attribute stops** round
+the very middle, each paying the ground it stands on; **a way in from every door**; and
+between each pair of doors a **highway** — straight, attributes only — from the Heart out to
+the inner ring of the lattice. It is all road, one piece with the rest of the highway, so the
+middle is somewhere every build passes through rather than somewhere it has to buy. In the
+gaps between a door's way in and a highway stand **twelve small defensive groups**, never the
+same one twice: armour, life and regeneration in the red (THE BULWARK, HEARTMENDING, IRON HIDE,
+THE HEARTH), evasion, accuracy and life in the green (THE SLIP, STEADY HAND, KEEN EYE, THE
+DODGE), energy shield and regeneration in the blue (THE INNER WARD, THE CALM, CLEAR MIND, THE
+LANTERN) — each with a few points of its country's attribute. **None of it is damage**: the
+middle is where every build walks, and a damage group there would be one every build takes.
+Each group hangs off the two roads beside it by one short line each and nothing else.
+
+**Nobody walks through a door by way of the Heart.** A way in stops at its door like every
+other road does, so holding the whole Heart still does not let you take a step from somebody
+else's beginning. Laying the highways *before* the doors choose their ways out is what keeps
+the middle clean: a door sees the highways and goes round them, and **no two lines on the
+map cross**.
+
+### Finding things — the search box
+
+![Searching the tree for minion](docs/tree-search.png)
+
+**Fifteen hundred nodes is a map you search.** The box at the top of the tree's panel
+(<kbd>Ctrl</kbd>+<kbd>F</kbd> or <kbd>/</kbd> goes to it) takes a **regular expression**,
+case-blind and found anywhere — `attr` is `*attr*` — and every node it matches wears a **small
+yellow ring**, readable even with the whole map on screen. **Enter** walks to the next one,
+nearest your beginning first, and shows its card (<kbd>Shift</kbd>+<kbd>Enter</kbd> goes back);
+**Esc** empties the box, a second Esc leaves it. Taking a node mid-search keeps the search.
+
+**It reads tags, not just names.** Every node carries words for what it is *for*, read off its
+stats the way its icon is, so a stat added tomorrow is findable the day it lands:
+
+| Search | Finds |
+|---|---|
+| `attr` | every strength, dexterity and intelligence node |
+| `minion` | every node a summoner wants — damage, life, speed, golems, zombies |
+| `sword` | the sword's door and oath, and every node only a sword (or melee) is paid by |
+| `fire res` | fire resistance **and** +every resistance — second-hand counts |
+| `defence` | life, armour, evasion, energy shield, resistances, regeneration, suppression |
+| `spell`, `physical`, `over time` | spell damage and cast speed; physical and bleeding; every damage-over-time node |
+| `life\|armour`, `^hale$` | anything a regular expression can say |
+
+Something that is not a legal expression is not an error: `*attr*` is read as the wildcard the
+hand meant, and anything else that still will not compile is searched for as the letters typed.
 
 **And every door's paths are open to everybody.** You still *begin* at your own one, and
 nothing paths through somebody else's door — so a sword hero reaching the staff's beginning
-has to come at it from the far end, up the lane it hangs off. Your own costs you **3**
-points; it costs everybody else **5 to 13**, averaging more than double. Leaning into the
+has to come at it from the far end, up the lane it hangs off. A whole path of your own costs
+you **3** points; walking to the far end of somebody else's costs **8 to 17**, about 12 on
+average. Leaning into the
 beginning next door is a real option, the way it is in the tree this is borrowed from; four
 beginnings that only one weapon could ever touch were four quarters of the middle of the map
 wasted.
@@ -1926,12 +2097,18 @@ on the way to somewhere interesting:
 
 | | | |
 |---|---|--:|
-| 🔴 **STRENGTH** | +0.5% increased physical damage, +0.5% increased maximum hearts | *each* |
-| 🔵 **INTELLIGENCE** | +0.5% increased spell damage, +0.5% increased regeneration | *each* |
-| 🟢 **DEXTERITY** | +0.3% increased critical chance, critical damage and attack speed | *each* |
+| 🔴 **STRENGTH** | +0.25% increased physical damage, +0.25% increased maximum hearts | *each* |
+| 🔵 **INTELLIGENCE** | +0.25% increased spell damage, +0.25% increased regeneration | *each* |
+| 🟢 **DEXTERITY** | +0.15% increased critical chance, critical damage and attack speed | *each* |
 
-**Every weapon starts somewhere different on the three** — a mace opens on 20 strength, a
-staff on 22 intelligence, an axe on 16 dexterity, and the sword is the only one with a little
+**Attribute points are PoE-sized:** a road node of the tree is **+10**, the big attribute stops
+off the junctions **+30**, an attribute on a cluster's small node +10 and on a notable +20. Every
+point does half what it once did and everything else that hands attributes over hands over twice
+as many — so a weapon, a favourite, a brick and gear give exactly what they gave, and only the
+tree's are bigger (a road node is five times what it was).
+
+**Every weapon starts somewhere different on the three** — a mace opens on 40 strength, a
+staff on 44 intelligence, an axe on 32 dexterity, and the sword is the only one with a little
 of all three. Four bricks hand them over directly and **any weapon and any favourite can be
 offered all four**: `Ironbone`, `Runescript`, `Quicksilver`, and `The Whole Brick` for all
 three at once.
@@ -2249,8 +2426,8 @@ evasion is a property of *what it is*, so accuracy is a choice made once rather 
 this existed. It does nothing against a **spell**: armour and suppression are what stand in
 front of those.
 
-**Dexterity is the attribute for both**, on top of everything it already did: **+2 accuracy** and
-**+0.2% increased evasion** per point, which is PoE's table in this game's units. It is the
+**Dexterity is the attribute for both**, on top of everything it already did: **+1 accuracy** and
+**+0.1% increased evasion** per point, which is PoE's table in this game's units. It is the
 busiest of the three now, which is what it is in the game this borrows from.
 
 ### Energy shield — *the bar in front of the bar*
@@ -2300,7 +2477,7 @@ eaten. You do not need a chaos build to fight a shielded boss; you need some cha
 you have. The same rule runs the other way: a **poison** is chaos over time, so a dose walks
 through your own shield while a **burn** meets it.
 
-**Intelligence is the attribute for it** — **+0.2% increased maximum energy shield** per point,
+**Intelligence is the attribute for it** — **+0.1% increased maximum energy shield** per point,
 which is PoE's line in this game's units, and the reason the staff's attribute finally buys a
 defence. You start with **none**: `WARD BRICK` is what gives you a pool at all, `DEEP WARD`
 increases it, and two notables in the blue country (`THE WARDING`, `THE RESERVOIR OF WILL`) are
@@ -3052,14 +3229,24 @@ you have since capped out of reads *YOU CAN NO LONGER TAKE IT* and cannot be bou
 PoE's Legion. A **monolith** rises somewhere off to one side (with a marker on the screen's rim).
 **Touch it** and a battle stopped in time comes into being around it: an army — **the Eternal
 Empire** (knights, lancers, archers, skeletons; bastion sergeants) or **the Karui Horde** (brutes,
-stalkers, imps, superimps; zombie-hulk sergeants) — standing in its ranks, **frozen**, in a
-480px ring about the stone: 22 + the wave of them (60 at most), 15% magic.
+stalkers, imps, superimps; zombie-hulk sergeants) — **frozen** mid-battle in pale violet ice,
+**scattered in three to six squads of uneven size** across the ground round the stone (up to
+620px out; one side of the field thick with them, another nearly bare), a sergeant leading each
+of the biggest: 22 + the wave of them (60 at most), 15% magic. **No ring is drawn**: the field
+is marked by the army on it, and the time left is the monolith's four runes going dark.
 
-- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt and
-  killed, but they do not walk, swing or shoot, and they cannot be shoved. **Every kill buys
-  0.35s**, up to 14s. The ring round the stone runs down as the time does, and the HUD counts
-  the time, the fallen and the standing.
-- **Then time starts again**, and what is left wakes up and fights.
+- **For 9 seconds nothing moves.** Frozen soldiers wear a shell of ice; they can be hurt, but
+  they do not walk, swing or shoot, and they cannot be shoved. **The clock is fixed** — a kill
+  buys no time (the league tree's *Longer Moment* is what will). The monolith's runes go dark
+  as the time runs down, and the HUD counts the time, the broken and the standing.
+- **A soldier you break does not die.** It stands where it was as a block of cracked ice — out
+  of the fight, nothing aims at it — until time starts again. Breaking the whole army does not
+  end the legion; the freeze always runs to the end.
+- **Then time starts again, and they ALL get up.** The ones you broke rise **AWAKENED** — 1.6×
+  their life, 35% harder hits, faster and bigger, with a violet flame at their feet and the word
+  over their heads — and the rest simply wake. Nothing pays out until it is killed for good: its
+  kill, its studs, a sergeant's war chest. Breaking a soldier in the freeze is choosing which ones
+  you will fight at their worst.
 - **Sergeants** (two, three from wave 20, four from 35 — elites, with rare modifiers) each drop a
   **war chest**: rare, epic 37% of the time, legendary 5%.
 - **From wave 15 a general** leads them — an elite with 2.5× the life, bigger — and pays an **epic
@@ -3090,6 +3277,10 @@ someone else sees exactly what you had. A linked run is a replay: it banks nothi
 The run is **compressed before it is base64'd** (LZW, zip's family), so a long run's link is well
 under half the length it was — a level-49 bow run went from 6,459 characters to 2,813. New links
 start with `z`; old ones still open.
+**A link's tree belongs to one version of the tree.** It is a list of node ids, and an id is a
+place on one layout, so a link copied before the Heart (or on any other version) keeps its
+weapon, bricks, level and everything else but **leaves its tree out**, and says so — rather than
+putting its points on whatever stands at those ids now. New links carry the version.
 **TRY AGAIN** replays the link from its wave; **TITLE** lets go of it.
 
 ### Block
@@ -3165,7 +3356,8 @@ water and rocks the way you do.
   lobbed bricks and fireballs, bombers, thorns, and every missile — the first skeleton an arrow
   crosses takes it.
 - **Golems, PoE's six.** Each is a **rare** card, one per kind; you may keep **two** (a third from
-  **THE FOUNDRY**, the *Golem Commander* notable out in blue), never two alike — so the pair you
+  **THE FOUNDRY**, the *Golem Commander* notable out in blue: **+1 maximum golems** -- room for
+  one more, and it raises nothing by itself; a golem brick decides which), never two alike — so the pair you
   raise is a choice about the whole build. **While a golem stands it grants you its buff**; the
   moment it falls the buff goes with it, and it rises again 10s later. Golems are their own pool:
   they take no place in the legion.
@@ -3186,6 +3378,18 @@ water and rocks the way you do.
   character sheet shows the hit it gets there (*...in the Overseer's aura*). It is not one of the
   legion and rises again 15s after it falls.
 - **Raise Zombie** (epic, once): see [the graveyard](#raise-zombie--the-graveyard) below.
+- **The Horde** (legendary, once — only once you raise zombies): the zombie cap doubles (**24**),
+  and what rises is any of the family, not only the walker — fast **runners**, low **crawlers**
+  that go down easily, fat **bloaters** with twice the life, and heavy **hulks** that hit nearly
+  twice as hard.
+- **How they move and fight.** The minion speed stat (*increased minion attack, cast and movement
+  speed*) speeds their feet as well as their hands, and half of your own increased movement speed is
+  theirs, so a quick hero keeps its legion. **Spearmen** thrust *through a line* — everything on
+  the spear, not one body — and four in ten carry a **pike**, 58 reach against 34. **Swordsmen**
+  are a quarter faster than the rest, and from a little way off (90–280px) one may **charge**: the
+  last of the ground at 2.6× its pace, striking on arrival. The **melee golems** (ice, stone, chaos,
+  carrion) **leap** onto what they are after when it is a few strides off (120–340px, every 6s):
+  up, across, and down with a slam round where they land.
 - **A minion's numbers are its own.** A skeleton hits for (the scepter's **2.10** + minion flat)
   × (1 + your level pool + the minion pool) × its kind. Nothing you buy for your own hits reaches
   it, and your conversions do not either. Its life is 14, plus 12% for every hero level, times the
@@ -3259,7 +3463,9 @@ Bladestorm, Blade Vortex, Blademaster, leech) are never offered to it. Its own b
 - **Split Arrow** — +1 arrow a shot at uncommon, +2 at rare, +3 at epic; fanned, up to 9.
 - **Piercing Shot** — +1 pierce at common, +2 uncommon, +3 rare, +4 epic, up to 12; each body an
   arrow has gone through costs it 15%.
-- **Barbed Arrows** — flat physical to arrows only.
+- **Barbed Arrows** — flat physical to arrows only, and so it pays more than the brick that feeds
+  everything: **Sharpened Blade's numbers +0.5** (+1 common, +1.5 uncommon, +3.5 rare, +5.5 epic,
+  +8.5 legendary). The tree's *Barbed* nodes are +0.5 each.
 
 **An arrow shoots things down.** Cross a monster's shot — an arrow, a skull, a bolt, a frost
 bolt, a hex, a bat — and both are gone: the arrow is spent taking it out of the air. A thrown
@@ -3289,6 +3495,58 @@ BARREL is arrows now, and **THE RICOCHET** keystone in dexterity's country reads
 
 > **Ricochet** — *40% chance for an arrow that would stop to leap to the nearest body it has
 > not hit, up to twice · 15% LESS arrow damage.*
+
+**The bow's own ground in the green.** Three clusters of nothing but bow, laid on clear ground
+without moving a single node a saved tree owns:
+
+| cluster | where | the minors | the notable |
+|---|---|---|---|
+| **THE FLETCHERY** | a short walk off the green door | +0.4 to arrows, +1 pierce, +4% attack speed | **Volley** — **+1 arrow on every shot**, +4% attack speed |
+| **THE SKEWER** | the middle of the green | +1 pierce, +0.4 to arrows, +5% damage | **Skewer** — **+2 pierce**, +0.5 to arrows |
+| **THE BARRAGE** | far out in the green | +1 pierce, +0.5 to arrows (*Barbed*), +5% attack speed | **Barrage** — **+1 arrow on every shot**, 8% LESS arrow damage |
+
+Both arrows count against the same cap of 9 as Split Arrow; search the tree for *arrow* to find them.
+
+### PoE's numbers on the tree
+
+**Every damage increase on a small node is 16%, and on a notable 30%** — physical, spell,
+elemental, fire, cold, lightning, chaos, damage over time, minion, *and* the weapon lanes — whatever
+the cluster's template once wrote (3% here and 7% there, which read as nothing worth walking to).
+Keystones keep their own trades; speed, crit, life and defences keep theirs. A small node in the
+blue that carries a minion "sister" gives its minions 80% (or 60%) of the 16%. Attributes are
+**+10** a node and **+30** on the big stops (see *attributes* above). Every increase still pours
+into the one pool capped at +400%.
+
+**Each weapon's own skill has ground of its own** — not "+1 to the axe" but the thing the weapon
+*does*. All five are laid after every other site, so no node a saved tree owns moves:
+
+| cluster | for | the minors | the notable |
+|---|---|---|---|
+| **THE DERVISH** (red) | sword, axe | +5% of a swing on every Blademaster whirl hit, +1 Bladestorm blade damage, +1 Blade Vortex damage | **Dervish** — +15% of a swing on every whirl hit, +12% Bladestorm and Blade Vortex rate |
+| **THE REAPER** (green) | axe | +5% of the critical carried by every thrown axe, +4% of the hit bleeds, +5% chance to wound | **Reaper** — the thrown axe reaps through **one more body**, +10% of the critical |
+| **THE EARTHSHAKER** (red) | mace | +0.5 to every tooth, +8° wider fault, +6% slam range | **Earthshaker** — +1 to every tooth, +15° wider, +10% range |
+| **THE TEMPEST QUIVER** (green) | bow | +10% Fire Arrow burst radius, +5% ricochet, +0.4 to arrows | **Tempest** — Lightning Arrow forks to **one more** body, +25% burst radius, +10% ricochet |
+| **THE SUNDERING** (blue) | any elemental hit | +4% fire / cold / lightning penetration | **Sundering** — +10% penetration of **every** elemental resistance, +30% elemental damage |
+
+**The whirl feeds rage like a swing.** A Blademaster whirl's pass is one hit however many bodies it
+goes through — once every 0.18s while it is landing, with *Rage on hit*.
+
+### Penetration
+
+PoE's line: *your hits PENETRATE 10% fire resistance* — a body's resistance counts that much
+lower against **your hits**. It only strips what is there: a resistance goes down to nothing and
+no further (making a body *weak* is what exposure and the brands do). It is for hits — a burn,
+bleed or poison was built when it was opened — and it is yours, not your minions'. Capped at
+**60%** per element, all sources together.
+
+| brick | rarity | per rarity | offered when |
+|---|---|---|---|
+| **Fire / Cold / Lightning Penetration** | uncommon+ | +6 / 8 / 11 / 15% | your hits carry that element |
+| **Chaos Penetration** | rare+ | +8 / 11 / 15% | your hits carry chaos |
+| **Elemental Penetration** | rare+ | +5 / 7 / 10% of all three | your hits carry any element |
+
+The tree has it in **THE SUNDERING**, and the character sheet (NERD) shows a **PENETRATION**
+card whenever you have any — hover a row for what a 10-damage hit does to a body resisting 50%.
 
 **The Brick Blaster is gone.** It was a physical projectile spell that fitted nothing; its
 flight code, pierce falloff and cards are the arrow's now.
@@ -3335,25 +3593,25 @@ that long — each rebuilds 2.4s after it breaks — which is exactly what the s
 
 ### Every hand carries attributes
 
-Every favourite hands over **twelve attribute points**, split by what the hand is — the same
-twelve for all of them, so no hand is ahead on attributes alone; what differs is which defence
+Every favourite hands over **twenty-four attribute points**, split by what the hand is — the same
+twenty-four for all of them, so no hand is ahead on attributes alone; what differs is which defence
 and which damage line they feed:
 
 | hand | STR | DEX | INT |
 |---|--:|--:|--:|
-| No Favourite | 4 | 4 | 4 |
-| Sword & Steel | 8 | 4 | |
-| Reaver's Edge | 4 | 8 | |
-| Earthshaker · Tough Bricks | 12 | | |
-| Guardian Brick | 6 | | 6 |
-| Brickbane | | 8 | 4 |
-| Deadeye | | 12 | |
-| Necromancer | | | 12 |
-| Storm Brick | | 4 | 8 |
-| Bladestorm | 4 | 8 | |
-| Blade Vortex | 6 | 6 | |
-| Block Freeze · Elemental Arts | | | 12 |
-| Bomb Volley | | 6 | 6 |
+| No Favourite | 8 | 8 | 8 |
+| Sword & Steel | 16 | 8 | |
+| Reaver's Edge | 8 | 16 | |
+| Earthshaker · Tough Bricks | 24 | | |
+| Guardian Brick | 12 | | 12 |
+| Brickbane | | 16 | 8 |
+| Deadeye | | 24 | |
+| Necromancer | | | 24 |
+| Storm Brick | | 8 | 16 |
+| Bladestorm | 8 | 16 | |
+| Blade Vortex | 12 | 12 | |
+| Block Freeze · Elemental Arts | | | 24 |
+| Bomb Volley | | 12 | 12 |
 
 The split is data on the card and the hover line is printed from it, so the two cannot drift.
 
@@ -3621,19 +3879,69 @@ build together, wipe it, fight one wave and see what *that* wave did.
 | | |
 |---|---|
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrows | move |
-| **Left mouse** | swing — *hold* to whirl, once you own Blademaster |
+| **Left mouse** | swing — *hold* to whirl, once you own Blademaster (or the right button: **OPTIONS → ATTACK BUTTON**) |
+| **Point & click** | **OPTIONS → MOVEMENT**: click to walk, click a monster to attack it — see [Point and click](#point-and-click) |
 | <kbd>Space</kbd> | roll — invulnerable through it, and a perfect dodge refunds bomb cooldown |
 | <kbd>F</kbd> | start the next wave early — every wave opens with a breather (30s after a boss) |
 | <kbd>F</kbd> *(wave cleared, league content left)* | **continue** — leave the untouched breach, abyss, strongbox or altar and go on to the next wave |
 | <kbd>F</kbd> *(held, mid-fight)* | call the next wave down on top of this one — 3 seconds' warning, up to 3 stacked, every wave pays its own reward |
 | <kbd>C</kbd> | character sheet |
-| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag. The run waits while it is open |
+| <kbd>I</kbd> | **equipment** *(RPG only)* — what you wear and the bag, plus the stash in Brickhaven. The run waits while it is open |
+| <kbd>Tab</kbd> | **the map**, laid over the field and centred on you; opacity and size in Options |
 | <kbd>U</kbd> | **ritual** — spend tribute on what the altars are offering, once a ritual is done. The run waits while it is open |
 | <kbd>P</kbd> | **spellbook** — every brick you are carrying, dealt into stacks. **It does not pause the game** |
 | <kbd>L</kbd> | combat log · <kbd>Shift</kbd>+<kbd>L</kbd> cycles dealt / taken / events / **DPS** / **TYPES** |
 | <kbd>R</kbd> / <kbd>X</kbd> | on a reward screen: reroll · decline for studs |
 | <kbd>Esc</kbd> | pause — or close the spellbook, if it is open |
 | <kbd>M</kbd> | mute |
+
+### Point and click
+
+**OPTIONS → MOVEMENT** switches between **WASD** (above, the default) and **POINT & CLICK**, PoE's
+way — and the movement the RPG will use. **ATTACK BUTTON** puts the weapon on the left or the
+right mouse button.
+
+| Point & click, attack on the **left** | |
+|---|---|
+| **Left-click the ground** | walk there, round whatever is in the way (the same A* the monsters use); **hold** to follow the cursor |
+| **Left-click a monster** (or a chest) | walk into range and **attack it once** — a sword walks into reach and swings, a bow or a staff walks into a comfortable shot (520 / 470px) and shoots; **hold** to keep attacking that one, wherever the cursor goes |
+| <kbd>Shift</kbd> + **left-click** | attack **where you stand**, at the cursor — a tap too quick for a frame still gets its one attack |
+| **Scepter** | a click walks (it attacks nothing itself); <kbd>Shift</kbd>+click is **Convocation** — and so is pressing <kbd>Shift</kbd> while you hold the button to walk |
+
+With the attack on the **right**, the **left button only ever walks**, even over a monster, and
+the **right** button attacks: on a monster it walks in and hits it, anywhere else it attacks from
+where you stand. A press decides what a hold means, as in PoE: pressed on the ground, a held button
+walks even when the cursor passes over a monster. The spot you clicked gets a small pale ring, and
+what you are after a red dashed one. <kbd>Space</kbd> still rolls, the way you are walking. (With
+WASD the attack button setting applies too: the weapon is on whichever button you chose.)
+
+**Walking and attacking are two things at once.** SHIFT with the left button (or the right button,
+with the attack there) attacks at the cursor **without stopping the walk**: click somewhere far,
+then SHIFT+click or right-click as you go and the hero keeps walking to the spot while swinging or
+shooting. Holding SHIFT while the left button walks attacks as it goes; holding both buttons (attack
+on the right) walks after the cursor and fights at once. Only a plain click ON a monster turns the
+walk into an approach.
+
+**The next skill point, on the HUD.** Under the level bar: *next skill point at level N* — a level
+pays a point the first time you reach it, so it is the level after your best, in blue when it is
+the very next one.
+
+### Arcade: every level a heart, and a second chance
+
+- **A level is a heart.** In the arcade every level adds **+1 maximum heart** (a flat heart: your
+  increases multiply it like any other) and **heals you to full**. The RPG will earn its life
+  from gear instead.
+- **A second chance.** A run begins with one free respawn. Die, and the death screen offers
+  **SECOND CHANCE — FREE**: you stand up where you fell, whole, with three seconds' grace, the
+  monsters close by thrown back and every shot near you gone. It comes back when you next **kill a
+  boss** (the HUD says *second chance ready* or *used — kill a boss*). Die again before then and you
+  may still **RESPAWN for a fine** in studs — 150 + 25 a wave, **tripled for every fine already
+  paid** this run. The run is not banked to the tree while a respawn is on the table; it is banked
+  when you leave (TRY AGAIN or TITLE).
+- **What killed you.** The death screen names it — *KILLED BY brute · 3.2* — and **COMBAT LOG**
+  steps the results aside and opens the log on **TAKEN**, every blow that landed on you (kept even
+  while the log was closed), with the other tabs a click away; **BACK TO THE RESULTS** brings them
+  back.
 
 ---
 
