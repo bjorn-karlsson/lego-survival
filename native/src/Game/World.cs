@@ -6,7 +6,7 @@ public sealed class Flower { public double x, y; public string col; }
 /* a prop: a tree, a rock, a chest, a pillar, a torch, a town building... */
 public sealed partial class Prop : Obj
 {
-    public string type; public double flash, seed, hp; public bool indestructible;
+    public double flash, seed, hp; public bool indestructible;
     public double tall; public bool landmark; public double lx, ly, lr;
 }
 

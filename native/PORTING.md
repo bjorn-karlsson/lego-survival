@@ -67,7 +67,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 | STATE | 4057–4391 | ported (`Game/State.cs`; run links are byte-compatible with the browser's) |
 | PLAYER | 4392–4553 | ported (`Game/Player.cs`, `Game/Ent.cs`) |
 | WORLD | 4554–4938 | ported (`Game/World.cs`) |
-| PICKUPS / DEBRIS / PARTICLES | 4939–5411 | |
+| PICKUPS / DEBRIS / PARTICLES | 4939–5411 | ported (`Game/Pickups.cs`) |
 | ENEMIES | 5412–8647 | |
 | WAVES / THE ROSTER | 8648–11357 | |
 | RARITY & UPGRADES | 11358–18277 | |
@@ -92,7 +92,7 @@ Updated as the port proceeds. "JS lines" are lines of `lego-survival.html`. The
 from sections not yet ported. `dotnet build` errors of the kind "name does not exist" are the
 list of what is left; any other kind of error is a bug in what has been ported.
 
-**Resume at JS line 4939** (PICKUPS / DEBRIS / PARTICLES).
+**Resume at JS line 5412** (ENEMIES).
 
 ## Build and run
 

@@ -9,6 +9,9 @@ public class Obj
 {
     public double x, y, r;
     public bool dead;
+    /* what hurt you, in the log and on the death screen: every source of damage carries these */
+    public string type, bname;
+    public double dmg;
     public Obj() { }
     public Obj(double x, double y) { this.x = x; this.y = y; }
 }
