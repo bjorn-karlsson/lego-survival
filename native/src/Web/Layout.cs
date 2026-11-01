@@ -11,6 +11,9 @@ internal sealed class Frag { public double x, y, w, h; public bool first, last; 
 
 internal sealed class Box
 {
+    /* the inputs of the last layout this box's subtree reflects (see LayoutBlockish) */
+    public bool lkOn, lkShrink; public double lkFW, lkFH, lkCW, lkCH; public List<Box> lkPend;
+    public double lkML, lkMR, lkMT, lkMB;   /* its margins as that layout left them (auto resolved, zoomed) */
     public Element el; public CStyle cs; public Box parent; public readonly List<Box> kids = new();
     public bool isText, isPseudo, anon, replaced;
     public TextNode tnode; public string text;
@@ -137,7 +140,7 @@ internal static class Layout
     public static void Run(Box root, double vw, double vh)
     {
         Root = root; VW = vw; VH = vh;
-        intr = new();
+        intr = new(); measured = new();
         var pend = new List<Box>();
         root.x = 0; root.y = 0;
         LayoutBlockish(root, vw, vh, pend, false);
@@ -350,7 +353,38 @@ internal static class Layout
 
     /* ---- block containers ---- */
     /* lays out b with the given containing-block width; sets b.w, b.h (b.x/b.y are the caller's) */
+    static bool Same(double a, double b) => a == b || double.IsNaN(a) && double.IsNaN(b);
+    /* A FLEX ITEM IS LAID OUT MORE THAN ONCE -- measured, then placed, then
+       stretched -- and inside a column flex in a column flex that multiplies at
+       every level. Layout is a function of its inputs, so a box asked again with
+       exactly the inputs its subtree already reflects keeps what it has. */
     static void LayoutBlockish(Box b, double cbW, double cbH, List<Box> pend, bool shrink)
+    {
+        if (b.lkOn && b.lkShrink == shrink && b.lkPend == pend && Same(b.lkFW, b.fixedW) && Same(b.lkFH, b.fixedH) && Same(b.lkCW, cbW) && Same(b.lkCH, cbH))
+        {
+            /* a parent's Edges() call resets the margins to their declared values before
+               asking: put back the ones this layout had resolved */
+            b.ml = b.lkML; b.mr = b.lkMR; b.mt = b.lkMT; b.mb = b.lkMB;
+            return;
+        }
+        double fw0 = b.fixedW, fh0 = b.fixedH;
+        LayoutBlockish0(b, cbW, cbH, pend, shrink);
+        b.lkOn = true; b.lkShrink = shrink; b.lkPend = pend; b.lkFW = fw0; b.lkFH = fh0; b.lkCW = cbW; b.lkCH = cbH;
+        b.lkML = b.ml; b.lkMR = b.mr; b.lkMT = b.mt; b.lkMB = b.mb;
+    }
+    /* a column-flex item's height at a width, measured once per layout pass */
+    static Dictionary<(Box, double, double), double> measured = new();
+    static double MeasureH(Box k, double crossW, double cw, List<Box> pend)
+    {
+        if (measured.TryGetValue((k, crossW, cw), out var h)) return h;
+        k.fixedW = crossW;
+        LayoutBlockish(k, cw, double.NaN, pend, false);
+        h = k.h;
+        k.fixedW = double.NaN;
+        measured[(k, crossW, cw)] = h;
+        return h;
+    }
+    static void LayoutBlockish0(Box b, double cbW, double cbH, List<Box> pend, bool shrink)
     {
         Edges(b, cbW);
         b.baseline = double.NaN;
@@ -778,10 +812,7 @@ internal static class Layout
                 else
                 {
                     double crossW = CrossWidthForColumn(k, it, cw);
-                    k.fixedW = crossW;
-                    LayoutBlockish(k, cw, double.NaN, pend, false);
-                    basis = k.h;
-                    k.fixedW = double.NaN;
+                    basis = MeasureH(k, crossW, cw, pend);
                 }
             }
             it.basis = basis;
@@ -807,7 +838,7 @@ internal static class Layout
                     else
                     {
                         double crossW = CrossWidthForColumn(k, it, cw);
-                        k.fixedW = crossW; LayoutBlockish(k, cw, double.NaN, pend, false); mn = k.h; k.fixedW = double.NaN;
+                        mn = MeasureH(k, crossW, cw, pend);
                         double sh = SpecH(k, k.cs.height, chDef); if (!double.IsNaN(sh)) mn = Math.Min(mn, sh);
                     }
                 }

@@ -6,6 +6,8 @@ namespace Brickblade;
      --script "30:click:startBtn; 60:keydown:KeyD; 200:shot:a.png; 260:status; 400:quit"
    Each step runs on its frame. Steps:
      click:ID            the element's click()
+     sel:CSS[@N]         click() the first (or Nth) element a selector finds
+     count:CSS           how many elements a selector finds
      keydown:CODE / keyup:CODE / key:CODE (down and up)
      move:X,Y            the pointer to CSS px X,Y
      down:B / up:B       a mouse button (0 left, 2 right) at the pointer
@@ -45,6 +47,16 @@ public static class AutoTest
                 switch (cmd)
                 {
                     case "click": Dom.document.getElementById(arg)?.click(); break;
+                    case "sel":
+                    {
+                        /* sel:CSS or sel:CSS@N -- click the first (or the Nth) element the selector finds */
+                        int at = arg.LastIndexOf('@'); int n = 0; string q = arg;
+                        if (at > 0 && int.TryParse(arg.Substring(at + 1), out var nn)) { n = nn; q = arg.Substring(0, at); }
+                        var all = Dom.document.querySelectorAll(q);
+                        if (n < all.Count) all[n].click(); else Console.WriteLine($"[script] {q}: {all.Count} found, no #{n}");
+                        break;
+                    }
+                    case "count": Console.WriteLine($"[count] {arg}: {Dom.document.querySelectorAll(arg).Count}"); break;
                     case "keydown": Dom.KeyDown(new KeyEvt { code = arg, key = KeyName(arg) }, G.onKeyDown); break;
                     case "keyup": Dom.KeyUp(new KeyEvt { code = arg, key = KeyName(arg) }, G.onKeyUp); break;
                     case "key": Dom.KeyDown(new KeyEvt { code = arg, key = KeyName(arg) }, G.onKeyDown); Dom.KeyUp(new KeyEvt { code = arg, key = KeyName(arg) }, G.onKeyUp); break;
@@ -88,6 +100,22 @@ public static class AutoTest
                     {
                         var near = G.enemies.OrderBy(e => G.dist(e, G.player)).Take(3).Select(e => $"{e.type}@{G.dist(e, G.player):0} hp={e.hp:0.#}/{e.maxHp:0.#} st={e.state}");
                         Console.WriteLine($"[probe] frame {frame} hero=({G.player.x:0},{G.player.y:0}) mouse=({G.mouse.wx:0},{G.mouse.wy:0}) down={G.mouse.down} proj={G.projectiles.Count}:{string.Join(",", G.projectiles.Take(4).Select(q => q.kind))} near: {string.Join(" | ", near)}");
+                        break;
+                    }
+                    case "time":
+                    {
+                        /* time:NAME -- G.NAME() a few times, and what the page then costs to restyle and lay out */
+                        var m = typeof(G).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == arg && x.GetParameters().All(q => q.IsOptional));
+                        if (m == null) { Console.WriteLine("[script] no G." + arg + "()"); break; }
+                        Dom.EnsureLayout();
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        for (int r = 0; r < 3; r++)
+                        {
+                            sw.Restart(); m.Invoke(null, m.GetParameters().Select(q => q.DefaultValue).ToArray()); double js = sw.Elapsed.TotalMilliseconds;
+                            sw.Restart(); Dom.EnsureStyle(); double st = sw.Elapsed.TotalMilliseconds;
+                            sw.Restart(); Dom.EnsureLayout(); double ly = sw.Elapsed.TotalMilliseconds;
+                            Console.WriteLine($"[time] {arg}: script {js:0.0} ms, style {st:0.0} ms, layout {ly:0.0} ms");
+                        }
                         break;
                     }
                     case "shot": shot(arg); break;

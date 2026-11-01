@@ -181,6 +181,11 @@ internal static class Paint2
     {
         if (b.cs == null) return;
         var st = Enter(b, parent, out double W, out double H);
+        /* SCROLLED OUT OF SIGHT, NOT PAINTED. A box (and everything in it) that lies
+           wholly outside the clip of the scroller it is in cannot show, and a long
+           list -- the test bench's hundreds of cards -- is mostly that. The margin
+           keeps a shadow or a badge hanging over the box's edge. */
+        if (st.clip is { } cl && !b.inlineBox && Outside(st.m, W, H, cl, 48 * DPR)) return;
         bool vis = !b.cs.hidden;
         Apply(st);
         if (b.inlineBox) { if (vis) InlineDeco(b, st); }
@@ -214,6 +219,13 @@ internal static class Paint2
             }
         }
         if (b.cs.Scrolls && !b.inlineBox && vis) { Apply(st); Scrollbars(b, st, W, H); }
+    }
+    static bool Outside(Mat m, double W, double H, (double x0, double y0, double x1, double y1) c, double pad)
+    {
+        var (ax, ay) = m.Ap(0, 0); var (bx, by) = m.Ap(W, 0); var (cx, cy) = m.Ap(W, H); var (dx, dy) = m.Ap(0, H);
+        double x0 = Math.Min(Math.Min(ax, bx), Math.Min(cx, dx)), x1 = Math.Max(Math.Max(ax, bx), Math.Max(cx, dx));
+        double y0 = Math.Min(Math.Min(ay, by), Math.Min(cy, dy)), y1 = Math.Max(Math.Max(ay, by), Math.Max(cy, dy));
+        return x1 + pad < c.x0 || x0 - pad > c.x1 || y1 + pad < c.y0 || y0 - pad > c.y1;
     }
     static Func<Col, Col> Compose(Func<Col, Col> outer, List<(string f, double v)> fs)
     {
