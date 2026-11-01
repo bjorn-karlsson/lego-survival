@@ -1,2 +1,5 @@
 _rgbCache -- Col.Parse keeps its own parse cache (Engine/Col.cs)
 cv -- the game window is the canvas (App.cs, Ctx.MainTarget)
+textFontOrig -- the cascade scales each rule's px font-size itself (Web/Css.cs Sheet.TextK), so no rule's original size has to be remembered
+textFontCache -- FontSpec keeps the scaled-font cache (Engine/Fonts.cs FontSpec.TextK, ClearCache)
+textScaleRules -- applyTextSize sets Sheet.TextK and restyles the page (Dom.StyleAll) instead of rewriting each rule

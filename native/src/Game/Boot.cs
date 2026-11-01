@@ -18,6 +18,8 @@ public static partial class G
         /* JS 18980: every stat a brick can move */ StatProbesInit();
         /* JS 19740: the sheet's simple / nerd view remembered */ SheetNerdLoad();
         /* JS 21303-21304: the reward screen's two buttons */ RewardButtonsWire();
-        /* the rest are added as the sections that hold them are ported (GAME FLOW, MAIN LOOP) */
+        /* JS 31848-31873: tcv, tctx and (function buildTitle(){ ... })() */ buildTitle();
+        /* JS 32243-32328: the title, pause, death and options buttons; audioLoad, optLoad, applyTextSize */ GameFlowWire();
+        /* JS 32431-32443: the saves, the demo run, the title's rows, the first frame, a run link */ GameBoot();
     }
 }

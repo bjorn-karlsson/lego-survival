@@ -8,6 +8,10 @@ public static class App
     /* an option the loop reads changed (render scale, vsync, fps cap) */
     public static void SettingsChanged() { settingsDirty = true; }
     static bool settingsDirty;
+    /* the density the field is drawn at: the screen's, times the render scale */
+    public static double WorldDensity = 1;
+    /* confirm(): a blocking yes/no box over the last frame */
+    public static bool Confirm(string msg) => true;
     public static int Run()
     {
         return 0;
