@@ -278,8 +278,8 @@ internal static class Layout
         {
             if (k.isText) { TextPieces(k, k.parent?.cs ?? b.cs, emit); continue; }
             if (k.cs.OutOfFlow) { emit(new Piece { kind = 7, box = k }); continue; }
-            if (k.el != null && !k.isPseudo && k.el.localName == "br") { emit(new Piece { kind = 2, box = k }); continue; }
-            if (Atomic(k)) { var (a, z) = Contribution(k); emit(new Piece { kind = 6, w = z, wmin = a, box = k, canBreak = true }); continue; }
+            if (k.el != null && !k.isPseudo && k.el.localName == "br") { emit(new Piece { kind = 2, box = k }); lastSpace = true; continue; }
+            if (Atomic(k)) { var (a, z) = Contribution(k); emit(new Piece { kind = 6, w = z, wmin = a, box = k, canBreak = true }); lastSpace = false; continue; }
             if (IsBlockLevel(k)) { emit(new Piece { kind = 3, box = k }); continue; }
             /* a plain inline: its left edge, its content, its right edge */
             Edges(k, 0);
