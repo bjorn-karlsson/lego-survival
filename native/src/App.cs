@@ -28,7 +28,7 @@ public static class App
     static OffCanvas world;               /* the field, when it is drawn below the screen's density */
     static Ctx screen;                    /* the window itself, for the page and the scaled field */
     static bool quit, showFps;
-    public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris; public static string LastGfx = "";
+    public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris, LastVerts; public static string LastGfx = "";
     static string pendingShot;
     static double fpsShown, fpsAcc; static int fpsN;
 
@@ -142,6 +142,7 @@ public static class App
         double slowT = 0, slowFrames = 0, slowAcc = 0, graceT = 3;
         double prevNow = G.perfNow();
         AutoTest.Load(Program.Opt("--script"));
+        GfxStats.On = AutoTest.On;
 
         while (!quit && !Raylib.WindowShouldClose())
         {
@@ -182,9 +183,9 @@ public static class App
             if (frameNo == shotAt) { Shot.Save(shotOut); quit = Program.Has("--quit-after-shot") || quit; }
             if (pendingShot != null) { Shot.Save(pendingShot); pendingShot = null; }
             Raylib.EndDrawing();
-            LastCalls = Gpu.DrawCalls; LastTris = Gpu.Tris; LastGfx = GfxStats.Line(); GfxStats.Reset();
+            LastCalls = Gpu.DrawCalls; LastTris = Gpu.Tris; LastVerts = Gpu.Verts; LastGfx = GfxStats.Line(); GfxStats.Reset();
             GlMs += (Gpu.GlTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency - GlMs) * 0.05;
-            Gpu.DrawCalls = 0; Gpu.Tris = 0; Gpu.GlTicks = 0;
+            Gpu.DrawCalls = 0; Gpu.Tris = 0; Gpu.Verts = 0; Gpu.GlTicks = 0;
             if (minimised) Raylib.WaitTime(0.05);
 
             /* ---- FPS, and AUTO's step down ---- */
@@ -244,7 +245,7 @@ public static class App
             screen.setTransform(k, 0, 0, k, 0, 0);
             screen.font = "600 13px Fredoka";
             string t = Math.Round(fpsShown) + " FPS · field " + Math.Round(RenderScaleK() * 100) + "% (" + Math.Round(G.cw * G.dpr) + "×" + Math.Round(G.ch * G.dpr) + ")" +
-                " · game " + G.updMs.ToString("0.0") + " ms, draw " + G.renMs.ToString("0.0") + " ms, page " + PageMs.ToString("0.0") + " ms · " + G.enemies.Count + " monsters";
+                " · game " + G.updMs.ToString("0.0") + " ms, draw " + G.renMs.ToString("0.0") + " ms, page " + PageMs.ToString("0.0") + " ms · " + LastCalls + " batches, " + ((LastVerts * 24 + LastTris * 6) / 1048576.0).ToString("0.0") + " MB · " + G.enemies.Count + " monsters";
             screen.fillStyle = "rgba(0,0,0,0.6)"; screen.fillRect(6, 6, screen.measureText(t).width + 14, 22);
             screen.fillStyle = "#ffcf00"; screen.textAlign = "left"; screen.textBaseline = "middle"; screen.fillText(t, 13, 17);
         }
@@ -321,7 +322,7 @@ public static class App
             {
                 /* the native window's own: F11 (or Alt+Enter) for fullscreen, F3 for the frame rate */
                 if (pressed && (code == "F11" || (code == "Enter" && alt))) { ToggleFullscreen(); continue; }
-                if (pressed && code == "F3") { showFps = !showFps; continue; }
+                if (pressed && code == "F3") { showFps = !showFps; GfxStats.On = showFps || AutoTest.On; continue; }
                 var e = new KeyEvt { code = code, key = shift ? shifted : plain, repeat = rep, shiftKey = shift, ctrlKey = ctrl, metaKey = meta };
                 Dom.KeyDown(e, G.onKeyDown);
             }

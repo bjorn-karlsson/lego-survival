@@ -24,23 +24,36 @@ public sealed class Target
 /* what a frame asked of the renderer (F3, --script 'gfx'): plain counters, reset each frame */
 public static class GfxStats
 {
+    /* the per-call timers run only while someone is looking (F3, --script) */
+    public static bool On;
     public static int Fills, FillsFan, FillsMulti, FillsTess, FillsEar, Strokes, Texts, Glyphs, Clips, Images, GradFills, Shadows, NewTargets;
     public static int BrkTarget, BrkBlend, BrkClip, BrkTex, BrkGrad, BrkFlushDirect;
 
     public static long TFill, TStroke, TImage, TText, TClip, TPath, TTess;
     static double Ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-    public static string Times() => $"fill {Ms(TFill):0.0}ms (tess {Ms(TTess):0.0}ms) stroke {Ms(TStroke):0.0}ms image {Ms(TImage):0.0}ms text {Ms(TText):0.0}ms clip {Ms(TClip):0.0}ms";
+    public static string Times() => $"fill {Ms(TFill):0.0}ms (tess {Ms(TTess):0.0}ms) stroke {Ms(TStroke):0.0}ms image {Ms(TImage):0.0}ms text {Ms(TText):0.0}ms clip {Ms(TClip):0.0}ms arcs {Ms(TPath):0.0}ms";
     public static string Line() => $"fills {Fills} (fan {FillsFan}, multi {FillsMulti}, ear {FillsEar}, tess {FillsTess}, grad {GradFills}) strokes {Strokes} texts {Texts}/{Glyphs} clips {Clips} images {Images} shadows {Shadows} newTargets {NewTargets} | {Times()} | breaks: target {BrkTarget} blend {BrkBlend} clip {BrkClip} tex {BrkTex} grad {BrkGrad} direct {BrkFlushDirect}";
     public static void Reset() { TFill = TStroke = TImage = TText = TClip = TPath = TTess = 0; Fills = FillsFan = FillsMulti = FillsTess = FillsEar = Strokes = Texts = Glyphs = Clips = Images = GradFills = Shadows = NewTargets = 0; BrkTarget = BrkBlend = BrkClip = BrkTex = BrkGrad = BrkFlushDirect = 0; }
 }
 
+/* one vertex as the GPU reads it: device position, texture coordinate (or the
+   user-space position a gradient is evaluated at), and the premultiplied colour
+   as four 16-bit parts -- 24 bytes, where four floats of colour made it 32, and
+   still exact for the faintest translucent passes */
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 4)]
+public struct Vtx { public float x, y, u, v; public ulong c; }
+
 public static unsafe class Gpu
 {
-    const int VF = 8;
-    const int MAXV = 3 * 40000;
-    static readonly float[] buf = new float[MAXV * VF];
-    static int nv;
-    static uint vao, vbo;
+    /* A BATCH IS INDEXED: shapes share their corners (a disc is its rim and its
+       centre, not three corners per sliver), and the indices say which corners make
+       each triangle. 16-bit indices, so a batch holds up to 65,532 corners. */
+    public const int MAXV = 65532;
+    const int MAXI = MAXV * 3;
+    static readonly Vtx[] vb = new Vtx[MAXV];
+    static readonly ushort[] ib = new ushort[MAXI];
+    static int nv, ni;
+    static uint vao, vbo, ebo;
     static Shader progTex, progGrad;
     static int tSize, tUseClip, tTex, tClip;
     static int gSize, gUseClip, gClip, gKind, gP, gN, gOff, gCol;
@@ -74,7 +87,7 @@ public static unsafe class Gpu
         Flush();
         scissor = r;
     }
-    public static int DrawCalls, Tris;
+    public static int DrawCalls, Tris, Verts;
 
     const string VS = @"#version 330
 layout(location=0) in vec2 aPos; layout(location=1) in vec2 aUv; layout(location=2) in vec4 aCol;
@@ -124,10 +137,11 @@ void main(){
         whiteTex = Rlgl.GetTextureIdDefault();
         vao = Rlgl.LoadVertexArray();
         Rlgl.EnableVertexArray(vao);
-        fixed (float* p = buf) vbo = Rlgl.LoadVertexBuffer(p, MAXV * VF * 4, true);
-        Rlgl.SetVertexAttribute(0, 2, 0x1406, false, VF * 4, 0); Rlgl.EnableVertexAttribute(0);
-        Rlgl.SetVertexAttribute(1, 2, 0x1406, false, VF * 4, 8); Rlgl.EnableVertexAttribute(1);
-        Rlgl.SetVertexAttribute(2, 4, 0x1406, false, VF * 4, 16); Rlgl.EnableVertexAttribute(2);
+        fixed (Vtx* p = vb) vbo = Rlgl.LoadVertexBuffer(p, MAXV * sizeof(Vtx), true);
+        Rlgl.SetVertexAttribute(0, 2, 0x1406, false, sizeof(Vtx), 0); Rlgl.EnableVertexAttribute(0);
+        Rlgl.SetVertexAttribute(1, 2, 0x1406, false, sizeof(Vtx), 8); Rlgl.EnableVertexAttribute(1);
+        Rlgl.SetVertexAttribute(2, 4, 0x1403, true, sizeof(Vtx), 16); Rlgl.EnableVertexAttribute(2);
+        fixed (ushort* q = ib) ebo = Rlgl.LoadVertexBufferElement(q, MAXI * 2, true);
         Rlgl.DisableVertexArray();
         Screen = new Target { screen = true, w = w, h = h };
         curTarget = Screen;
@@ -287,30 +301,49 @@ void main(){
         Rlgl.ActiveTextureSlot(1); Rlgl.EnableTexture(useClip == 1 ? curClip.tex : whiteTex);
         Rlgl.ActiveTextureSlot(0);
         Rlgl.EnableVertexArray(vao);
-        fixed (float* p = buf) Rlgl.UpdateVertexBuffer(vbo, p, nv * VF * 4, 0);
-        Rlgl.DrawVertexArray(0, nv);
+        fixed (Vtx* p = vb) Rlgl.UpdateVertexBuffer(vbo, p, nv * sizeof(Vtx), 0);
+        fixed (ushort* q = ib) Rlgl.UpdateVertexBufferElements(ebo, q, ni * 2, 0);
+        Rlgl.DrawVertexArrayElements(0, ni, null);
         Rlgl.DisableVertexArray();
         if (scissor != null) Rlgl.DisableScissorTest();
         Rlgl.DisableShader();
-        DrawCalls++; Tris += nv / 3;
-        nv = 0;
+        DrawCalls++; Tris += ni / 3; Verts += nv;
+        nv = 0; ni = 0;
         GlTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
     }
 
-    /* one vertex: device position, texcoord (or user-space position for a
-       gradient), premultiplied colour */
+    /* a premultiplied colour (each part 0..1) as the four 16-bit parts a vertex carries */
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static ulong Pack(float r, float g, float b, float a)
+    {
+        static ulong B(float f) => f <= 0 ? 0ul : f >= 1 ? 65535ul : (ulong)(f * 65535f + 0.5f);
+        return B(r) | B(g) << 16 | B(b) << 32 | B(a) << 48;
+    }
+    /* one corner of a triangle in a list of separate triangles (three V calls make one) */
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public static void V(float x, float y, float u, float v, float r, float g, float b, float a)
     {
-        int i = nv * VF;
-        buf[i] = x; buf[i + 1] = y; buf[i + 2] = u; buf[i + 3] = v;
-        buf[i + 4] = r; buf[i + 5] = g; buf[i + 6] = b; buf[i + 7] = a;
-        nv++;
+        ref var t = ref vb[nv]; t.x = x; t.y = y; t.u = u; t.v = v; t.c = Pack(r, g, b, a);
+        ib[ni++] = (ushort)nv; nv++;
     }
-    /* room for n more vertices, flushing first if the buffer is full (always a
-       multiple of 3 so a triangle is never split) */
+    /* room for n more separate-triangle corners (a multiple of 3) */
     public static void Need(int n)
     {
-        if (nv + n > MAXV) Flush();
+        if (nv + n > MAXV || ni + n > MAXI) Flush();
     }
+    /* SHARED CORNERS: room for nVerts corners and nIdx indices; returns the index
+       the first corner added next will have. False when the shape cannot fit in
+       one batch at all (then it goes as separate triangles). */
+    public static bool Begin(int nVerts, int nIdx, out int baseV)
+    {
+        baseV = 0;
+        if (nVerts > MAXV || nIdx > MAXI) return false;
+        if (nv + nVerts > MAXV || ni + nIdx > MAXI) Flush();
+        baseV = nv;
+        return true;
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static void VX(float x, float y, float u, float v, ulong c) { ref var t = ref vb[nv++]; t.x = x; t.y = y; t.u = u; t.v = v; t.c = c; }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static void I(int i) { ib[ni++] = (ushort)i; }
 }

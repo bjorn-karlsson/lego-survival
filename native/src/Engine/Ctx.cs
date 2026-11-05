@@ -212,21 +212,28 @@ public sealed class Ctx
     }
     public void arc(double x, double y, double r, double a0, double a1, bool ccw = false)
     {
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        try {
         if (!Js.IsFinite(x) || !Js.IsFinite(y) || !Js.IsFinite(r) || !Js.IsFinite(a0) || !Js.IsFinite(a1)) return;
         r = Math.Abs(r);
         double sw = Sweep(a0, a1, ccw);
         double sx = x + Math.Cos(a0) * r, sy = y + Math.Sin(a0) * r;
         if (cur == null) NewSub(sx, sy); else { EnsureOpen(); cur.p.Add(X(sx, sy)); }
         int n = ArcSegs(r, sw);
+        /* the points by rotation: one cos and sin for the step, not one per point */
+        double cs = Math.Cos(sw / n), sn = Math.Sin(sw / n), ca = Math.Cos(a0), sa = Math.Sin(a0);
         for (int i = 1; i <= n; i++)
         {
-            double t = a0 + sw * i / n;
-            cur.p.Add(X(x + Math.Cos(t) * r, y + Math.Sin(t) * r));
+            double nca = ca * cs - sa * sn; sa = sa * cs + ca * sn; ca = nca;
+            cur.p.Add(X(x + ca * r, y + sa * r));
         }
         ux = x + Math.Cos(a0 + sw) * r; uy = y + Math.Sin(a0 + sw) * r; hasPt = true;
+            } finally { if (GfxStats.On) GfxStats.TPath += System.Diagnostics.Stopwatch.GetTimestamp() - __t0; }
     }
     public void ellipse(double x, double y, double rx, double ry, double rot, double a0, double a1, bool ccw = false)
     {
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        try {
         if (!Js.IsFinite(x) || !Js.IsFinite(y) || !Js.IsFinite(rx) || !Js.IsFinite(ry)) return;
         rx = Math.Abs(rx); ry = Math.Abs(ry);
         double sw = Sweep(a0, a1, ccw);
@@ -235,8 +242,15 @@ public sealed class Ctx
         var (sx, sy) = P(a0);
         if (cur == null) NewSub(sx, sy); else { EnsureOpen(); cur.p.Add(X(sx, sy)); }
         int n = ArcSegs(Math.Max(rx, ry), sw);
-        for (int i = 1; i <= n; i++) { var (px, py) = P(a0 + sw * i / n); cur.p.Add(X(px, py)); }
+        double cs = Math.Cos(sw / n), sn = Math.Sin(sw / n), ct = Math.Cos(a0), st = Math.Sin(a0);
+        for (int i = 1; i <= n; i++)
+        {
+            double nct = ct * cs - st * sn; st = st * cs + ct * sn; ct = nct;
+            double ex = rx * ct, ey = ry * st;
+            cur.p.Add(X(x + cr * ex - sr * ey, y + sr * ex + cr * ey));
+        }
         (ux, uy) = P(a0 + sw); hasPt = true;
+            } finally { if (GfxStats.On) GfxStats.TPath += System.Diagnostics.Stopwatch.GetTimestamp() - __t0; }
     }
     public void arcTo(double x1, double y1, double x2, double y2, double r)
     {
@@ -301,9 +315,22 @@ public sealed class Ctx
     public static Func<Col, Col> Filter;
     public static Col Premul(Col c, double alpha) => Pm(c, alpha);
 
-    /* the triangles of a fill, in device space */
-    readonly List<Vector2> tri = new();
-    void TessFill(bool evenodd, List<Sub> list, List<Vector2> outTri, bool opaque = false)
+    /* A SHAPE'S TRIANGLES, in device space, sharing their corners: a fill's polygon
+       is its points and a fan of indices, a stroke's strip shares the corners its
+       quads and joins meet at. The GPU gets each corner once. */
+    sealed class Mesh
+    {
+        public readonly List<Vector2> v = new(); public readonly List<int> i = new();
+        public void Clear() { v.Clear(); i.Clear(); }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)] public int P(Vector2 p) { v.Add(p); return v.Count - 1; }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)] public void T(int a, int b, int c) { i.Add(a); i.Add(b); i.Add(c); }
+        public void Tri(Vector2 a, Vector2 b, Vector2 c) { int k = v.Count; v.Add(a); v.Add(b); v.Add(c); i.Add(k); i.Add(k + 1); i.Add(k + 2); }
+        public void Quad(Vector2 a, Vector2 b, Vector2 c, Vector2 d) { int k = v.Count; v.Add(a); v.Add(b); v.Add(c); v.Add(d); i.Add(k); i.Add(k + 1); i.Add(k + 2); i.Add(k); i.Add(k + 2); i.Add(k + 3); }
+        public void Fan(List<Vector2> poly, int n) { int k = v.Count; for (int q = 0; q < n; q++) v.Add(poly[q]); for (int q = 1; q < n - 1; q++) { i.Add(k); i.Add(k + q); i.Add(k + q + 1); } }
+        public void Rollback(int vc, int ic) { v.RemoveRange(vc, v.Count - vc); i.RemoveRange(ic, i.Count - ic); }
+    }
+    readonly Mesh mesh = new(), shMesh = new();
+    void TessFill(bool evenodd, List<Sub> list, Mesh outTri, bool opaque = false)
     {
         outTri.Clear();
         int live = 0; Sub only = null;
@@ -314,7 +341,7 @@ public sealed class Ctx
             GfxStats.FillsFan++;
             var p = only.p; int n = p.Count;
             if (n > 2 && p[n - 1] == p[0]) n--;
-            for (int i = 1; i < n - 1; i++) { outTri.Add(p[0]); outTri.Add(p[i]); outTri.Add(p[i + 1]); }
+            outTri.Fan(p, n);
             return;
         }
         /* A SINGLE OUTLINE that is merely concave -- a horn, a helmet, a hand -- is cut
@@ -324,7 +351,7 @@ public sealed class Ctx
         if (live == 1 && !evenodd && only.p.Count <= 256 && EarClip(only.p, outTri)) { GfxStats.FillsEar++; return; }
         outTri.Clear();
         GfxStats.FillsTess++;
-        long __tt = System.Diagnostics.Stopwatch.GetTimestamp();
+        long __tt = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         try {
         var tess = new Tess();
         foreach (var sb in list)
@@ -336,13 +363,14 @@ public sealed class Ctx
         }
         try { tess.Tessellate(evenodd ? WindingRule.EvenOdd : WindingRule.NonZero, ElementType.Polygons, 3); }
         catch { return; }
-        for (int i = 0; i < tess.ElementCount * 3; i++)
+        for (int i = 0; i < tess.VertexCount; i++) { var v = tess.Vertices[i].Position; outTri.v.Add(new Vector2(v.X, v.Y)); }
+        for (int i = 0; i + 2 < tess.ElementCount * 3; i += 3)
         {
-            int k = tess.Elements[i]; if (k < 0) continue;
-            var v = tess.Vertices[k].Position; outTri.Add(new Vector2(v.X, v.Y));
+            int a = tess.Elements[i], b = tess.Elements[i + 1], c = tess.Elements[i + 2];
+            if (a < 0 || b < 0 || c < 0) continue;
+            outTri.T(a, b, c);
         }
-        if (outTri.Count % 3 != 0) outTri.RemoveRange(outTri.Count - outTri.Count % 3, outTri.Count % 3);
-        } finally { GfxStats.TTess += System.Diagnostics.Stopwatch.GetTimestamp() - __tt; }
+        } finally { if (GfxStats.On) GfxStats.TTess += System.Diagnostics.Stopwatch.GetTimestamp() - __tt; }
     }
     /* TWO LOOPS IN ONE OUTLINE: arc(); arc(); fill() -- a pair of eyes. Each circle
        closes on its own start and the line between them is walked there and back,
@@ -350,7 +378,7 @@ public sealed class Ctx
        exact when they do not overlap, or overlap painted opaque and wound the
        same way (nonzero would fill the overlap once either way). */
     readonly List<Vector2> la = new(), lb = new();
-    bool TwoLoops(List<Vector2> p, List<Vector2> outTri, bool opaque)
+    bool TwoLoops(List<Vector2> p, Mesh outTri, bool opaque)
     {
         int n = p.Count, k = -1;
         if (n < 8) return false;
@@ -364,11 +392,11 @@ public sealed class Ctx
         var A = Box(la); var B = Box(lb);
         bool apart = A.x1 < B.x0 || B.x1 < A.x0 || A.y1 < B.y0 || B.y1 < A.y0;
         if (!apart && !(opaque && Area(la) * Area(lb) > 0)) return false;
-        int start = outTri.Count;
+        int sv = outTri.v.Count, si = outTri.i.Count;
         foreach (var l in new[] { la, lb })
         {
-            if (Convex(l)) { for (int i = 1; i < l.Count - 1; i++) { outTri.Add(l[0]); outTri.Add(l[i]); outTri.Add(l[i + 1]); } }
-            else if (!EarClip(l, outTri)) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+            if (Convex(l)) outTri.Fan(l, l.Count);
+            else if (!EarClip(l, outTri)) { outTri.Rollback(sv, si); return false; }
         }
         return true;
     }
@@ -377,7 +405,7 @@ public sealed class Ctx
        up to the polygon's own area: a crossing outline, which nonzero filling
        must handle as the tessellator does. */
     readonly List<Vector2> ec = new(); readonly List<int> ei = new();
-    bool EarClip(List<Vector2> src, List<Vector2> outTri)
+    bool EarClip(List<Vector2> src, Mesh outTri)
     {
         ec.Clear();
         foreach (var v in src) if (ec.Count == 0 || Vector2.DistanceSquared(ec[^1], v) > 1e-8f) ec.Add(v);
@@ -390,11 +418,12 @@ public sealed class Ctx
         if (Math.Abs(area) < 1e-6) return false;
         float orient = area > 0 ? 1 : -1;
         ei.Clear(); for (int i = 0; i < n; i++) ei.Add(i);
-        int start = outTri.Count; double got = 0;
+        int sv = outTri.v.Count, si = outTri.i.Count; double got = 0;
+        foreach (var v in ec) outTri.v.Add(v);
         int guard = 0, k = 0;
         while (ei.Count > 3)
         {
-            if (guard++ > ei.Count * 2 + 8) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+            if (guard++ > ei.Count * 2 + 8) { outTri.Rollback(sv, si); return false; }
             int m = ei.Count;
             int ip = ei[(k + m - 1) % m], ic = ei[k % m], inx = ei[(k + 1) % m];
             Vector2 a = ec[ip], b = ec[ic], c = ec[inx];
@@ -418,16 +447,16 @@ public sealed class Ctx
                 if (d1 >= -1e-7f && d2 >= -1e-7f && d3 >= -1e-7f) ear = false;
             }
             if (!ear) { k = (k + 1) % m; continue; }
-            outTri.Add(a); outTri.Add(b); outTri.Add(c); got += cr * 0.5;
+            outTri.T(sv + ip, sv + ic, sv + inx); got += cr * 0.5;
             ei.RemoveAt(k % m); guard = 0;
             k = k % ei.Count;
         }
         {
             Vector2 a = ec[ei[0]], b = ec[ei[1]], c = ec[ei[2]];
             float cr = ((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)) * orient;
-            if (cr > 1e-7f) { outTri.Add(a); outTri.Add(b); outTri.Add(c); got += cr * 0.5; }
+            if (cr > 1e-7f) { outTri.T(sv + ei[0], sv + ei[1], sv + ei[2]); got += cr * 0.5; }
         }
-        if (Math.Abs(got - Math.Abs(area)) > Math.Abs(area) * 0.002 + 0.01) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+        if (Math.Abs(got - Math.Abs(area)) > Math.Abs(area) * 0.002 + 0.01) { outTri.Rollback(sv, si); return false; }
         return true;
     }
     /* CONVEX: every turn the same way, and the edges sweep round once -- their
@@ -459,49 +488,59 @@ public sealed class Ctx
         return xFlips <= 2 && yFlips <= 2;
     }
     /* send triangles with a paint */
-    void Emit(List<Vector2> t, Paint paint, double extraAlpha = 1)
+    void Emit(Mesh m, Paint paint, double extraAlpha = 1)
     {
-        if (t.Count == 0) return;
+        if (m.i.Count == 0) return;
         var tg = Tgt;
+        var mv = m.v; var mi = m.i;
         if (paint.grad != null)
         {
             if (!Inv(out var ia, out var ib, out var ic, out var id, out var ie, out var iff)) return;
             Gpu.UseGrad(tg, s.op, Clip, paint.grad);
             float ga = (float)(s.alpha * extraAlpha);
-            for (int i = 0; i < t.Count; i += 3)
+            if (Gpu.Begin(mv.Count, mi.Count, out int b0))
+            {
+                ulong gc = Gpu.Pack(0, 0, 0, ga);
+                foreach (var v in mv) Gpu.VX(v.X, v.Y, (float)(ia * v.X + ic * v.Y + ie), (float)(ib * v.X + id * v.Y + iff), gc);
+                foreach (var k in mi) Gpu.I(b0 + k);
+                return;
+            }
+            for (int i = 0; i + 2 < mi.Count; i += 3)
             {
                 Gpu.Need(3);
-                for (int k = 0; k < 3; k++)
-                {
-                    var v = t[i + k];
-                    float uxu = (float)(ia * v.X + ic * v.Y + ie), uyu = (float)(ib * v.X + id * v.Y + iff);
-                    Gpu.V(v.X, v.Y, uxu, uyu, 0, 0, 0, ga);
-                }
+                for (int q = 0; q < 3; q++) { var v = mv[mi[i + q]]; Gpu.V(v.X, v.Y, (float)(ia * v.X + ic * v.Y + ie), (float)(ib * v.X + id * v.Y + iff), 0, 0, 0, ga); }
             }
             return;
         }
         var c = Pm(paint.col, s.alpha * extraAlpha);
         if (c.a <= 0 && s.op == BlendOp.SourceOver) return;
         Gpu.Use(tg, s.op, Clip, Gpu.WhiteTex);
-        for (int i = 0; i < t.Count; i += 3)
+        if (Gpu.Begin(mv.Count, mi.Count, out int b))
+        {
+            ulong pc = Gpu.Pack(c.r, c.g, c.b, c.a);
+            foreach (var v in mv) Gpu.VX(v.X, v.Y, 0.5f, 0.5f, pc);
+            foreach (var k in mi) Gpu.I(b + k);
+            return;
+        }
+        for (int i = 0; i + 2 < mi.Count; i += 3)
         {
             Gpu.Need(3);
-            for (int k = 0; k < 3; k++) { var v = t[i + k]; Gpu.V(v.X, v.Y, 0.5f, 0.5f, c.r, c.g, c.b, c.a); }
+            for (int q = 0; q < 3; q++) { var v = mv[mi[i + q]]; Gpu.V(v.X, v.Y, 0.5f, 0.5f, c.r, c.g, c.b, c.a); }
         }
     }
-    void Shadow(List<Vector2> t)
+    void Shadow(Mesh t)
     {
-        if (s.shCol.a <= 0 || (s.shBlur <= 0 && s.shX == 0 && s.shY == 0) || t.Count == 0) return;
+        if (s.shCol.a <= 0 || (s.shBlur <= 0 && s.shX == 0 && s.shY == 0) || t.i.Count == 0) return;
         GfxStats.Shadows++;
         /* a blur, roughly: the shape again in soft rings around the offset */
         double blur = s.shBlur, ox = s.shX, oy = s.shY;
-        var copy = new List<Vector2>(t.Count);
+        var copy = shMesh;
         int rings = blur > 0 ? 3 : 0, dirs = 8;
         double total = 1 + rings * dirs;
         var col = s.shCol;
         void Pass(double dx, double dy, double w)
         {
-            copy.Clear(); foreach (var v in t) copy.Add(new Vector2((float)(v.X + dx), (float)(v.Y + dy)));
+            copy.Clear(); foreach (var v in t.v) copy.v.Add(new Vector2((float)(v.X + dx), (float)(v.Y + dy))); copy.i.AddRange(t.i);
             Emit(copy, col.WithAlpha(col.a), w);
         }
         Pass(ox, oy, 1.0 / total * 2.2);
@@ -514,14 +553,14 @@ public sealed class Ctx
     }
     public void fill(string rule = "nonzero")
     {
-        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0, __g0 = Gpu.GlTicks;
         try {
         GfxStats.Fills++; if (s.fill.grad != null) GfxStats.GradFills++;
         bool opaque = s.fill.grad == null && s.fill.col.a * s.alpha >= 0.999 && s.op == BlendOp.SourceOver && Filter == null;
-        TessFill(rule == "evenodd", subs, tri, opaque);
-        Shadow(tri);
-        Emit(tri, s.fill);
-            } finally { GfxStats.TFill += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
+        TessFill(rule == "evenodd", subs, mesh, opaque);
+        Shadow(mesh);
+        Emit(mesh, s.fill);
+            } finally { if (GfxStats.On) GfxStats.TFill += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void fill(Path2D p, string rule = "nonzero")
     {
@@ -532,13 +571,13 @@ public sealed class Ctx
     }
     public void stroke()
     {
-        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0, __g0 = Gpu.GlTicks;
         try {
         GfxStats.Strokes++;
-        BuildStroke(subs, tri);
-        Shadow(tri);
-        Emit(tri, s.stroke, strokeAlphaK);
-            } finally { GfxStats.TStroke += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
+        BuildStroke(subs, mesh);
+        Shadow(mesh);
+        Emit(mesh, s.stroke, strokeAlphaK);
+            } finally { if (GfxStats.On) GfxStats.TStroke += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void stroke(Path2D p)
     {
@@ -550,11 +589,10 @@ public sealed class Ctx
     public void fillRect(double x, double y, double w, double h)
     {
         if (!Js.IsFinite(x + y + w + h)) return;
-        tri.Clear();
-        var a = X(x, y); var b = X(x + w, y); var c = X(x + w, y + h); var d = X(x, y + h);
-        tri.Add(a); tri.Add(b); tri.Add(c); tri.Add(a); tri.Add(c); tri.Add(d);
-        Shadow(tri);
-        Emit(tri, s.fill);
+        mesh.Clear();
+        mesh.Quad(X(x, y), X(x + w, y), X(x + w, y + h), X(x, y + h));
+        Shadow(mesh);
+        Emit(mesh, s.fill);
     }
     public void strokeRect(double x, double y, double w, double h)
     {
@@ -568,32 +606,37 @@ public sealed class Ctx
     {
         var op = s.op; var al = s.alpha;
         s.op = BlendOp.DestinationOut; s.alpha = 1;
-        tri.Clear();
-        var a = X(x, y); var b = X(x + w, y); var c = X(x + w, y + h); var d = X(x, y + h);
-        tri.Add(a); tri.Add(b); tri.Add(c); tri.Add(a); tri.Add(c); tri.Add(d);
-        Emit(tri, new Col(0, 0, 0, 1));
+        mesh.Clear();
+        mesh.Quad(X(x, y), X(x + w, y), X(x + w, y + h), X(x, y + h));
+        Emit(mesh, new Col(0, 0, 0, 1));
         s.op = op; s.alpha = al;
     }
     /* clip: the path is drawn into a mask the size of the target; later draws
        are multiplied by it (an intersection with any clip already in force) */
     public void clip(string rule = "nonzero")
     {
-        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0, __g0 = Gpu.GlTicks;
         try {
         GfxStats.Clips++;
         var tg = Tgt;
         var mask = MaskPool.Get(tg.w, tg.h);
-        TessFill(rule == "evenodd", subs, tri, true);
+        TessFill(rule == "evenodd", subs, mesh, true);
         Gpu.Use(mask, BlendOp.SourceOver, s.clip, Gpu.WhiteTex);
-        foreach (var v in tri) { }
-        for (int i = 0; i < tri.Count; i += 3)
+        if (Gpu.Begin(mesh.v.Count, mesh.i.Count, out int mb))
         {
-            Gpu.Need(3);
-            for (int k = 0; k < 3; k++) { var v = tri[i + k]; Gpu.V(v.X, v.Y, 0.5f, 0.5f, 1, 1, 1, 1); }
+            ulong w1 = Gpu.Pack(1, 1, 1, 1);
+            foreach (var v in mesh.v) Gpu.VX(v.X, v.Y, 0.5f, 0.5f, w1);
+            foreach (var k in mesh.i) Gpu.I(mb + k);
         }
+        else
+            for (int i = 0; i + 2 < mesh.i.Count; i += 3)
+            {
+                Gpu.Need(3);
+                for (int k = 0; k < 3; k++) { var v = mesh.v[mesh.i[i + k]]; Gpu.V(v.X, v.Y, 0.5f, 0.5f, 1, 1, 1, 1); }
+            }
         Gpu.Flush();
         s.clip = mask;
-            } finally { GfxStats.TClip += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
+            } finally { if (GfxStats.On) GfxStats.TClip += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void clip(Path2D p, string rule = "nonzero")
     {
@@ -605,7 +648,7 @@ public sealed class Ctx
 
     /* ================= strokes ================= */
     readonly List<Vector2> pl = new();
-    void BuildStroke(List<Sub> list, List<Vector2> outTri)
+    void BuildStroke(List<Sub> list, Mesh outTri)
     {
         outTri.Clear();
         double sc = Scale;
@@ -625,7 +668,7 @@ public sealed class Ctx
             {
                 /* a dot: only round and square caps draw anything */
                 if (s.cap == Cap.Round) Disc(pl[0], hw, outTri);
-                else if (s.cap == Cap.Square) { var p = pl[0]; Quad(p + new Vector2(-hw, -hw), p + new Vector2(hw, -hw), p + new Vector2(hw, hw), p + new Vector2(-hw, hw), outTri); }
+                else if (s.cap == Cap.Square) { var p = pl[0]; outTri.Quad(p + new Vector2(-hw, -hw), p + new Vector2(hw, -hw), p + new Vector2(hw, hw), p + new Vector2(-hw, hw)); }
                 continue;
             }
             if (s.dash != null) { Dashed(pl, closed, hw, sc, outTri); continue; }
@@ -633,7 +676,7 @@ public sealed class Ctx
         }
     }
     double strokeAlphaK = 1;
-    void Dashed(List<Vector2> pts, bool closed, float hw, double sc, List<Vector2> outTri)
+    void Dashed(List<Vector2> pts, bool closed, float hw, double sc, Mesh outTri)
     {
         var all = new List<Vector2>(pts); if (closed) all.Add(pts[0]);
         double[] dash = s.dash; int di = 0; double pos = (s.dashOff * sc) % dash.Sum(x => x * sc); if (pos < 0) pos += dash.Sum(x => x * sc);
@@ -659,44 +702,105 @@ public sealed class Ctx
         }
         if (on && piece.Count > 1) Poly(piece, false, hw, outTri);
     }
-    static void Quad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, List<Vector2> o) { o.Add(a); o.Add(b); o.Add(c); o.Add(a); o.Add(c); o.Add(d); }
-    static void Disc(Vector2 c, float r, List<Vector2> o)
+    static void Disc(Vector2 c, float r, Mesh o)
     {
         int n = Math.Clamp((int)(r * 1.2f) + 8, 8, 48);
-        for (int i = 0; i < n; i++)
-        {
-            double a0 = i * Math.PI * 2 / n, a1 = (i + 1) * Math.PI * 2 / n;
-            o.Add(c); o.Add(c + new Vector2((float)Math.Cos(a0) * r, (float)Math.Sin(a0) * r)); o.Add(c + new Vector2((float)Math.Cos(a1) * r, (float)Math.Sin(a1) * r));
-        }
+        int k0 = o.P(c), k1 = o.v.Count;
+        for (int i = 0; i < n; i++) { double a0 = i * Math.PI * 2 / n; o.v.Add(c + new Vector2((float)Math.Cos(a0) * r, (float)Math.Sin(a0) * r)); }
+        for (int i = 0; i < n; i++) o.T(k0, k1 + i, k1 + (i + 1) % n);
     }
-    static void Fan(Vector2 c, Vector2 from, Vector2 to, float r, bool cw, List<Vector2> o)
+    static void Fan(Vector2 c, Vector2 from, Vector2 to, float r, bool cw, Mesh o)
     {
         /* the wedge between two radii of length r: one atan2 for its angle, then the
            steps by rotation; a wedge too small to need a second step is one triangle */
         var u0 = from - c; var u1 = to - c;
         double rr = (double)r * r; if (rr < 1e-12) return;
         double dot = (u0.X * (double)u1.X + u0.Y * (double)u1.Y) / rr, crs = (u0.X * (double)u1.Y - u0.Y * (double)u1.X) / rr;
-        if (dot > 0 && Math.Abs(crs) * 1.5708 * r < 2) { o.Add(c); o.Add(from); o.Add(to); return; }
+        if (dot > 0 && Math.Abs(crs) * 1.5708 * r < 2) { o.Tri(c, from, to); return; }
         double d = Math.Atan2(crs, dot);
         int n = Math.Clamp((int)(Math.Abs(d) * r / 2) + 1, 1, 32);
-        if (n == 1) { o.Add(c); o.Add(from); o.Add(to); return; }
+        if (n == 1) { o.Tri(c, from, to); return; }
         double cs = Math.Cos(d / n), sn = Math.Sin(d / n), vx = u0.X, vy = u0.Y;
-        var prev = from;
+        int kc = o.P(c), kp = o.P(from);
         for (int i = 1; i <= n; i++)
         {
             double nx = vx * cs - vy * sn, ny = vx * sn + vy * cs; vx = nx; vy = ny;
-            var p = i == n ? to : c + new Vector2((float)vx, (float)vy);
-            o.Add(c); o.Add(prev); o.Add(p); prev = p;
+            int kn = o.P(i == n ? to : c + new Vector2((float)vx, (float)vy));
+            o.T(kc, kp, kn); kp = kn;
         }
+    }
+    /* A GENTLE OUTLINE AS ONE STRIP: when every corner turns less than about 45
+       degrees (a circle, an ellipse, a rounded box), the stroke's two edges are the
+       offset lines meeting at their miter points, and the corners each quad and its
+       joins shared become one pair of strip points per vertex. Against a round join
+       the outer edge is off by under a tenth of the line's width; nothing in the
+       strip overlaps, so a translucent outline no longer darkens at every joint. */
+    bool Strip(List<Vector2> p, bool closed, float hw, Mesh o)
+    {
+        int n = p.Count, segs = closed ? n : n - 1;
+        if (n < 3 || segs < 2) return false;
+        for (int i = 0; i < segs; i++)
+        {
+            var d = p[i + 1 < n ? i + 1 : 0] - p[i]; float l = d.Length();
+            if (l < 1e-4f) return false;
+            dirBuf[i] = d / l;
+        }
+        int j0 = closed ? 0 : 1, j1 = closed ? n : n - 1;
+        for (int i = j0; i < j1; i++)
+        {
+            var d0 = dirBuf[i - 1 < 0 ? segs - 1 : i - 1]; var d1 = dirBuf[i < segs ? i : 0];
+            if (d0.X * d1.X + d0.Y * d1.Y < 0.71f) return false;
+        }
+        int b = o.v.Count;
+        for (int i = 0; i < n; i++)
+        {
+            Vector2 c = p[i], off;
+            if (!closed && i == 0)
+            {
+                var d = dirBuf[0]; off = new Vector2(-d.Y, d.X) * hw;
+                if (s.cap == Cap.Square) c -= d * hw;
+            }
+            else if (!closed && i == n - 1)
+            {
+                var d = dirBuf[segs - 1]; off = new Vector2(-d.Y, d.X) * hw;
+                if (s.cap == Cap.Square) c += d * hw;
+            }
+            else
+            {
+                var d0 = dirBuf[i - 1 < 0 ? segs - 1 : i - 1]; var d1 = dirBuf[i < segs ? i : 0];
+                var n0 = new Vector2(-d0.Y, d0.X); var n1 = new Vector2(-d1.Y, d1.X);
+                var m = n0 + n1; float ml = m.Length();
+                if (ml < 1e-4f) return false;
+                m /= ml;
+                float cosHalf = m.X * n1.X + m.Y * n1.Y;
+                off = m * (hw / Math.Max(cosHalf, 0.5f));
+            }
+            o.v.Add(c + off); o.v.Add(c - off);
+        }
+        for (int i = 0; i < segs; i++)
+        {
+            int a = b + 2 * i, q = b + 2 * (i + 1 < n ? i + 1 : 0);
+            o.T(a, q, q + 1); o.T(a, q + 1, a + 1);
+        }
+        if (!closed && s.cap == Cap.Round)
+            for (int e = 0; e < 2; e++)
+            {
+                var c = e == 0 ? p[0] : p[n - 1]; var d = e == 0 ? -dirBuf[0] : dirBuf[segs - 1];
+                var nn = new Vector2(-d.Y, d.X) * hw;
+                Fan(c, c + nn, c + d * hw, hw, false, o);
+                Fan(c, c + d * hw, c - nn, hw, false, o);
+            }
+        return true;
     }
     /* each segment's unit direction, worked out once for its quad and both joins */
     Vector2[] dirBuf = new Vector2[64]; bool[] dirOk = new bool[64];
-    void Poly(List<Vector2> p, bool closed, float hw, List<Vector2> o)
+    void Poly(List<Vector2> p, bool closed, float hw, Mesh o)
     {
         int n = p.Count;
         int segs = closed ? n : n - 1;
         if (segs < 1) return;
         if (dirBuf.Length < segs) { dirBuf = new Vector2[segs * 2]; dirOk = new bool[segs * 2]; }
+        if (Strip(p, closed, hw, o)) return;
         /* each segment as a quad */
         for (int i = 0; i < segs; i++)
         {
@@ -712,7 +816,7 @@ public sealed class Ctx
                 if (i == 0) ea -= ext;
                 if (i == segs - 1) eb += ext;
             }
-            Quad(ea + nn, eb + nn, eb - nn, ea - nn, o);
+            o.Quad(ea + nn, eb + nn, eb - nn, ea - nn);
         }
         /* joins: the wedge on the outer side of each corner (segment i-1 into segment i) */
         int j0 = closed ? 0 : 1, j1 = closed ? n : n - 1;
@@ -729,7 +833,7 @@ public sealed class Ctx
             if (cross > 0) { n0 = -n0; n1 = -n1; }
             var o0 = c + n0; var o1 = c + n1;
             if (s.join == Join.Round) { Fan(c, o0, o1, hw, cross > 0, o); continue; }
-            o.Add(c); o.Add(o0); o.Add(o1);
+            o.Tri(c, o0, o1);
             if (s.join == Join.Miter)
             {
                 var mid = Vector2.Normalize(n0 + n1);
@@ -737,7 +841,7 @@ public sealed class Ctx
                 if (cosHalf > 1e-4f)
                 {
                     float ml = hw / cosHalf;
-                    if (ml / hw <= s.miter) { var mp = c + mid * ml; o.Add(o0); o.Add(mp); o.Add(o1); }
+                    if (ml / hw <= s.miter) { var mp = c + mid * ml; o.Tri(o0, mp, o1); }
                 }
             }
         }
@@ -784,7 +888,7 @@ public sealed class Ctx
     public void strokeText(string t, double x, double y, double maxWidth = 0) => DrawText(t, x, y, maxWidth, true);
     unsafe void DrawText(string t, double x, double y, double maxWidth, bool stroke)
     {
-        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0, __g0 = Gpu.GlTicks;
         try {
         GfxStats.Texts++; GfxStats.Glyphs += t?.Length ?? 0;
         if (string.IsNullOrEmpty(t) || !Js.IsFinite(x) || !Js.IsFinite(y)) return;
@@ -817,6 +921,7 @@ public sealed class Ctx
             col = col.WithAlpha(1);
         }
         var pm = Pm(col, alpha);
+        ulong pmc = Gpu.Pack(pm.r, pm.g, pm.b, pm.a);
         foreach (var (odx, ody) in offs)
         {
             double pen = 0;
@@ -837,9 +942,9 @@ public sealed class Ctx
                     float tw = at.font.Texture.Width, th = at.font.Texture.Height;
                     float u0 = rc.X / tw, v0 = rc.Y / th, u1 = (rc.X + rc.Width) / tw, v1 = (rc.Y + rc.Height) / th;
                     Gpu.Use(Tgt, s.op, Clip, at.tex);
-                    Gpu.Need(6);
-                    Gpu.V(p0.X, p0.Y, u0, v0, pm.r, pm.g, pm.b, pm.a); Gpu.V(p1.X, p1.Y, u1, v0, pm.r, pm.g, pm.b, pm.a); Gpu.V(p2.X, p2.Y, u1, v1, pm.r, pm.g, pm.b, pm.a);
-                    Gpu.V(p0.X, p0.Y, u0, v0, pm.r, pm.g, pm.b, pm.a); Gpu.V(p2.X, p2.Y, u1, v1, pm.r, pm.g, pm.b, pm.a); Gpu.V(p3.X, p3.Y, u0, v1, pm.r, pm.g, pm.b, pm.a);
+                    Gpu.Begin(4, 6, out int gb);
+                    Gpu.VX(p0.X, p0.Y, u0, v0, pmc); Gpu.VX(p1.X, p1.Y, u1, v0, pmc); Gpu.VX(p2.X, p2.Y, u1, v1, pmc); Gpu.VX(p3.X, p3.Y, u0, v1, pmc);
+                    Gpu.I(gb); Gpu.I(gb + 1); Gpu.I(gb + 2); Gpu.I(gb); Gpu.I(gb + 2); Gpu.I(gb + 3);
                 }
                 /* advance at the reference size so measureText and drawing agree */
                 pen += s.ls;
@@ -850,7 +955,7 @@ public sealed class Ctx
                 else pen += adv / sc;
             }
         }
-            } finally { GfxStats.TText += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
+            } finally { if (GfxStats.On) GfxStats.TText += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
 
     /* ================= images ================= */
@@ -858,7 +963,7 @@ public sealed class Ctx
     public void drawImage(OffCanvas img, double dx, double dy, double dw, double dh) => drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
     public void drawImage(OffCanvas img, double sx, double sy, double sw, double sh, double dx, double dy, double dw, double dh)
     {
-        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        long __t0 = GfxStats.On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0, __g0 = Gpu.GlTicks;
         try {
         if (img == null) return;
         GfxStats.Images++;
@@ -872,10 +977,11 @@ public sealed class Ctx
         float a = (float)s.alpha;
         Gpu.Use(Tgt, s.op, Clip, T.tex);
         Gpu.Filter(T, s.smooth);
-        Gpu.Need(6);
-        Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p1.X, p1.Y, u1, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a);
-        Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a); Gpu.V(p3.X, p3.Y, u0, v1, a, a, a, a);
-            } finally { GfxStats.TImage += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
+        Gpu.Begin(4, 6, out int ib0);
+        ulong ac = Gpu.Pack(a, a, a, a);
+        Gpu.VX(p0.X, p0.Y, u0, v0, ac); Gpu.VX(p1.X, p1.Y, u1, v0, ac); Gpu.VX(p2.X, p2.Y, u1, v1, ac); Gpu.VX(p3.X, p3.Y, u0, v1, ac);
+        Gpu.I(ib0); Gpu.I(ib0 + 1); Gpu.I(ib0 + 2); Gpu.I(ib0); Gpu.I(ib0 + 2); Gpu.I(ib0 + 3);
+            } finally { if (GfxStats.On) GfxStats.TImage += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
 
     /* ================= gradients ================= */

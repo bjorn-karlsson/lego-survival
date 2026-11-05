@@ -197,7 +197,7 @@ public static class AutoTest
                             $"picks={G.pendingPicks?.Count} view={G.cw:0}x{G.ch:0}@{G.dpr:0.##} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}");
                         break;
 
-                    case "gfx": Console.WriteLine($"[gfx] frame {frame} enemies={G.enemies.Count} calls={App.LastCalls} tris={App.LastTris} :: {App.LastGfx}"); break;
+                    case "gfx": Console.WriteLine($"[gfx] frame {frame} enemies={G.enemies.Count} calls={App.LastCalls} tris={App.LastTris} verts={App.LastVerts} ({(App.LastVerts * 24 + App.LastTris * 6) / 1048576.0:0.00} MB to the GPU) :: {App.LastGfx}"); break;
                     case "atlas": Console.WriteLine($"[atlas] frame {frame}: {Fonts.AtlasBuilds} glyph atlases built, {Fonts.AtlasTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms in all"); break;
                     case "quit": return false;
                 }
