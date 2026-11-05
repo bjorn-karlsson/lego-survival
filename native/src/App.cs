@@ -99,6 +99,7 @@ public static class App
     {
         /* --det: the same random numbers and the same clock every run (see G.FakeClock) */
         if (Program.Has("--det")) { Js.Seed(20261105); G.FakeClock = 0; }
+        double t0Boot = G.perfNow();
         Raylib.SetTraceLogLevel(TraceLogLevel.Error);
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint);
         int iw = int.Parse(Program.Opt("--w") ?? "1280"), ih = int.Parse(Program.Opt("--h") ?? "800");
@@ -129,9 +130,11 @@ public static class App
         WorldDensity = sc;
         G.ctx = new Ctx(null);
         G.resize(RW / sc, RH / sc, WorldDensity);
+        Console.Error.WriteLine($"window + fonts + page: {G.perfNow() - t0Boot:0} ms");
         Dom.FieldEl = Dom.document.getElementById("game");
         G.fieldDone = FieldDone;
         G.boot();
+        Console.Error.WriteLine($"ready: {G.perfNow() - t0Boot:0} ms after start");
         ApplySize();
         ApplyVsync();
         settingsDirty = false;

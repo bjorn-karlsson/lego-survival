@@ -130,7 +130,8 @@ dotnet bin/Release/net8.0/Brickblade.dll               # the game
 dotnet bin/Release/net8.0/Brickblade.dll --shimtest --out shim.png
 python3 tools/coverage.py --missing                    # anything not carried over
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o out/win
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+  -p:PublishReadyToRun=true -o out/win
 ```
 
 In a container without a display: `xvfb-run -a dotnet …` (Mesa renders in software, so the
