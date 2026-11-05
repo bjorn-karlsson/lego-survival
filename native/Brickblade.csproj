@@ -17,7 +17,7 @@
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <!-- the port keeps the JS names and shapes; these warnings are about that, not bugs -->
     <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS8981;CS1717;CS0108;CS0659;CS0661</NoWarn>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>assets/brickblade.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Raylib-cs" Version="8.1.0" />

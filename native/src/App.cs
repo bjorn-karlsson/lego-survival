@@ -105,7 +105,7 @@ public static class App
         int iw = int.Parse(Program.Opt("--w") ?? "1280"), ih = int.Parse(Program.Opt("--h") ?? "800");
         Raylib.InitWindow(iw, ih, "BRICKBLADE — Brick-Built ARPG");
         Raylib.SetExitKey(KeyboardKey.Null);              /* Esc is the game's */
-        if (Program.Opt("--w") == null)
+        if (Program.Opt("--w") == null && !RestoreWindow())
         {
             /* most of the screen, centred: the size a browser window would have */
             int mon = Raylib.GetCurrentMonitor();
@@ -123,6 +123,8 @@ public static class App
         Fonts.Init();
         screen = new Ctx(null);
 
+        if (Program.Opt("--make-icon") is string iconOut) { MakeIcon(iconOut); Raylib.CloseWindow(); return 0; }
+        SetIcon();
         var (css, body) = Page();
         double sc = DpiScale();
         Dom.Init(css, body);
@@ -160,6 +162,7 @@ public static class App
             bool foc = Raylib.IsWindowFocused();
             if (foc != Focused) { Focused = foc; if (!foc) { Dom.Blur(); } }
             bool minimised = Raylib.IsWindowMinimized();
+            TrackWindow(minimised);
 
             /* ---- input, into the page and on to the game ---- */
             if (!minimised) Input();
@@ -215,6 +218,7 @@ public static class App
             }
             else { slowT = 0; slowFrames = 0; slowAcc = 0; }
         }
+        if (Program.Opt("--w") == null) SaveWindow();
         SoundOut.Close();
         Raylib.CloseWindow();
         return 0;
@@ -256,6 +260,52 @@ public static class App
         /* the next frame's world goes back into its canvas */
         fieldOnScreen = false;
         Ctx.MainTarget = world?.T;
+    }
+
+    /* ---------------------------------------------------------------- the icon */
+    /* a red 2x2 brick in the game's own stud style, drawn by the game's own
+       drawing (--make-icon FILE writes it; assets/icon.png is that picture) */
+    static void MakeIcon(string path)
+    {
+        const int S = 1024;               /* drawn at 4x; the icon file is made from it scaled down, smooth */
+        var cv = new OffCanvas { width = S, height = S };
+        var g = cv.getContext("2d"); g.Reset();
+        Gpu.Clear(cv.T);
+        g.scale(4, 4);
+        Col red = G.PAL.red;
+        g.fillStyle = G.sh(red, -0.35); G.roundRect(g, 18, 30, 220, 212, 34); g.fill();
+        g.fillStyle = red; G.roundRect(g, 18, 18, 220, 206, 34); g.fill();
+        g.strokeStyle = "rgba(0,0,0,0.22)"; g.lineWidth = 6; g.stroke();
+        g.fillStyle = "rgba(255,255,255,0.10)"; G.roundRect(g, 30, 28, 196, 70, 26); g.fill();
+        foreach (var (x, y) in new[] { (78.0, 78.0), (178.0, 78.0), (78.0, 172.0), (178.0, 172.0) })
+        {
+            g.save(); g.translate(x, y); g.scale(3.4, 3.4); G.drawStudG(g, 0, 0, 11, red); g.restore();
+        }
+        Gpu.Flush();
+        Image img = Raylib.LoadImageFromTexture(cv.T.rt.Texture);
+        Raylib.ImageFlipVertical(ref img);
+        Raylib.ExportImage(img, path);
+        Raylib.UnloadImage(img);
+    }
+    static unsafe void SetIcon()
+    {
+        try
+        {
+            using var st = Assembly.GetExecutingAssembly().GetManifestResourceStream("icon.png");
+            if (st == null) return;
+            var data = new byte[st.Length]; st.ReadExactly(data);
+            fixed (byte* d = data)
+            {
+                var ext = System.Text.Encoding.ASCII.GetBytes(".png\0");
+                fixed (byte* e = ext)
+                {
+                    Image img = Raylib.LoadImageFromMemory((sbyte*)e, d, data.Length);
+                    Raylib.SetWindowIcon(img);
+                    Raylib.UnloadImage(img);
+                }
+            }
+        }
+        catch { }
     }
 
     /* ---------------------------------------------------------------- input */
@@ -363,6 +413,51 @@ public static class App
     static void ToggleFullscreen()
     {
         Raylib.ToggleBorderlessWindowed();
+    }
+
+    /* ---- THE WINDOW AS YOU LEFT IT: size, place, maximised, fullscreen ---- */
+    const string WIN_KEY = "native_window";
+    static int winX, winY, winW, winH; static bool winKnown;
+    static void TrackWindow(bool minimised)
+    {
+        if (minimised || Raylib.IsWindowMaximized() || Raylib.IsWindowState(ConfigFlags.BorderlessWindowMode)) return;
+        var p = Raylib.GetWindowPosition();
+        winX = (int)p.X; winY = (int)p.Y; winW = Raylib.GetScreenWidth(); winH = Raylib.GetScreenHeight(); winKnown = true;
+    }
+    static void SaveWindow()
+    {
+        try
+        {
+            if (!winKnown) return;
+            bool max = Raylib.IsWindowMaximized(), full = Raylib.IsWindowState(ConfigFlags.BorderlessWindowMode);
+            Store.setItem(WIN_KEY, string.Join(",", winX, winY, winW, winH, max ? 1 : 0, full ? 1 : 0));
+        }
+        catch { }
+    }
+    static bool RestoreWindow()
+    {
+        try
+        {
+            var v = Store.getItem(WIN_KEY)?.Split(',');
+            if (v == null || v.Length < 6) return false;
+            int x = int.Parse(v[0]), y = int.Parse(v[1]), w = int.Parse(v[2]), h = int.Parse(v[3]);
+            if (w < 640 || h < 400) return false;
+            /* only onto a screen that is still there: its middle must be on some monitor */
+            double cx = x + w / 2.0, cy = y + h / 2.0; bool onScreen = false;
+            for (int m = 0; m < Raylib.GetMonitorCount(); m++)
+            {
+                var mp = Raylib.GetMonitorPosition(m); int mw = Raylib.GetMonitorWidth(m), mh = Raylib.GetMonitorHeight(m);
+                if (cx >= mp.X && cx < mp.X + mw && cy >= mp.Y && cy < mp.Y + mh) { onScreen = true; w = Math.Min(w, mw); h = Math.Min(h, mh); break; }
+            }
+            if (!onScreen) return false;
+            Raylib.SetWindowSize(w, h);
+            Raylib.SetWindowPosition(x, y);
+            winX = x; winY = y; winW = w; winH = h; winKnown = true;
+            if (v[4] == "1") Raylib.MaximizeWindow();
+            if (v[5] == "1") Raylib.ToggleBorderlessWindowed();
+            return true;
+        }
+        catch { return false; }
     }
 
     /* ------------------------------------------------- confirm(): a yes/no box */
