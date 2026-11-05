@@ -36,7 +36,7 @@ public static class AutoTest
             l.Add(s.Substring(i + 1));
         }
     }
-    static double px = 400, py = 300;
+    static double px = 400, py = 300, perfT0;
     /* runs before the frame: returns false to quit */
     public static bool Step(int frame, double fps, Action<string> shot)
     {
@@ -177,6 +177,16 @@ public static class AutoTest
                         var (el, hx, hy) = seen[n];
                         Dom.PointerMove(hx, hy, 0); Dom.PointerDown(0); Dom.PointerUp(0); px = hx; py = hy;
                         Console.WriteLine($"[hitclick] {item}@{n} = {el.getAttribute("data-node")} at {hx:0},{hy:0}");
+                        break;
+                    }
+                    case "perf":
+                    {
+                        /* perf -- exact averages since the last perf: frames a second, update, draw (and the
+                           driver's share of it), monsters; then start counting again */
+                        double secs = (G.perfNow() - perfT0) / 1000; int n = Math.Max(1, G.perfN);
+                        if (arg != "reset" && perfT0 > 0)
+                            Console.WriteLine($"C#   fps={G.perfN / secs:0} update={G.perfUpd / n:0.00}ms render={G.perfRen / n:0.00}ms (driver {App.GlMs:0.0}ms) enemies={G.perfEn / n:0}");
+                        G.perfUpd = G.perfRen = G.perfEn = 0; G.perfN = 0; perfT0 = G.perfNow();
                         break;
                     }
                     case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }
