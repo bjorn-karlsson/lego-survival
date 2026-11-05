@@ -28,7 +28,7 @@ Everything is as in the browser version: the title, the two modes, the tree, the
 | **F11** or **Alt+Enter** | fullscreen (borderless) and back |
 | **F3** | frame rate, the field's resolution, and what each frame costs |
 | **OPTIONS → RENDER QUALITY** | FULL, 75%, 50% or AUTO (the default) |
-| **OPTIONS → VSYNC** | on by default; off draws as fast as it can |
+| **OPTIONS → VSYNC** | on by default; off draws up to twice your display's rate (at least 240 a second) |
 
 **If the game is slow**, set RENDER QUALITY to 75% or 50%. The battlefield is then drawn
 with fewer pixels and scaled up; the menus, the HUD and all text stay sharp. AUTO does
@@ -43,6 +43,9 @@ A run link copied in the browser opens here too: start the game with
 
 - `storage.json` — your progress, gear, options (what the browser kept in localStorage;
   the two are separate, so a browser save does not carry over)
+- `storage.json.bak` — the save before the last one. If `storage.json` is ever damaged
+  (a power cut while saving), the game restores this one by itself and keeps the damaged
+  file beside it as `storage.json.unreadable-<date>`
 - `brickblade.log` — what went wrong, if anything did (fresh each start)
 - `crash.log` — written only if the game stops on an error
 
