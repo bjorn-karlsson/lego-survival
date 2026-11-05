@@ -86,29 +86,35 @@ public static partial class G
         if (!SoundOut.Available) return;
         try
         {
-            A.ctx = new AudioContext(SoundOut.Rate);
-            A.master = A.ctx.createGain(); A.master.gain.value = MASTER_GAIN; A.master.persistent = true;
-            A.comp = A.ctx.createDynamicsCompressor();
-            A.comp.threshold.value = -20; A.comp.knee.value = 24;
-            A.comp.ratio.value = 7; A.comp.attack.value = 0.004; A.comp.release.value = 0.16;
-            A.master.connect(A.comp); A.comp.connect(A.ctx.destination);
-            A.sfxLid = A.ctx.createBiquadFilter(); A.sfxLid.persistent = true;
-            A.sfxLid.type = "lowpass"; A.sfxLid.frequency.value = 11000; A.sfxLid.Q.value = 0.4;
-            A.sfxLid.connect(A.master);
-            A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN * A.sfxVol; A.sfx.persistent = true; A.sfx.connect(A.sfxLid);
-            sfxLayerInit();
-            A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN * A.musVol; A.mus.persistent = true; A.mus.connect(A.master);
-            var nb = A.ctx.createBuffer(1, (int)A.ctx.sampleRate, A.ctx.sampleRate);
-            var d = nb.getChannelData(0); for (int i = 0; i < d.Length; i++) d[i] = (float)(Js.R() * 2 - 1);
-            A.noiseBuf = nb;
-            A.delay = A.ctx.createDelay(1); A.delay.delayTime.value = 0.245;
-            var fb = A.ctx.createGain(); fb.gain.value = 0.3; fb.persistent = true;
-            A.delay.connect(fb); fb.connect(A.delay); A.delay.connect(A.mus);
+            audioGraph(new AudioContext(SoundOut.Rate));
             SoundOut.Attach(A.ctx);
             startMusic();
             audioApply();
         }
         catch (Exception err) { Console.Error.WriteLine("audio unavailable: " + err.Message); }
+    }
+    /* the mixer the whole game plays into: master, compressor, the effects bus
+       with its room, the music bus with its echo (also built by --audiotest) */
+    public static void audioGraph(AudioContext c)
+    {
+        A.ctx = c;
+        A.master = A.ctx.createGain(); A.master.gain.value = MASTER_GAIN; A.master.persistent = true;
+        A.comp = A.ctx.createDynamicsCompressor();
+        A.comp.threshold.value = -20; A.comp.knee.value = 24;
+        A.comp.ratio.value = 7; A.comp.attack.value = 0.004; A.comp.release.value = 0.16;
+        A.master.connect(A.comp); A.comp.connect(A.ctx.destination);
+        A.sfxLid = A.ctx.createBiquadFilter(); A.sfxLid.persistent = true;
+        A.sfxLid.type = "lowpass"; A.sfxLid.frequency.value = 11000; A.sfxLid.Q.value = 0.4;
+        A.sfxLid.connect(A.master);
+        A.sfx = A.ctx.createGain(); A.sfx.gain.value = SFX_GAIN * A.sfxVol; A.sfx.persistent = true; A.sfx.connect(A.sfxLid);
+        sfxLayerInit();
+        A.mus = A.ctx.createGain(); A.mus.gain.value = MUS_GAIN * A.musVol; A.mus.persistent = true; A.mus.connect(A.master);
+        var nb = A.ctx.createBuffer(1, (int)A.ctx.sampleRate, A.ctx.sampleRate);
+        var d = nb.getChannelData(0); for (int i = 0; i < d.Length; i++) d[i] = (float)(Js.R() * 2 - 1);
+        A.noiseBuf = nb;
+        A.delay = A.ctx.createDelay(1); A.delay.delayTime.value = 0.245;
+        var fb = A.ctx.createGain(); fb.gain.value = 0.3; fb.persistent = true;
+        A.delay.connect(fb); fb.connect(A.delay); A.delay.connect(A.mus);
     }
     public static void tone(string type, double f0, double f1, double dur, double vol, AudioNode dest = null, double when = 0)
     {

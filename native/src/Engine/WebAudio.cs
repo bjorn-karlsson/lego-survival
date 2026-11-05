@@ -58,6 +58,54 @@ public sealed class AudioParam
         if (keep > 0) { _v = evs[keep].v; evs.RemoveRange(0, keep); var e = evs[0]; e.kind = 0; evs[0] = e; }
     }
     internal bool Automated => evs.Count > 0;
+
+    /* the values for the block being rendered, once per block: a walk over the
+       events' segments, exponential ramps by a per-frame multiplier from an
+       exact start (as Chromium's timeline does), events that are over dropped.
+       `Constant` says whether the block holds one value throughout. */
+    readonly float[] vals = new float[AudioContext.BLOCK];
+    long valsBlock = -1;
+    internal bool Constant;
+    internal float[] Values()
+    {
+        if (valsBlock == ctx.blockId) return vals;
+        valsBlock = ctx.blockId;
+        const int B = AudioContext.BLOCK;
+        long f0 = ctx.blockFrame; double sr = ctx.sampleRate;
+        Prune(f0 / sr);
+        if (evs.Count == 0 || (evs.Count == 1 && evs[0].t <= f0 / sr))
+        {
+            float c = (float)(evs.Count == 0 ? _v : evs[0].v);
+            Array.Fill(vals, c); Constant = true; return vals;
+        }
+        Constant = false;
+        int i = 0;
+        while (i < B)
+        {
+            double t = (f0 + i) / sr;
+            int k = 0; while (k < evs.Count && evs[k].t <= t) k++;
+            if (k == evs.Count) { Array.Fill(vals, (float)evs[^1].v, i, B - i); break; }
+            var e = evs[k];
+            double pT = k == 0 ? 0 : evs[k - 1].t, pV = k == 0 ? _v : evs[k - 1].v;
+            /* the frames before this event's time */
+            long endF = (long)Math.Ceiling(e.t * sr);
+            int n = (int)Math.Clamp(endF - f0 - i, 1, B - i);
+            if (e.kind == 1)
+            {
+                double span = Math.Max(1e-9, e.t - pT);
+                for (int j = 0; j < n; j++) vals[i + j] = (float)(pV + (e.v - pV) * (((f0 + i + j) / sr) - pT) / span);
+            }
+            else if (e.kind == 2 && pV != 0 && Math.Sign(pV) == Math.Sign(e.v))
+            {
+                double span = Math.Max(1e-9, e.t - pT), ratio = e.v / pV;
+                double v = pV * Math.Pow(ratio, (t - pT) / span), m = Math.Pow(ratio, 1 / (span * sr));
+                for (int j = 0; j < n; j++) { vals[i + j] = (float)v; v *= m; }
+            }
+            else Array.Fill(vals, (float)pV, i, n);
+            i += n;
+        }
+        return vals;
+    }
 }
 
 public abstract class AudioNode
@@ -68,6 +116,9 @@ public abstract class AudioNode
     internal readonly List<AudioParam> paramOuts = new();
     internal float[] L = new float[AudioContext.BLOCK], R = new float[AudioContext.BLOCK];
     internal long block = -1;
+    /* this block's output is exact silence (a source outside its play time, or
+       a stateless node fed only silence): downstream nodes skip it */
+    internal bool silent;
     public bool persistent;               /* a bus: never finishes */
     protected AudioNode(AudioContext c) { context = c; }
     public AudioNode connect(AudioNode n) { lock (context.Lock) { n.inputs.Add(this); outputs.Add(n); } return n; }
@@ -81,17 +132,24 @@ public abstract class AudioNode
         Process();
     }
     protected abstract void Process();
-    /* the sum of the inputs into L/R */
-    protected void SumInputs()
+    /* the sum of the inputs into L/R; true when every input was silent */
+    protected bool SumInputs()
     {
         Array.Clear(L); Array.Clear(R);
+        bool quiet = true;
         for (int k = 0; k < inputs.Count; k++)
         {
             var n = inputs[k]; n.Pull();
+            if (n.silent) continue;
+            quiet = false;
             var a = n.L; var b = n.R;
             for (int i = 0; i < AudioContext.BLOCK; i++) { L[i] += a[i]; R[i] += b[i]; }
         }
+        return quiet;
     }
+    /* a modulator runs every block whether or not its result is used, so its
+       phase moves on as Chromium's does */
+    protected static void RunMods(AudioParam p) { foreach (var n in p.mods) n.Pull(); }
     /* finished: a source past its stop, or a node every input of which has finished */
     internal virtual bool Finished
     {
@@ -116,19 +174,19 @@ public sealed class GainNode : AudioNode
     public GainNode(AudioContext c) : base(c) { gain = new AudioParam(c, 1); }
     protected override void Process()
     {
-        SumInputs();
-        double t0 = context.blockTime, dt = 1.0 / context.sampleRate;
         bool mod = gain.mods.Count > 0;
+        if (silent = SumInputs()) { if (mod) RunMods(gain); return; }
         if (!gain.Automated && !mod)
         {
             float g = (float)gain.value;
             if (g != 1) for (int i = 0; i < AudioContext.BLOCK; i++) { L[i] *= g; R[i] *= g; }
             return;
         }
+        var gv = gain.Values();
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
-            double g = gain.At(t0 + i * dt) + (mod ? ModAt(gain, i) : 0);
-            L[i] *= (float)g; R[i] *= (float)g;
+            float g = mod ? (float)(gv[i] + ModAt(gain, i)) : gv[i];
+            L[i] *= g; R[i] *= g;
         }
     }
 }
@@ -136,55 +194,137 @@ public sealed class GainNode : AudioNode
 public abstract class AudioScheduledSourceNode : AudioNode
 {
     protected double startT = double.PositiveInfinity, stopT = double.PositiveInfinity;
+    /* the first frame that plays, how far after the start time it falls (0..1
+       of a frame: a source started between two frames begins that far into its
+       signal, as Chromium's do) and the first frame that is silent again */
+    protected long startF = long.MaxValue, stopF = long.MaxValue; protected double startOff;
     protected AudioScheduledSourceNode(AudioContext c) : base(c) { c.Track(this); }
-    public virtual void start(double when = 0) { startT = Math.Max(when, 0); }
-    public void stop(double when = 0) { stopT = when; }
+    public virtual void start(double when = 0)
+    {
+        startT = Math.Max(when, 0);
+        /* a time that is a whole frame but for the last bits of a double (0.17 *
+           48000 = 8160.0000000000009) is that frame, as in Chromium */
+        double x = startT * context.sampleRate, rx = System.Math.Round(x);
+        if (Math.Abs(x - rx) < 1e-6) x = rx;
+        startF = (long)Math.Ceiling(x); startOff = startF - x;
+    }
+    public void stop(double when = 0) { stopT = when; stopF = (long)Math.Ceiling(Math.Max(0, when) * context.sampleRate); }
+    /* the offset into the signal at this frame, the first time it plays: a source
+       whose start time had already passed starts on the frame, with none */
+    protected double FirstOffset(long frame) => frame == startF ? startOff : 0;
     internal override bool Finished => context.blockTime > stopT + 0.01;
+}
+
+/* Chromium's oscillator tables: every shape as a Fourier series, in 36 tables
+   a third of an octave apart, each with the partials that would alias at its
+   pitch cut away, all scaled so the fullest table peaks at 1. A note reads the
+   two tables either side of its pitch, linearly within each and between them. */
+sealed class PeriodicWave
+{
+    public readonly int N, Ranges; public readonly float RateScale; readonly float lowest; readonly float[][] tables;
+    const float CentsPerRange = 1200f / 3;
+    static readonly Dictionary<(string, double), PeriodicWave> cache = new();
+    public static PeriodicWave For(string type, double sr)
+    {
+        type = type is "square" or "sawtooth" or "triangle" ? type : "sine";
+        lock (cache) { if (!cache.TryGetValue((type, sr), out var w)) cache[(type, sr)] = w = new PeriodicWave(type, sr); return w; }
+    }
+    PeriodicWave(string type, double sr)
+    {
+        N = sr <= 24000 ? 2048 : sr <= 88200 ? 4096 : 16384;
+        int half = N / 2;
+        lowest = 0.5f * (float)sr / half; RateScale = N / (float)sr;
+        Ranges = (int)(0.5f + 3 * MathF.Log2(N));
+        var b = new float[half];
+        for (int n = 1; n < half; n++)
+        {
+            float pf = 2 / (n * MathF.PI);
+            b[n] = type switch
+            {
+                "square" => (n & 1) != 0 ? 2 * pf : 0,
+                "sawtooth" => pf * ((n & 1) != 0 ? 1 : -1),
+                "triangle" => (n & 1) != 0 ? 2 * (pf * pf) * ((((n - 1) >> 1) & 1) != 0 ? -1 : 1) : 0,
+                _ => n == 1 ? 1 : 0,
+            };
+        }
+        var fft = new Fft(N);
+        tables = new float[Ranges][];
+        float norm = 1;
+        for (int r = 0; r < Ranges; r++)
+        {
+            int partials = (int)(MathF.Pow(2, -r * CentsPerRange / 1200) * half);
+            var re = new float[N]; var im = new float[N];
+            for (int n = 1; n < Math.Min(half, partials + 1); n++) { im[n] = -b[n] / 2; im[N - n] = b[n] / 2; }
+            fft.Run(re, im, true);
+            if (r == 0) { float mx = 0; foreach (var v in re) mx = Math.Max(mx, Math.Abs(v)); if (mx > 0) norm = 1 / mx; }
+            for (int k = 0; k < N; k++) re[k] *= norm;
+            tables[r] = re;
+        }
+    }
+    /* the two tables either side of a pitch, and how far between them */
+    public void Select(float freq, out float[] hi, out float[] lo, out float tif)
+    {
+        freq = MathF.Abs(freq);
+        float ratio = freq > 0 ? freq / lowest : 0.5f;
+        float pitch = 1 + MathF.Log2(ratio) * 1200 / CentsPerRange;
+        pitch = Math.Clamp(pitch, 0, Ranges - 1);
+        int r1 = (int)pitch, r2 = r1 < Ranges - 1 ? r1 + 1 : r1;
+        tif = pitch - r1; hi = tables[r1]; lo = tables[r2];
+    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float Read(double vri, int mask, float[] hi, float[] lo, float tif)
+    {
+        int i0 = (int)vri, i1 = (i0 + 1) & mask; i0 &= mask;
+        double f = (float)vri - (int)vri;
+        double sh = (1 - f) * hi[i0] + f * hi[i1], sl = (1 - f) * lo[i0] + f * lo[i1];
+        return (float)((1 - tif) * sh + tif * sl);
+    }
 }
 
 public sealed class OscillatorNode : AudioScheduledSourceNode
 {
     public string type = "sine";
     public readonly AudioParam frequency, detune;
-    double phase;
+    double vri = -1;      /* where in the wave table, -1 before the first frame */
     public OscillatorNode(AudioContext c) : base(c) { frequency = new AudioParam(c, 440); detune = new AudioParam(c, 0); }
-    static double Blep(double t, double dt)
-    {
-        if (t < dt) { t /= dt; return t + t - t * t - 1; }
-        if (t > 1 - dt) { t = (t - 1) / dt; return t * t + t + t + 1; }
-        return 0;
-    }
     protected override void Process()
     {
-        double t0 = context.blockTime, sdt = 1.0 / context.sampleRate;
-        bool fm = frequency.mods.Count > 0;
+        double sr = context.sampleRate, nyq = sr / 2; long f0 = context.blockFrame;
+        bool fm = frequency.mods.Count > 0, dm = detune.mods.Count > 0;
+        if (stopF <= f0 || startF >= f0 + AudioContext.BLOCK)
+        {
+            if (!silent) { Array.Clear(L); Array.Clear(R); silent = true; }
+            if (fm) RunMods(frequency); if (dm) RunMods(detune);
+            return;
+        }
+        silent = false;
+        var wave = PeriodicWave.For(type, sr);
+        int n = wave.N;
+        /* CHROMIUM'S START QUANTUM: an oscillator that starts part-way into a
+           render quantum reads its sample-accurate frequency and detune from the
+           START of the quantum (the values are computed for all 128 frames and
+           read from the first, not from where the oscillator begins), so its
+           first frames play the values from that many frames earlier -- for a
+           pitch set at the start time, the param's default (440 Hz). It is what
+           every browser build of the game sounds like, so it is kept. */
+        bool aRate = fm || dm || frequency.Automated || detune.Automated;
+        int lag = aRate && startF > f0 && startF < f0 + AudioContext.BLOCK ? (int)(startF - f0) : 0;
+        var fv = frequency.Values(); var dv = detune.Values();
+        float lastF = float.NaN; float[] hi = null, lo = null; float tif = 0;
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
-            double t = t0 + i * sdt;
-            if (t < startT || t >= stopT) { L[i] = R[i] = 0; continue; }
-            double f = frequency.At(t) + (fm ? ModAt(frequency, i) : 0);
-            double dtn = detune.value;
-            if (dtn != 0 || detune.Automated) f *= Math.Pow(2, detune.At(t) / 1200);
-            double inc = f * sdt;
-            double v;
-            switch (type)
-            {
-                case "square":
-                    v = phase < 0.5 ? 1 : -1;
-                    v += Blep(phase, Math.Abs(inc)); v -= Blep((phase + 0.5) % 1, Math.Abs(inc));
-                    break;
-                case "sawtooth":
-                    v = 2 * phase - 1; v -= Blep(phase, Math.Abs(inc));
-                    break;
-                case "triangle":
-                    v = phase < 0.5 ? 4 * phase - 1 : 3 - 4 * phase;
-                    break;
-                default:
-                    v = Math.Sin(phase * 2 * Math.PI);
-                    break;
-            }
-            L[i] = R[i] = (float)v;
-            phase += inc; phase -= Math.Floor(phase);
+            long fr = f0 + i;
+            if (fr < startF || fr >= stopF) { L[i] = R[i] = 0; continue; }
+            int j = i - lag;
+            double f = fv[j] + (fm ? ModAt(frequency, j) : 0);
+            double dt = dv[j] + (dm ? ModAt(detune, j) : 0);
+            if (dt != 0) f *= Math.Pow(2, dt / 1200);
+            f = Math.Clamp(f, -nyq, nyq);
+            float ff = (float)f, incr = ff * wave.RateScale;
+            if (ff != lastF) { wave.Select(ff, out hi, out lo, out tif); lastF = ff; }
+            if (vri < 0) { vri = FirstOffset(fr) * incr; vri -= Math.Floor(vri / n) * n; }
+            L[i] = R[i] = PeriodicWave.Read(vri, n - 1, hi, lo, tif);
+            vri += incr; vri -= Math.Floor(vri / n) * n;
         }
     }
 }
@@ -200,25 +340,38 @@ public sealed class AudioBuffer
 public sealed class AudioBufferSourceNode : AudioScheduledSourceNode
 {
     public AudioBuffer buffer; public bool loop;
-    double pos, offset;
+    double pos = -1, offset;
+    bool ended;
     public AudioBufferSourceNode(AudioContext c) : base(c) { }
-    public void start(double when, double off) { base.start(when); offset = off; pos = -1; }
+    public void start(double when, double off) { base.start(when); offset = Math.Max(0, off); pos = -1; }
     public override void start(double when = 0) { start(when, 0); }
     protected override void Process()
     {
-        double t0 = context.blockTime, sdt = 1.0 / context.sampleRate;
-        var b = buffer;
-        if (b == null) { Array.Clear(L); Array.Clear(R); return; }
+        var b = buffer; long fb = context.blockFrame;
+        if (b == null || ended || stopF <= fb || startF >= fb + AudioContext.BLOCK)
+        {
+            if (!silent) { Array.Clear(L); Array.Clear(R); silent = true; }
+            return;
+        }
+        silent = false;
         var d0 = b.getChannelData(0); var d1 = b.numberOfChannels > 1 ? b.getChannelData(1) : d0;
+        int len = b.length; double rate = b.sampleRate / context.sampleRate; long f0 = context.blockFrame;
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
-            double t = t0 + i * sdt;
-            if (t < startT || t >= stopT) { L[i] = R[i] = 0; continue; }
-            if (pos < 0) pos = offset * b.sampleRate;
-            int k = (int)pos;
-            if (k >= b.length) { if (loop) { pos %= b.length; k = (int)pos; } else { L[i] = R[i] = 0; continue; } }
-            L[i] = d0[k]; R[i] = d1[k];
-            pos += b.sampleRate * sdt;
+            long fr = f0 + i;
+            if (fr < startF || fr >= stopF || ended) { L[i] = R[i] = 0; continue; }
+            /* the offset lands on a whole frame (Chromium keeps rate-1 playback
+               bit-exact); a start between frames moves in by the fraction */
+            if (pos < 0) pos = System.Math.Round(offset * b.sampleRate, MidpointRounding.AwayFromZero) + FirstOffset(fr) * rate;
+            if (pos >= len) { if (loop && len > 0) pos %= len; else { ended = true; L[i] = R[i] = 0; continue; } }
+            int k = (int)pos; double f = pos - k;
+            int k2 = k + 1; if (k2 >= len) k2 = loop ? k2 - len : k;
+            if (k2 == k && k >= 1)
+            {   /* past the last frame (not looping): Chromium extrapolates from the last two */
+                L[i] = (float)(d0[k] + (d0[k] - d0[k - 1]) * f); R[i] = (float)(d1[k] + (d1[k] - d1[k - 1]) * f);
+            }
+            else { L[i] = (float)((1 - f) * d0[k] + f * d0[k2]); R[i] = (float)((1 - f) * d1[k] + f * d1[k2]); }
+            pos += rate;
         }
     }
 }
@@ -254,14 +407,20 @@ public sealed class BiquadFilterNode : AudioNode
     }
     protected override void Process()
     {
-        SumInputs();
-        double t0 = context.blockTime, sdt = 1.0 / context.sampleRate;
+        bool quiet = SumInputs();
         bool fm = frequency.mods.Count > 0;
+        if (quiet && Math.Abs(ly1) + Math.Abs(ly2) + Math.Abs(ry1) + Math.Abs(ry2) + Math.Abs(lx1) + Math.Abs(lx2) + Math.Abs(rx1) + Math.Abs(rx2) < 1e-12)
+        {
+            lx1 = lx2 = ly1 = ly2 = rx1 = rx2 = ry1 = ry2 = 0;
+            silent = true; if (fm) RunMods(frequency); return;
+        }
+        silent = false;
+        var fv = frequency.Values();
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
             if ((i & 7) == 0)
             {
-                double f = frequency.At(t0 + i * sdt) + (fm ? ModAt(frequency, i) : 0), q = Q.value;
+                double f = fv[i] + (fm ? ModAt(frequency, i) : 0), q = Q.value;
                 if (Math.Abs(f - lastF) > 0.01 || q != lastQ) { Coef(f, q); lastF = f; lastQ = q; }
             }
             double x = L[i], y = b0 * x + b1 * lx1 + b2 * lx2 - a1 * ly1 - a2 * ly2;
@@ -280,9 +439,11 @@ public sealed class WaveShaperNode : AudioNode
     public WaveShaperNode(AudioContext c) : base(c) { }
     protected override void Process()
     {
-        SumInputs();
-        var cv = curve; if (cv == null || cv.Length < 2) return;
+        bool quiet = SumInputs();
+        var cv = curve; if (cv == null || cv.Length < 2) { silent = quiet; return; }
         int n = cv.Length;
+        if (quiet && Shape(0, cv, n) == 0) { silent = true; return; }
+        silent = false;
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
             L[i] = Shape(L[i], cv, n); R[i] = Shape(R[i], cv, n);
@@ -304,48 +465,139 @@ public sealed class StereoPannerNode : AudioNode
     public StereoPannerNode(AudioContext c) : base(c) { pan = new AudioParam(c, 0); }
     protected override void Process()
     {
-        SumInputs();
+        if (silent = SumInputs()) return;
         double x = (Math.Clamp(pan.value, -1, 1) + 1) / 2;
         float gl = (float)Math.Cos(x * Math.PI / 2), gr = (float)Math.Sin(x * Math.PI / 2);
         for (int i = 0; i < AudioContext.BLOCK; i++) { float m = (L[i] + R[i]) * 0.5f; L[i] = m * gl; R[i] = m * gr; }
     }
 }
 
-/* the room: Web Audio convolves with a generated impulse (decaying noise, about
-   a second); this is the same idea as a Freeverb-style network, which costs a
-   few dozen operations a sample instead of fifty thousand */
+/* a complex radix-2 FFT of one size, twiddles and bit reversal made once */
+sealed class Fft
+{
+    public readonly int n; readonly int[] rev; readonly float[] wr, wi;
+    public Fft(int n)
+    {
+        this.n = n; rev = new int[n]; wr = new float[n / 2]; wi = new float[n / 2];
+        int bits = System.Numerics.BitOperations.Log2((uint)n);
+        for (int i = 0; i < n; i++) { int r = 0; for (int b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); rev[i] = r; }
+        for (int i = 0; i < n / 2; i++) { wr[i] = (float)Math.Cos(-2 * Math.PI * i / n); wi[i] = (float)Math.Sin(-2 * Math.PI * i / n); }
+    }
+    /* in place; the inverse is unscaled */
+    public void Run(float[] re, float[] im, bool inverse)
+    {
+        for (int i = 0; i < n; i++) { int j = rev[i]; if (i < j) { (re[i], re[j]) = (re[j], re[i]); (im[i], im[j]) = (im[j], im[i]); } }
+        float sg = inverse ? -1 : 1;
+        for (int len = 2; len <= n; len <<= 1)
+        {
+            int half = len >> 1, step = n / len;
+            for (int i = 0; i < n; i += len)
+                for (int k = 0; k < half; k++)
+                {
+                    float cr = wr[k * step], ci = wi[k * step] * sg;
+                    int u = i + k, v = u + half;
+                    float tr = re[v] * cr - im[v] * ci, ti = re[v] * ci + im[v] * cr;
+                    re[v] = re[u] - tr; im[v] = im[u] - ti; re[u] += tr; im[u] += ti;
+                }
+        }
+    }
+}
+
+/* Convolution with the impulse response the game gives it, as Chromium's
+   Reverb does: the response is normalised by its RMS power and calibrated
+   (-58 dB, for 44.1 kHz), and the input is convolved with channel 0 for the
+   left and channel 1 for the right. Uniformly partitioned overlap-save in two
+   stages: 128-frame partitions for the first 4096 frames (zero latency, one
+   render quantum at a time) and 4096-frame partitions for the rest, computed
+   once every 32 quanta, just as their output falls due. The input is taken as
+   mono, which is all the game sends it (the voices' room sends). */
 public sealed class ConvolverNode : AudioNode
 {
     public AudioBuffer buffer;
-    readonly float[][] combL, combR, apL, apR; readonly int[] ciL, ciR, aiL, aiR; readonly float[] fsL, fsR;
-    static readonly int[] COMB = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 };
-    static readonly int[] AP = { 556, 441, 341, 225 };
-    const float FEED = 0.78f, DAMP = 0.32f, SPREAD = 23;
-    public ConvolverNode(AudioContext c) : base(c)
+    public bool normalize = true;
+    AudioBuffer built;
+    sealed class Stage
     {
-        double k = c.sampleRate / 44100.0;
-        combL = COMB.Select(n => new float[(int)(n * k)]).ToArray(); combR = COMB.Select(n => new float[(int)((n + SPREAD) * k)]).ToArray();
-        apL = AP.Select(n => new float[(int)(n * k)]).ToArray(); apR = AP.Select(n => new float[(int)((n + SPREAD) * k)]).ToArray();
-        ciL = new int[8]; ciR = new int[8]; aiL = new int[4]; aiR = new int[4]; fsL = new float[8]; fsR = new float[8];
-        persistent = true;
+        public int B, P, slot; public Fft fft;
+        public float[][] hRe, hIm, xRe, xIm;     /* the response's partitions, and the input's spectra (a ring) */
+        public float[] inBuf, re, im, outRe, outIm; public int fill;
+        public Stage(int b, float[] ir0, float[] ir1, int from, int to, float scale)
+        {
+            B = b; P = Math.Max(0, (to - from + b - 1) / b); fft = new Fft(2 * b);
+            hRe = new float[P][]; hIm = new float[P][]; xRe = new float[P][]; xIm = new float[P][];
+            for (int p = 0; p < P; p++)
+            {
+                var r = new float[2 * b]; var i = new float[2 * b];
+                for (int k = 0; k < b; k++) { int at = from + p * b + k; if (at < to) { r[k] = ir0[at] * scale; i[k] = ir1[at] * scale; } }
+                fft.Run(r, i, false); hRe[p] = r; hIm[p] = i;
+                xRe[p] = new float[2 * b]; xIm[p] = new float[2 * b];
+            }
+            inBuf = new float[2 * b]; re = new float[2 * b]; im = new float[2 * b]; outRe = new float[b]; outIm = new float[b];
+        }
+        /* a full block of input is in inBuf's second half: its contribution, and
+           the earlier blocks', for the next B frames of this stage's span */
+        public void Step()
+        {
+            int n = 2 * B;
+            var xr = xRe[slot]; var xi = xIm[slot];
+            Array.Copy(inBuf, xr, n); Array.Clear(xi);
+            fft.Run(xr, xi, false);
+            Array.Clear(re); Array.Clear(im);
+            for (int p = 0; p < P; p++)
+            {
+                int s = (slot - p + P) % P; var ar = xRe[s]; var ai = xIm[s]; var br = hRe[p]; var bi = hIm[p];
+                for (int k = 0; k < n; k++) { re[k] += ar[k] * br[k] - ai[k] * bi[k]; im[k] += ar[k] * bi[k] + ai[k] * br[k]; }
+            }
+            fft.Run(re, im, true);
+            float inv = 1f / n;
+            for (int k = 0; k < B; k++) { outRe[k] = re[B + k] * inv; outIm[k] = im[B + k] * inv; }
+            slot = (slot + 1) % P;
+            Array.Copy(inBuf, B, inBuf, 0, B);
+        }
+    }
+    Stage head, tail;
+    float[] tailRe = Array.Empty<float>(), tailIm = Array.Empty<float>(); int tailAt;
+    const int HeadB = AudioContext.BLOCK, HeadLen = 4096, TailB = 4096;
+    public ConvolverNode(AudioContext c) : base(c) { persistent = true; }
+    void Build()
+    {
+        built = buffer; head = tail = null;
+        if (buffer == null || buffer.length == 0) return;
+        var ir0 = buffer.getChannelData(0); var ir1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ir0;
+        int len = buffer.length;
+        float scale = 1;
+        if (normalize)
+        {
+            double pw = 0; for (int c = 0; c < buffer.numberOfChannels; c++) foreach (var v in buffer.getChannelData(c)) pw += v * v;
+            double power = Math.Sqrt(pw / (buffer.numberOfChannels * (double)len));
+            if (!double.IsFinite(power) || power < 0.000125) power = 0.000125;
+            scale = (float)(1 / power * Math.Pow(10, -58 / 20.0) * (44100 / buffer.sampleRate));
+        }
+        head = new Stage(HeadB, ir0, ir1, 0, Math.Min(len, HeadLen), scale);
+        if (len > HeadLen) { tail = new Stage(TailB, ir0, ir1, HeadLen, len, scale); tailRe = new float[TailB]; tailIm = new float[TailB]; tailAt = 0; }
     }
     protected override void Process()
     {
         SumInputs();
-        for (int i = 0; i < AudioContext.BLOCK; i++)
+        if (buffer != built) Build();
+        if (head == null) { Array.Clear(L); Array.Clear(R); return; }
+        const int Q = AudioContext.BLOCK;
+        for (int i = 0; i < Q; i++) head.inBuf[Q + i] = 0.5f * (L[i] + R[i]);
+        if (tail != null) for (int i = 0; i < Q; i++) tail.inBuf[TailB + tail.fill + i] = 0.5f * (L[i] + R[i]);
+        head.Step();
+        for (int i = 0; i < Q; i++) { L[i] = head.outRe[i]; R[i] = head.outIm[i]; }
+        if (tail != null)
         {
-            float inp = (L[i] + R[i]) * 0.015f, ol = 0, or = 0;
-            for (int c = 0; c < 8; c++)
+            /* the tail's output for these frames was computed when the block before them filled */
+            for (int i = 0; i < Q; i++) { L[i] += tailRe[tailAt + i]; R[i] += tailIm[tailAt + i]; }
+            tailAt += Q;
+            tail.fill += Q;
+            if (tail.fill == TailB)
             {
-                var b = combL[c]; int j = ciL[c]; float y = b[j]; fsL[c] = y * (1 - DAMP) + fsL[c] * DAMP; b[j] = inp + fsL[c] * FEED; ciL[c] = (j + 1) % b.Length; ol += y;
-                b = combR[c]; j = ciR[c]; y = b[j]; fsR[c] = y * (1 - DAMP) + fsR[c] * DAMP; b[j] = inp + fsR[c] * FEED; ciR[c] = (j + 1) % b.Length; or += y;
+                tail.fill = 0;
+                tail.Step();
+                Array.Copy(tail.outRe, tailRe, TailB); Array.Copy(tail.outIm, tailIm, TailB); tailAt = 0;
             }
-            for (int a = 0; a < 4; a++)
-            {
-                var b = apL[a]; int j = aiL[a]; float bo = b[j]; b[j] = ol + bo * 0.5f; ol = bo - ol; aiL[a] = (j + 1) % b.Length;
-                b = apR[a]; j = aiR[a]; bo = b[j]; b[j] = or + bo * 0.5f; or = bo - or; aiR[a] = (j + 1) % b.Length;
-            }
-            L[i] = ol * 3.2f; R[i] = or * 3.2f;
         }
     }
 }
@@ -380,29 +632,132 @@ public sealed class DelayNode : AudioNode
     }
 }
 
+/* Chromium's compressor, step for step (DynamicsCompressorKernel): a 6 ms
+   look-ahead, a detector on the undelayed signal, a soft knee that turns into
+   the ratio, attack toward the wanted gain and an adaptive release (deeper
+   compression lets go faster), a sine warp on the gain, and the automatic
+   make-up gain the Web Audio spec calls for, which lifts everything under the
+   threshold. In float, as Chromium runs it, in 32-frame steps. */
 public sealed class DynamicsCompressorNode : AudioNode
 {
     public readonly AudioParam threshold, knee, ratio, attack, release;
-    double env = 0;
+    const int MaxPre = 1024, PreMask = MaxPre - 1, Div = 32;
+    const float PiOver2 = MathF.PI / 2;
+    readonly float[] preL = new float[MaxPre], preR = new float[MaxPre];
+    int preRead, preWrite, lastPre = -1;
+    float detectorAverage = 0, compressorGain = 1, maxAttackDiffDb = -1;
+    /* the static curve, rebuilt when threshold, knee or ratio change */
+    float cTh = float.NaN, cKnee = float.NaN, cRatio = float.NaN, linThreshold, slope, kneeThreshold, kneeThresholdDb, yKneeThresholdDb, kCurve;
     public DynamicsCompressorNode(AudioContext c) : base(c)
     {
         threshold = new AudioParam(c, -24); knee = new AudioParam(c, 30); ratio = new AudioParam(c, 12);
         attack = new AudioParam(c, 0.003); release = new AudioParam(c, 0.25); persistent = true;
     }
+    static float Db2Lin(float db) => MathF.Pow(10, 0.05f * db);
+    static float Lin2Db(float x) => 20 * MathF.Log10(x);
+    float KneeCurve(float x, float k) => x < linThreshold ? x : linThreshold + (1 - MathF.Exp(-k * (x - linThreshold))) / k;
+    float Saturate(float x, float k)
+    {
+        if (x < kneeThreshold) return KneeCurve(x, k);
+        float xDb = Lin2Db(x), yDb = yKneeThresholdDb + slope * (xDb - kneeThresholdDb);
+        return Db2Lin(yDb);
+    }
+    float SlopeAt(float x, float k)
+    {
+        if (x < linThreshold) return 1;
+        float x2 = x * 1.001f;
+        float xDb = Lin2Db(x), x2Db = Lin2Db(x2), yDb = Lin2Db(KneeCurve(x, k)), y2Db = Lin2Db(KneeCurve(x2, k));
+        return (y2Db - yDb) / (x2Db - xDb);
+    }
+    float KAtSlope(float desired)
+    {
+        float x = Db2Lin(cTh + cKnee), minK = 0.1f, maxK = 10000, k = 5;
+        for (int i = 0; i < 15; i++)
+        {
+            if (SlopeAt(x, k) < desired) maxK = k; else minK = k;
+            k = MathF.Sqrt(minK * maxK);
+        }
+        return k;
+    }
+    float Curve(float th, float kn, float ra)
+    {
+        if (th != cTh || kn != cKnee || ra != cRatio)
+        {
+            cTh = th; linThreshold = Db2Lin(th); cKnee = kn; cRatio = ra; slope = 1 / ra;
+            float k = KAtSlope(1 / ra);
+            kneeThresholdDb = th + kn; kneeThreshold = Db2Lin(kneeThresholdDb);
+            yKneeThresholdDb = Lin2Db(KneeCurve(kneeThreshold, k));
+            kCurve = k;
+        }
+        return kCurve;
+    }
     protected override void Process()
     {
         SumInputs();
-        double sr = context.sampleRate, th = threshold.value, kn = knee.value, ra = ratio.value;
-        double ca = Math.Exp(-1 / (Math.Max(1e-4, attack.value) * sr)), cr = Math.Exp(-1 / (Math.Max(1e-4, release.value) * sr));
-        for (int i = 0; i < AudioContext.BLOCK; i++)
+        float sr = (float)context.sampleRate;
+        /* the spec's ranges */
+        float th = (float)Math.Clamp(threshold.value, -100, 0), kn = (float)Math.Clamp(knee.value, 0, 40), ra = (float)Math.Clamp(ratio.value, 1, 20);
+        float at = (float)Math.Clamp(attack.value, 0, 1), rel = (float)Math.Clamp(release.value, 0, 1);
+        float k = Curve(th, kn, ra);
+        float makeup = MathF.Pow(1 / Saturate(1, k), 0.6f);
+        float attackFrames = MathF.Max(0.001f, at) * sr, releaseFrames = sr * rel, satReleaseFrames = 0.0025f * sr;
+        float y1 = releaseFrames * 0.09f, y2 = releaseFrames * 0.16f, y3 = releaseFrames * 0.42f, y4 = releaseFrames * 0.98f;
+        float kA = 0.9999999999999998f * y1 + 1.8432219684323923e-16f * y2 - 1.9373394351676423e-16f * y3 + 8.824516011816245e-18f * y4;
+        float kB = -1.5788320352845888f * y1 + 2.3305837032074286f * y2 - 0.9141194204840429f * y3 + 0.1623677525612032f * y4;
+        float kC = 0.5334142869106424f * y1 - 1.272736789213631f * y2 + 0.9258856042207512f * y3 - 0.18656310191776226f * y4;
+        float kD = 0.08783463138207234f * y1 - 0.1694162967925622f * y2 + 0.08588057951595272f * y3 - 0.00429891410546283f * y4;
+        float kE = -0.042416883008123074f * y1 + 0.1115693827987602f * y2 - 0.09764676325265872f * y3 + 0.028494263462021576f * y4;
+        int preFrames = Math.Min(MaxPre - 1, (int)(0.006f * sr));
+        if (preFrames != lastPre)
         {
-            double x = Math.Max(Math.Abs(L[i]), Math.Abs(R[i]));
-            env = x > env ? ca * env + (1 - ca) * x : cr * env + (1 - cr) * x;
-            double db = 20 * Math.Log10(Math.Max(1e-9, env)), over = db - th, gr = 0;
-            if (over > kn / 2) gr = over - over / ra;
-            else if (over > -kn / 2) { double z = over + kn / 2; gr = (1 / ra - 1) * z * z / (2 * kn) * -1; }
-            float g = (float)Math.Pow(10, -gr / 20);
-            L[i] *= g; R[i] *= g;
+            lastPre = preFrames; Array.Clear(preL); Array.Clear(preR);
+            preRead = 0; preWrite = preFrames;
+        }
+        int fi = 0;
+        for (int d = 0; d < AudioContext.BLOCK / Div; d++)
+        {
+            if (!float.IsFinite(detectorAverage)) detectorAverage = 1;
+            float desired = detectorAverage;
+            float scaledDesired = MathF.Asin(desired) / PiOver2;
+            float envRate;
+            bool releasing = scaledDesired > compressorGain;
+            float diffDb = Lin2Db(compressorGain / scaledDesired);
+            if (releasing)
+            {
+                maxAttackDiffDb = -1;
+                if (!float.IsFinite(diffDb)) diffDb = -1;
+                float x = Math.Clamp(diffDb, -12f, 0f);
+                x = 0.25f * (x + 12);
+                float x2 = x * x, x3 = x2 * x, x4 = x2 * x2;
+                float relFrames = kA + kB * x + kC * x2 + kD * x3 + kE * x4;
+                envRate = Db2Lin(5 / relFrames);
+            }
+            else
+            {
+                if (!float.IsFinite(diffDb)) diffDb = 1;
+                if (maxAttackDiffDb == -1 || maxAttackDiffDb < diffDb) maxAttackDiffDb = diffDb;
+                float eff = MathF.Max(0.5f, maxAttackDiffDb);
+                envRate = 1 - MathF.Pow(0.25f / eff, 1 / attackFrames);
+            }
+            for (int n = 0; n < Div; n++, fi++)
+            {
+                float l = L[fi], r = R[fi];
+                preL[preWrite] = l; preR[preWrite] = r;
+                float input = MathF.Max(MathF.Abs(l), MathF.Abs(r));
+                float shaped = Saturate(input, k);
+                float atten = input <= 0.0001f ? 1 : shaped / input;
+                float attenDb = MathF.Max(2f, -Lin2Db(atten));
+                float satRate = Db2Lin(attenDb / satReleaseFrames) - 1;
+                float rate = atten > detectorAverage ? satRate : 1;
+                detectorAverage += (atten - detectorAverage) * rate;
+                detectorAverage = MathF.Min(1f, detectorAverage);
+                if (!float.IsFinite(detectorAverage)) detectorAverage = 1;
+                if (envRate < 1) compressorGain += (scaledDesired - compressorGain) * envRate;
+                else { compressorGain *= envRate; compressorGain = MathF.Min(1f, compressorGain); }
+                float gain = makeup * MathF.Sin(PiOver2 * compressorGain);
+                L[fi] = preL[preRead] * gain; R[fi] = preR[preRead] * gain;
+                preRead = (preRead + 1) & PreMask; preWrite = (preWrite + 1) & PreMask;
+            }
         }
     }
 }
@@ -423,6 +778,7 @@ public sealed class AudioContext
     long frames;
     internal long blockId;
     internal double blockTime;
+    internal long blockFrame;
     internal readonly List<DelayNode> delays = new();
     readonly List<AudioScheduledSourceNode> sources = new();
     public AudioContext(double rate = 48000) { sampleRate = rate; destination = new AudioDestination(this); }
@@ -464,13 +820,14 @@ public sealed class AudioContext
     void RenderBlock()
     {
         blockId++;
-        blockTime = (double)Interlocked.Read(ref frames) / sampleRate;
+        blockFrame = Interlocked.Read(ref frames);
+        blockTime = blockFrame / sampleRate;
         destination.Pull();
         foreach (var d in delays) d.Write();
         for (int i = 0; i < BLOCK; i++)
         {
-            pend[i * 2] = Math.Clamp(destination.L[i], -1f, 1f);
-            pend[i * 2 + 1] = Math.Clamp(destination.R[i], -1f, 1f);
+            pend[i * 2] = destination.L[i];
+            pend[i * 2 + 1] = destination.R[i];
         }
         Interlocked.Add(ref frames, BLOCK);
         /* every few blocks: let go of what has finished */

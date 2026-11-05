@@ -121,6 +121,28 @@ render quality, vsync and text size changed live; the window resized mid-run; de
 pause, main menu and a second run. None of them logs an exception. Screens were compared with Chromium running the original
 page (`tests/DomTest` compares element rectangles; the gameplay field by eye).
 
+The sound is checked against Chromium's own Web Audio, sample for sample (`tests/AudioTest`).
+Both sides swap `Math.random` for the same seeded generator, so every pitch, pan and noise
+sample is the same:
+
+```
+node tests/AudioTest/audioref.js ../lego-survival.html ref     # Chromium: every effect, every track
+dotnet bin/Release/net8.0/Brickblade.dll --audiotest mine      # the same list here (+ a stress timing)
+node tests/AudioTest/audiocmp.js ref mine                      # loudness, lag, correlation, envelope, bands
+
+node tests/AudioTest/probes.js pref                            # one node at a time, no mixer
+dotnet bin/Release/net8.0/Brickblade.dll --audioprobe pmine
+node tests/AudioTest/probecmp.js pref pmine
+```
+
+All 26 effects and 6 tracks match within 0.1 dB with a waveform correlation of 0.98–1.00, and
+the single-node probes to 60–140 dB signal-to-error. What that took: Chromium's compressor
+(look-ahead, adaptive release, make-up gain), convolution with the game's own impulse response
+(normalised as Chromium's Reverb is), Chromium's band-limited oscillator tables, starts between
+frames, buffer offsets rounded to a frame and interpolated reads, and one Chromium quirk kept on
+purpose: an oscillator starting part-way into a 128-frame quantum reads its automated pitch from
+the start of the quantum (see `OscillatorNode`).
+
 ## Build and run
 
 ```

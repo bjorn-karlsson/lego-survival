@@ -19,6 +19,8 @@ public static class Program
         LogInit();
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Crash(e.ExceptionObject as Exception);
         if (Has("--shimtest")) return ShimTest.Run();
+        if (Opt("--audiotest") is string adir) return AudioTest.Run(adir);
+        if (Opt("--audioprobe") is string pdir) return AudioProbes.Run(pdir);
         try { return App.Run(); }
         catch (Exception e) { Crash(e); return 1; }
     }

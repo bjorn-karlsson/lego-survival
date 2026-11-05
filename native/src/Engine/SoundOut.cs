@@ -48,6 +48,8 @@ public static unsafe class SoundOut
         {
             if (ctx == null) { span.Clear(); return; }
             ctx.Render(span, (int)frames);
+            /* the mix is not clamped (as in Chromium); the speakers are */
+            for (int i = 0; i < span.Length; i++) span[i] = Math.Clamp(span[i], -1f, 1f);
         }
         catch { span.Clear(); }
     }
