@@ -11,10 +11,26 @@ public sealed class OffCanvas
     int _w = 300, _h = 150;
     public Target target;
     Ctx _ctx;
-    public int width { get => _w; set { if (value != _w) { _w = Math.Max(1, value); Realloc(); } else Gpu.Clear(T); } }
-    public int height { get => _h; set { if (value != _h) { _h = Math.Max(1, value); Realloc(); } else Gpu.Clear(T); } }
-    void Realloc() { if (target != null) { Gpu.FreeTarget(target); target = null; } }
-    public Target T { get { if (target == null || target.tex == 0) target = Gpu.NewTarget(_w, _h); return target; } }
+    /* SUPERSAMPLED. An offscreen canvas has no multisampling, so a small one -- a
+       sprite, a golem's baked body, the ground's sheet, the title's letters -- keeps
+       its pixels at twice the size and the GPU averages them back down when it is
+       drawn: edges as smooth as the browser's. ss 0 decides by size when the texture
+       is made; a copy of the screen (ss 1) is never scaled. */
+    public int ss = 0;
+    /* the factor follows from the size alone, so the context can know it before any texture exists */
+    public int SS => ss > 0 ? ss : (_w <= 1024 && _h <= 1024 && (long)_w * _h <= 320000 ? 2 : 1);
+    public int width { get => _w; set { value = Math.Max(1, value); if (value != _w) { _w = value; Realloc(); } else if (target != null) Gpu.Clear(target); } }
+    public int height { get => _h; set { value = Math.Max(1, value); if (value != _h) { _h = value; Realloc(); } else if (target != null) Gpu.Clear(target); } }
+    /* a new size is a new, cleared canvas, and its context starts again (as the spec has it) */
+    void Realloc() { if (target != null) { Gpu.FreeTarget(target); target = null; } _ctx?.Reset(); }
+    public Target T
+    {
+        get
+        {
+            if (target == null || target.tex == 0) { int k = SS; target = Gpu.NewTarget(_w * k, _h * k); }
+            return target;
+        }
+    }
     public Ctx getContext(string kind = "2d") { if (_ctx == null) _ctx = new Ctx(this); return _ctx; }
     public void Free() { Realloc(); }
     /* A browser frees a canvas's pixels when nothing holds the canvas any more. A
@@ -66,11 +82,14 @@ public sealed class Ctx
         this.owner = owner;
         Reset();
     }
+    /* canvas pixels to texture pixels (2 on a supersampled canvas) */
+    double bs = 1;
     public void Reset()
     {
+        bs = owner != null ? owner.SS : 1;
         s = new St
         {
-            a = 1, d = 1, fill = "#000", stroke = "#000", lw = 1, cap = Cap.Butt, join = Join.Miter, miter = 10,
+            a = bs, d = bs, fill = "#000", stroke = "#000", lw = 1, cap = Cap.Butt, join = Join.Miter, miter = 10,
             alpha = 1, op = BlendOp.SourceOver, font = FontSpec.Parse("10px sans-serif"), align = 0, baseline = 0,
             dash = null, smooth = true
         };
@@ -117,7 +136,7 @@ public sealed class Ctx
     public void restore() { if (stack.Count > 0) s = stack.Pop(); }
 
     /* ================= transform ================= */
-    public void setTransform(double a, double b, double c, double d, double e, double f) { s.a = a; s.b = b; s.c = c; s.d = d; s.e = e; s.f = f; }
+    public void setTransform(double a, double b, double c, double d, double e, double f) { s.a = a * bs; s.b = b * bs; s.c = c * bs; s.d = d * bs; s.e = e * bs; s.f = f * bs; }
     public void resetTransform() => setTransform(1, 0, 0, 1, 0, 0);
     public void transform(double a, double b, double c, double d, double e, double f)
     {
@@ -533,7 +552,7 @@ public sealed class Ctx
         if (s.shCol.a <= 0 || (s.shBlur <= 0 && s.shX == 0 && s.shY == 0) || t.i.Count == 0) return;
         GfxStats.Shadows++;
         /* a blur, roughly: the shape again in soft rings around the offset */
-        double blur = s.shBlur, ox = s.shX, oy = s.shY;
+        double blur = s.shBlur * bs, ox = s.shX * bs, oy = s.shY * bs;
         var copy = shMesh;
         int rings = blur > 0 ? 3 : 0, dirs = 8;
         double total = 1 + rings * dirs;
@@ -971,10 +990,13 @@ public sealed class Ctx
         if (T == Tgt) return;
         Gpu.ReadingFrom(T);
         var p0 = X(dx, dy); var p1 = X(dx + dw, dy); var p2 = X(dx + dw, dy + dh); var p3 = X(dx, dy + dh);
-        /* a canvas's texture is stored bottom row first */
-        float u0 = (float)(sx / T.w), u1 = (float)((sx + sw) / T.w);
-        float v0 = 1 - (float)(sy / T.h), v1 = 1 - (float)((sy + sh) / T.h);
+        /* a canvas's texture is stored bottom row first; source rectangles are in
+           canvas pixels, whatever size the texture keeps them at */
+        double iw = img.width, ih = img.height;
+        float u0 = (float)(sx / iw), u1 = (float)((sx + sw) / iw);
+        float v0 = 1 - (float)(sy / ih), v1 = 1 - (float)((sy + sh) / ih);
         float a = (float)s.alpha;
+        if (s.smooth && img.SS > 1) Gpu.Mips(T);
         Gpu.Use(Tgt, s.op, Clip, T.tex);
         Gpu.Filter(T, s.smooth);
         Gpu.Begin(4, 6, out int ib0);

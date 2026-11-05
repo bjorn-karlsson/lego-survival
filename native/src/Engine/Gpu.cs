@@ -13,6 +13,7 @@ public sealed class Target
     public bool screen;
     public RenderTexture2D rt;
     public int filter = -1;      /* the sampling it was last set to (-1: never) */
+    public bool dirty, mips;     /* drawn into since its mip levels were made; has mip levels */
 }
 
 /* The one place that talks to OpenGL. Every shape the canvas shim makes becomes
@@ -74,12 +75,25 @@ public static unsafe class Gpu
     /* a canvas's sampling (smooth or nearest): a change waits for what already uses it */
     public static void Filter(Target t, bool smooth)
     {
-        int f = smooth ? 0x2601 : 0x2600;
+        int f = smooth ? (t.mips ? 0x2703 : 0x2601) : 0x2600;
         if (t.filter == f) return;
         if (nv > 0 && curTex == t.tex) Flush();
-        Rlgl.TextureParameters(t.tex, 0x2800, f);
+        Rlgl.TextureParameters(t.tex, 0x2800, smooth ? 0x2601 : 0x2600);
         Rlgl.TextureParameters(t.tex, 0x2801, f);
         t.filter = f;
+    }
+    /* A SUPERSAMPLED CANVAS IS SHRUNK, not just sampled: its mip levels are made
+       again whenever it was drawn into since, so drawing it at any smaller size
+       averages all the pixels under each one (trilinear), not four of them */
+    public static void Mips(Target t)
+    {
+        if (!t.dirty || t.screen || t.tex == 0) return;
+        if (nv > 0 && curTex == t.tex) Flush();
+        int levels = 0;
+        Rlgl.GenTextureMipmaps(t.tex, t.w, t.h, PixelFormat.UncompressedR8G8B8A8, &levels);
+        /* a little towards the larger level: smooth, without the softness of an even blend */
+        Rlgl.TextureParameters(t.tex, 0x4000, -50);
+        t.mips = true; t.dirty = false; t.filter = -1;
     }
     public static void Scissor((int x, int y, int w, int h)? r)
     {
@@ -172,6 +186,7 @@ void main(){
     {
         Flush();
         Bind(t);
+        t.dirty = true;
         Rlgl.ClearColor(0, 0, 0, 0);
         Rlgl.ClearScreenBuffers();
     }
@@ -256,6 +271,7 @@ void main(){
         if (nv == 0) return;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var t = curTarget ?? Screen;
+        t.dirty = true;
         Bind(t);
         ApplyBlend(curBlend);
         Rlgl.DisableBackfaceCulling();

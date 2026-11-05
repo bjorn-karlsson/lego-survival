@@ -520,7 +520,7 @@ internal static class Paint2
         double k = Math.Clamp(radius * DPR / 1.5, 1, 16);
         int sw = Math.Max(1, (int)Math.Round(w / k)), sh = Math.Max(1, (int)Math.Round(h / k));
         int mw = Math.Max(sw, w / 2), mh = Math.Max(sh, h / 2);
-        bdFull ??= new OffCanvas(); bdA ??= new OffCanvas(); bdB ??= new OffCanvas();
+        bdFull ??= new OffCanvas { ss = 1 }; bdA ??= new OffCanvas { ss = 1 }; bdB ??= new OffCanvas { ss = 1 };
         if (bdFull.width < w || bdFull.height < h) { bdFull.width = Math.Max(bdFull.width, w); bdFull.height = Math.Max(bdFull.height, h); }
         if (bdA.width != mw || bdA.height != mh) { bdA.width = mw; bdA.height = mh; }
         if (bdB.width != sw || bdB.height != sh) { bdB.width = sw; bdB.height = sh; }
@@ -543,7 +543,7 @@ internal static class Paint2
         int W = Math.Max(1, (int)Math.Ceiling(tw * DPR)), H = Math.Max(1, (int)Math.Ceiling(th * DPR));
         if (tiles.TryGetValue((img, W, H), out var t) && t.target != null && t.target.tex != 0) return t;
         if (tiles.Count > 64) { foreach (var v in tiles.Values) v.Free(); tiles.Clear(); }
-        t = new OffCanvas { width = W, height = H };
+        t = new OffCanvas { ss = 1, width = W, height = H };
         var tg = t.getContext("2d");
         var keepM = curM; var keepA = curAlpha; var keepF = Ctx.Filter;
         Ctx.Filter = null;

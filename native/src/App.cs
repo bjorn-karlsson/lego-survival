@@ -26,6 +26,13 @@ public static class App
     public static double WorldDensity = 1;
     static double autoScale = 1;          /* AUTO's own step: 1, 0.75, 0.5 */
     static OffCanvas world;               /* the field, when it is drawn below the screen's density */
+    /* WHERE THE SMALL FIELD IS DRAWN: a corner of the window itself, which is
+       multisampled, so edges stay smooth at 75% and 50%; it is then resolved into
+       `world` and stretched over the window. Null where the self-test found the
+       driver cannot resolve the window into a texture: then the field is drawn
+       straight into `world`, without anti-aliasing. */
+    static Target worldCorner; static bool cornerOk = true, cornerTested;
+    static Target WorldTgt => world == null ? null : cornerOk ? worldCorner : world.T;
     static Ctx screen;                    /* the window itself, for the page and the scaled field */
     static bool quit, showFps;
     public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris, LastVerts; public static string LastGfx = "";
@@ -85,9 +92,35 @@ public static class App
             Ctx.MainTarget = null;
             return;
         }
-        world ??= new OffCanvas();
+        world ??= new OffCanvas { ss = 1 };
         world.width = Math.Max(1, w); world.height = Math.Max(1, h);
-        Ctx.MainTarget = world.T;
+        worldCorner = new Target { screen = true, w = world.width, h = world.height };
+        if (!cornerTested) { cornerTested = true; cornerOk = CornerSelfTest(); if (!cornerOk) Console.Error.WriteLine("render scale: the window cannot be resolved into a texture here; the scaled field is drawn without anti-aliasing"); }
+        Ctx.MainTarget = WorldTgt;
+    }
+    /* Draw a known colour into a corner of the window, resolve it into a small
+       texture and read one pixel back: whether this driver can do what the scaled
+       field relies on (a blit from the multisampled window into a texture). */
+    static unsafe bool CornerSelfTest()
+    {
+        try
+        {
+            var probe = new OffCanvas { ss = 1, width = 8, height = 8 };
+            var corner = new Target { screen = true, w = 8, h = 8 };
+            var keep = Ctx.MainTarget; Ctx.MainTarget = corner;
+            var c = new Ctx(null);
+            c.fillStyle = "#3a7bd5"; c.fillRect(0, 0, 8, 8);
+            Gpu.Copy(corner, 0, 0, 8, 8, probe.T);
+            Gpu.Flush();
+            Ctx.MainTarget = keep;
+            Image img = Raylib.LoadImageFromTexture(probe.T.rt.Texture);
+            var px = Raylib.GetImageColor(img, 4, 4);
+            Raylib.UnloadImage(img);
+            probe.Free();
+            Gpu.ClearScreen(new Col(16, 21, 26, 1));
+            return Math.Abs(px.R - 0x3a) <= 2 && Math.Abs(px.G - 0x7b) <= 2 && Math.Abs(px.B - 0xd5) <= 2;
+        }
+        catch { return false; }
     }
     static void ApplyVsync()
     {
@@ -231,10 +264,14 @@ public static class App
     {
         if (fieldOnScreen || world == null || Ctx.MainTarget == null) return;
         fieldOnScreen = true;
+        /* the multisampled corner, resolved into the field's texture */
+        if (cornerOk) Gpu.Copy(worldCorner, 0, 0, world.width, world.height, world.T);
         Ctx.MainTarget = null;
         screen.Reset();
         screen.imageSmoothingEnabled = true;
+        screen.globalCompositeOperation = "copy";
         screen.drawImage(world, 0, 0, world.width, world.height, 0, 0, RW, RH);
+        screen.globalCompositeOperation = "source-over";
         double k = RW / Math.Max(1, G.cw);
         G.ctx.setTransform(k, 0, 0, k, 0, 0);
     }
@@ -259,7 +296,7 @@ public static class App
         Gpu.Flush();
         /* the next frame's world goes back into its canvas */
         fieldOnScreen = false;
-        Ctx.MainTarget = world?.T;
+        Ctx.MainTarget = WorldTgt;
     }
 
     /* ---------------------------------------------------------------- the icon */
@@ -268,7 +305,7 @@ public static class App
     static void MakeIcon(string path)
     {
         const int S = 1024;               /* drawn at 4x; the icon file is made from it scaled down, smooth */
-        var cv = new OffCanvas { width = S, height = S };
+        var cv = new OffCanvas { ss = 1, width = S, height = S };
         var g = cv.getContext("2d"); g.Reset();
         Gpu.Clear(cv.T);
         g.scale(4, 4);
@@ -506,9 +543,9 @@ public static class App
             Gpu.Flush();
             Gpu.EndFrame(); MaskPool.EndFrame();
             Raylib.EndDrawing();
-            Ctx.MainTarget = world?.T;
+            Ctx.MainTarget = WorldTgt;
         }
-        Ctx.MainTarget = world?.T;
+        Ctx.MainTarget = WorldTgt;
         curNow = "";
         return answer == true;
     }
