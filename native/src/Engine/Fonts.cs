@@ -21,6 +21,16 @@ public sealed class Face
         return adv[Math.Min(g, adv.Length - 1)];
     }
     public readonly Dictionary<int, Atlas> atlases = new();
+    /* KERNING, as the browser applies it to canvas and page text: the font's own
+       pair adjustments (GPOS 'kern', both pair formats), in font units, for the
+       characters the game draws */
+    readonly Dictionary<(int, int), short> kern = new();
+    public bool HasKern => kern.Count > 0;
+    public double Kern(int cpA, int cpB)
+    {
+        if (kern.Count == 0 || !gids.TryGetValue(cpA, out int a) || !gids.TryGetValue(cpB, out int b)) return 0;
+        return kern.TryGetValue((a, b), out var k) ? k : 0;
+    }
 
     public Face(string name, byte[] data)
     {
@@ -42,6 +52,7 @@ public sealed class Face
             tables[tag] = (int)U32(d, o + 8);
         }
         if (tables.TryGetValue("head", out int head)) upm = U16(d, head + 18);
+        gposAt = tables.TryGetValue("GPOS", out int gp) ? gp : -1;
         int nHM = 0;
         if (tables.TryGetValue("hhea", out int hhea)) { asc = S16(d, hhea + 4); desc = S16(d, hhea + 6); gap = S16(d, hhea + 8); nHM = U16(d, hhea + 34); }
         if (nHM > 0 && tables.TryGetValue("hmtx", out int hmtx))
@@ -93,6 +104,118 @@ public sealed class Face
             }
         }
     }
+    int gposAt = -1;
+    /* the pairs among these characters that the font kerns */
+    public void LoadKern(IEnumerable<int> cps)
+    {
+        if (gposAt < 0 || kern.Count > 0) return;
+        try
+        {
+            var d = data; int g0 = gposAt;
+            var glyphs = cps.Where(gids.ContainsKey).Select(c => gids[c]).Distinct().ToArray();
+            if (glyphs.Length == 0) return;
+            var gset = new HashSet<int>(glyphs);
+            int featList = g0 + U16(d, g0 + 6), lookupList = g0 + U16(d, g0 + 8);
+            var lookups = new SortedSet<int>();
+            int nf = U16(d, featList);
+            for (int i = 0; i < nf; i++)
+            {
+                string tag = System.Text.Encoding.ASCII.GetString(d, featList + 2 + i * 6, 4);
+                if (tag != "kern") continue;
+                int ft = featList + U16(d, featList + 6 + i * 6);
+                int nl = U16(d, ft + 2);
+                for (int k = 0; k < nl; k++) lookups.Add(U16(d, ft + 4 + k * 2));
+            }
+            int nLook = U16(d, lookupList);
+            foreach (int li in lookups)
+            {
+                if (li >= nLook) continue;
+                int lk = lookupList + U16(d, lookupList + 2 + li * 2);
+                int type = U16(d, lk), nsub = U16(d, lk + 4);
+                /* this lookup's value for each pair: the first subtable that applies wins */
+                var done = new HashSet<(int, int)>();
+                for (int si = 0; si < nsub; si++)
+                {
+                    int st = lk + U16(d, lk + 6 + si * 2), stType = type;
+                    if (type == 9) { stType = U16(d, st + 2); st += (int)U32(d, st + 4); }
+                    if (stType != 2) continue;
+                    PairPos(d, st, glyphs, gset, done);
+                }
+            }
+        }
+        catch { kern.Clear(); }
+    }
+    static int VRSize(int fmt) { int n = 0; for (int b = 0; b < 8; b++) if ((fmt & (1 << b)) != 0) n += 2; return n; }
+    /* the XAdvance a value record carries (0 if it has none) */
+    static int XAdv(byte[] d, int at, int fmt)
+    {
+        int o = at;
+        if ((fmt & 1) != 0) o += 2;
+        if ((fmt & 2) != 0) o += 2;
+        return (fmt & 4) != 0 ? S16(d, o) : 0;
+    }
+    static int CoverageIndex(byte[] d, int cov, int g)
+    {
+        int fmt = U16(d, cov);
+        if (fmt == 1)
+        {
+            int n = U16(d, cov + 2), lo = 0, hi = n - 1;
+            while (lo <= hi) { int m = (lo + hi) >> 1, v = U16(d, cov + 4 + m * 2); if (v == g) return m; if (v < g) lo = m + 1; else hi = m - 1; }
+            return -1;
+        }
+        if (fmt == 2)
+        {
+            int n = U16(d, cov + 2);
+            for (int i = 0; i < n; i++) { int r = cov + 4 + i * 6, a = U16(d, r), b = U16(d, r + 2); if (g >= a && g <= b) return U16(d, r + 4) + g - a; }
+        }
+        return -1;
+    }
+    static int ClassOf(byte[] d, int cd, int g)
+    {
+        int fmt = U16(d, cd);
+        if (fmt == 1) { int start = U16(d, cd + 2), n = U16(d, cd + 4); return g >= start && g < start + n ? U16(d, cd + 6 + (g - start) * 2) : 0; }
+        if (fmt == 2) { int n = U16(d, cd + 2); for (int i = 0; i < n; i++) { int r = cd + 4 + i * 6; if (g >= U16(d, r) && g <= U16(d, r + 2)) return U16(d, r + 4); } }
+        return 0;
+    }
+    void PairPos(byte[] d, int st, int[] glyphs, HashSet<int> gset, HashSet<(int, int)> done)
+    {
+        int fmt = U16(d, st), cov = st + U16(d, st + 2), vf1 = U16(d, st + 4), vf2 = U16(d, st + 6);
+        int s1 = VRSize(vf1), s2 = VRSize(vf2);
+        if (fmt == 1)
+        {
+            int nset = U16(d, st + 8);
+            foreach (int a in glyphs)
+            {
+                int ci = CoverageIndex(d, cov, a);
+                if (ci < 0 || ci >= nset) continue;
+                int ps = st + U16(d, st + 10 + ci * 2), n = U16(d, ps), rec = 2 + s1 + s2;
+                for (int i = 0; i < n; i++)
+                {
+                    int r = ps + 2 + i * rec, b = U16(d, r);
+                    if (!gset.Contains(b) || !done.Add((a, b))) continue;
+                    int v = XAdv(d, r + 2, vf1);
+                    if (v != 0) kern[(a, b)] = (short)(kern.GetValueOrDefault((a, b)) + v);
+                }
+            }
+        }
+        else if (fmt == 2)
+        {
+            int cd1 = st + U16(d, st + 8), cd2 = st + U16(d, st + 10), c1n = U16(d, st + 12), c2n = U16(d, st + 14);
+            int rec = s1 + s2;
+            var cls2 = glyphs.ToDictionary(b => b, b => ClassOf(d, cd2, b));
+            foreach (int a in glyphs)
+            {
+                if (CoverageIndex(d, cov, a) < 0) continue;
+                int c1 = ClassOf(d, cd1, a); if (c1 >= c1n) continue;
+                foreach (int b in glyphs)
+                {
+                    int c2 = cls2[b]; if (c2 >= c2n || !done.Add((a, b))) continue;
+                    int v = XAdv(d, st + 16 + (c1 * c2n + c2) * rec, vf1);
+                    if (v != 0) kern[(a, b)] = (short)(kern.GetValueOrDefault((a, b)) + v);
+                }
+            }
+        }
+    }
     public bool Has(int cp) => cmap.Count == 0 || cmap.Contains(cp);
     /* size of the font in px of the em box -> raylib's "size" (which is ascent-descent) */
     public float RaylibSize(float emPx) => emPx * (asc - desc) / upm;
@@ -133,6 +256,8 @@ public static unsafe class Fonts
         F600 = L("f600", "Fredoka-600.ttf"); F700 = L("f700", "Fredoka-700.ttf");
         Sans = L("sans", "DejaVuSans.ttf"); SansBold = L("sansb", "DejaVuSans-Bold.ttf");
         Mono = L("mono", "DejaVuSansMono.ttf"); Emoji = L("emoji", "NotoEmoji.ttf");
+        var cps = Enumerable.Range(32, 95).Concat(Extra).ToArray();
+        foreach (var f in new[] { Titan, F400, F500, F600, F700, Sans, SansBold }) f.LoadKern(cps);
     }
     public static Face Pick(string family, int weight)
     {

@@ -885,11 +885,13 @@ public sealed class Ctx
     {
         if (string.IsNullOrEmpty(t)) return 0;
         const int REF = 64;
-        double w = 0;
+        double w = 0; Face pf = null; int pc = 0;
         foreach (var rune in t.EnumerateRunes())
         {
             w += ls;
             var face = Fonts.For(f.face, rune.Value);
+            if (face == pf && face.HasKern) w += face.Kern(pc, rune.Value) * f.px / face.upm;
+            pf = face; pc = rune.Value;
             double a = face.Adv(rune.Value);
             if (a >= 0) { w += a * f.px / face.upm; continue; }
             var at = Fonts.Get(face, REF);
@@ -943,10 +945,12 @@ public sealed class Ctx
         ulong pmc = Gpu.Pack(pm.r, pm.g, pm.b, pm.a);
         foreach (var (odx, ody) in offs)
         {
-            double pen = 0;
+            double pen = 0; Face pf = null; int pc = 0;
             foreach (var rune in t.EnumerateRunes())
             {
                 var face = Fonts.For(f.face, rune.Value);
+                if (face == pf && face.HasKern) pen += face.Kern(pc, rune.Value) * f.px / face.upm;
+                pf = face; pc = rune.Value;
                 var at = Fonts.Get(face, dsize);
                 if (!at.idx.TryGetValue(rune.Value, out int gi)) { if (!at.idx.TryGetValue('?', out gi)) continue; }
                 var g = at.font.Glyphs[gi]; var rc = at.font.Recs[gi];
