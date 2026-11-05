@@ -12,7 +12,7 @@ public static unsafe class SoundOut
     public const int Rate = 48000;
     static AudioContext ctx;
     static AudioStream stream;
-    static bool open, tried;
+    static bool open, tried, warned;
     public static bool Available
     {
         get
@@ -27,6 +27,7 @@ public static unsafe class SoundOut
                     open = Raylib.IsAudioDeviceReady();
                 }
                 catch { open = false; }
+                Console.Error.WriteLine(open ? $"audio: device open, {Rate} Hz" : "audio: no sound device; the game runs silent");
             }
             return open;
         }
@@ -51,7 +52,11 @@ public static unsafe class SoundOut
             /* the mix is not clamped (as in Chromium); the speakers are */
             for (int i = 0; i < span.Length; i++) span[i] = Math.Clamp(span[i], -1f, 1f);
         }
-        catch { span.Clear(); }
+        catch (Exception e)
+        {
+            span.Clear();
+            if (!warned) { warned = true; Console.Error.WriteLine("audio: a buffer failed (" + e.GetType().Name + ": " + e.Message + ")\n" + e.StackTrace); }
+        }
     }
     public static void Close()
     {

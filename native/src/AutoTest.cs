@@ -198,7 +198,7 @@ public static class AutoTest
                     case "status":
                         Console.WriteLine($"[status] frame {frame} state={G.state} wave={G.wave?.n}/{G.wave?.state} enemies={G.enemies?.Count} " +
                             $"hp={G.player?.hp:0.#}/{G.player?.maxHp:0.#} lvl={G.player?.level} kills={G.player?.kills} studs={G.player?.studs} " +
-                            $"picks={G.pendingPicks?.Count} view={G.cw:0}x{G.ch:0}@{G.dpr:0.##} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}");
+                            $"picks={G.pendingPicks?.Count} view={G.cw:0}x{G.ch:0}@{G.dpr:0.##} fps={fps:0} upd={G.updMs:0.0}ms ren={G.renMs:0.0}ms page={App.PageMs:0.0}ms gl={App.GlMs:0.0}ms calls={App.LastCalls} tris={App.LastTris} errors={Dom.errors.Count}" + (G.A.ctx != null ? $" audio={G.A.ctx.currentTime:0.0}s voices={G.A.ctx.LiveSources}" : ""));
                         break;
 
                     case "gfx": Console.WriteLine($"[gfx] frame {frame} enemies={G.enemies.Count} calls={App.LastCalls} tris={App.LastTris} verts={App.LastVerts} ({(App.LastVerts * 24 + App.LastTris * 6) / 1048576.0:0.00} MB to the GPU) :: {App.LastGfx}"); break;

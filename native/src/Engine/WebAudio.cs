@@ -63,13 +63,14 @@ public sealed class AudioParam
        events' segments, exponential ramps by a per-frame multiplier from an
        exact start (as Chromium's timeline does), events that are over dropped.
        `Constant` says whether the block holds one value throughout. */
-    readonly float[] vals = new float[AudioContext.BLOCK];
+    float[] vals;                 /* made on first use: most params are never automated */
     long valsBlock = -1;
     internal bool Constant;
     internal float[] Values()
     {
         if (valsBlock == ctx.blockId) return vals;
         valsBlock = ctx.blockId;
+        vals ??= new float[AudioContext.BLOCK];
         const int B = AudioContext.BLOCK;
         long f0 = ctx.blockFrame; double sr = ctx.sampleRate;
         Prune(f0 / sr);
@@ -309,7 +310,8 @@ public sealed class OscillatorNode : AudioScheduledSourceNode
            every browser build of the game sounds like, so it is kept. */
         bool aRate = fm || dm || frequency.Automated || detune.Automated;
         int lag = aRate && startF > f0 && startF < f0 + AudioContext.BLOCK ? (int)(startF - f0) : 0;
-        var fv = frequency.Values(); var dv = detune.Values();
+        var fv = frequency.Values();
+        var dv = dm || detune.Automated ? detune.Values() : null; double dConst = detune.value;
         float lastF = float.NaN; float[] hi = null, lo = null; float tif = 0;
         for (int i = 0; i < AudioContext.BLOCK; i++)
         {
@@ -317,7 +319,7 @@ public sealed class OscillatorNode : AudioScheduledSourceNode
             if (fr < startF || fr >= stopF) { L[i] = R[i] = 0; continue; }
             int j = i - lag;
             double f = fv[j] + (fm ? ModAt(frequency, j) : 0);
-            double dt = dv[j] + (dm ? ModAt(detune, j) : 0);
+            double dt = (dv != null ? dv[j] : dConst) + (dm ? ModAt(detune, j) : 0);
             if (dt != 0) f *= Math.Pow(2, dt / 1200);
             f = Math.Clamp(f, -nyq, nyq);
             float ff = (float)f, incr = ff * wave.RateScale;
