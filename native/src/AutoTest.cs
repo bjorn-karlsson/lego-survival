@@ -36,7 +36,7 @@ public static class AutoTest
             l.Add(s.Substring(i + 1));
         }
     }
-    static double px = 400, py = 300, perfT0;
+    static double px = 400, py = 300, perfT0; static int gc0, gc1, gc2; static long alloc0;
     /* runs before the frame: returns false to quit */
     public static bool Step(int frame, double fps, Action<string> shot)
     {
@@ -185,8 +185,8 @@ public static class AutoTest
                            driver's share of it), monsters; then start counting again */
                         double secs = (G.perfNow() - perfT0) / 1000; int n = Math.Max(1, G.perfN);
                         if (arg != "reset" && perfT0 > 0)
-                            Console.WriteLine($"C#   fps={G.perfN / secs:0} update={G.perfUpd / n:0.00}ms render={G.perfRen / n:0.00}ms (own CPU {(G.perfRen - G.perfGl) / n:0.00}ms, driver {G.perfGl / n:0.00}ms) enemies={G.perfEn / n:0}");
-                        G.perfUpd = G.perfRen = G.perfEn = G.perfGl = 0; G.perfN = 0; perfT0 = G.perfNow();
+                            Console.WriteLine($"C#   fps={G.perfN / secs:0} update={G.perfUpd / n:0.00}ms render={G.perfRen / n:0.00}ms (own CPU {(G.perfRen - G.perfGl) / n:0.00}ms, driver {G.perfGl / n:0.00}ms) worst={G.perfMax:0.0}ms gc0/1/2={GC.CollectionCount(0) - gc0}/{GC.CollectionCount(1) - gc1}/{GC.CollectionCount(2) - gc2} alloc={(GC.GetTotalAllocatedBytes() - alloc0) / 1048576.0 / Math.Max(1, G.perfN):0.00}MB/frame enemies={G.perfEn / n:0}");
+                        G.perfUpd = G.perfRen = G.perfEn = G.perfGl = G.perfMax = 0; gc0 = GC.CollectionCount(0); gc1 = GC.CollectionCount(1); gc2 = GC.CollectionCount(2); alloc0 = GC.GetTotalAllocatedBytes(); G.perfN = 0; perfT0 = G.perfNow();
                         break;
                     }
                     case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }
@@ -198,6 +198,7 @@ public static class AutoTest
                         break;
 
                     case "gfx": Console.WriteLine($"[gfx] frame {frame} enemies={G.enemies.Count} calls={App.LastCalls} tris={App.LastTris} :: {App.LastGfx}"); break;
+                    case "atlas": Console.WriteLine($"[atlas] frame {frame}: {Fonts.AtlasBuilds} glyph atlases built, {Fonts.AtlasTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms in all"); break;
                     case "quit": return false;
                 }
             }

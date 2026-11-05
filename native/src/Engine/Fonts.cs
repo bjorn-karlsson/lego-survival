@@ -144,6 +144,7 @@ public static unsafe class Fonts
         return weight >= 600 ? SansBold : Sans;
     }
     /* the atlas for a face at a device size, made the first time it is asked for */
+    public static int AtlasBuilds; public static long AtlasTicks;
     public static Atlas Get(Face face, int size)
     {
         size = Math.Clamp(size, 4, 220);
@@ -154,19 +155,27 @@ public static unsafe class Fonts
         if (face == Emoji) { cps.Clear(); foreach (var c in Extra) if (face.Has(c)) cps.Add(c); if (cps.Count == 0) cps.Add(32); }
         var arr = cps.ToArray();
         float rs = face.RaylibSize(size);
-        Font font;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        /* what LoadFontFromMemory does, with the atlas premultiplied (the renderer
+           blends everything premultiplied) BEFORE it goes to the GPU: reading a texture
+           back to fix it stalls the whole frame, and a new size can appear mid-fight */
+        var font = new Font();
+        int fsize = (int)Math.Round(rs);
         fixed (byte* d = face.data) fixed (int* cp = arr)
         {
-            sbyte* ext = (sbyte*)Marshal.StringToHGlobalAnsi(".ttf");
-            font = Raylib.LoadFontFromMemory(ext, d, face.data.Length, (int)Math.Round(rs), cp, arr.Length);
-            Marshal.FreeHGlobal((IntPtr)ext);
+            int got = 0;
+            font.BaseSize = fsize; font.GlyphPadding = 4;
+            font.Glyphs = Raylib.LoadFontData(d, face.data.Length, fsize, cp, arr.Length, FontType.Default, &got);
+            font.GlyphCount = got;
+            Rectangle* recs = null;
+            Image img = Raylib.GenImageFontAtlas(font.Glyphs, &recs, got, fsize, 4, 0);
+            font.Recs = recs;
+            Raylib.ImageAlphaPremultiply(&img);
+            font.Texture = Raylib.LoadTextureFromImage(img);
+            Raylib.UnloadImage(img);
         }
-        /* premultiply the atlas: the renderer blends everything premultiplied */
-        Image img = Raylib.LoadImageFromTexture(font.Texture);
-        Raylib.ImageAlphaPremultiply(&img);
-        Raylib.UpdateTexture(font.Texture, img.Data);
-        Raylib.UnloadImage(img);
         Raylib.SetTextureFilter(font.Texture, TextureFilter.Bilinear);
+        AtlasBuilds++; AtlasTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         a = new Atlas { font = font, size = size, tex = font.Texture.Id };
         for (int i = 0; i < font.GlyphCount; i++) a.idx[font.Glyphs[i].Value] = i;
         a.asc = (float)Math.Round(rs) * face.asc / (face.asc - face.desc);

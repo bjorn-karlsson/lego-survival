@@ -703,8 +703,9 @@ public static partial class G
         double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         updMs += ((t1 - t0) * f - updMs) * 0.05; renMs += ((t2 - t1) * f - renMs) * 0.05;
         perfUpd += (t1 - t0) * f; perfRen += (t2 - t1) * f; perfN++; perfEn += enemies.Count;
+        perfMax = Math.Max(perfMax, (t2 - t0) * f);
     }
-    public static double perfUpd, perfRen, perfEn, perfGl; public static int perfN;
+    public static double perfUpd, perfRen, perfEn, perfGl, perfMax; public static int perfN;
     public static double updMs, renMs;
     /* JS 32431–32443: the script's last statements */
     public static void GameBoot()
