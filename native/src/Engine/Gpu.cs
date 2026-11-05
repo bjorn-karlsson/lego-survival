@@ -21,6 +21,18 @@ public sealed class Target
    changes: the texture, the blend, the target, the clip mask, or the gradient.
    Everything is premultiplied alpha, so offscreen canvases composite onto each
    other exactly the way a browser's do. */
+/* what a frame asked of the renderer (F3, --script 'gfx'): plain counters, reset each frame */
+public static class GfxStats
+{
+    public static int Fills, FillsFan, FillsMulti, FillsTess, Strokes, Texts, Glyphs, Clips, Images, GradFills, Shadows, NewTargets;
+    public static int BrkTarget, BrkBlend, BrkClip, BrkTex, BrkGrad, BrkFlushDirect;
+    public static long TFill, TStroke, TImage, TText, TClip, TPath;
+    static double Ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    public static string Times() => $"fill {Ms(TFill):0.0}ms stroke {Ms(TStroke):0.0}ms image {Ms(TImage):0.0}ms text {Ms(TText):0.0}ms clip {Ms(TClip):0.0}ms";
+    public static string Line() => $"fills {Fills} (fan {FillsFan}, multi {FillsMulti}, tess {FillsTess}, grad {GradFills}) strokes {Strokes} texts {Texts}/{Glyphs} clips {Clips} images {Images} shadows {Shadows} newTargets {NewTargets} | {Times()} | breaks: target {BrkTarget} blend {BrkBlend} clip {BrkClip} tex {BrkTex} grad {BrkGrad} direct {BrkFlushDirect}";
+    public static void Reset() { TFill = TStroke = TImage = TText = TClip = TPath = 0; Fills = FillsFan = FillsMulti = FillsTess = Strokes = Texts = Glyphs = Clips = Images = GradFills = Shadows = NewTargets = 0; BrkTarget = BrkBlend = BrkClip = BrkTex = BrkGrad = BrkFlushDirect = 0; }
+}
+
 public static unsafe class Gpu
 {
     const int VF = 8;
@@ -123,6 +135,7 @@ void main(){
 
     public static Target NewTarget(int w, int h)
     {
+        GfxStats.NewTargets++;
         w = Math.Max(1, w); h = Math.Max(1, h);
         var rt = Raylib.LoadRenderTexture(w, h);
         Raylib.SetTextureFilter(rt.Texture, TextureFilter.Bilinear);
@@ -191,6 +204,7 @@ void main(){
     {
         if (t != curTarget || op != curBlend || clip != curClip || tex != curTex || useGrad)
         {
+            if (nv > 0) { if (t != curTarget) GfxStats.BrkTarget++; else if (op != curBlend) GfxStats.BrkBlend++; else if (clip != curClip) GfxStats.BrkClip++; else if (useGrad) GfxStats.BrkGrad++; else GfxStats.BrkTex++; }
             Flush();
             curTarget = t; curBlend = op; curClip = clip; curTex = tex; useGrad = false; curGrad = null;
         }
@@ -199,6 +213,7 @@ void main(){
     {
         if (t != curTarget || op != curBlend || clip != curClip || !useGrad || g != curGrad)
         {
+            if (nv > 0) { if (t != curTarget) GfxStats.BrkTarget++; else if (op != curBlend) GfxStats.BrkBlend++; else if (clip != curClip) GfxStats.BrkClip++; else GfxStats.BrkGrad++; }
             Flush();
             curTarget = t; curBlend = op; curClip = clip; useGrad = true; curGrad = g; curTex = whiteTex;
         }

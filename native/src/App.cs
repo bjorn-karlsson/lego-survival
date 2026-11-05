@@ -28,7 +28,7 @@ public static class App
     static OffCanvas world;               /* the field, when it is drawn below the screen's density */
     static Ctx screen;                    /* the window itself, for the page and the scaled field */
     static bool quit, showFps;
-    public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris;
+    public static double PageMs, FrameMs, GlMs; public static int LastCalls, LastTris; public static string LastGfx = "";
     static string pendingShot;
     static double fpsShown, fpsAcc; static int fpsN;
 
@@ -97,6 +97,8 @@ public static class App
 
     public static int Run()
     {
+        /* --det: the same random numbers and the same clock every run (see G.FakeClock) */
+        if (Program.Has("--det")) { Js.Seed(20261105); G.FakeClock = 0; }
         Raylib.SetTraceLogLevel(TraceLogLevel.Error);
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.Msaa4xHint | ConfigFlags.VSyncHint);
         int iw = int.Parse(Program.Opt("--w") ?? "1280"), ih = int.Parse(Program.Opt("--h") ?? "800");
@@ -159,6 +161,7 @@ public static class App
             if (!minimised) Input();
             if (AutoTest.On && !AutoTest.Step(frameNo, fpsShown, f => pendingShot = f)) quit = true;
 
+            if (!double.IsNaN(G.FakeClock)) G.FakeClock += 1000.0 / 60;
             /* ---- timers, then the frame ---- */
             G.RunTimers();
             double now = G.perfNow();
@@ -179,7 +182,7 @@ public static class App
             if (frameNo == shotAt) { Shot.Save(shotOut); quit = Program.Has("--quit-after-shot") || quit; }
             if (pendingShot != null) { Shot.Save(pendingShot); pendingShot = null; }
             Raylib.EndDrawing();
-            LastCalls = Gpu.DrawCalls; LastTris = Gpu.Tris;
+            LastCalls = Gpu.DrawCalls; LastTris = Gpu.Tris; LastGfx = GfxStats.Line(); GfxStats.Reset();
             GlMs += (Gpu.GlTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency - GlMs) * 0.05;
             Gpu.DrawCalls = 0; Gpu.Tris = 0; Gpu.GlTicks = 0;
             if (minimised) Raylib.WaitTime(0.05);

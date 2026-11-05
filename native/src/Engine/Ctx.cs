@@ -150,21 +150,30 @@ public sealed class Ctx
 
     /* ================= path ================= */
     sealed class Sub { public readonly List<Vector2> p = new(); public bool closed; }
-    readonly List<Sub> subs = new();
+    /* sub-paths and their point lists are used again, path after path: a frame
+       builds thousands of paths, and making each from new is most of the garbage */
+    List<Sub> subs = new();
+    readonly Stack<Sub> subPool = new();
+    readonly Stack<List<Sub>> listPool = new();
     Sub cur;
     double ux, uy;            /* the current point, user space */
     bool hasPt;
-    public void beginPath() { subs.Clear(); cur = null; hasPt = false; }
+    Sub Fresh() { var sb = subPool.Count > 0 ? subPool.Pop() : new Sub(); sb.p.Clear(); sb.closed = false; return sb; }
+    void Release(List<Sub> l) { foreach (var sb in l) subPool.Push(sb); l.Clear(); }
+    public void beginPath() { Release(subs); cur = null; hasPt = false; }
+    /* a path drawn in passing (fill(path2d), strokeRect...) leaves the current path alone */
+    List<Sub> Aside() { var keep = subs; subs = listPool.Count > 0 ? listPool.Pop() : new List<Sub>(); return keep; }
+    void Back(List<Sub> keep) { Release(subs); listPool.Push(subs); subs = keep; }
     void NewSub(double x, double y)
     {
-        cur = new Sub(); subs.Add(cur);
+        cur = Fresh(); subs.Add(cur);
         cur.p.Add(X(x, y)); ux = x; uy = y; hasPt = true;
     }
     public void moveTo(double x, double y) { if (!Js.IsFinite(x) || !Js.IsFinite(y)) return; NewSub(x, y); }
     public void lineTo(double x, double y)
     {
         if (!Js.IsFinite(x) || !Js.IsFinite(y)) return;
-        if (cur == null || cur.closed) { if (cur != null && cur.closed) { var st = cur.p[0]; cur = new Sub(); subs.Add(cur); cur.p.Add(st); } else { NewSub(x, y); return; } }
+        if (cur == null || cur.closed) { if (cur != null && cur.closed) { var st = cur.p[0]; cur = Fresh(); subs.Add(cur); cur.p.Add(st); } else { NewSub(x, y); return; } }
         cur.p.Add(X(x, y)); ux = x; uy = y; hasPt = true;
     }
     public void closePath()
@@ -175,7 +184,7 @@ public sealed class Ctx
     }
     void EnsureOpen()
     {
-        if (cur != null && cur.closed) { var st = cur.p[0]; cur = new Sub(); subs.Add(cur); cur.p.Add(st); }
+        if (cur != null && cur.closed) { var st = cur.p[0]; cur = Fresh(); subs.Add(cur); cur.p.Add(st); }
     }
     public void rect(double x, double y, double w, double h)
     {
@@ -302,11 +311,13 @@ public sealed class Ctx
         if (live == 0) return;
         if (live == 1 && Convex(only.p))
         {
+            GfxStats.FillsFan++;
             var p = only.p; int n = p.Count;
             if (n > 2 && p[n - 1] == p[0]) n--;
             for (int i = 1; i < n - 1; i++) { outTri.Add(p[0]); outTri.Add(p[i]); outTri.Add(p[i + 1]); }
             return;
         }
+        GfxStats.FillsTess++;
         var tess = new Tess();
         foreach (var sb in list)
         {
@@ -324,24 +335,33 @@ public sealed class Ctx
         }
         if (outTri.Count % 3 != 0) outTri.RemoveRange(outTri.Count - outTri.Count % 3, outTri.Count % 3);
     }
+    /* CONVEX: every turn the same way, and the edges sweep round once -- their
+       direction's x and y each change sign at most twice going round (a star
+       turns the same way at every corner but goes round more than once) */
     static bool Convex(List<Vector2> p)
     {
         int n = p.Count;
         if (n > 2 && p[n - 1] == p[0]) n--;
         if (n < 3) return false;
-        int sign = 0; double turn = 0;
+        int sign = 0, xs = 0, ys = 0, xFirst = 0, yFirst = 0, xFlips = 0, yFlips = 0;
         for (int i = 0; i < n; i++)
         {
-            var a = p[i]; var b = p[(i + 1) % n]; var c = p[(i + 2) % n];
-            float cx = (b.X - a.X) * (c.Y - b.Y) - (b.Y - a.Y) * (c.X - b.X);
-            if (Math.Abs(cx) < 1e-4f) continue;
-            int sg = cx > 0 ? 1 : -1;
-            if (sign == 0) sign = sg; else if (sg != sign) return false;
-            double a1 = Math.Atan2(b.Y - a.Y, b.X - a.X), a2 = Math.Atan2(c.Y - b.Y, c.X - b.X);
-            double d = a2 - a1; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
-            turn += d;
+            var a = p[i]; var b = p[i + 1 < n ? i + 1 : i + 1 - n]; var c = p[i + 2 < n ? i + 2 : i + 2 - n];
+            float ex = b.X - a.X, ey = b.Y - a.Y;
+            float cx = ex * (c.Y - b.Y) - ey * (c.X - b.X);
+            if (cx > 1e-4f || cx < -1e-4f)
+            {
+                int sg = cx > 0 ? 1 : -1;
+                if (sign == 0) sign = sg; else if (sg != sign) return false;
+            }
+            int sx = ex > 1e-6f ? 1 : ex < -1e-6f ? -1 : 0, sy = ey > 1e-6f ? 1 : ey < -1e-6f ? -1 : 0;
+            if (sx != 0) { if (xs != 0 && sx != xs) xFlips++; if (xFirst == 0) xFirst = sx; xs = sx; }
+            if (sy != 0) { if (ys != 0 && sy != ys) yFlips++; if (yFirst == 0) yFirst = sy; ys = sy; }
         }
-        return Math.Abs(turn) < 2 * Math.PI + 0.5;
+        /* the wrap from the last edge back to the first */
+        if (xs != 0 && xFirst != 0 && xs != xFirst) xFlips++;
+        if (ys != 0 && yFirst != 0 && ys != yFirst) yFlips++;
+        return xFlips <= 2 && yFlips <= 2;
     }
     /* send triangles with a paint */
     void Emit(List<Vector2> t, Paint paint, double extraAlpha = 1)
@@ -377,6 +397,7 @@ public sealed class Ctx
     void Shadow(List<Vector2> t)
     {
         if (s.shCol.a <= 0 || (s.shBlur <= 0 && s.shX == 0 && s.shY == 0) || t.Count == 0) return;
+        GfxStats.Shadows++;
         /* a blur, roughly: the shape again in soft rings around the offset */
         double blur = s.shBlur, ox = s.shX, oy = s.shY;
         var copy = new List<Vector2>(t.Count);
@@ -398,29 +419,37 @@ public sealed class Ctx
     }
     public void fill(string rule = "nonzero")
     {
+        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        try {
+        GfxStats.Fills++; if (s.fill.grad != null) GfxStats.GradFills++;
         TessFill(rule == "evenodd", subs, tri);
         Shadow(tri);
         Emit(tri, s.fill);
+            } finally { GfxStats.TFill += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void fill(Path2D p, string rule = "nonzero")
     {
-        var saveSubs = new List<Sub>(subs); var saveCur = cur; double sx = ux, sy = uy; bool sh = hasPt;
-        beginPath(); p.Replay(this);
+        var keep = Aside(); var saveCur = cur; double sx = ux, sy = uy; bool sh = hasPt;
+        cur = null; hasPt = false; p.Replay(this);
         fill(rule);
-        subs.Clear(); subs.AddRange(saveSubs); cur = saveCur; ux = sx; uy = sy; hasPt = sh;
+        Back(keep); cur = saveCur; ux = sx; uy = sy; hasPt = sh;
     }
     public void stroke()
     {
+        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        try {
+        GfxStats.Strokes++;
         BuildStroke(subs, tri);
         Shadow(tri);
         Emit(tri, s.stroke, strokeAlphaK);
+            } finally { GfxStats.TStroke += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void stroke(Path2D p)
     {
-        var saveSubs = new List<Sub>(subs); var saveCur = cur; double sx = ux, sy = uy; bool sh = hasPt;
-        beginPath(); p.Replay(this);
+        var keep = Aside(); var saveCur = cur; double sx = ux, sy = uy; bool sh = hasPt;
+        cur = null; hasPt = false; p.Replay(this);
         stroke();
-        subs.Clear(); subs.AddRange(saveSubs); cur = saveCur; ux = sx; uy = sy; hasPt = sh;
+        Back(keep); cur = saveCur; ux = sx; uy = sy; hasPt = sh;
     }
     public void fillRect(double x, double y, double w, double h)
     {
@@ -433,11 +462,11 @@ public sealed class Ctx
     }
     public void strokeRect(double x, double y, double w, double h)
     {
-        var keep = new List<Sub>(subs); var kc = cur;
-        subs.Clear(); cur = null;
+        var keep = Aside(); var kc = cur;
+        cur = null;
         rect(x, y, w, h);
         stroke();
-        subs.Clear(); subs.AddRange(keep); cur = kc;
+        Back(keep); cur = kc;
     }
     public void clearRect(double x, double y, double w, double h)
     {
@@ -453,8 +482,11 @@ public sealed class Ctx
        are multiplied by it (an intersection with any clip already in force) */
     public void clip(string rule = "nonzero")
     {
+        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        try {
+        GfxStats.Clips++;
         var tg = Tgt;
-        var mask = Gpu.NewTarget(tg.w, tg.h);
+        var mask = MaskPool.Get(tg.w, tg.h);
         TessFill(rule == "evenodd", subs, tri);
         Gpu.Use(mask, BlendOp.SourceOver, s.clip, Gpu.WhiteTex);
         foreach (var v in tri) { }
@@ -464,15 +496,15 @@ public sealed class Ctx
             for (int k = 0; k < 3; k++) { var v = tri[i + k]; Gpu.V(v.X, v.Y, 0.5f, 0.5f, 1, 1, 1, 1); }
         }
         Gpu.Flush();
-        MaskPool.Track(mask);
         s.clip = mask;
+            } finally { GfxStats.TClip += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
     public void clip(Path2D p, string rule = "nonzero")
     {
-        var saveSubs = new List<Sub>(subs); var saveCur = cur;
-        beginPath(); p.Replay(this);
+        var keep = Aside(); var saveCur = cur;
+        cur = null; hasPt = false; p.Replay(this);
         clip(rule);
-        subs.Clear(); subs.AddRange(saveSubs); cur = saveCur;
+        Back(keep); cur = saveCur;
     }
 
     /* ================= strokes ================= */
@@ -645,6 +677,9 @@ public sealed class Ctx
     public void strokeText(string t, double x, double y, double maxWidth = 0) => DrawText(t, x, y, maxWidth, true);
     unsafe void DrawText(string t, double x, double y, double maxWidth, bool stroke)
     {
+        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        try {
+        GfxStats.Texts++; GfxStats.Glyphs += t?.Length ?? 0;
         if (string.IsNullOrEmpty(t) || !Js.IsFinite(x) || !Js.IsFinite(y)) return;
         var f = s.font;
         double sc = Scale;
@@ -708,6 +743,7 @@ public sealed class Ctx
                 else pen += adv / sc;
             }
         }
+            } finally { GfxStats.TText += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
 
     /* ================= images ================= */
@@ -715,7 +751,10 @@ public sealed class Ctx
     public void drawImage(OffCanvas img, double dx, double dy, double dw, double dh) => drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
     public void drawImage(OffCanvas img, double sx, double sy, double sw, double sh, double dx, double dy, double dw, double dh)
     {
+        long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
+        try {
         if (img == null) return;
+        GfxStats.Images++;
         var T = img.T;
         if (T == Tgt) return;
         Gpu.ReadingFrom(T);
@@ -729,6 +768,7 @@ public sealed class Ctx
         Gpu.Need(6);
         Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p1.X, p1.Y, u1, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a);
         Gpu.V(p0.X, p0.Y, u0, v0, a, a, a, a); Gpu.V(p2.X, p2.Y, u1, v1, a, a, a, a); Gpu.V(p3.X, p3.Y, u0, v1, a, a, a, a);
+            } finally { GfxStats.TImage += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
     }
 
     /* ================= gradients ================= */
@@ -736,12 +776,39 @@ public sealed class Ctx
     public Grad createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) => new Grad { radial = true, x0 = x0, y0 = y0, r0 = r0, x1 = x1, y1 = y1, r1 = r1 };
 }
 
-/* the masks clip() makes are freed at the end of the frame */
+/* THE MASKS clip() DRAWS INTO are kept and used again. A mask lives for the rest
+   of the frame it was made in; at the end of the frame it goes back to the pool,
+   and the next clip of the same size clears it rather than asking the driver for
+   a new texture -- which costs far more than drawing the clip itself. Masks no
+   clip has wanted for a few seconds are given back. */
 public static class MaskPool
 {
     static readonly List<Target> live = new();
-    public static void Track(Target t) => live.Add(t);
-    public static void EndFrame() { foreach (var t in live) Gpu.FreeTarget(t); live.Clear(); }
+    static readonly List<(Target t, int frame)> free = new();
+    static int frame;
+    public static Target Get(int w, int h)
+    {
+        for (int i = free.Count - 1; i >= 0; i--)
+        {
+            var t = free[i].t;
+            if (t.w != w || t.h != h || t.tex == 0) continue;
+            free.RemoveAt(i);
+            Gpu.Clear(t);
+            live.Add(t);
+            return t;
+        }
+        var n = Gpu.NewTarget(w, h);
+        live.Add(n);
+        return n;
+    }
+    public static void EndFrame()
+    {
+        frame++;
+        foreach (var t in live) free.Add((t, frame));
+        live.Clear();
+        for (int i = free.Count - 1; i >= 0; i--)
+            if (frame - free[i].frame > 240 || free.Count > 24) { Gpu.FreeTarget(free[i].t); free.RemoveAt(i); }
+    }
 }
 
 /* new Path2D(): a list of path commands, replayed into a context */

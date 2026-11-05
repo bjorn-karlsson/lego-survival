@@ -10,7 +10,10 @@ public static partial class G
     static int timerSeq;
     static readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
     /* performance.now(): milliseconds since start */
-    public static double perfNow() => clock.Elapsed.TotalMilliseconds;
+    public static double perfNow() => double.IsNaN(FakeClock) ? clock.Elapsed.TotalMilliseconds : FakeClock;
+    /* --det: a clock that advances exactly one 60th of a second a frame, so a scripted
+       run draws the same pictures every time (with Math.random seeded) */
+    public static double FakeClock = double.NaN;
     public static int setTimeout(Action fn, double ms = 0) { var t = new Timer { id = ++timerSeq, at = perfNow() + Math.Max(0, Js.Or(ms, 0)), fn = fn }; timers.Add(t); return t.id; }
     public static int setInterval(Action fn, double ms) { double e = Math.Max(1, Js.Or(ms, 0)); var t = new Timer { id = ++timerSeq, at = perfNow() + e, every = e, fn = fn }; timers.Add(t); return t.id; }
     public static void clearTimeout(double id) { timers.RemoveAll(t => t.id == (int)id); }
