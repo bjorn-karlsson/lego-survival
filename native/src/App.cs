@@ -252,6 +252,7 @@ public static class App
             else { slowT = 0; slowFrames = 0; slowAcc = 0; }
         }
         if (Program.Opt("--w") == null) SaveWindow();
+        Store.Flush();
         SoundOut.Close();
         Raylib.CloseWindow();
         return 0;

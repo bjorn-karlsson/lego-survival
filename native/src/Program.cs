@@ -45,6 +45,7 @@ public static class Program
     }
     static void Crash(Exception e)
     {
+        try { Store.Flush(); } catch { }
         try
         {
             string msg = "CRASH " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n" + e;
