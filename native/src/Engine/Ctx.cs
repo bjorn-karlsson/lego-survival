@@ -303,7 +303,7 @@ public sealed class Ctx
 
     /* the triangles of a fill, in device space */
     readonly List<Vector2> tri = new();
-    void TessFill(bool evenodd, List<Sub> list, List<Vector2> outTri)
+    void TessFill(bool evenodd, List<Sub> list, List<Vector2> outTri, bool opaque = false)
     {
         outTri.Clear();
         int live = 0; Sub only = null;
@@ -317,7 +317,15 @@ public sealed class Ctx
             for (int i = 1; i < n - 1; i++) { outTri.Add(p[0]); outTri.Add(p[i]); outTri.Add(p[i + 1]); }
             return;
         }
+        /* A SINGLE OUTLINE that is merely concave -- a horn, a helmet, a hand -- is cut
+           into triangles by ear clipping, many times faster than the general
+           tessellator; anything it cannot prove simple goes on to the tessellator */
+        if (live == 1 && !evenodd && only.p.Count <= 256 && TwoLoops(only.p, outTri, opaque)) { GfxStats.FillsMulti++; return; }
+        if (live == 1 && !evenodd && only.p.Count <= 256 && EarClip(only.p, outTri)) { GfxStats.FillsEar++; return; }
+        outTri.Clear();
         GfxStats.FillsTess++;
+        long __tt = System.Diagnostics.Stopwatch.GetTimestamp();
+        try {
         var tess = new Tess();
         foreach (var sb in list)
         {
@@ -334,6 +342,93 @@ public sealed class Ctx
             var v = tess.Vertices[k].Position; outTri.Add(new Vector2(v.X, v.Y));
         }
         if (outTri.Count % 3 != 0) outTri.RemoveRange(outTri.Count - outTri.Count % 3, outTri.Count % 3);
+        } finally { GfxStats.TTess += System.Diagnostics.Stopwatch.GetTimestamp() - __tt; }
+    }
+    /* TWO LOOPS IN ONE OUTLINE: arc(); arc(); fill() -- a pair of eyes. Each circle
+       closes on its own start and the line between them is walked there and back,
+       so it adds nothing: the fill is the two loops. Filled one by one, that is
+       exact when they do not overlap, or overlap painted opaque and wound the
+       same way (nonzero would fill the overlap once either way). */
+    readonly List<Vector2> la = new(), lb = new();
+    bool TwoLoops(List<Vector2> p, List<Vector2> outTri, bool opaque)
+    {
+        int n = p.Count, k = -1;
+        if (n < 8) return false;
+        for (int i = 3; i < n - 3; i++) if (Vector2.DistanceSquared(p[i], p[0]) < 1e-4f) { k = i; break; }
+        if (k < 0 || Vector2.DistanceSquared(p[n - 1], p[k + 1]) >= 1e-4f) return false;
+        la.Clear(); for (int i = 0; i < k; i++) la.Add(p[i]);
+        lb.Clear(); for (int i = k + 1; i < n - 1; i++) lb.Add(p[i]);
+        if (la.Count < 3 || lb.Count < 3) return false;
+        static (float x0, float y0, float x1, float y1) Box(List<Vector2> l) { float a = float.MaxValue, b = float.MaxValue, c = float.MinValue, d = float.MinValue; foreach (var v in l) { a = Math.Min(a, v.X); b = Math.Min(b, v.Y); c = Math.Max(c, v.X); d = Math.Max(d, v.Y); } return (a, b, c, d); }
+        static double Area(List<Vector2> l) { double s2 = 0; for (int i = 0, j = l.Count - 1; i < l.Count; j = i++) s2 += (double)l[j].X * l[i].Y - (double)l[i].X * l[j].Y; return s2; }
+        var A = Box(la); var B = Box(lb);
+        bool apart = A.x1 < B.x0 || B.x1 < A.x0 || A.y1 < B.y0 || B.y1 < A.y0;
+        if (!apart && !(opaque && Area(la) * Area(lb) > 0)) return false;
+        int start = outTri.Count;
+        foreach (var l in new[] { la, lb })
+        {
+            if (Convex(l)) { for (int i = 1; i < l.Count - 1; i++) { outTri.Add(l[0]); outTri.Add(l[i]); outTri.Add(l[i + 1]); } }
+            else if (!EarClip(l, outTri)) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+        }
+        return true;
+    }
+    /* EAR CLIPPING a simple polygon (no edge crossing another). False -- and
+       nothing kept -- when it gets stuck, or when the triangles it made do not add
+       up to the polygon's own area: a crossing outline, which nonzero filling
+       must handle as the tessellator does. */
+    readonly List<Vector2> ec = new(); readonly List<int> ei = new();
+    bool EarClip(List<Vector2> src, List<Vector2> outTri)
+    {
+        ec.Clear();
+        foreach (var v in src) if (ec.Count == 0 || Vector2.DistanceSquared(ec[^1], v) > 1e-8f) ec.Add(v);
+        while (ec.Count > 1 && Vector2.DistanceSquared(ec[0], ec[^1]) <= 1e-8f) ec.RemoveAt(ec.Count - 1);
+        int n = ec.Count;
+        if (n < 3) return false;
+        double area = 0;
+        for (int i = 0, j = n - 1; i < n; j = i++) area += (double)ec[j].X * ec[i].Y - (double)ec[i].X * ec[j].Y;
+        area *= 0.5;
+        if (Math.Abs(area) < 1e-6) return false;
+        float orient = area > 0 ? 1 : -1;
+        ei.Clear(); for (int i = 0; i < n; i++) ei.Add(i);
+        int start = outTri.Count; double got = 0;
+        int guard = 0, k = 0;
+        while (ei.Count > 3)
+        {
+            if (guard++ > ei.Count * 2 + 8) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+            int m = ei.Count;
+            int ip = ei[(k + m - 1) % m], ic = ei[k % m], inx = ei[(k + 1) % m];
+            Vector2 a = ec[ip], b = ec[ic], c = ec[inx];
+            float cr = ((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)) * orient;
+            if (cr <= 1e-7f)
+            {
+                /* collinear: the middle point adds nothing */
+                if (cr > -1e-7f) { ei.RemoveAt(k % m); guard = 0; k = k % Math.Max(1, ei.Count); continue; }
+                k = (k + 1) % m; continue;
+            }
+            bool ear = true;
+            for (int q = 0; q < m && ear; q++)
+            {
+                int iv = ei[q];
+                if (iv == ip || iv == ic || iv == inx) continue;
+                var pv = ec[iv];
+                if (pv == a || pv == b || pv == c) continue;
+                float d1 = ((b.X - a.X) * (pv.Y - a.Y) - (b.Y - a.Y) * (pv.X - a.X)) * orient;
+                float d2 = ((c.X - b.X) * (pv.Y - b.Y) - (c.Y - b.Y) * (pv.X - b.X)) * orient;
+                float d3 = ((a.X - c.X) * (pv.Y - c.Y) - (a.Y - c.Y) * (pv.X - c.X)) * orient;
+                if (d1 >= -1e-7f && d2 >= -1e-7f && d3 >= -1e-7f) ear = false;
+            }
+            if (!ear) { k = (k + 1) % m; continue; }
+            outTri.Add(a); outTri.Add(b); outTri.Add(c); got += cr * 0.5;
+            ei.RemoveAt(k % m); guard = 0;
+            k = k % ei.Count;
+        }
+        {
+            Vector2 a = ec[ei[0]], b = ec[ei[1]], c = ec[ei[2]];
+            float cr = ((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)) * orient;
+            if (cr > 1e-7f) { outTri.Add(a); outTri.Add(b); outTri.Add(c); got += cr * 0.5; }
+        }
+        if (Math.Abs(got - Math.Abs(area)) > Math.Abs(area) * 0.002 + 0.01) { outTri.RemoveRange(start, outTri.Count - start); return false; }
+        return true;
     }
     /* CONVEX: every turn the same way, and the edges sweep round once -- their
        direction's x and y each change sign at most twice going round (a star
@@ -422,7 +517,8 @@ public sealed class Ctx
         long __t0 = System.Diagnostics.Stopwatch.GetTimestamp(), __g0 = Gpu.GlTicks;
         try {
         GfxStats.Fills++; if (s.fill.grad != null) GfxStats.GradFills++;
-        TessFill(rule == "evenodd", subs, tri);
+        bool opaque = s.fill.grad == null && s.fill.col.a * s.alpha >= 0.999 && s.op == BlendOp.SourceOver && Filter == null;
+        TessFill(rule == "evenodd", subs, tri, opaque);
         Shadow(tri);
         Emit(tri, s.fill);
             } finally { GfxStats.TFill += System.Diagnostics.Stopwatch.GetTimestamp() - __t0 - (Gpu.GlTicks - __g0); }
@@ -487,7 +583,7 @@ public sealed class Ctx
         GfxStats.Clips++;
         var tg = Tgt;
         var mask = MaskPool.Get(tg.w, tg.h);
-        TessFill(rule == "evenodd", subs, tri);
+        TessFill(rule == "evenodd", subs, tri, true);
         Gpu.Use(mask, BlendOp.SourceOver, s.clip, Gpu.WhiteTex);
         foreach (var v in tri) { }
         for (int i = 0; i < tri.Count; i += 3)
@@ -575,46 +671,57 @@ public sealed class Ctx
     }
     static void Fan(Vector2 c, Vector2 from, Vector2 to, float r, bool cw, List<Vector2> o)
     {
-        double a0 = Math.Atan2(from.Y - c.Y, from.X - c.X), a1 = Math.Atan2(to.Y - c.Y, to.X - c.X);
-        double d = a1 - a0;
-        while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+        /* the wedge between two radii of length r: one atan2 for its angle, then the
+           steps by rotation; a wedge too small to need a second step is one triangle */
+        var u0 = from - c; var u1 = to - c;
+        double rr = (double)r * r; if (rr < 1e-12) return;
+        double dot = (u0.X * (double)u1.X + u0.Y * (double)u1.Y) / rr, crs = (u0.X * (double)u1.Y - u0.Y * (double)u1.X) / rr;
+        if (dot > 0 && Math.Abs(crs) * 1.5708 * r < 2) { o.Add(c); o.Add(from); o.Add(to); return; }
+        double d = Math.Atan2(crs, dot);
         int n = Math.Clamp((int)(Math.Abs(d) * r / 2) + 1, 1, 32);
+        if (n == 1) { o.Add(c); o.Add(from); o.Add(to); return; }
+        double cs = Math.Cos(d / n), sn = Math.Sin(d / n), vx = u0.X, vy = u0.Y;
         var prev = from;
         for (int i = 1; i <= n; i++)
         {
-            double a = a0 + d * i / n;
-            var p = c + new Vector2((float)Math.Cos(a) * r, (float)Math.Sin(a) * r);
+            double nx = vx * cs - vy * sn, ny = vx * sn + vy * cs; vx = nx; vy = ny;
+            var p = i == n ? to : c + new Vector2((float)vx, (float)vy);
             o.Add(c); o.Add(prev); o.Add(p); prev = p;
         }
     }
+    /* each segment's unit direction, worked out once for its quad and both joins */
+    Vector2[] dirBuf = new Vector2[64]; bool[] dirOk = new bool[64];
     void Poly(List<Vector2> p, bool closed, float hw, List<Vector2> o)
     {
         int n = p.Count;
         int segs = closed ? n : n - 1;
         if (segs < 1) return;
+        if (dirBuf.Length < segs) { dirBuf = new Vector2[segs * 2]; dirOk = new bool[segs * 2]; }
         /* each segment as a quad */
         for (int i = 0; i < segs; i++)
         {
-            var a = p[i]; var b = p[(i + 1) % n];
-            var d = b - a; float l = d.Length(); if (l < 1e-6f) continue;
-            var nn = new Vector2(-d.Y / l, d.X / l) * hw;
+            var a = p[i]; var b = p[i + 1 < n ? i + 1 : 0];
+            var d = b - a; float l = d.Length();
+            if (l < 1e-6f) { dirOk[i] = false; continue; }
+            dirOk[i] = true; var u = d / l; dirBuf[i] = u;
+            var nn = new Vector2(-u.Y, u.X) * hw;
             var ea = a; var eb = b;
             if (!closed && s.cap == Cap.Square)
             {
-                var ext = d / l * hw;
+                var ext = u * hw;
                 if (i == 0) ea -= ext;
                 if (i == segs - 1) eb += ext;
             }
             Quad(ea + nn, eb + nn, eb - nn, ea - nn, o);
         }
-        /* joins: the wedge on the outer side of each corner */
+        /* joins: the wedge on the outer side of each corner (segment i-1 into segment i) */
         int j0 = closed ? 0 : 1, j1 = closed ? n : n - 1;
         for (int i = j0; i < j1; i++)
         {
-            var c = p[i]; var pa = p[(i - 1 + n) % n]; var pb = p[(i + 1) % n];
-            var d0 = c - pa; var d1 = pb - c;
-            float l0 = d0.Length(), l1 = d1.Length(); if (l0 < 1e-6f || l1 < 1e-6f) continue;
-            d0 /= l0; d1 /= l1;
+            int sp = i - 1 < 0 ? segs - 1 : i - 1, sn = i;
+            if (!dirOk[sp] || !dirOk[sn]) continue;
+            var c = p[i];
+            var d0 = dirBuf[sp]; var d1 = dirBuf[sn];
             float cross = d0.X * d1.Y - d0.Y * d1.X;
             if (Math.Abs(cross) < 1e-5f && Vector2.Dot(d0, d1) > 0) continue;
             var n0 = new Vector2(-d0.Y, d0.X) * hw; var n1 = new Vector2(-d1.Y, d1.X) * hw;
@@ -626,7 +733,7 @@ public sealed class Ctx
             if (s.join == Join.Miter)
             {
                 var mid = Vector2.Normalize(n0 + n1);
-                float cosHalf = Vector2.Dot(mid, Vector2.Normalize(n0));
+                float cosHalf = Vector2.Dot(mid, n0 / hw);
                 if (cosHalf > 1e-4f)
                 {
                     float ml = hw / cosHalf;

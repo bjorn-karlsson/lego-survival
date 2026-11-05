@@ -94,6 +94,33 @@ public static partial class G
         spriteCache[col] = s;
         return s;
     }
+    /* NATIVE: THE GROUND'S CELLS ON ONE SHEET. The JS keeps a canvas per colour and
+       the ground stamps them cell by cell; drawn from separate textures, every change
+       of colour between neighbours cost the renderer a new batch. Here every colour's
+       cell is painted once into its own slot of a shared sheet -- with a gutter of the
+       same colour round it, so the slightly stretched stamp samples what the single
+       canvas's clamped edge gave -- and the whole ground goes out in one batch. */
+    const int CELL_PAD = 3, CELL_SLOT = CS + 2 * CELL_PAD, CELL_COLS = 16, CELL_ROWS = 8;
+    static readonly List<OffCanvas> cellSheets = new();
+    static readonly JsMap<Col, (OffCanvas sheet, int sx, int sy)> cellSlots = new();
+    static int cellNext;
+    public static (OffCanvas sheet, int sx, int sy) cellSlot(Col col)
+    {
+        if (cellSlots.TryGetValue(col, out var slot)) return slot;
+        int per = CELL_COLS * CELL_ROWS, k = cellNext++ % per;
+        if (k == 0) cellSheets.Add(new OffCanvas { width = CELL_COLS * CELL_SLOT, height = CELL_ROWS * CELL_SLOT });
+        var sheet = cellSheets[^1];
+        int ox = (k % CELL_COLS) * CELL_SLOT, oy = (k / CELL_COLS) * CELL_SLOT;
+        var g = sheet.getContext("2d");
+        g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+        g.fillStyle = col; g.fillRect(ox, oy, CELL_SLOT, CELL_SLOT);
+        g.translate(ox + CELL_PAD, oy + CELL_PAD);
+        drawStudG(g, CS / 2.0, CS / 2.0, 11, col);
+        g.restore();
+        slot = (sheet, ox + CELL_PAD, oy + CELL_PAD);
+        cellSlots[col] = slot;
+        return slot;
+    }
     public static string cellColorKey(int ix, int iy)
     {
         double cxw = ix * CS + 20, cyw = iy * CS + 20;
@@ -236,7 +263,10 @@ public static partial class G
         int ix0 = (int)Math.Max(0, Math.Floor(vx / CS)), ix1 = (int)Math.Min(Math.Ceiling(W.w / CS) - 1, Math.Ceiling((vx + vw) / CS));
         int iy0 = (int)Math.Max(0, Math.Floor(vy / CS)), iy1 = (int)Math.Min(Math.Ceiling(W.h / CS) - 1, Math.Ceiling((vy + vh) / CS));
         for (int iy = iy0; iy <= iy1; iy++) for (int ix = ix0; ix <= ix1; ix++)
-                ctx.drawImage(cellSprite(cellColorKey(ix, iy)), ix * CS, iy * CS, CS + 1, CS + 1);
+            {
+                var (sheet, sx, sy) = cellSlot(cellColorKey(ix, iy));
+                ctx.drawImage(sheet, sx, sy, CS, CS, ix * CS, iy * CS, CS + 1, CS + 1);
+            }
         foreach (var parts in lakeGroups)
         {
             if (!waters.Contains(parts[0])) continue;

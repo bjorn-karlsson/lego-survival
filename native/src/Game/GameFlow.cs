@@ -694,7 +694,9 @@ public static partial class G
             cam.y = player != null ? player.y : W.h / 2;
             reclampCam();
         }
+        long g1 = Gpu.GlTicks;
         try { render(); } catch (Exception err) { Console.Error.WriteLine("render: " + err); }
+        perfGl += (Gpu.GlTicks - g1) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         if (state == "title") { try { renderTitle(); } catch (Exception err) { Console.Error.WriteLine("title: " + err); } }
         long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
         /* NATIVE: what the frame cost, for the F3 readout (smoothed) */
@@ -702,7 +704,7 @@ public static partial class G
         updMs += ((t1 - t0) * f - updMs) * 0.05; renMs += ((t2 - t1) * f - renMs) * 0.05;
         perfUpd += (t1 - t0) * f; perfRen += (t2 - t1) * f; perfN++; perfEn += enemies.Count;
     }
-    public static double perfUpd, perfRen, perfEn; public static int perfN;
+    public static double perfUpd, perfRen, perfEn, perfGl; public static int perfN;
     public static double updMs, renMs;
     /* JS 32431–32443: the script's last statements */
     public static void GameBoot()

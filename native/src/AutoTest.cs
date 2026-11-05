@@ -185,8 +185,8 @@ public static class AutoTest
                            driver's share of it), monsters; then start counting again */
                         double secs = (G.perfNow() - perfT0) / 1000; int n = Math.Max(1, G.perfN);
                         if (arg != "reset" && perfT0 > 0)
-                            Console.WriteLine($"C#   fps={G.perfN / secs:0} update={G.perfUpd / n:0.00}ms render={G.perfRen / n:0.00}ms (driver {App.GlMs:0.0}ms) enemies={G.perfEn / n:0}");
-                        G.perfUpd = G.perfRen = G.perfEn = 0; G.perfN = 0; perfT0 = G.perfNow();
+                            Console.WriteLine($"C#   fps={G.perfN / secs:0} update={G.perfUpd / n:0.00}ms render={G.perfRen / n:0.00}ms (own CPU {(G.perfRen - G.perfGl) / n:0.00}ms, driver {G.perfGl / n:0.00}ms) enemies={G.perfEn / n:0}");
+                        G.perfUpd = G.perfRen = G.perfEn = G.perfGl = 0; G.perfN = 0; perfT0 = G.perfNow();
                         break;
                     }
                     case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }

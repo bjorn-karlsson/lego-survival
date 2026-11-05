@@ -24,13 +24,14 @@ public sealed class Target
 /* what a frame asked of the renderer (F3, --script 'gfx'): plain counters, reset each frame */
 public static class GfxStats
 {
-    public static int Fills, FillsFan, FillsMulti, FillsTess, Strokes, Texts, Glyphs, Clips, Images, GradFills, Shadows, NewTargets;
+    public static int Fills, FillsFan, FillsMulti, FillsTess, FillsEar, Strokes, Texts, Glyphs, Clips, Images, GradFills, Shadows, NewTargets;
     public static int BrkTarget, BrkBlend, BrkClip, BrkTex, BrkGrad, BrkFlushDirect;
-    public static long TFill, TStroke, TImage, TText, TClip, TPath;
+
+    public static long TFill, TStroke, TImage, TText, TClip, TPath, TTess;
     static double Ms(long t) => t * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-    public static string Times() => $"fill {Ms(TFill):0.0}ms stroke {Ms(TStroke):0.0}ms image {Ms(TImage):0.0}ms text {Ms(TText):0.0}ms clip {Ms(TClip):0.0}ms";
-    public static string Line() => $"fills {Fills} (fan {FillsFan}, multi {FillsMulti}, tess {FillsTess}, grad {GradFills}) strokes {Strokes} texts {Texts}/{Glyphs} clips {Clips} images {Images} shadows {Shadows} newTargets {NewTargets} | {Times()} | breaks: target {BrkTarget} blend {BrkBlend} clip {BrkClip} tex {BrkTex} grad {BrkGrad} direct {BrkFlushDirect}";
-    public static void Reset() { TFill = TStroke = TImage = TText = TClip = TPath = 0; Fills = FillsFan = FillsMulti = FillsTess = Strokes = Texts = Glyphs = Clips = Images = GradFills = Shadows = NewTargets = 0; BrkTarget = BrkBlend = BrkClip = BrkTex = BrkGrad = BrkFlushDirect = 0; }
+    public static string Times() => $"fill {Ms(TFill):0.0}ms (tess {Ms(TTess):0.0}ms) stroke {Ms(TStroke):0.0}ms image {Ms(TImage):0.0}ms text {Ms(TText):0.0}ms clip {Ms(TClip):0.0}ms";
+    public static string Line() => $"fills {Fills} (fan {FillsFan}, multi {FillsMulti}, ear {FillsEar}, tess {FillsTess}, grad {GradFills}) strokes {Strokes} texts {Texts}/{Glyphs} clips {Clips} images {Images} shadows {Shadows} newTargets {NewTargets} | {Times()} | breaks: target {BrkTarget} blend {BrkBlend} clip {BrkClip} tex {BrkTex} grad {BrkGrad} direct {BrkFlushDirect}";
+    public static void Reset() { TFill = TStroke = TImage = TText = TClip = TPath = TTess = 0; Fills = FillsFan = FillsMulti = FillsTess = FillsEar = Strokes = Texts = Glyphs = Clips = Images = GradFills = Shadows = NewTargets = 0; BrkTarget = BrkBlend = BrkClip = BrkTex = BrkGrad = BrkFlushDirect = 0; }
 }
 
 public static unsafe class Gpu
