@@ -122,10 +122,36 @@ public static class App
         }
         catch { return false; }
     }
+    /* the display's refresh rate (60 when the system will not say) */
+    static int RefreshHz()
+    {
+        int hz = Raylib.GetMonitorRefreshRate(Raylib.GetCurrentMonitor());
+        return hz >= 24 && hz <= 1000 ? hz : 60;
+    }
+    /* VSYNC ON waits for the display. VSYNC OFF is capped at twice the display's
+       rate (at least 240): low latency without a title screen drawn three
+       thousand times a second. And when vsync is on but the driver ignores it
+       (frames far faster than the display), frames are paced at the display's
+       rate instead (see VsyncWatch). */
+    static bool vsyncPaced; static double vsT; static int vsN;
     static void ApplyVsync()
     {
+        vsyncPaced = false; vsT = 0; vsN = 0;
         if (G.OPT.vsync) { Raylib.SetWindowState(ConfigFlags.VSyncHint); Raylib.SetTargetFPS(0); }
-        else { Raylib.ClearWindowState(ConfigFlags.VSyncHint); Raylib.SetTargetFPS(0); }
+        else { Raylib.ClearWindowState(ConfigFlags.VSyncHint); Raylib.SetTargetFPS(Math.Max(240, 2 * RefreshHz())); }
+    }
+    static void VsyncWatch(double frameDt)
+    {
+        if (!G.OPT.vsync || vsyncPaced || AutoTest.On) return;
+        vsT += frameDt; vsN++;
+        if (vsT < 1) return;
+        int hz = RefreshHz();
+        if (vsT / vsN < 0.5 / hz)
+        {
+            vsyncPaced = true; Raylib.SetTargetFPS(hz);
+            Console.Error.WriteLine($"vsync: the driver is not waiting for the display ({vsN / vsT:0} frames a second on a {hz} Hz display); frames paced at {hz}");
+        }
+        vsT = 0; vsN = 0;
     }
 
     public static int Run()
@@ -226,6 +252,7 @@ public static class App
             GlMs += (Gpu.GlTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency - GlMs) * 0.05;
             Gpu.DrawCalls = 0; Gpu.Tris = 0; Gpu.Verts = 0; Gpu.GlTicks = 0;
             if (minimised) Raylib.WaitTime(0.05);
+            else VsyncWatch(frameDt);
 
             /* ---- FPS, and AUTO's step down ---- */
             fpsAcc += frameDt; fpsN++;
