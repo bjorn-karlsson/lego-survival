@@ -498,8 +498,10 @@ public static class App
     }
 
     /* ------------------------------------------------- confirm(): a yes/no box */
+    static int confirmFrames;
     public static bool Confirm(string msg)
     {
+        confirmFrames = 0;
         if (!Raylib.IsWindowReady()) return true;
         bool? answer = null;
         while (answer == null)
@@ -517,6 +519,8 @@ public static class App
             if (Raylib.IsMouseButtonReleased(MouseButton.Left)) { if (inOk) answer = true; else if (inCn) answer = false; }
             if (Raylib.IsKeyPressed(KeyboardKey.Enter) || Raylib.IsKeyPressed(KeyboardKey.KpEnter)) answer = true;
             if (Raylib.IsKeyPressed(KeyboardKey.Escape)) answer = false;
+            /* a scripted session: a picture of the box, then OK */
+            if (AutoTest.On && ++confirmFrames > 3) { if (Program.Opt("--confirm-shot") is string cs) Shot.Save(cs); answer = true; }
             Cursor(inOk || inCn ? "pointer" : "default");
 
             Raylib.BeginDrawing();

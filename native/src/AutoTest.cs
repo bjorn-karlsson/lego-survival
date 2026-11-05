@@ -16,6 +16,7 @@ namespace Brickblade;
      set:FIELD=NUMBER    a number on the hero (player.FIELD), e.g. set:invuln=9999
      gear:N              N rolled items into the bag
      drag:SRC>DST        drag from one element (CSS selector) and drop on another
+     focus:CSS / type:TEXT   focus a field and type into it ("_" is a space)
      size:W,H            resize the window
      shot:FILE           a screenshot
      status              one line: state, wave, monsters, hero, frame rate
@@ -189,6 +190,9 @@ public static class AutoTest
                         G.perfUpd = G.perfRen = G.perfEn = G.perfGl = G.perfMax = 0; gc0 = GC.CollectionCount(0); gc1 = GC.CollectionCount(1); gc2 = GC.CollectionCount(2); alloc0 = GC.GetTotalAllocatedBytes(); G.perfN = 0; perfT0 = G.perfNow();
                         break;
                     }
+                    case "val": { var e = Dom.document.querySelector(arg); Console.WriteLine($"[val] {arg}: '{e?.value}' focused={(Dom.focused == e)} textFocused={Dom.TextFocused} connected={e?.isConnected}"); break; }
+                    case "focus": Dom.document.querySelector(arg)?.focus(); break;
+                    case "type": foreach (var ch in arg.Replace("_", " ")) Dom.TypeChar(ch); break;
                     case "size": { var p = arg.Split(','); Raylib_cs.Raylib.SetWindowSize(int.Parse(p[0]), int.Parse(p[1])); break; }
                     case "shot": shot(arg); break;
                     case "status":

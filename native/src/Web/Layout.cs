@@ -726,7 +726,9 @@ internal static class Layout
         if (e.canvas != null) { iw = e.canvas.width; ih = e.canvas.height; }
         else if (e.localName == "svg")
         {
-            double aw = Js.ToNumber(e.getAttribute("width") ?? ""), ah = Js.ToNumber(e.getAttribute("height") ?? "");
+            /* an absent attribute is auto (NaN), not 0 */
+            static double Attr(Element el, string k) { var v = el.getAttribute(k); return string.IsNullOrWhiteSpace(v) ? double.NaN : Js.ToNumber(v); }
+            double aw = Attr(e, "width"), ah = Attr(e, "height");
             var vb = Svg.ViewBox(e);
             if (double.IsNaN(aw) && double.IsNaN(ah) && vb != null) { iw = 300; ih = vb[3] > 0 ? 300 * vb[3] / vb[2] : 150; if (double.IsNaN(cbW)) { } }
             else { iw = double.IsNaN(aw) ? (vb != null && !double.IsNaN(ah) ? ah * vb[2] / vb[3] : 300) : aw; ih = double.IsNaN(ah) ? (vb != null ? iw * vb[3] / vb[2] : 150) : ah; }

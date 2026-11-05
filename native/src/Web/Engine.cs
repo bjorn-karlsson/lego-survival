@@ -434,7 +434,8 @@ public static class Dom
     {
         string v = e.value; int a = Math.Clamp(e.caret, 0, v.Length), z = a;
         if (e.selFrom >= 0 && e.selFrom != e.caret) { a = Math.Min(e.selFrom, e.caret); z = Math.Max(e.selFrom, e.caret); a = Math.Clamp(a, 0, v.Length); z = Math.Clamp(z, 0, v.Length); }
-        var ml = Js.ToNumber(e.getAttribute("maxlength") ?? "");
+        /* no maxlength is no limit (an absent attribute is not 0) */
+        var mla = e.getAttribute("maxlength"); var ml = string.IsNullOrWhiteSpace(mla) ? double.NaN : Js.ToNumber(mla);
         if (!double.IsNaN(ml) && ml >= 0) { int room = (int)ml - (v.Length - (z - a)); if (room <= 0) return; if (s.Length > room) s = s.Substring(0, room); }
         string nv = v.Substring(0, a) + s + v.Substring(z);
         e.value = nv; e.caret = a + s.Length; e.selFrom = -1;
